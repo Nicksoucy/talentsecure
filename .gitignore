@@ -1,0 +1,86 @@
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+
+# Production
+/build
+/dist
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+prisma/migrations/*/migration.sql
+
+# Google Cloud credentials
+gcs-credentials.json
+*-credentials.json
+*.json.key
+service-account-*.json
+
+# Uploads (fichiers locaux)
+backend/uploads/
+uploads/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.history/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Excel files (données sensibles)
+*.xlsx
+*Grille*.xlsx
+
+# Prisma
+.prisma/
+
+# Railway
+.railway/
+
+# Vercel
+.vercel/
+
+# Next.js (si utilisé)
+.next/
+out/
+
+# TypeScript
+*.tsbuildinfo
+
+# Misc
+.turbo
+.eslintcache

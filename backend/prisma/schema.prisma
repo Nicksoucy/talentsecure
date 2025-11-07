@@ -1,0 +1,404 @@
+// This is your Prisma schema file
+// Documentation: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  RH_RECRUITER
+  SALES
+}
+
+enum CandidateStatus {
+  QUALIFIE          // 7-7.9
+  BON               // 8-8.4
+  TRES_BON          // 8.5-8.9
+  EXCELLENT         // 9-9.4
+  ELITE             // 9.5+
+  A_REVOIR          // < 7
+  EN_ATTENTE        // En cours d'évaluation
+  INACTIF           // Plus disponible
+}
+
+enum AvailabilityType {
+  JOUR
+  SOIR
+  NUIT
+  FIN_DE_SEMAINE
+}
+
+enum LanguageLevel {
+  DEBUTANT
+  INTERMEDIAIRE
+  AVANCE
+  BILINGUE
+  LANGUE_MATERNELLE
+}
+
+enum CatalogueStatus {
+  BROUILLON
+  GENERE
+  ENVOYE
+  ACCEPTE
+  REFUSE
+}
+
+enum PlacementStatus {
+  EN_NEGOCIATION
+  CONFIRME
+  EN_COURS
+  TERMINE
+  ANNULE
+}
+
+enum AuditAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  EXPORT
+  IMPORT
+}
+
+// Models
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password      String?  // Null si OAuth uniquement
+  firstName     String
+  lastName      String
+  role          UserRole @default(RH_RECRUITER)
+
+  // OAuth
+  googleId      String?  @unique
+  microsoftId   String?  @unique
+
+  // Metadata
+  isActive      Boolean  @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  candidatesCreated Candidate[] @relation("CandidateCreatedBy")
+  cataloguesCreated Catalogue[] @relation("CatalogueCreatedBy")
+  placementsCreated Placement[] @relation("PlacementCreatedBy")
+  auditLogs         AuditLog[]
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model Candidate {
+  id                    String          @id @default(uuid())
+
+  // Informations personnelles
+  firstName             String
+  lastName              String
+  email                 String?
+  phone                 String
+  address               String?
+  city                  String
+  province              String          @default("QC")
+  postalCode            String?
+
+  // Statut et évaluation
+  status                CandidateStatus @default(EN_ATTENTE)
+  globalRating          Float?          // Note globale /10
+  interviewDate         DateTime?       // Date de l'entrevue RH
+
+  // Évaluation détaillée
+  professionalismRating Float?          // /10
+  communicationRating   Float?          // /10
+  appearanceRating      Float?          // /10
+  motivationRating      Float?          // /10
+  experienceRating      Float?          // /10
+
+  // Commentaires RH
+  hrNotes               String?         @db.Text
+  strengths             String?         @db.Text
+  weaknesses            String?         @db.Text
+
+  // Détails complets d'entretien (JSON)
+  interviewDetails      Json?           // Stocke toutes les infos de l'onglet candidat
+
+  // Disponibilités
+  hasVehicle            Boolean         @default(false)
+  canTravelKm           Int?            // Rayon de déplacement en km
+
+  // Permis et certifications
+  hasBSP                Boolean         @default(false)
+  bspNumber             String?
+  bspExpiryDate         DateTime?
+  bspStatus             String?         // "Actif", "En cours", "Expiré"
+
+  hasDriverLicense      Boolean         @default(false)
+  driverLicenseNumber   String?
+  driverLicenseClass    String?
+
+  // Urgence 24h
+  urgency24hScore       Int?            @default(0) // Score de 0 à 10
+  canWorkUrgent         Boolean         @default(false)
+
+  // Vidéo d'entrevue
+  videoUrl              String?
+  videoUploadedAt       DateTime?
+  videoStoragePath      String?
+
+  // CV et documents
+  cvUrl                 String?
+  cvStoragePath         String?
+  documentsUrls         String[]        @default([])
+
+  // Consentement LPRPDE
+  hasConsent            Boolean         @default(false)
+  consentDate           DateTime?
+  consentSignature      String?
+
+  // Metadata
+  isActive              Boolean         @default(true)
+  isDeleted             Boolean         @default(false)
+  deletedAt             DateTime?
+  createdById           String
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  // Relations
+  createdBy             User            @relation("CandidateCreatedBy", fields: [createdById], references: [id])
+  availabilities        Availability[]
+  languages             Language[]
+  experiences           Experience[]
+  certifications        Certification[]
+  situationTests        SituationTest[]
+  catalogueItems        CatalogueItem[]
+  placements            Placement[]
+
+  @@index([status])
+  @@index([globalRating])
+  @@index([city])
+  @@index([hasBSP])
+  @@index([hasVehicle])
+  @@index([isActive])
+  @@index([createdAt])
+  @@map("candidates")
+}
+
+model Availability {
+  id          String            @id @default(uuid())
+  candidateId String
+  type        AvailabilityType
+  isAvailable Boolean           @default(true)
+  notes       String?
+
+  candidate   Candidate         @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@map("availabilities")
+}
+
+model Language {
+  id          String        @id @default(uuid())
+  candidateId String
+  language    String        // "Français", "Anglais", "Espagnol", etc.
+  level       LanguageLevel
+  canRead     Boolean       @default(true)
+  canWrite    Boolean       @default(true)
+  canSpeak    Boolean       @default(true)
+
+  candidate   Candidate     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@index([language])
+  @@map("languages")
+}
+
+model Experience {
+  id               String    @id @default(uuid())
+  candidateId      String
+  companyName      String
+  position         String
+  startDate        DateTime?
+  endDate          DateTime?
+  isCurrent        Boolean   @default(false)
+  durationMonths   Int?      // Durée en mois
+  description      String?   @db.Text
+  responsibilities String?   @db.Text
+
+  candidate        Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@map("experiences")
+}
+
+model Certification {
+  id              String    @id @default(uuid())
+  candidateId     String
+  name            String
+  issuingOrg      String?
+  issueDate       DateTime?
+  expiryDate      DateTime?
+  certificateUrl  String?
+
+  candidate       Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@map("certifications")
+}
+
+model SituationTest {
+  id          String    @id @default(uuid())
+  candidateId String
+  question    String    @db.Text
+  answer      String    @db.Text
+  rating      Float?    // Note /10 pour cette réponse
+  evaluatorNotes String? @db.Text
+
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@map("situation_tests")
+}
+
+model Client {
+  id              String      @id @default(uuid())
+  name            String
+  companyName     String?
+  email           String      @unique
+  phone           String?
+  address         String?
+  city            String?
+  province        String?
+  postalCode      String?
+
+  // Metadata
+  isActive        Boolean     @default(true)
+  notes           String?     @db.Text
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  catalogues      Catalogue[]
+  placements      Placement[]
+
+  @@index([email])
+  @@index([companyName])
+  @@map("clients")
+}
+
+model Catalogue {
+  id                String          @id @default(uuid())
+  clientId          String
+  title             String
+  customMessage     String?         @db.Text
+  status            CatalogueStatus @default(BROUILLON)
+
+  // Configuration PDF
+  includeSummary    Boolean         @default(true)
+  includeDetails    Boolean         @default(true)
+  includeVideo      Boolean         @default(true)
+  includeExperience Boolean         @default(true)
+  includeSituation  Boolean         @default(true)
+  includeCV         Boolean         @default(true)
+
+  // URLs générés
+  pdfUrl            String?
+  pdfStoragePath    String?
+
+  // Metadata
+  generatedAt       DateTime?
+  sentAt            DateTime?
+  viewedAt          DateTime?
+  createdById       String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  // Relations
+  client            Client          @relation(fields: [clientId], references: [id])
+  createdBy         User            @relation("CatalogueCreatedBy", fields: [createdById], references: [id])
+  items             CatalogueItem[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("catalogues")
+}
+
+model CatalogueItem {
+  id          String    @id @default(uuid())
+  catalogueId String
+  candidateId String
+  order       Int       @default(0)
+
+  // Relations
+  catalogue   Catalogue @relation(fields: [catalogueId], references: [id], onDelete: Cascade)
+  candidate   Candidate @relation(fields: [candidateId], references: [id])
+
+  @@unique([catalogueId, candidateId])
+  @@index([catalogueId])
+  @@index([candidateId])
+  @@map("catalogue_items")
+}
+
+model Placement {
+  id              String          @id @default(uuid())
+  clientId        String
+  candidateId     String
+  status          PlacementStatus @default(EN_NEGOCIATION)
+
+  // Détails du placement
+  position        String
+  startDate       DateTime?
+  endDate         DateTime?
+  hourlyRate      Float?
+  commissionRate  Float?          // Taux de commission (ex: 15%)
+  commissionAmount Float?         // Montant commission
+
+  // Metadata
+  notes           String?         @db.Text
+  createdById     String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relations
+  client          Client          @relation(fields: [clientId], references: [id])
+  candidate       Candidate       @relation(fields: [candidateId], references: [id])
+  createdBy       User            @relation("PlacementCreatedBy", fields: [createdById], references: [id])
+
+  @@index([clientId])
+  @@index([candidateId])
+  @@index([status])
+  @@map("placements")
+}
+
+model AuditLog {
+  id          String      @id @default(uuid())
+  userId      String
+  action      AuditAction
+  resource    String      // "Candidate", "Catalogue", "User", etc.
+  resourceId  String?     // Generic ID - not enforced by FK
+  details     String?     @db.Text
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime    @default(now())
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
