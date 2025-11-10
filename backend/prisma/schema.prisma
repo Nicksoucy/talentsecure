@@ -402,3 +402,54 @@ model AuditLog {
   @@index([createdAt])
   @@map("audit_logs")
 }
+
+// Model pour les candidats potentiels (pas encore interviewés)
+model ProspectCandidate {
+  id                String    @id @default(uuid())
+
+  // Informations personnelles
+  firstName         String
+  lastName          String
+  email             String?
+  phone             String
+
+  // Adresse
+  streetAddress     String?
+  city              String?
+  province          String?   @default("QC")
+  postalCode        String?
+  country           String?   @default("CA")
+  fullAddress       String?   @db.Text // Adresse complète du CSV
+
+  // CV
+  cvUrl             String?   // URL du CV à télécharger
+  cvStoragePath     String?   // Chemin local après téléchargement
+
+  // Metadata
+  timezone          String?
+  submissionDate    DateTime? // Date de soumission du formulaire
+  isContacted       Boolean   @default(false)
+  contactedAt       DateTime?
+  notes             String?   @db.Text
+
+  // Conversion
+  isConverted       Boolean   @default(false) // Converti en candidat qualifié
+  convertedAt       DateTime?
+  convertedToId     String?   // ID du candidat créé après entrevue
+
+  // Soft delete
+  isDeleted         Boolean   @default(false)
+  deletedAt         DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([email])
+  @@index([phone])
+  @@index([city])
+  @@index([isContacted])
+  @@index([isConverted])
+  @@index([submissionDate])
+  @@index([createdAt])
+  @@map("prospect_candidates")
+}

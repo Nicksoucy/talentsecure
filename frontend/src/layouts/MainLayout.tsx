@@ -21,6 +21,7 @@ import {
   Menu as MenuIcon,
   Dashboard as DashboardIcon,
   People as PeopleIcon,
+  PersonSearch as PersonSearchIcon,
   Description as DescriptionIcon,
   Business as BusinessIcon,
   Settings as SettingsIcon,
@@ -64,6 +65,7 @@ const MainLayout = () => {
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
     { text: 'Candidats', icon: <PeopleIcon />, path: '/candidates' },
+    { text: 'Candidats Potentiels', icon: <PersonSearchIcon />, path: '/prospects' },
     { text: 'Catalogues', icon: <DescriptionIcon />, path: '/catalogues' },
     { text: 'Clients', icon: <BusinessIcon />, path: '/clients' },
   ];

@@ -85,6 +85,33 @@ export interface Client {
   createdAt: string;
 }
 
+// Prospect Candidate types (not yet interviewed)
+export interface ProspectCandidate {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone: string;
+  streetAddress?: string;
+  city?: string;
+  province?: string;
+  postalCode?: string;
+  country?: string;
+  fullAddress?: string;
+  cvUrl?: string;
+  cvStoragePath?: string;
+  timezone?: string;
+  submissionDate?: string;
+  isContacted: boolean;
+  contactedAt?: string;
+  notes?: string;
+  isConverted: boolean;
+  convertedAt?: string;
+  convertedToId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // API Response types
 export interface ApiResponse<T> {
   data?: T;

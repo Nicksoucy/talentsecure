@@ -5,6 +5,7 @@ import {
   CardContent,
   Typography,
   LinearProgress,
+  CircularProgress,
 } from '@mui/material';
 import {
   People as PeopleIcon,
@@ -12,12 +13,24 @@ import {
   Description as DescriptionIcon,
   TrendingUp as TrendingUpIcon,
   Map as MapIcon,
+  PersonSearch as PersonSearchIcon,
 } from '@mui/icons-material';
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/authStore';
 import CandidatesMap from '@/components/map/CandidatesMap';
+import ProspectsMapClustered from '@/components/map/ProspectsMapClustered';
+import { prospectService } from '@/services/prospect.service';
 
 const DashboardPage = () => {
   const { user } = useAuthStore();
+
+  // Fetch prospect stats
+  const { data: prospectStatsData, isLoading: loadingProspects } = useQuery({
+    queryKey: ['prospects', 'stats'],
+    queryFn: () => prospectService.getProspectsStats(),
+  });
+
+  const prospectStats = prospectStatsData?.data;
 
   const stats = [
     {
@@ -90,6 +103,74 @@ const DashboardPage = () => {
         ))}
       </Grid>
 
+      {/* Prospect Stats Section */}
+      <Grid container spacing={3} sx={{ mt: 2 }}>
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <PersonSearchIcon sx={{ mr: 1, color: '#2196f3' }} />
+                <Typography variant="h6">
+                  Candidats Potentiels (Non interviewés)
+                </Typography>
+              </Box>
+              {loadingProspects ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : prospectStats ? (
+                <Grid container spacing={2}>
+                  <Grid item xs={6} sm={3}>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="h3" color="primary" fontWeight="bold">
+                        {prospectStats.total}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Total
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="h3" color="warning.main" fontWeight="bold">
+                        {prospectStats.pending}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        À contacter
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="h3" color="success.main" fontWeight="bold">
+                        {prospectStats.contacted}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Contactés
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="h3" color="info.main" fontWeight="bold">
+                        {prospectStats.converted}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Convertis ({prospectStats.conversionRate}%)
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  Aucune donnée disponible
+                </Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
       <Grid container spacing={3} sx={{ mt: 2 }}>
         <Grid item xs={12} md={6}>
           <Card>
@@ -155,21 +236,37 @@ const DashboardPage = () => {
         </Grid>
       </Grid>
 
-      {/* Map Section */}
+      {/* Maps Section */}
       <Grid container spacing={3} sx={{ mt: 2 }}>
-        <Grid item xs={12}>
+        <Grid item xs={12} lg={6}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                 <MapIcon sx={{ mr: 1, color: '#1976d2' }} />
                 <Typography variant="h6">
-                  Répartition géographique des candidats
+                  Répartition - Candidats qualifiés
                 </Typography>
               </Box>
               <Typography variant="body2" color="text.secondary" paragraph>
-                Carte interactive du Québec montrant la distribution des candidats par ville.
+                Carte interactive du Québec montrant la distribution des candidats qualifiés par ville.
               </Typography>
               <CandidatesMap />
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} lg={6}>
+          <Card>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <PersonSearchIcon sx={{ mr: 1, color: '#2196f3' }} />
+                <Typography variant="h6">
+                  Répartition - Candidats potentiels
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Carte interactive du Québec montrant la distribution des candidats potentiels par ville.
+              </Typography>
+              <ProspectsMapClustered />
             </CardContent>
           </Card>
         </Grid>

@@ -16,6 +16,7 @@ import authRoutes from './routes/auth.routes';
 import candidateRoutes from './routes/candidate.routes';
 import catalogueRoutes from './routes/catalogue.routes';
 import clientRoutes from './routes/client.routes';
+import prospectRoutes from './routes/prospect.routes';
 
 const app: Application = express();
 const PORT = process.env.PORT || 5000;
@@ -91,6 +92,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/candidates', candidateRoutes);
 app.use('/api/catalogues', catalogueRoutes);
 app.use('/api/clients', clientRoutes);
+app.use('/api/prospects', prospectRoutes);
 // app.use('/api/users', userRoutes);
 
 // 404 handler
