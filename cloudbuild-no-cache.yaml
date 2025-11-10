@@ -1,0 +1,48 @@
+steps:
+  # Build the container image WITHOUT CACHE
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--no-cache'
+      - '-t'
+      - 'northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/talentsecure:$SHORT_SHA'
+      - '-t'
+      - 'northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/talentsecure:latest'
+      - '-f'
+      - 'Dockerfile'
+      - '.'
+    dir: 'backend'
+
+  # Push the container image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - 'northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/talentsecure'
+
+  # Deploy container image to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'talentsecure'
+      - '--image'
+      - 'northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/talentsecure:$SHORT_SHA'
+      - '--region'
+      - 'northamerica-northeast1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--set-env-vars'
+      - 'NODE_ENV=production,PORT=8080'
+
+images:
+  - 'northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/talentsecure:$SHORT_SHA'
+  - 'northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/talentsecure:latest'
+
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1200s
