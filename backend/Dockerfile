@@ -14,14 +14,14 @@ RUN apk add --no-cache \
 WORKDIR /app
 
 # Copier les fichiers de dépendances
-COPY package*.json ./
-COPY prisma ./prisma/
+COPY backend/package*.json ./
+COPY backend/prisma ./prisma/
 
 # Installer toutes les dépendances (dev + prod pour build TypeScript)
 RUN npm ci
 
 # Copier le reste du code
-COPY . .
+COPY backend/ .
 
 # Générer le client Prisma
 RUN npx prisma generate
