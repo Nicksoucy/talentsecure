@@ -62,9 +62,11 @@ L'application TalentSecure est maintenant opérationnelle avec les fonctionnalit
 3. **Optimiser les requêtes Prisma** - Utiliser `select` au lieu de tout charger
 4. **Pagination côté serveur** - Limiter les données transférées
 
+**Fonctionnalités implémentées**
+5. ✅ **Upload de vidéos d'entretien** - Intégration Google Cloud Storage (backend + frontend complets)
+6. ✅ **Player vidéo intégré** - Afficher vidéos dans la fiche candidat
+
 **Fonctionnalités manquantes**
-5. **Upload de vidéos d'entretien** - Intégration Google Cloud Storage
-6. **Player vidéo intégré** - Afficher vidéos dans la fiche candidat
 7. **Email automatique pour catalogues** - Envoyer catalogues PDF par email
 8. **Export Excel** - Exporter résultats de recherche en Excel
 
@@ -136,6 +138,107 @@ npm run dev
 - Email: `test@xguard.com`
 - Mot de passe: `Test123!`
 - Rôle: ADMIN
+
+---
+
+## 🚀 Déploiement sur Google Cloud Run
+
+### Production URL
+- **Application en ligne:** https://talentsecure-frontend-XXXXX.run.app *(à venir)*
+- **API Backend:** https://talentsecure-backend-XXXXX.run.app *(à venir)*
+
+### Prérequis
+- Compte Google Cloud Platform avec facturation activée
+- Projet Google Cloud créé : `talentsecure`
+- APIs activées :
+  - Cloud Run API
+  - Cloud Build API
+  - Cloud Storage API
+  - Artifact Registry API
+
+### Déploiement via Google Cloud Console
+
+#### 1️⃣ Déployer le Backend
+
+**Aller sur Cloud Run :**
+```
+https://console.cloud.google.com/run?project=talentsecure
+```
+
+**Créer le service :**
+- Cliquer sur "CREATE SERVICE"
+- Source : "Continuously deploy from a repository (source)"
+- Cliquer "SET UP WITH CLOUD BUILD"
+- Provider : **GitHub**
+- Repository : `Nicksoucy/talentsecure`
+- Branch : `main`
+- Build Type : **Dockerfile**
+- Source location : `/backend/Dockerfile`
+- Service name : `talentsecure-backend`
+- Region : `us-central1` (ou `northamerica-northeast1` pour Montréal)
+- Authentication : ✅ Allow unauthenticated invocations
+
+**Variables d'environnement :**
+```
+NODE_ENV=production
+PORT=8080
+DATABASE_URL=<votre_url_neon>
+JWT_SECRET=<votre_secret>
+JWT_REFRESH_SECRET=<votre_refresh_secret>
+FRONTEND_URL=https://talentsecure-frontend-XXXXX.run.app
+```
+
+**Container port :** `8080`
+
+#### 2️⃣ Déployer le Frontend
+
+**Créer un nouveau service :**
+- Source : "Continuously deploy from a repository (source)"
+- Repository : `Nicksoucy/talentsecure`
+- Build Type : **Dockerfile**
+- Source location : `/frontend/Dockerfile`
+- Service name : `talentsecure-frontend`
+- Region : `us-central1` (ou `northamerica-northeast1`)
+- Authentication : ✅ Allow unauthenticated invocations
+
+**Variables d'environnement :**
+```
+VITE_API_URL=https://talentsecure-backend-XXXXX.run.app
+```
+
+**Container port :** `80`
+
+#### 3️⃣ Mettre à jour FRONTEND_URL
+
+Une fois le frontend déployé :
+1. Copier l'URL du frontend
+2. Retourner dans le service backend
+3. Mettre à jour la variable `FRONTEND_URL` avec l'URL du frontend
+4. Redéployer le backend
+
+### Configuration de la base de données
+
+L'application utilise **Neon PostgreSQL** (déjà configuré) :
+- URL de connexion dans la variable `DATABASE_URL`
+- Pas besoin de Cloud SQL pour le MVP
+- Migration possible vers Cloud SQL plus tard si nécessaire
+
+### Coût mensuel estimé
+
+| Service | Coût |
+|---------|------|
+| Cloud Run Backend | $10-20 |
+| Cloud Run Frontend | $5-10 |
+| Neon PostgreSQL | $0-20 |
+| **Total** | **$15-50/mois** |
+
+**Note :** Crédits gratuits de $300 pendant 90 jours pour nouveaux comptes !
+
+### Monitoring
+
+- **Logs Backend :** https://console.cloud.google.com/run/detail/us-central1/talentsecure-backend/logs
+- **Logs Frontend :** https://console.cloud.google.com/run/detail/us-central1/talentsecure-frontend/logs
+- **Metrics :** https://console.cloud.google.com/run?project=talentsecure
 
 ---
 
