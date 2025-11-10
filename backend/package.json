@@ -24,7 +24,7 @@
   "dependencies": {
     "@google-cloud/storage": "^7.17.3",
     "@prisma/client": "^5.7.0",
-    "@types/uuid": "^10.0.0",
+    "@types/uuid": "^9.0.8",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "csv-parse": "^6.1.0",
@@ -42,7 +42,7 @@
     "pdf-lib": "^1.17.1",
     "pdfkit": "^0.14.0",
     "redis": "^4.6.12",
-    "uuid": "^13.0.0",
+    "uuid": "^9.0.1",
     "winston": "^3.11.0",
     "xlsx": "^0.18.5",
     "zod": "^3.25.76"
