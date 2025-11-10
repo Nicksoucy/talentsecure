@@ -19,7 +19,7 @@ import clientRoutes from './routes/client.routes';
 import prospectRoutes from './routes/prospect.routes';
 
 const app: Application = express();
-const PORT = process.env.PORT || 5000;
+const PORT = parseInt(process.env.PORT || '8080', 10);
 
 // Security middleware
 app.use(helmet());
