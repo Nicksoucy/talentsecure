@@ -117,8 +117,9 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 TalentSecure API démarrée sur http://localhost:${PORT}`);
+const HOST = '0.0.0.0'; // CRITICAL for Cloud Run - must bind to all interfaces
+app.listen(PORT, HOST, () => {
+  console.log(`🚀 TalentSecure API démarrée sur http://${HOST}:${PORT}`);
   console.log(`📊 Environnement: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔒 CORS activé pour: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
 });
