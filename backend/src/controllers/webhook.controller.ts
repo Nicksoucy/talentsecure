@@ -72,20 +72,21 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
     const { contact, form_data } = req.body;
 
     // GoHighLevel envoie les données dans différents formats
-    // On essaie de supporter les deux formats courants
+    // On essaie de supporter les trois formats courants
     const formData = form_data || {};
     const contactData = contact || {};
+    const bodyData = req.body || {};  // Ajout: données directes dans body
 
-    // Extraire les champs
-    const firstName = formData.first_name || contactData.first_name || formData.firstName || contactData.firstName || '';
-    const lastName = formData.last_name || contactData.last_name || formData.lastName || contactData.lastName || '';
-    const email = formData.email || contactData.email || null;
-    const phone = formData.phone || contactData.phone || '';
-    const city = formData.city || contactData.city || formData.address1?.city || null;
-    const streetAddress = formData.address1?.address || formData.street_address || contactData.address1 || null;
-    const province = formData.state || contactData.state || 'QC';
-    const postalCode = formData.postal_code || contactData.postal_code || formData.zip || contactData.zip || null;
-    const country = formData.country || contactData.country || 'CA';
+    // Extraire les champs (priorité: bodyData direct, puis form_data, puis contact)
+    const firstName = bodyData.first_name || formData.first_name || contactData.first_name || '';
+    const lastName = bodyData.last_name || formData.last_name || contactData.last_name || '';
+    const email = bodyData.email || formData.email || contactData.email || null;
+    const phone = bodyData.phone || formData.phone || contactData.phone || '';
+    const city = bodyData.city || formData.city || contactData.city || null;
+    const streetAddress = bodyData.street_address || bodyData.stret_addess || formData.street_address || contactData.address1 || null;
+    const province = bodyData.state || formData.state || contactData.state || 'QC';
+    const postalCode = bodyData.postal_code || formData.postal_code || contactData.postal_code || null;
+    const country = bodyData.country || formData.country || contactData.country || 'CA';
 
     // Valider les champs requis
     if (!firstName || !phone) {
