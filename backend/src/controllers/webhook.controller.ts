@@ -87,6 +87,7 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
     const province = bodyData.state || formData.state || contactData.state || 'QC';
     const postalCode = bodyData.postal_code || formData.postal_code || contactData.postal_code || null;
     const country = bodyData.country || formData.country || contactData.country || 'CA';
+    const cvUrl = bodyData.cv_url || formData.cv_url || contactData.svp_joindre_votre_cv || null;
 
     // Valider les champs requis
     if (!firstName || !phone) {
@@ -95,6 +96,31 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
         error: 'Missing required fields',
         required: ['first_name', 'phone'],
         received: { firstName, phone }
+      });
+    }
+
+    // Vérifier les doublons (par email OU téléphone)
+    const existingProspect = await prisma.prospectCandidate.findFirst({
+      where: {
+        OR: [
+          email ? { email } : {},
+          { phone }
+        ],
+        isDeleted: false,
+      }
+    });
+
+    if (existingProspect) {
+      console.log('⚠️ Prospect déjà existant:', {
+        id: existingProspect.id,
+        email: existingProspect.email,
+        phone: existingProspect.phone
+      });
+      return res.status(409).json({
+        error: 'Duplicate prospect',
+        message: 'Un prospect avec cet email ou téléphone existe déjà',
+        existingProspectId: existingProspect.id,
+        matchedBy: existingProspect.email === email ? 'email' : 'phone'
       });
     }
 
@@ -114,20 +140,30 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
         postalCode,
         country,
         fullAddress: streetAddress ? `${streetAddress}, ${normalizedCity || city || ''}, ${province}, ${country}` : null,
+        cvUrl,
         submissionDate: new Date(),
         isContacted: false,
         isConverted: false,
-        notes: 'Ajouté automatiquement via GoHighLevel',
+        notes: cvUrl
+          ? 'Ajouté automatiquement via GoHighLevel avec CV'
+          : 'Ajouté automatiquement via GoHighLevel',
       },
     });
 
-    console.log('✅ Prospect créé avec succès:', prospect.id);
+    console.log('✅ Prospect créé avec succès:', {
+      id: prospect.id,
+      name: `${firstName} ${lastName}`,
+      email,
+      phone,
+      cvUrl: cvUrl || 'Non fourni',
+    });
 
     return res.status(201).json({
       success: true,
       message: 'Prospect créé avec succès',
       prospectId: prospect.id,
       normalizedCity,
+      cvUrl: cvUrl || null,
     });
 
   } catch (error) {
