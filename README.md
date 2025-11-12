@@ -29,6 +29,10 @@ L'application TalentSecure est maintenant opérationnelle avec les fonctionnalit
 - ✅ **Gestion complète des clients** (CRUD)
 - ✅ **API de statistiques** (candidats par ville, etc.)
 - ✅ **Script d'association automatique des CVs**
+- ✅ **Gestion des prospects** (CRUD avec filtres avancés)
+- ✅ **Import Google Sheets** automatique des prospects
+- ✅ **Intégration GoHighLevel API** (export contacts)
+- ✅ **API statistiques prospects** (par ville, statut, tendances)
 
 ### Frontend (React + TypeScript + Material-UI)
 - ✅ Structure du projet créée
@@ -49,6 +53,12 @@ L'application TalentSecure est maintenant opérationnelle avec les fonctionnalit
 - ✅ **Gestion des clients** (interface complète)
 - ✅ **Map interactive du Québec** (Leaflet) montrant distribution des candidats
 - ✅ **Téléchargement de CVs** depuis l'interface
+- ✅ **Gestion des prospects** (liste, détail, création, modification)
+- ✅ **Map interactive des prospects** (clustering, filtres par ville)
+- ✅ **Sélection multi-pages Gmail-style** (sélectionner tous les prospects filtrés)
+- ✅ **Export CSV des prospects** (avec sélection multiple)
+- ✅ **Marquage en masse** (contacter plusieurs prospects à la fois)
+- ✅ **Statistiques prospects** (graphiques, tendances par ville)
 
 ---
 
@@ -65,10 +75,14 @@ L'application TalentSecure est maintenant opérationnelle avec les fonctionnalit
 **Fonctionnalités implémentées**
 5. ✅ **Upload de vidéos d'entretien** - Intégration Google Cloud Storage (backend + frontend complets)
 6. ✅ **Player vidéo intégré** - Afficher vidéos dans la fiche candidat
+7. ✅ **Système de gestion des prospects** - CRUD complet avec map interactive
+8. ✅ **Import Google Sheets** - Synchronisation automatique des prospects depuis formulaire
+9. ✅ **Export CSV prospects** - Export multi-sélection avec filtres
+10. ✅ **Intégration GoHighLevel** - Export automatique des contacts vers CRM
 
 **Fonctionnalités manquantes**
-7. **Email automatique pour catalogues** - Envoyer catalogues PDF par email
-8. **Export Excel** - Exporter résultats de recherche en Excel
+11. **Email automatique pour catalogues** - Envoyer catalogues PDF par email
+12. **Export Excel candidats** - Exporter résultats de recherche en Excel
 
 **Qualité & Sécurité**
 9. **Tests unitaires** - Tests pour candidateController, authController
@@ -356,8 +370,11 @@ npm test                       # Lance les tests
 npm run test:coverage          # Tests avec couverture
 
 # Scripts utiles
-npx tsx src/scripts/create-test-user.ts    # Créer utilisateur de test
-npx tsx src/scripts/link-cvs.ts            # Associer les CVs aux candidats
+npx tsx src/scripts/create-test-user.ts              # Créer utilisateur de test
+npx tsx src/scripts/link-cvs.ts                      # Associer les CVs aux candidats
+npx tsx src/scripts/import-from-google-sheet.ts      # Importer prospects depuis Google Sheet
+npx tsx src/scripts/check-recent-prospects.ts        # Voir les 5 derniers prospects créés
+npx tsx src/scripts/normalize-prospect-cities.ts     # Normaliser les noms de villes
 ```
 
 ### Frontend
@@ -422,6 +439,90 @@ npm run prisma:studio
 1. Ouvrir http://localhost:5173/login
 2. Entrer email et mot de passe
 3. Ou cliquer "Se connecter avec Google"
+
+---
+
+## Gestion des Prospects
+
+### Fonctionnalités
+
+Le système de gestion des prospects permet de :
+- **Importer automatiquement** des prospects depuis Google Sheets
+- **Visualiser sur une carte** interactive avec clustering
+- **Filtrer** par ville, statut de contact, statut de conversion
+- **Sélectionner en masse** (style Gmail - sélection multi-pages)
+- **Exporter en CSV** les prospects sélectionnés
+- **Marquer comme contactés** en masse
+- **Exporter vers GoHighLevel** (CRM)
+
+### Import depuis Google Sheets
+
+Configuration requise dans `backend/.env` :
+```bash
+GOOGLE_SHEETS_API_KEY=votre-clé-api
+```
+
+Pour importer les prospects :
+```bash
+cd backend
+npx tsx src/scripts/import-from-google-sheet.ts
+```
+
+Le script :
+- ✅ Récupère les données du Google Sheet public
+- ✅ Normalise les noms de villes (Montréal, Québec, etc.)
+- ✅ Détecte et ignore les doublons (email ou téléphone)
+- ✅ Parse les dates de soumission
+- ✅ Associe automatiquement les CVs si disponibles
+
+### Export vers GoHighLevel
+
+Configuration requise dans `backend/.env` :
+```bash
+GOHIGHLEVEL_API_KEY=votre-clé-api
+GOHIGHLEVEL_LOCATION_ID=votre-location-id
+```
+
+L'export se fait via l'interface web (bouton "Exporter vers GoHighLevel") ou via API :
+```bash
+POST /api/prospects/export-to-gohighlevel
+Content-Type: application/json
+
+{
+  "prospectIds": ["id1", "id2", "id3"]
+}
+```
+
+### Carte Interactive
+
+La carte des prospects (`/prospects`) affiche :
+- 🗺️ Clustering automatique par densité
+- 📍 Marqueurs bleus pour les prospects
+- 🔢 Badges avec nombre de prospects par ville
+- 🖱️ Clic sur ville → filtre la liste automatiquement
+- 🔍 Zoom pour voir détails individuels
+
+### Sélection Multi-Pages (Gmail-style)
+
+1. **Cocher les prospects** sur la page actuelle
+2. Quand toute la page est sélectionnée, voir le message :
+   *"20 prospects sélectionnés sur cette page. Sélectionner tous les 50 prospects de Québec?"*
+3. **Cliquer "Sélectionner tout"** pour sélectionner ALL prospects matching les filtres
+4. **Exporter CSV** ou **Marquer comme contactés** en masse
+
+### Export CSV
+
+Format du CSV :
+- Prénom, Nom
+- Email, Téléphone
+- Ville, Province, Code Postal, Adresse
+- CV (Oui/Non)
+- Date de soumission
+- Contacté (Oui/Non)
+- Converti (Oui/Non)
+- Notes
+
+Encodage : UTF-8 avec BOM (support accents français)
 
 ---
 
