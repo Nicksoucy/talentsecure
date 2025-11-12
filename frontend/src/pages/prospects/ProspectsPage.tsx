@@ -42,6 +42,8 @@ import {
   Description as DescriptionIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
+  Download as DownloadIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useNavigate } from 'react-router-dom';
@@ -71,6 +73,13 @@ export default function ProspectsPage() {
     prospect: null,
   });
   const [contactNotes, setContactNotes] = useState('');
+
+  // CV Preview dialog
+  const [cvPreviewDialog, setCvPreviewDialog] = useState<{ open: boolean; cvUrl: string | null; prospectName: string }>({
+    open: false,
+    cvUrl: null,
+    prospectName: '',
+  });
 
   // Fetch prospects
   const { data, isLoading, error } = useQuery({
@@ -344,10 +353,14 @@ export default function ProspectsPage() {
                         {prospect.cvUrl ? (
                           <Chip
                             icon={<CheckCircleIcon />}
-                            label="Oui"
+                            label="Voir"
                             color="success"
                             size="small"
-                            onClick={() => window.open(prospect.cvUrl!, '_blank')}
+                            onClick={() => setCvPreviewDialog({
+                              open: true,
+                              cvUrl: prospect.cvUrl,
+                              prospectName: `${prospect.firstName} ${prospect.lastName}`,
+                            })}
                             sx={{ cursor: 'pointer' }}
                           />
                         ) : (
@@ -460,6 +473,59 @@ export default function ProspectsPage() {
             disabled={markContactedMutation.isPending}
           >
             {markContactedMutation.isPending ? 'En cours...' : 'Confirmer'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* CV Preview Dialog */}
+      <Dialog
+        open={cvPreviewDialog.open}
+        onClose={() => setCvPreviewDialog({ open: false, cvUrl: null, prospectName: '' })}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <DescriptionIcon />
+              <Typography variant="h6">
+                CV - {cvPreviewDialog.prospectName}
+              </Typography>
+            </Box>
+            <IconButton
+              onClick={() => setCvPreviewDialog({ open: false, cvUrl: null, prospectName: '' })}
+              size="small"
+            >
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0, height: '80vh' }}>
+          {cvPreviewDialog.cvUrl && (
+            <iframe
+              src={cvPreviewDialog.cvUrl}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+              }}
+              title={`CV - ${cvPreviewDialog.prospectName}`}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => window.open(cvPreviewDialog.cvUrl!, '_blank')}
+            startIcon={<DownloadIcon />}
+            variant="outlined"
+          >
+            Télécharger
+          </Button>
+          <Button
+            onClick={() => setCvPreviewDialog({ open: false, cvUrl: null, prospectName: '' })}
+            variant="contained"
+          >
+            Fermer
           </Button>
         </DialogActions>
       </Dialog>
