@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
-import { Box, Typography, CircularProgress, Paper, Chip } from '@mui/material';
+import { Box, Typography, CircularProgress, Paper, Chip, Button } from '@mui/material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { quebecCitiesCoordinates } from '../../utils/quebecCities';
@@ -30,7 +30,11 @@ interface CityStats {
   count: number;
 }
 
-const ProspectsMapClustered: React.FC = () => {
+interface ProspectsMapClusteredProps {
+  onCityClick?: (city: string) => void;
+}
+
+const ProspectsMapClustered: React.FC<ProspectsMapClusteredProps> = ({ onCityClick }) => {
   const [cityStats, setCityStats] = useState<CityStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,7 +104,18 @@ const ProspectsMapClustered: React.FC = () => {
                   label={`${stat.count} prospect${stat.count > 1 ? 's' : ''}`}
                   color="primary"
                   size="small"
+                  sx={{ mb: 1 }}
                 />
+                {onCityClick && (
+                  <Button
+                    variant="contained"
+                    size="small"
+                    fullWidth
+                    onClick={() => onCityClick(stat.city)}
+                  >
+                    Voir ces prospects
+                  </Button>
+                )}
               </Box>
             </Popup>
           </Marker>

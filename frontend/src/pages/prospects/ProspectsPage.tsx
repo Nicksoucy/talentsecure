@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box,
@@ -30,6 +30,8 @@ import {
   DialogActions,
   Grid,
   Collapse,
+  Checkbox,
+  Toolbar,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -44,6 +46,7 @@ import {
   Cancel as CancelIcon,
   Download as DownloadIcon,
   Close as CloseIcon,
+  FileDownload as FileDownloadIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useNavigate } from 'react-router-dom';
@@ -67,6 +70,10 @@ export default function ProspectsPage() {
     isConverted: '',
   });
 
+  // Selection state
+  const [selectedProspects, setSelectedProspects] = useState<Set<string>>(new Set());
+  const [selectAllPages, setSelectAllPages] = useState(false);
+
   // Contact dialog
   const [contactDialog, setContactDialog] = useState<{ open: boolean; prospect: ProspectCandidate | null }>({
     open: false,
@@ -80,6 +87,13 @@ export default function ProspectsPage() {
     cvUrl: null,
     prospectName: '',
   });
+
+  // Reset selection when changing pages (unless "select all pages" is active)
+  useEffect(() => {
+    if (!selectAllPages) {
+      setSelectedProspects(new Set());
+    }
+  }, [page, selectAllPages]);
 
   // Fetch prospects
   const { data, isLoading, error } = useQuery({
@@ -151,6 +165,182 @@ export default function ProspectsPage() {
   const handleDelete = (id: string) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce prospect ?')) {
       deleteMutation.mutate(id);
+    }
+  };
+
+  // Selection handlers
+  const handleCityClick = (city: string) => {
+    setFilters({ ...filters, city });
+    setShowMap(false); // Hide map after filtering
+    enqueueSnackbar(`Filtré par ville: ${city}`, { variant: 'info' });
+  };
+
+  const handleSelectProspect = (id: string) => {
+    const newSelected = new Set(selectedProspects);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedProspects(newSelected);
+    setSelectAllPages(false); // Reset when manually selecting
+  };
+
+  const handleSelectAll = () => {
+    if (selectedProspects.size === prospects.length) {
+      setSelectedProspects(new Set());
+      setSelectAllPages(false);
+    } else {
+      setSelectedProspects(new Set(prospects.map((p: ProspectCandidate) => p.id)));
+      setSelectAllPages(false);
+    }
+  };
+
+  const handleSelectAllPages = async () => {
+    try {
+      // Fetch all prospect IDs matching current filters
+      const response = await prospectService.getProspects({
+        page: 1,
+        limit: 10000, // Large limit to get all
+        search: search || undefined,
+        city: filters.city || undefined,
+        isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
+        isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
+      });
+
+      const allIds = response.data.map((p: ProspectCandidate) => p.id);
+      setSelectedProspects(new Set(allIds));
+      setSelectAllPages(true);
+
+      enqueueSnackbar(`${allIds.length} prospects sélectionnés (toutes pages)`, {
+        variant: 'info',
+      });
+    } catch (error) {
+      enqueueSnackbar('Erreur lors de la sélection', { variant: 'error' });
+    }
+  };
+
+  const handleBulkContact = async () => {
+    if (selectedProspects.size === 0 && !selectAllPages) return;
+
+    try {
+      let prospectsToContact: string[] = [];
+
+      if (selectAllPages) {
+        // Get all IDs that match the current filters
+        const response = await prospectService.getProspects({
+          page: 1,
+          limit: 10000,
+          search: search || undefined,
+          city: filters.city || undefined,
+          isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
+          isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
+        });
+        prospectsToContact = response.data.map((p: ProspectCandidate) => p.id);
+      } else {
+        prospectsToContact = Array.from(selectedProspects);
+      }
+
+      // Mark all as contacted
+      await Promise.all(
+        prospectsToContact.map((id) => prospectService.markAsContacted(id))
+      );
+
+      enqueueSnackbar(`${prospectsToContact.length} prospects marqués comme contactés`, {
+        variant: 'success',
+      });
+
+      setSelectedProspects(new Set());
+      setSelectAllPages(false);
+      queryClient.invalidateQueries({ queryKey: ['prospects'] });
+      queryClient.invalidateQueries({ queryKey: ['prospects', 'stats'] });
+    } catch (error) {
+      enqueueSnackbar('Erreur lors du marquage des prospects', { variant: 'error' });
+    }
+  };
+
+  const handleExportCSV = async () => {
+    if (selectedProspects.size === 0 && !selectAllPages) return;
+
+    try {
+      let prospectsToExport: ProspectCandidate[] = [];
+
+      if (selectAllPages) {
+        // Get all prospects that match the current filters
+        const response = await prospectService.getProspects({
+          page: 1,
+          limit: 10000,
+          search: search || undefined,
+          city: filters.city || undefined,
+          isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
+          isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
+        });
+        prospectsToExport = response.data;
+      } else {
+        // Filter current prospects by selected IDs
+        prospectsToExport = prospects.filter((p: ProspectCandidate) =>
+          selectedProspects.has(p.id)
+        );
+      }
+
+      // Create CSV content
+      const headers = [
+        'Prénom',
+        'Nom',
+        'Email',
+        'Téléphone',
+        'Ville',
+        'Province',
+        'Code Postal',
+        'Adresse',
+        'CV',
+        'Date de soumission',
+        'Contacté',
+        'Converti',
+        'Notes',
+      ];
+
+      const csvRows = [
+        headers.join(','),
+        ...prospectsToExport.map((prospect) =>
+          [
+            `"${prospect.firstName || ''}"`,
+            `"${prospect.lastName || ''}"`,
+            `"${prospect.email || ''}"`,
+            `"${prospect.phone || ''}"`,
+            `"${prospect.city || ''}"`,
+            `"${prospect.province || ''}"`,
+            `"${prospect.postalCode || ''}"`,
+            `"${prospect.streetAddress || ''}"`,
+            prospect.cvUrl ? 'Oui' : 'Non',
+            prospect.submissionDate ? new Date(prospect.submissionDate).toLocaleDateString('fr-CA') : '',
+            prospect.isContacted ? 'Oui' : 'Non',
+            prospect.isConverted ? 'Oui' : 'Non',
+            `"${(prospect.notes || '').replace(/"/g, '""')}"`,
+          ].join(',')
+        ),
+      ];
+
+      const csvContent = csvRows.join('\n');
+
+      // Create and download file
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      const date = new Date().toISOString().split('T')[0];
+
+      link.setAttribute('href', url);
+      link.setAttribute('download', `prospects_${date}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      enqueueSnackbar(`${prospectsToExport.length} prospects exportés en CSV`, {
+        variant: 'success',
+      });
+    } catch (error) {
+      enqueueSnackbar('Erreur lors de l\'export CSV', { variant: 'error' });
     }
   };
 
@@ -248,7 +438,7 @@ export default function ProspectsPage() {
       {/* Map */}
       <Collapse in={showMap}>
         <Box sx={{ mb: 3 }}>
-          <ProspectsMapClustered />
+          <ProspectsMapClustered onCityClick={handleCityClick} />
         </Box>
       </Collapse>
 
@@ -318,10 +508,81 @@ export default function ProspectsPage() {
         </Box>
       ) : (
         <>
+          {/* Bulk Actions Toolbar */}
+          {selectedProspects.size > 0 && (
+            <Paper sx={{ mb: 2, p: 2, bgcolor: 'primary.light', color: 'primary.contrastText' }}>
+              <Toolbar sx={{ gap: 2, flexDirection: 'column', alignItems: 'flex-start' }}>
+                <Box sx={{ display: 'flex', gap: 2, width: '100%', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Typography variant="subtitle1">
+                    {selectAllPages
+                      ? `Tous les ${selectedProspects.size} prospects sélectionnés`
+                      : `${selectedProspects.size} prospect${selectedProspects.size > 1 ? 's' : ''} sélectionné${selectedProspects.size > 1 ? 's' : ''}`}
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    startIcon={<ContactIcon />}
+                    onClick={handleBulkContact}
+                  >
+                    Marquer comme contactés
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="info"
+                    startIcon={<FileDownloadIcon />}
+                    onClick={handleExportCSV}
+                  >
+                    Exporter CSV
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    sx={{ color: 'white', borderColor: 'white' }}
+                    onClick={() => {
+                      setSelectedProspects(new Set());
+                      setSelectAllPages(false);
+                    }}
+                  >
+                    Annuler la sélection
+                  </Button>
+                </Box>
+                {/* Show "Select all pages" option when all current page items are selected */}
+                {!selectAllPages &&
+                  selectedProspects.size === prospects.length &&
+                  data?.pagination?.total &&
+                  data.pagination.total > prospects.length && (
+                    <Alert
+                      severity="info"
+                      sx={{ mt: 1, bgcolor: 'white', color: 'text.primary' }}
+                      action={
+                        <Button color="primary" size="small" onClick={handleSelectAllPages}>
+                          Sélectionner tout
+                        </Button>
+                      }
+                    >
+                      {prospects.length} prospects sélectionnés sur cette page.{' '}
+                      <strong>
+                        Sélectionner tous les {data.pagination.total} prospects{' '}
+                        {filters.city && `de ${filters.city}`}?
+                      </strong>
+                    </Alert>
+                  )}
+              </Toolbar>
+            </Paper>
+          )}
+
           <TableContainer component={Paper}>
             <Table>
               <TableHead>
                 <TableRow>
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      indeterminate={
+                        selectedProspects.size > 0 && selectedProspects.size < prospects.length
+                      }
+                      checked={prospects.length > 0 && selectedProspects.size === prospects.length}
+                      onChange={handleSelectAll}
+                    />
+                  </TableCell>
                   <TableCell>Nom</TableCell>
                   <TableCell>Email</TableCell>
                   <TableCell>Téléphone</TableCell>
@@ -336,13 +597,23 @@ export default function ProspectsPage() {
               <TableBody>
                 {prospects.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} align="center">
+                    <TableCell colSpan={10} align="center">
                       Aucun prospect trouvé
                     </TableCell>
                   </TableRow>
                 ) : (
                   prospects.map((prospect: ProspectCandidate) => (
-                    <TableRow key={prospect.id} hover>
+                    <TableRow
+                      key={prospect.id}
+                      hover
+                      selected={selectedProspects.has(prospect.id)}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={selectedProspects.has(prospect.id)}
+                          onChange={() => handleSelectProspect(prospect.id)}
+                        />
+                      </TableCell>
                       <TableCell>
                         {prospect.firstName} {prospect.lastName}
                       </TableCell>
