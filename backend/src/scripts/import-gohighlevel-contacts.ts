@@ -122,22 +122,28 @@ async function fetchGoHighLevelContacts(): Promise<GoHighLevelContact[]> {
 
   try {
     const contacts: GoHighLevelContact[] = [];
-    let skip = 0;
+    let nextCursor: string | undefined = undefined;
     const limit = 100;
-    let hasMore = true;
 
-    while (hasMore) {
+    // API v2.0 utilise la pagination par cursor
+    do {
+      const params: any = {
+        locationId,
+        limit,
+      };
+
+      if (nextCursor) {
+        params.startAfterId = nextCursor;
+      }
+
       const response = await axios.get(
-        `https://rest.gohighlevel.com/v1/contacts/`,
+        `https://services.leadconnectorhq.com/contacts/`,
         {
           headers: {
             Authorization: `Bearer ${apiKey}`,
+            Version: '2021-07-28',
           },
-          params: {
-            locationId,
-            limit,
-            skip,
-          },
+          params,
         }
       );
 
@@ -146,9 +152,9 @@ async function fetchGoHighLevelContacts(): Promise<GoHighLevelContact[]> {
 
       console.log(`  Récupéré ${contacts.length} contacts...`);
 
-      hasMore = batch.length === limit;
-      skip += limit;
-    }
+      // API v2.0 utilise meta.nextStartAfterId pour la pagination
+      nextCursor = response.data.meta?.nextStartAfterId;
+    } while (nextCursor);
 
     console.log(`✅ Total: ${contacts.length} contacts récupérés`);
     return contacts;

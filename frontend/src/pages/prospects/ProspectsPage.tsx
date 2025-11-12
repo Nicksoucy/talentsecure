@@ -39,6 +39,9 @@ import {
   Delete as DeleteIcon,
   FilterList as FilterIcon,
   Map as MapIcon,
+  Description as DescriptionIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useNavigate } from 'react-router-dom';
@@ -314,6 +317,7 @@ export default function ProspectsPage() {
                   <TableCell>Email</TableCell>
                   <TableCell>Téléphone</TableCell>
                   <TableCell>Ville</TableCell>
+                  <TableCell>CV</TableCell>
                   <TableCell>Date soumission</TableCell>
                   <TableCell>Contacté</TableCell>
                   <TableCell>Converti</TableCell>
@@ -323,7 +327,7 @@ export default function ProspectsPage() {
               <TableBody>
                 {prospects.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center">
+                    <TableCell colSpan={9} align="center">
                       Aucun prospect trouvé
                     </TableCell>
                   </TableRow>
@@ -336,6 +340,20 @@ export default function ProspectsPage() {
                       <TableCell>{prospect.email || 'N/A'}</TableCell>
                       <TableCell>{prospect.phone}</TableCell>
                       <TableCell>{prospect.city || 'N/A'}</TableCell>
+                      <TableCell>
+                        {prospect.cvUrl ? (
+                          <Chip
+                            icon={<CheckCircleIcon />}
+                            label="Oui"
+                            color="success"
+                            size="small"
+                            onClick={() => window.open(prospect.cvUrl!, '_blank')}
+                            sx={{ cursor: 'pointer' }}
+                          />
+                        ) : (
+                          <Chip icon={<CancelIcon />} label="Non" color="default" size="small" />
+                        )}
+                      </TableCell>
                       <TableCell>{formatDate(prospect.submissionDate)}</TableCell>
                       <TableCell>
                         {prospect.isContacted ? (
