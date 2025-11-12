@@ -17,6 +17,7 @@ import candidateRoutes from './routes/candidate.routes';
 import catalogueRoutes from './routes/catalogue.routes';
 import clientRoutes from './routes/client.routes';
 import prospectRoutes from './routes/prospect.routes';
+import webhookRoutes from './routes/webhook.routes';
 
 const app: Application = express();
 const PORT = parseInt(process.env.PORT || '8080', 10);
@@ -93,6 +94,7 @@ app.use('/api/candidates', candidateRoutes);
 app.use('/api/catalogues', catalogueRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/prospects', prospectRoutes);
+app.use('/api/webhooks', webhookRoutes);
 // app.use('/api/users', userRoutes);
 
 // 404 handler
