@@ -124,9 +124,11 @@ async function fetchGoHighLevelContacts(): Promise<GoHighLevelContact[]> {
     const contacts: GoHighLevelContact[] = [];
     let nextCursor: string | undefined = undefined;
     const limit = 100;
+    let pageCount = 0;
 
     // API v2.0 utilise la pagination par cursor
     do {
+      pageCount++;
       const params: any = {
         locationId,
         limit,
@@ -135,6 +137,8 @@ async function fetchGoHighLevelContacts(): Promise<GoHighLevelContact[]> {
       if (nextCursor) {
         params.startAfterId = nextCursor;
       }
+
+      console.log(`  📄 Page ${pageCount}: Récupération...`);
 
       const response = await axios.get(
         `https://services.leadconnectorhq.com/contacts/`,
@@ -150,13 +154,33 @@ async function fetchGoHighLevelContacts(): Promise<GoHighLevelContact[]> {
       const batch = response.data.contacts || [];
       contacts.push(...batch);
 
-      console.log(`  Récupéré ${contacts.length} contacts...`);
+      console.log(`     ✓ ${batch.length} contacts sur cette page. Total: ${contacts.length}`);
 
       // API v2.0 utilise meta.nextStartAfterId pour la pagination
+      const previousCursor = nextCursor;
       nextCursor = response.data.meta?.nextStartAfterId;
+
+      // Debug: afficher si on a un nextCursor
+      if (nextCursor) {
+        console.log(`     → Cursor suivant: ${nextCursor.substring(0, 20)}...`);
+      } else {
+        console.log(`     → Fin de la pagination (pas de nextCursor)`);
+      }
+
+      // Sécurité: éviter boucle infinie
+      if (nextCursor === previousCursor) {
+        console.log(`     ⚠️ Cursor identique détecté, arrêt pour éviter boucle infinie`);
+        break;
+      }
+
+      // Limite de sécurité: max 20 pages (2000 contacts)
+      if (pageCount >= 20) {
+        console.log(`     ⚠️ Limite de 20 pages atteinte, arrêt de sécurité`);
+        break;
+      }
     } while (nextCursor);
 
-    console.log(`✅ Total: ${contacts.length} contacts récupérés`);
+    console.log(`✅ Total: ${contacts.length} contacts récupérés en ${pageCount} pages`);
     return contacts;
   } catch (error: any) {
     console.error('❌ Erreur lors de la récupération des contacts:', error.response?.data || error.message);
@@ -177,7 +201,22 @@ async function importContact(contact: GoHighLevelContact): Promise<'created' | '
     const country = contact.country || 'CA';
 
     // Récupérer l'URL du CV depuis les custom fields
-    const cvUrl = contact.customFields?.svp_joindre_votre_cv || null;
+    // Le CV est dans le custom field avec ID: cm3tVwxgP152THc1PMZy
+    let cvUrl: string | null = null;
+
+    if (contact.customFields && Array.isArray(contact.customFields)) {
+      const cvField = contact.customFields.find((f: any) => f.id === 'cm3tVwxgP152THc1PMZy');
+
+      if (cvField && cvField.value && typeof cvField.value === 'object') {
+        // La valeur est un objet avec des UUIDs comme clés
+        // Extraire le premier document trouvé
+        const documents = Object.values(cvField.value);
+        if (documents.length > 0) {
+          const firstDoc: any = documents[0];
+          cvUrl = firstDoc.url || null;
+        }
+      }
+    }
 
     // Validation: on a besoin au minimum d'un prénom et d'un téléphone
     if (!firstName || !phone) {
@@ -218,20 +257,11 @@ async function importContact(contact: GoHighLevelContact): Promise<'created' | '
         submissionDate: contact.dateAdded ? new Date(contact.dateAdded) : new Date(),
         isContacted: false,
         isConverted: false,
-        notes: 'Importé depuis GoHighLevel',
+        notes: cvUrl
+          ? 'Importé depuis GoHighLevel avec CV'
+          : 'Importé depuis GoHighLevel',
       },
     });
-
-    // Télécharger le CV si disponible
-    if (cvUrl) {
-      const cvStoragePath = await downloadCV(cvUrl, prospect.id);
-      if (cvStoragePath) {
-        await prisma.prospectCandidate.update({
-          where: { id: prospect.id },
-          data: { cvStoragePath },
-        });
-      }
-    }
 
     console.log(`  ✅ Importé: ${firstName} ${lastName} ${cvUrl ? '(avec CV)' : ''}`);
     return 'created';
