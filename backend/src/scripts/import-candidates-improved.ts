@@ -185,16 +185,23 @@ async function importCandidate(
     let hrNotes = avisRH || null;
     let status: CandidateStatus;
 
-    // Si l'onglet individuel n'existe pas, marquer comme ABSENT avec note "info missing"
+    // Déterminer le statut d'abord en fonction de la note et l'avis RH
+    status = getStatusFromRatingAndAvis(globalRating, avisRH);
+
+    // Si l'onglet individuel n'existe pas
     if (!sheetName) {
-      console.log(`  [${rowIndex}] ⚠️ Onglet individuel non trouvé pour le numéro "${numero}" - Marqué ABSENT`);
-      status = 'ABSENT';
-      hrNotes = (hrNotes ? hrNotes + ' | ' : '') + 'Info missing - Onglet individuel non trouvé';
+      // Si le candidat a une note, il a été interviewé donc pas ABSENT
+      if (globalRating !== null) {
+        console.log(`  [${rowIndex}] ⚠️ Onglet individuel non trouvé pour le numéro "${numero}" (mais a une note: ${noteStr})`);
+        hrNotes = (hrNotes ? hrNotes + ' | ' : '') + 'Info missing - Onglet individuel non trouvé';
+      } else {
+        // Pas de note ET pas d'onglet = vraiment absent ou pas encore interviewé
+        console.log(`  [${rowIndex}] ⚠️ Onglet individuel non trouvé pour le numéro "${numero}" ET pas de note - Marqué ABSENT`);
+        status = 'ABSENT';
+        hrNotes = (hrNotes ? hrNotes + ' | ' : '') + 'Info missing - Onglet individuel non trouvé, pas de note';
+      }
     } else {
       console.log(`  [${rowIndex}] 📄 Lecture onglet: "${sheetName}"...`);
-
-      // Déterminer le statut (prend en compte "absent" dans avisRH)
-      status = getStatusFromRatingAndAvis(globalRating, avisRH);
 
       // Si le candidat est absent selon avisRH, on ne lit pas l'onglet
       if (status === 'ABSENT') {
