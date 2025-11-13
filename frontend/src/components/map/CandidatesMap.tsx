@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
-import { Box, Typography, CircularProgress, Paper } from '@mui/material';
+import { Box, Typography, CircularProgress, Paper, Button, Chip } from '@mui/material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { quebecCitiesCoordinates } from '../../utils/quebecCities';
@@ -19,7 +19,11 @@ interface CityStats {
   count: number;
 }
 
-const CandidatesMap: React.FC = () => {
+interface CandidatesMapProps {
+  onCityClick?: (city: string) => void;
+}
+
+const CandidatesMap: React.FC<CandidatesMapProps> = ({ onCityClick }) => {
   const [cityStats, setCityStats] = useState<CityStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -106,12 +110,25 @@ const CandidatesMap: React.FC = () => {
             >
               <Popup>
                 <Box>
-                  <Typography variant="h6" gutterBottom>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                     {stat.city}
                   </Typography>
-                  <Typography variant="body1">
-                    <strong>{stat.count}</strong> candidat{stat.count > 1 ? 's' : ''}
-                  </Typography>
+                  <Chip
+                    label={`${stat.count} candidat${stat.count > 1 ? 's' : ''}`}
+                    color="success"
+                    size="small"
+                    sx={{ mb: 1 }}
+                  />
+                  {onCityClick && (
+                    <Button
+                      variant="contained"
+                      size="small"
+                      fullWidth
+                      onClick={() => onCityClick(stat.city)}
+                    >
+                      Voir ces candidats
+                    </Button>
+                  )}
                 </Box>
               </Popup>
             </Circle>

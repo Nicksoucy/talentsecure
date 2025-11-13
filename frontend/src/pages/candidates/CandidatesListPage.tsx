@@ -48,6 +48,7 @@ import {
   ArrowDownward as ArrowDownwardIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
+  Map as MapIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useNavigate } from 'react-router-dom';
@@ -55,6 +56,7 @@ import { candidateService } from '@/services/candidate.service';
 import { catalogueService } from '@/services/catalogue.service';
 import { clientService } from '@/services/client.service';
 import InterviewEvaluationForm from '@/components/InterviewEvaluationForm';
+import CandidatesMap from '@/components/map/CandidatesMap';
 
 const STATUS_COLORS: Record<string, 'success' | 'info' | 'warning' | 'error' | 'default'> = {
   ELITE: 'error',
@@ -88,6 +90,7 @@ export default function CandidatesListPage() {
   // Search and filter states
   const [search, setSearch] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [showMap, setShowMap] = useState(false);
   const [filters, setFilters] = useState({
     status: '',
     minRating: '',
@@ -163,6 +166,15 @@ export default function CandidatesListPage() {
   const handleFilterChange = (field: string, value: any) => {
     setFilters({ ...filters, [field]: value });
     setPage(1);
+  };
+
+  // Handle city click from map
+  const handleCityClick = (city: string) => {
+    setFilters({ ...filters, city });
+    setCityInput(city); // Update local input for autocomplete
+    setShowMap(false); // Hide map after filtering
+    setPage(1);
+    enqueueSnackbar(`Filtré par ville: ${city}`, { variant: 'info' });
   };
 
   // Clear all filters
@@ -536,14 +548,30 @@ export default function CandidatesListPage() {
         <Typography variant="h4" fontWeight="bold">
           Candidats ({data?.pagination.total || 0})
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setOpenAddDialog(true)}
-        >
-          Ajouter un candidat
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="outlined"
+            startIcon={<MapIcon />}
+            onClick={() => setShowMap(!showMap)}
+          >
+            {showMap ? 'Masquer carte' : 'Afficher carte'}
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenAddDialog(true)}
+          >
+            Ajouter un candidat
+          </Button>
+        </Box>
       </Box>
+
+      {/* Map */}
+      <Collapse in={showMap}>
+        <Box sx={{ mb: 3 }}>
+          <CandidatesMap onCityClick={handleCityClick} />
+        </Box>
+      </Collapse>
 
       {/* Search and Filters */}
       <Card sx={{ mb: 2 }}>
