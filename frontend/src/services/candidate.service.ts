@@ -141,4 +141,27 @@ export const candidateService = {
     const response = await api.delete(`/api/candidates/${candidateId}/video`);
     return response.data;
   },
+
+  /**
+   * Get candidates statistics (total, by status)
+   */
+  async getCandidatesStats(): Promise<{
+    success: boolean;
+    data: {
+      total: number;
+      byStatus: Record<string, number>;
+      elite: number;
+      excellent: number;
+      veryGood: number;
+      good: number;
+      qualified: number;
+      toReview: number;
+      pending: number;
+      absent: number;
+      inactive: number;
+    }
+  }> {
+    const response = await api.get('/api/candidates/stats/summary');
+    return response.data;
+  },
 };

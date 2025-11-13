@@ -757,3 +757,87 @@ export const deleteCandidateVideo = async (
     next(error);
   }
 };
+
+/**
+ * Get candidates statistics (total, by status, etc.)
+ */
+export const getCandidatesStats = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    // Get total count (active, non-deleted)
+    const total = await prisma.candidate.count({
+      where: {
+        isDeleted: false,
+        isActive: true,
+      },
+    });
+
+    // Get count by status
+    const byStatus = await prisma.candidate.groupBy({
+      by: ['status'],
+      where: {
+        isDeleted: false,
+        isActive: true,
+      },
+      _count: {
+        status: true,
+      },
+    });
+
+    // Convert to object for easier access
+    const statusCounts: Record<string, number> = {};
+    byStatus.forEach((item) => {
+      statusCounts[item.status] = item._count.status;
+    });
+
+    // Get elite candidates (9.5+)
+    const elite = statusCounts['ELITE'] || 0;
+
+    // Get excellent candidates (9-9.4)
+    const excellent = statusCounts['EXCELLENT'] || 0;
+
+    // Get very good candidates (8.5-8.9)
+    const veryGood = statusCounts['TRES_BON'] || 0;
+
+    // Get good candidates (8-8.4)
+    const good = statusCounts['BON'] || 0;
+
+    // Get qualified candidates (7-7.9)
+    const qualified = statusCounts['QUALIFIE'] || 0;
+
+    // Get candidates to review (<7)
+    const toReview = statusCounts['A_REVOIR'] || 0;
+
+    // Get pending candidates
+    const pending = statusCounts['EN_ATTENTE'] || 0;
+
+    // Get absent candidates
+    const absent = statusCounts['ABSENT'] || 0;
+
+    // Get inactive candidates
+    const inactive = statusCounts['INACTIF'] || 0;
+
+    res.json({
+      success: true,
+      data: {
+        total,
+        byStatus: statusCounts,
+        elite,
+        excellent,
+        veryGood,
+        good,
+        qualified,
+        toReview,
+        pending,
+        absent,
+        inactive,
+      },
+    });
+  } catch (error) {
+    console.error('Error getting candidates stats:', error);
+    next(error);
+  }
+};

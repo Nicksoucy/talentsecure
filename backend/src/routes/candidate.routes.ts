@@ -11,6 +11,7 @@ import {
   uploadCandidateVideo,
   getCandidateVideoUrl,
   deleteCandidateVideo,
+  getCandidatesStats,
 } from '../controllers/candidate.controller';
 import {
   uploadCandidateCV,
@@ -32,6 +33,13 @@ router.use(authenticateJWT);
  * @access  Private (All authenticated users)
  */
 router.get('/', getCandidates);
+
+/**
+ * @route   GET /api/candidates/stats/summary
+ * @desc    Get candidates statistics summary (total, by status)
+ * @access  Private (All authenticated users)
+ */
+router.get('/stats/summary', getCandidatesStats);
 
 /**
  * @route   GET /api/candidates/stats/by-city

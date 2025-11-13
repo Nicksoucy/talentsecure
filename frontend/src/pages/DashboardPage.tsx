@@ -20,6 +20,7 @@ import { useAuthStore } from '@/store/authStore';
 import CandidatesMap from '@/components/map/CandidatesMap';
 import ProspectsMapClustered from '@/components/map/ProspectsMapClustered';
 import { prospectService } from '@/services/prospect.service';
+import { candidateService } from '@/services/candidate.service';
 
 const DashboardPage = () => {
   const { user } = useAuthStore();
@@ -30,19 +31,26 @@ const DashboardPage = () => {
     queryFn: () => prospectService.getProspectsStats(),
   });
 
+  // Fetch candidate stats
+  const { data: candidateStatsData, isLoading: loadingCandidates } = useQuery({
+    queryKey: ['candidates', 'stats'],
+    queryFn: () => candidateService.getCandidatesStats(),
+  });
+
   const prospectStats = prospectStatsData?.data;
+  const candidateStats = candidateStatsData?.data;
 
   const stats = [
     {
       title: 'Total Candidats',
-      value: '97',
+      value: loadingCandidates ? '...' : (candidateStats?.total || 0).toString(),
       icon: <PeopleIcon sx={{ fontSize: 40 }} />,
       color: '#1976d2',
-      change: '+12 ce mois',
+      change: 'Candidats qualifiés',
     },
     {
       title: 'Candidats Élite',
-      value: '15',
+      value: loadingCandidates ? '...' : (candidateStats?.elite || 0).toString(),
       icon: <StarIcon sx={{ fontSize: 40 }} />,
       color: '#f50057',
       change: '9.5+ /10',
@@ -178,41 +186,51 @@ const DashboardPage = () => {
               <Typography variant="h6" gutterBottom>
                 Candidats par statut
               </Typography>
-              <Box sx={{ mt: 2 }}>
-                {[
-                  { label: 'ELITE (9.5+)', value: 15, total: 97, color: '#f50057' },
-                  { label: 'EXCELLENT (9-9.4)', value: 28, total: 97, color: '#4caf50' },
-                  { label: 'TRES_BON (8.5-8.9)', value: 32, total: 97, color: '#2196f3' },
-                  { label: 'BON (8-8.4)', value: 22, total: 97, color: '#ff9800' },
-                ].map((item, index) => (
-                  <Box key={index} sx={{ mb: 2 }}>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        mb: 0.5,
-                      }}
-                    >
-                      <Typography variant="body2">{item.label}</Typography>
-                      <Typography variant="body2" fontWeight="bold">
-                        {item.value}
-                      </Typography>
+              {loadingCandidates ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : candidateStats ? (
+                <Box sx={{ mt: 2 }}>
+                  {[
+                    { label: 'ELITE (9.5+)', value: candidateStats.elite, total: candidateStats.total, color: '#f50057' },
+                    { label: 'EXCELLENT (9-9.4)', value: candidateStats.excellent, total: candidateStats.total, color: '#4caf50' },
+                    { label: 'TRES_BON (8.5-8.9)', value: candidateStats.veryGood, total: candidateStats.total, color: '#2196f3' },
+                    { label: 'BON (8-8.4)', value: candidateStats.good, total: candidateStats.total, color: '#ff9800' },
+                  ].map((item, index) => (
+                    <Box key={index} sx={{ mb: 2 }}>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          mb: 0.5,
+                        }}
+                      >
+                        <Typography variant="body2">{item.label}</Typography>
+                        <Typography variant="body2" fontWeight="bold">
+                          {item.value}
+                        </Typography>
+                      </Box>
+                      <LinearProgress
+                        variant="determinate"
+                        value={item.total > 0 ? (item.value / item.total) * 100 : 0}
+                        sx={{
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: '#e0e0e0',
+                          '& .MuiLinearProgress-bar': {
+                            backgroundColor: item.color,
+                          },
+                        }}
+                      />
                     </Box>
-                    <LinearProgress
-                      variant="determinate"
-                      value={(item.value / item.total) * 100}
-                      sx={{
-                        height: 8,
-                        borderRadius: 4,
-                        backgroundColor: '#e0e0e0',
-                        '& .MuiLinearProgress-bar': {
-                          backgroundColor: item.color,
-                        },
-                      }}
-                    />
-                  </Box>
-                ))}
-              </Box>
+                  ))}
+                </Box>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  Aucune donnée disponible
+                </Typography>
+              )}
             </CardContent>
           </Card>
         </Grid>
