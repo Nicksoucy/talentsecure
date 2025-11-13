@@ -190,7 +190,7 @@ export default function InterviewEvaluationForm({
   const addLanguage = () => {
     setFormData({
       ...formData,
-      languages: [...formData.languages, { language: '', level: 'Intermédiaire' }],
+      languages: [...formData.languages, { language: '', level: 'INTERMEDIAIRE' }],
     });
   };
 
@@ -575,11 +575,11 @@ export default function InterviewEvaluationForm({
                           label="Niveau"
                           onChange={(e) => updateLanguage(index, 'level', e.target.value)}
                         >
-                          <MenuItem value="Débutant">Débutant</MenuItem>
-                          <MenuItem value="Intermédiaire">Intermédiaire</MenuItem>
-                          <MenuItem value="Avancé">Avancé</MenuItem>
-                          <MenuItem value="Bilingue">Bilingue</MenuItem>
-                          <MenuItem value="Langue maternelle">Langue maternelle</MenuItem>
+                          <MenuItem value="DEBUTANT">Débutant</MenuItem>
+                          <MenuItem value="INTERMEDIAIRE">Intermédiaire</MenuItem>
+                          <MenuItem value="AVANCE">Avancé</MenuItem>
+                          <MenuItem value="BILINGUE">Bilingue</MenuItem>
+                          <MenuItem value="LANGUE_MATERNELLE">Langue maternelle</MenuItem>
                         </Select>
                       </FormControl>
                     </Grid>
