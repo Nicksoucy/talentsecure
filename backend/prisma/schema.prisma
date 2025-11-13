@@ -26,6 +26,7 @@ enum CandidateStatus {
   A_REVOIR          // < 7
   EN_ATTENTE        // En cours d'évaluation
   INACTIF           // Plus disponible
+  ABSENT            // Absent à l'entretien
 }
 
 enum AvailabilityType {
