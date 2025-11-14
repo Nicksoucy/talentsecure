@@ -331,6 +331,7 @@ export default function CandidatesListPage() {
       address: formData.address,
       city: formData.city,
       postalCode: formData.postalCode,
+      interviewDate: formData.interviewDate,
 
       // Transport
       hasVehicle: formData.hasVehicle,
