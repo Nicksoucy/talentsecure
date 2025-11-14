@@ -1,0 +1,72 @@
+# Cloud Build configuration for TalentSecure Frontend
+# This file defines the steps to build and deploy the frontend to Cloud Run
+# Triggered automatically on push to main branch
+
+steps:
+  # Step 1: Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/talentsecure/frontend:$COMMIT_SHA'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/talentsecure/frontend:latest'
+      - '-f'
+      - 'frontend/Dockerfile'
+      - '--build-arg'
+      - 'VITE_API_URL=https://talentsecure-backend-226200423574.us-central1.run.app'
+      - './frontend'
+    id: 'build-frontend-image'
+
+  # Step 2: Push the Docker image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/talentsecure/frontend:$COMMIT_SHA'
+    id: 'push-frontend-image'
+    waitFor: ['build-frontend-image']
+
+  # Step 3: Push the latest tag
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/talentsecure/frontend:latest'
+    waitFor: ['build-frontend-image']
+
+  # Step 4: Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'talentsecure-frontend'
+      - '--image'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/talentsecure/frontend:$COMMIT_SHA'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--memory'
+      - '256Mi'
+      - '--cpu'
+      - '1'
+      - '--max-instances'
+      - '10'
+      - '--min-instances'
+      - '0'
+    id: 'deploy-to-cloud-run'
+    waitFor: ['push-frontend-image']
+
+# Images to store in Artifact Registry
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/talentsecure/frontend:$COMMIT_SHA'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/talentsecure/frontend:latest'
+
+# Build timeout
+timeout: 1200s
+
+# Build options
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
