@@ -5,6 +5,8 @@ import {
   createCandidate,
   updateCandidate,
   deleteCandidate,
+  archiveCandidate,
+  unarchiveCandidate,
   getCandidatesByCity,
   getCitiesSuggestions,
   getCandidatesSuggestions,
@@ -163,6 +165,28 @@ router.delete(
   '/:id',
   authorizeRoles('ADMIN'),
   deleteCandidate
+);
+
+/**
+ * @route   PATCH /api/candidates/:id/archive
+ * @desc    Archive candidate
+ * @access  Private (ADMIN, RH_RECRUITER)
+ */
+router.patch(
+  '/:id/archive',
+  authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  archiveCandidate
+);
+
+/**
+ * @route   PATCH /api/candidates/:id/unarchive
+ * @desc    Unarchive (restore) candidate
+ * @access  Private (ADMIN, RH_RECRUITER)
+ */
+router.patch(
+  '/:id/unarchive',
+  authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  unarchiveCandidate
 );
 
 export default router;

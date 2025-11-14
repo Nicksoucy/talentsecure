@@ -170,6 +170,9 @@ model Candidate {
 
   // Metadata
   isActive              Boolean         @default(true)
+  isArchived            Boolean         @default(false)
+  archivedAt            DateTime?
+  archivedById          String?
   isDeleted             Boolean         @default(false)
   deletedAt             DateTime?
   createdById           String

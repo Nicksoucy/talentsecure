@@ -39,7 +39,8 @@ export type CandidateStatus =
   | 'ELITE'
   | 'A_REVOIR'
   | 'EN_ATTENTE'
-  | 'INACTIF';
+  | 'INACTIF'
+  | 'ABSENT';
 
 export interface Candidate {
   id: string;
@@ -57,6 +58,9 @@ export interface Candidate {
   hasVehicle: boolean;
   hasBSP: boolean;
   videoUrl?: string;
+  isArchived: boolean;
+  archivedAt?: string;
+  archivedById?: string;
   createdAt: string;
   updatedAt: string;
 }

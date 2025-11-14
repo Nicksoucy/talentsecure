@@ -26,6 +26,7 @@ export const getCandidates = async (
       bspStatus,
       interviewDateStart,
       interviewDateEnd,
+      includeArchived,
       page = 1,
       limit = 10,
       sortBy = 'createdAt',
@@ -39,6 +40,11 @@ export const getCandidates = async (
       isDeleted: false,
       isActive: true,
     };
+
+    // By default, exclude archived candidates unless explicitly requested
+    if (includeArchived !== 'true') {
+      where.isArchived = false;
+    }
 
     if (search) {
       where.OR = [
@@ -454,6 +460,82 @@ export const deleteCandidate = async (
     });
 
     res.json({ message: 'Candidat supprimé avec succès' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Archive candidate
+ */
+export const archiveCandidate = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.id;
+
+    const candidate = await prisma.candidate.update({
+      where: { id },
+      data: {
+        isArchived: true,
+        archivedAt: new Date(),
+        archivedById: userId,
+      },
+    });
+
+    // Log audit
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'UPDATE',
+        resource: 'Candidate',
+        resourceId: id,
+        details: `Candidat archivé: ${candidate.firstName} ${candidate.lastName}`,
+      },
+    });
+
+    res.json({ message: 'Candidat archivé avec succès', data: candidate });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Unarchive (restore) candidate
+ */
+export const unarchiveCandidate = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.id;
+
+    const candidate = await prisma.candidate.update({
+      where: { id },
+      data: {
+        isArchived: false,
+        archivedAt: null,
+        archivedById: null,
+      },
+    });
+
+    // Log audit
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'UPDATE',
+        resource: 'Candidate',
+        resourceId: id,
+        details: `Candidat désarchivé: ${candidate.firstName} ${candidate.lastName}`,
+      },
+    });
+
+    res.json({ message: 'Candidat désarchivé avec succès', data: candidate });
   } catch (error) {
     next(error);
   }

@@ -74,6 +74,22 @@ export const candidateService = {
   },
 
   /**
+   * Archive candidate
+   */
+  async archiveCandidate(id: string): Promise<{ message: string; data: Candidate }> {
+    const response = await api.patch(`/api/candidates/${id}/archive`);
+    return response.data;
+  },
+
+  /**
+   * Unarchive (restore) candidate
+   */
+  async unarchiveCandidate(id: string): Promise<{ message: string; data: Candidate }> {
+    const response = await api.patch(`/api/candidates/${id}/unarchive`);
+    return response.data;
+  },
+
+  /**
    * Get cities suggestions for autocomplete
    */
   async getCitiesSuggestions(query?: string): Promise<{ success: boolean; data: string[] }> {
