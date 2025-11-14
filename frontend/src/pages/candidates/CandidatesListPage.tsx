@@ -13,7 +13,6 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Chip,
   IconButton,
   Dialog,
   DialogTitle,
@@ -24,29 +23,15 @@ import {
   CircularProgress,
   Alert,
   Pagination,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  InputAdornment,
-  Collapse,
   Checkbox,
-  AppBar,
-  Toolbar,
-  Slide,
+  Collapse,
   Autocomplete,
   FormControlLabel,
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Visibility as ViewIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Search as SearchIcon,
-  FilterList as FilterIcon,
   ArrowUpward as ArrowUpwardIcon,
   ArrowDownward as ArrowDownwardIcon,
-  CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   Map as MapIcon,
 } from '@mui/icons-material';
@@ -57,26 +42,9 @@ import { catalogueService } from '@/services/catalogue.service';
 import { clientService } from '@/services/client.service';
 import InterviewEvaluationForm from '@/components/InterviewEvaluationForm';
 import CandidatesMap from '@/components/map/CandidatesMap';
-
-const STATUS_COLORS: Record<string, 'success' | 'info' | 'warning' | 'error' | 'default'> = {
-  ELITE: 'error',
-  EXCELLENT: 'success',
-  TRES_BON: 'info',
-  BON: 'info',
-  QUALIFIE: 'warning',
-  EN_ATTENTE: 'default',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  ELITE: 'Élite',
-  EXCELLENT: 'Excellent',
-  TRES_BON: 'Très bon',
-  BON: 'Bon',
-  QUALIFIE: 'Qualifié',
-  A_REVOIR: 'À revoir',
-  EN_ATTENTE: 'En attente',
-  INACTIF: 'Inactif',
-};
+import CandidateFiltersBar from './components/CandidateFiltersBar';
+import CandidateTableRow from './components/CandidateTableRow';
+import CandidateBulkActions from './components/CandidateBulkActions';
 
 export default function CandidatesListPage() {
   const navigate = useNavigate();
@@ -91,6 +59,7 @@ export default function CandidatesListPage() {
   const [search, setSearch] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [includeArchived, setIncludeArchived] = useState(false);
   const [filters, setFilters] = useState({
     status: '',
     minRating: '',
@@ -134,7 +103,7 @@ export default function CandidatesListPage() {
 
   // Fetch candidates
   const { data, isLoading, error } = useQuery({
-    queryKey: ['candidates', page, pageSize, search, filters, sortBy, sortOrder],
+    queryKey: ['candidates', page, pageSize, search, filters, sortBy, sortOrder, includeArchived],
     queryFn: () =>
       candidateService.getCandidates({
         page,
@@ -146,6 +115,7 @@ export default function CandidatesListPage() {
         hasVideo: filters.hasVideo === '' ? undefined : filters.hasVideo === 'true',
         interviewDateStart: filters.interviewDateStart || undefined,
         interviewDateEnd: filters.interviewDateEnd || undefined,
+        includeArchived: includeArchived || undefined,
         sortBy,
         sortOrder,
       }),
@@ -275,6 +245,48 @@ export default function CandidatesListPage() {
     },
     onError: (error: any) => {
       enqueueSnackbar(error.response?.data?.error || 'Erreur lors de la modification', {
+        variant: 'error',
+      });
+    },
+  });
+
+  // Delete candidate mutation
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => candidateService.deleteCandidate(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
+      enqueueSnackbar('Candidat supprimé avec succès !', { variant: 'success' });
+    },
+    onError: (error: any) => {
+      enqueueSnackbar(error.response?.data?.error || 'Erreur lors de la suppression', {
+        variant: 'error',
+      });
+    },
+  });
+
+  // Archive candidate mutation
+  const archiveMutation = useMutation({
+    mutationFn: (id: string) => candidateService.archiveCandidate(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
+      enqueueSnackbar('Candidat archivé avec succès !', { variant: 'success' });
+    },
+    onError: (error: any) => {
+      enqueueSnackbar(error.response?.data?.error || 'Erreur lors de l\'archivage', {
+        variant: 'error',
+      });
+    },
+  });
+
+  // Unarchive candidate mutation
+  const unarchiveMutation = useMutation({
+    mutationFn: (id: string) => candidateService.unarchiveCandidate(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
+      enqueueSnackbar('Candidat désarchivé avec succès !', { variant: 'success' });
+    },
+    onError: (error: any) => {
+      enqueueSnackbar(error.response?.data?.error || 'Erreur lors de la désarchivage', {
         variant: 'error',
       });
     },
@@ -513,36 +525,12 @@ export default function CandidatesListPage() {
 
   return (
     <Box>
-      {/* Sticky Action Bar for selected candidates */}
-      <Slide direction="down" in={selectedCandidates.size > 0} mountOnEnter unmountOnExit>
-        <AppBar
-          position="sticky"
-          color="primary"
-          elevation={4}
-          sx={{ top: 0, zIndex: 1100, mb: 2 }}
-        >
-          <Toolbar>
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-              {selectedCandidates.size} candidat{selectedCandidates.size !== 1 ? 's' : ''} sélectionné{selectedCandidates.size !== 1 ? 's' : ''}
-            </Typography>
-            <Button
-              color="inherit"
-              onClick={handleDeselectAll}
-              sx={{ mr: 2 }}
-            >
-              Désélectionner tout
-            </Button>
-            <Button
-              variant="contained"
-              color="success"
-              onClick={() => setOpenCatalogueDialog(true)}
-              startIcon={<AddIcon />}
-            >
-              Créer un catalogue
-            </Button>
-          </Toolbar>
-        </AppBar>
-      </Slide>
+      {/* Bulk Actions Bar */}
+      <CandidateBulkActions
+        selectedCount={selectedCandidates.size}
+        onCreateCatalogue={() => setOpenCatalogueDialog(true)}
+        onClearSelection={handleDeselectAll}
+      />
 
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" fontWeight="bold">
@@ -574,198 +562,28 @@ export default function CandidatesListPage() {
       </Collapse>
 
       {/* Search and Filters */}
-      <Card sx={{ mb: 2 }}>
-        <CardContent>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={6}>
-              <Autocomplete
-                fullWidth
-                freeSolo
-                options={candidateSuggestions}
-                getOptionLabel={(option) => typeof option === 'string' ? option : option.label}
-                value={search}
-                onInputChange={(_, newValue) => {
-                  setSearch(newValue);
-                  setPage(1);
-                  if (newValue && newValue.length >= 2) {
-                    fetchCandidateSuggestions(newValue);
-                  } else {
-                    setCandidateSuggestions([]);
-                  }
-                }}
-                onChange={(_, newValue) => {
-                  if (typeof newValue === 'object' && newValue !== null) {
-                    setSearch(newValue.label);
-                  }
-                }}
-                loading={loadingCandidates}
-                renderOption={(props, option) => (
-                  <li {...props}>
-                    <Box>
-                      <Typography variant="body1">{option.label}</Typography>
-                      <Typography variant="caption" color="text.secondary">{option.email}</Typography>
-                    </Box>
-                  </li>
-                )}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    placeholder="Rechercher par nom, email ou téléphone..."
-                    InputProps={{
-                      ...params.InputProps,
-                      startAdornment: (
-                        <>
-                          <InputAdornment position="start">
-                            <SearchIcon />
-                          </InputAdornment>
-                          {params.InputProps.startAdornment}
-                        </>
-                      ),
-                      endAdornment: (
-                        <>
-                          {loadingCandidates ? <CircularProgress size={20} /> : null}
-                          {params.InputProps.endAdornment}
-                        </>
-                      ),
-                    }}
-                  />
-                )}
-              />
-            </Grid>
-            <Grid item xs={12} md={6} display="flex" gap={2} justifyContent="flex-end">
-              <Button
-                variant="outlined"
-                startIcon={<FilterIcon />}
-                onClick={() => setShowFilters(!showFilters)}
-              >
-                Filtres
-              </Button>
-              {(search || Object.values(filters).some((v) => v)) && (
-                <Button variant="text" onClick={clearFilters}>
-                  Réinitialiser
-                </Button>
-              )}
-            </Grid>
-          </Grid>
-
-          <Collapse in={showFilters}>
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Statut</InputLabel>
-                  <Select
-                    value={filters.status}
-                    label="Statut"
-                    onChange={(e) => handleFilterChange('status', e.target.value)}
-                  >
-                    <MenuItem value="">Tous</MenuItem>
-                    <MenuItem value="EN_ATTENTE">En attente</MenuItem>
-                    <MenuItem value="QUALIFIE">Qualifié</MenuItem>
-                    <MenuItem value="BON">Bon</MenuItem>
-                    <MenuItem value="TRES_BON">Très bon</MenuItem>
-                    <MenuItem value="EXCELLENT">Excellent</MenuItem>
-                    <MenuItem value="ELITE">Élite</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Note minimale</InputLabel>
-                  <Select
-                    value={filters.minRating}
-                    label="Note minimale"
-                    onChange={(e) => handleFilterChange('minRating', e.target.value)}
-                  >
-                    <MenuItem value="">Toutes</MenuItem>
-                    <MenuItem value="5">5/10 et plus</MenuItem>
-                    <MenuItem value="6">6/10 et plus</MenuItem>
-                    <MenuItem value="7">7/10 et plus</MenuItem>
-                    <MenuItem value="8">8/10 et plus</MenuItem>
-                    <MenuItem value="9">9/10 et plus</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} sm={6} md={3}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Vidéo d'entretien</InputLabel>
-                  <Select
-                    value={filters.hasVideo}
-                    label="Vidéo d'entretien"
-                    onChange={(e) => handleFilterChange('hasVideo', e.target.value)}
-                  >
-                    <MenuItem value="">Tous</MenuItem>
-                    <MenuItem value="true">Avec vidéo</MenuItem>
-                    <MenuItem value="false">Sans vidéo</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} sm={6} md={3}>
-                <Autocomplete
-                  fullWidth
-                  size="small"
-                  freeSolo
-                  options={citySuggestions}
-                  value={cityInput}
-                  onInputChange={(_, newValue) => {
-                    setCityInput(newValue);
-                    if (newValue) {
-                      fetchCitySuggestions(newValue);
-                    }
-                  }}
-                  onOpen={() => {
-                    if (citySuggestions.length === 0) {
-                      fetchCitySuggestions('');
-                    }
-                  }}
-                  loading={loadingCities}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Ville"
-                      InputProps={{
-                        ...params.InputProps,
-                        endAdornment: (
-                          <>
-                            {loadingCities ? <CircularProgress size={20} /> : null}
-                            {params.InputProps.endAdornment}
-                          </>
-                        ),
-                      }}
-                    />
-                  )}
-                />
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  type="date"
-                  label="Date début"
-                  InputLabelProps={{ shrink: true }}
-                  value={filters.interviewDateStart}
-                  onChange={(e) => handleFilterChange('interviewDateStart', e.target.value)}
-                />
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  type="date"
-                  label="Date fin"
-                  InputLabelProps={{ shrink: true }}
-                  value={filters.interviewDateEnd}
-                  onChange={(e) => handleFilterChange('interviewDateEnd', e.target.value)}
-                />
-              </Grid>
-            </Grid>
-          </Collapse>
-        </CardContent>
-      </Card>
+      <CandidateFiltersBar
+        search={search}
+        onSearchChange={(value) => {
+          setSearch(value);
+          setPage(1);
+        }}
+        filters={filters}
+        onFilterChange={handleFilterChange}
+        includeArchived={includeArchived}
+        onIncludeArchivedChange={(value) => {
+          setIncludeArchived(value);
+          setPage(1);
+        }}
+        showFilters={showFilters}
+        onToggleFilters={() => setShowFilters(!showFilters)}
+        candidateSuggestions={candidateSuggestions}
+        loadingCandidates={loadingCandidates}
+        onFetchCandidateSuggestions={fetchCandidateSuggestions}
+        citySuggestions={citySuggestions}
+        cityInput={cityInput}
+        onCityInputChange={setCityInput}
+      />
 
       <Card>
         <CardContent>
@@ -841,71 +659,17 @@ export default function CandidatesListPage() {
                 </TableHead>
                 <TableBody>
                   {candidates.map((candidate: any) => (
-                    <TableRow key={candidate.id} hover>
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={selectedCandidates.has(candidate.id)}
-                          onChange={() => handleSelectCandidate(candidate.id)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {candidate.firstName} {candidate.lastName}
-                      </TableCell>
-                      <TableCell>{candidate.phone}</TableCell>
-                      <TableCell>{candidate.city}</TableCell>
-                      <TableCell>
-                        {candidate.interviewDate
-                          ? new Date(candidate.interviewDate).toLocaleDateString('fr-FR')
-                          : '-'}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={STATUS_LABELS[candidate.status] || candidate.status}
-                          color={STATUS_COLORS[candidate.status] || 'default'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {candidate.globalRating ? `${candidate.globalRating}/10` : '-'}
-                      </TableCell>
-                      <TableCell sx={{ maxWidth: 300 }}>
-                        {(() => {
-                          const hrOpinion = candidate.interviewDetails?.observation?.hrOpinion || candidate.hrNotes;
-                          if (!hrOpinion) return '-';
-                          return hrOpinion.length > 100
-                            ? `${hrOpinion.substring(0, 100)}...`
-                            : hrOpinion;
-                        })()}
-                      </TableCell>
-                      <TableCell align="center">
-                        {candidate.cvUrl || candidate.cvStoragePath ? (
-                          <CheckCircleIcon fontSize="small" sx={{ color: 'success.main' }} />
-                        ) : (
-                          <CancelIcon fontSize="small" sx={{ color: 'text.disabled' }} />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {candidate.hasBSP ? '✓' : '-'}
-                      </TableCell>
-                      <TableCell align="right">
-                        <IconButton
-                          size="small"
-                          color="primary"
-                          onClick={() => navigate(`/candidates/${candidate.id}`)}
-                          title="Voir le détail"
-                        >
-                          <ViewIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          color="secondary"
-                          onClick={() => handleEditCandidate(candidate.id)}
-                          title="Modifier"
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
+                    <CandidateTableRow
+                      key={candidate.id}
+                      candidate={candidate}
+                      isSelected={selectedCandidates.has(candidate.id)}
+                      onSelect={() => handleSelectCandidate(candidate.id)}
+                      onView={() => navigate(`/candidates/${candidate.id}`)}
+                      onEdit={() => handleEditCandidate(candidate.id)}
+                      onArchive={() => archiveMutation.mutate(candidate.id)}
+                      onUnarchive={() => unarchiveMutation.mutate(candidate.id)}
+                      onDelete={() => deleteMutation.mutate(candidate.id)}
+                    />
                   ))}
                 </TableBody>
               </Table>
