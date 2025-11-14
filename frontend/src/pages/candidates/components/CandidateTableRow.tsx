@@ -106,8 +106,14 @@ export default function CandidateTableRow({
       </TableCell>
 
       <TableCell sx={{ maxWidth: 300 }}>
-        {/* HR Notes preview - can be expanded later */}
-        -
+        {(() => {
+          const hrNotes = candidate.hrNotes;
+          if (!hrNotes) return '-';
+          // Show first 100 characters
+          return hrNotes.length > 100
+            ? `${hrNotes.substring(0, 100)}...`
+            : hrNotes;
+        })()}
       </TableCell>
 
       <TableCell align="center">
