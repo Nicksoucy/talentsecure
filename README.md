@@ -23,7 +23,7 @@ L'application TalentSecure est maintenant opérationnelle avec les fonctionnalit
 - ✅ Middleware JWT et RBAC
 - ✅ Routes API d'authentification
 - ✅ Gestion des erreurs
-- ✅ **Import Excel automatique** des 97 candidats
+- ✅ **Import Google Sheets** des 105 candidats (avec statut ABSENT)
 - ✅ **Upload et téléchargement de CVs** (Multer + système de fichiers)
 - ✅ **Génération de catalogues PDF** (PDFKit)
 - ✅ **Gestion complète des clients** (CRUD)
@@ -33,6 +33,8 @@ L'application TalentSecure est maintenant opérationnelle avec les fonctionnalit
 - ✅ **Import Google Sheets** automatique des prospects
 - ✅ **Intégration GoHighLevel API** (export contacts)
 - ✅ **API statistiques prospects** (par ville, statut, tendances)
+- ✅ **Calcul automatique du statut** basé sur note globale (QUALIFIE, BON, TRES_BON, EXCELLENT, ELITE)
+- ✅ **Enregistrement date d'entrevue** dans création et modification candidat
 
 ### Frontend (React + TypeScript + Material-UI)
 - ✅ Structure du projet créée
@@ -43,7 +45,7 @@ L'application TalentSecure est maintenant opérationnelle avec les fonctionnalit
 - ✅ Services API (Axios + React Query)
 - ✅ Layouts (Auth + Main)
 - ✅ Page de login fonctionnelle
-- ✅ **Dashboard avec statistiques en temps réel**
+- ✅ **Dashboard avec statistiques en temps réel** (candidats, prospects, par statut)
 - ✅ Navigation principale
 - ✅ **CRUD Candidats complet** (liste, détail, création, modification, suppression)
 - ✅ **Recherche et filtres avancés** (10+ critères avec debouncing)
@@ -52,6 +54,7 @@ L'application TalentSecure est maintenant opérationnelle avec les fonctionnalit
 - ✅ **Création de catalogues PDF** avec sélection multiple
 - ✅ **Gestion des clients** (interface complète)
 - ✅ **Map interactive du Québec** (Leaflet) montrant distribution des candidats
+- ✅ **Filtrage par carte candidats** - Cliquer sur ville dans la carte filtre automatiquement la liste
 - ✅ **Téléchargement de CVs** depuis l'interface
 - ✅ **Gestion des prospects** (liste, détail, création, modification)
 - ✅ **Map interactive des prospects** (clustering, filtres par ville)
@@ -370,11 +373,12 @@ npm test                       # Lance les tests
 npm run test:coverage          # Tests avec couverture
 
 # Scripts utiles
-npx tsx src/scripts/create-test-user.ts              # Créer utilisateur de test
-npx tsx src/scripts/link-cvs.ts                      # Associer les CVs aux candidats
-npx tsx src/scripts/import-from-google-sheet.ts      # Importer prospects depuis Google Sheet
-npx tsx src/scripts/check-recent-prospects.ts        # Voir les 5 derniers prospects créés
-npx tsx src/scripts/normalize-prospect-cities.ts     # Normaliser les noms de villes
+npx tsx src/scripts/create-test-user.ts                    # Créer utilisateur de test
+npx tsx src/scripts/link-cvs.ts                            # Associer les CVs aux candidats
+npx tsx src/scripts/import-candidates-improved.ts          # Importer candidats depuis Google Sheet (105 candidats)
+npx tsx src/scripts/import-from-google-sheet.ts            # Importer prospects depuis Google Sheet
+npx tsx src/scripts/check-recent-prospects.ts              # Voir les 5 derniers prospects créés
+npx tsx src/scripts/normalize-prospect-cities.ts           # Normaliser les noms de villes
 ```
 
 ### Frontend
@@ -439,6 +443,46 @@ npm run prisma:studio
 1. Ouvrir http://localhost:5173/login
 2. Entrer email et mot de passe
 3. Ou cliquer "Se connecter avec Google"
+
+---
+
+## Système de Statuts Candidats
+
+### Calcul automatique du statut
+
+Le statut d'un candidat est **calculé automatiquement** en fonction de sa note globale d'entrevue :
+
+| Note Globale | Statut | Description |
+|--------------|--------|-------------|
+| 9.5 - 10.0 | **ELITE** | Candidats d'exception (9.5+/10) |
+| 9.0 - 9.4 | **EXCELLENT** | Excellents candidats (9-9.4/10) |
+| 8.5 - 8.9 | **TRES_BON** | Très bons candidats (8.5-8.9/10) |
+| 8.0 - 8.4 | **BON** | Bons candidats (8-8.4/10) |
+| 7.0 - 7.9 | **QUALIFIE** | Candidats qualifiés (7-7.9/10) |
+| < 7.0 | **A_REVOIR** | À revoir (note < 7/10) |
+| Pas de note | **EN_ATTENTE** | En attente d'évaluation |
+| Absent | **ABSENT** | Candidat ne s'est pas présenté |
+
+### Fonctionnement
+
+1. **À la création** : Le statut est calculé automatiquement basé sur la note globale saisie
+2. **À la modification** : Si la note change, le statut est recalculé automatiquement
+3. **Statut manuel** : Possibilité de forcer un statut spécifique si nécessaire
+
+### Exemple
+
+```typescript
+// Créer un candidat avec note de 7.5/10
+POST /api/candidates
+{
+  "firstName": "Jean",
+  "lastName": "Dupont",
+  "globalRating": 7.5,
+  // ... autres champs
+}
+
+// Résultat : Status automatiquement défini à "QUALIFIE"
+```
 
 ---
 
