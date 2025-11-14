@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
+import { getStatusFromRating } from '../utils/candidate.utils';
 
 /**
  * Get all candidates with filters
@@ -217,6 +218,7 @@ export const createCandidate = async (
       city,
       province,
       postalCode,
+      interviewDate,
       // Status
       status,
       globalRating,
@@ -256,6 +258,10 @@ export const createCandidate = async (
       situationTests,
     } = req.body;
 
+    // Calculate status automatically based on rating if not provided
+    const finalGlobalRating = globalRating ? Number(globalRating) : null;
+    const finalStatus = status || getStatusFromRating(finalGlobalRating);
+
     // Create candidate with nested data
     const candidate = await prisma.candidate.create({
       data: {
@@ -268,9 +274,10 @@ export const createCandidate = async (
         city: city || 'Non spécifié',
         province: province || 'QC',
         postalCode,
+        interviewDate: interviewDate ? new Date(interviewDate) : null,
         // Status
-        status: status || 'EN_ATTENTE',
-        globalRating: globalRating ? Number(globalRating) : null,
+        status: finalStatus,
+        globalRating: finalGlobalRating,
         // Ratings
         professionalismRating: professionalismRating ? Number(professionalismRating) : null,
         communicationRating: communicationRating ? Number(communicationRating) : null,
@@ -371,6 +378,17 @@ export const updateCandidate = async (
 
     // Update candidate (exclude nested relations for now)
     const { availabilities, languages, experiences, certifications, situationTests, ...candidateData } = updateData;
+
+    // If globalRating changed but status not provided, recalculate status
+    if (candidateData.globalRating !== undefined && candidateData.status === undefined) {
+      const newRating = candidateData.globalRating ? Number(candidateData.globalRating) : null;
+      candidateData.status = getStatusFromRating(newRating);
+    }
+
+    // Convert interviewDate to Date if provided
+    if (candidateData.interviewDate) {
+      candidateData.interviewDate = new Date(candidateData.interviewDate);
+    }
 
     const candidate = await prisma.candidate.update({
       where: { id },
