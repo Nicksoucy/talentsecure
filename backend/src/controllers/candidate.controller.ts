@@ -144,12 +144,24 @@ export const getCandidates = async (
     // Get total count
     const total = await prisma.candidate.count({ where });
 
+    // Build orderBy with special handling for globalRating to place NULL values last
+    let orderByClause: any;
+    if (sortBy === 'globalRating') {
+      // For globalRating, we want NULL values to be treated as 0 (lowest)
+      // So they should always appear last when sorting DESC, and first when sorting ASC
+      orderByClause = [
+        { globalRating: { sort: sortOrder, nulls: 'last' } }
+      ];
+    } else {
+      orderByClause = { [sortBy as string]: sortOrder };
+    }
+
     // Get candidates
     const candidates = await prisma.candidate.findMany({
       where,
       skip,
       take: Number(limit),
-      orderBy: { [sortBy as string]: sortOrder },
+      orderBy: orderByClause,
       include: {
         availabilities: true,
         languages: true,
