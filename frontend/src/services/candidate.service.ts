@@ -16,6 +16,8 @@ interface GetCandidatesParams {
   bspStatus?: string;
   interviewDateStart?: string;
   interviewDateEnd?: string;
+  includeArchived?: boolean;
+  certification?: string;
   page?: number;
   limit?: number;
   sortBy?: string;

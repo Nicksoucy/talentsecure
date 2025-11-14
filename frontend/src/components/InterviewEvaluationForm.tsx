@@ -31,6 +31,7 @@ import {
   Delete as DeleteIcon,
   PersonAdd as PersonAddIcon,
 } from '@mui/icons-material';
+import { PREDEFINED_CERTIFICATIONS } from '@/constants/certifications';
 
 const steps = [
   '📋 Informations personnelles',
@@ -68,6 +69,10 @@ interface InterviewFormData {
   bspNumber: string;
   bspExpiryDate: string;
   bspStatus: string;
+  certifications: Array<{
+    name: string;
+    expiryDate?: string;
+  }>;
 
   // Availability
   availableDay: boolean;
@@ -145,6 +150,7 @@ export default function InterviewEvaluationForm({
       bspNumber: '',
       bspExpiryDate: '',
       bspStatus: '',
+      certifications: [],
       availableDay: false,
       availableEvening: false,
       availableNight: false,
@@ -450,6 +456,48 @@ export default function InterviewEvaluationForm({
                 </Grid>
               </>
             )}
+
+            {/* Other Certifications */}
+            <Grid item xs={12}>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
+                📜 Autres certifications et formations
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                Cochez les certifications/formations que possède le candidat
+              </Typography>
+            </Grid>
+
+            {PREDEFINED_CERTIFICATIONS.map((certName) => {
+              const isCertified = formData.certifications.some(c => c.name === certName);
+
+              return (
+                <Grid item xs={12} sm={6} md={4} key={certName}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={isCertified}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            // Add certification
+                            updateField('certifications', [
+                              ...formData.certifications,
+                              { name: certName, expiryDate: '' }
+                            ]);
+                          } else {
+                            // Remove certification
+                            updateField('certifications',
+                              formData.certifications.filter(c => c.name !== certName)
+                            );
+                          }
+                        }}
+                      />
+                    }
+                    label={certName}
+                  />
+                </Grid>
+              );
+            })}
           </Grid>
         );
 

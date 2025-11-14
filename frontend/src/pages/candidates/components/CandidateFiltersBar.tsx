@@ -19,6 +19,7 @@ import {
   Search as SearchIcon,
   FilterList as FilterIcon,
 } from '@mui/icons-material';
+import { PREDEFINED_CERTIFICATIONS } from '@/constants/certifications';
 
 interface CandidateFiltersBarProps {
   search: string;
@@ -30,6 +31,7 @@ interface CandidateFiltersBarProps {
     hasVideo: string;
     interviewDateStart: string;
     interviewDateEnd: string;
+    certification: string;
   };
   onFilterChange: (field: string, value: any) => void;
   includeArchived: boolean;
@@ -194,6 +196,24 @@ export default function CandidateFiltersBar({
                     <MenuItem value="">Tous</MenuItem>
                     <MenuItem value="true">Avec vidéo</MenuItem>
                     <MenuItem value="false">Sans vidéo</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={3}>
+                <FormControl fullWidth>
+                  <InputLabel>Certification / Formation</InputLabel>
+                  <Select
+                    value={filters.certification}
+                    label="Certification / Formation"
+                    onChange={(e) => onFilterChange('certification', e.target.value)}
+                  >
+                    <MenuItem value="">Toutes</MenuItem>
+                    {PREDEFINED_CERTIFICATIONS.map((cert) => (
+                      <MenuItem key={cert} value={cert}>
+                        {cert}
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>

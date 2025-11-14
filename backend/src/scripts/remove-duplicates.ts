@@ -15,7 +15,7 @@ async function removeDuplicates() {
         createdAt: true,
       },
       orderBy: {
-        createdAt: 'desc'
+        createdAt: 'asc'  // Trier par date croissante pour garder les plus anciens
       }
     });
 
@@ -40,24 +40,16 @@ async function removeDuplicates() {
         const toDelete = candidates.slice(1);
 
         console.log(`\n📧 ${email} (${candidates.length} copies)`);
-        console.log(`  ✅ Garder: ${toKeep.firstName} ${toKeep.lastName}`);
+        console.log(`  ✅ Garder: ${toKeep.firstName} ${toKeep.lastName} (ancien - créé le ${toKeep.createdAt.toLocaleString()})`);
 
         for (const candidate of toDelete) {
           try {
-            await prisma.$transaction([
-              prisma.candidateLanguage.deleteMany({ where: { candidateId: candidate.id } }),
-              prisma.candidateAvailability.deleteMany({ where: { candidateId: candidate.id } }),
-              prisma.candidateExperience.deleteMany({ where: { candidateId: candidate.id } }),
-              prisma.candidateCertification.deleteMany({ where: { candidateId: candidate.id } }),
-              prisma.candidateSituationTest.deleteMany({ where: { candidateId: candidate.id } }),
-              prisma.catalogueItem.deleteMany({ where: { candidateId: candidate.id } }),
-              prisma.candidate.delete({ where: { id: candidate.id } }),
-            ]);
+            await prisma.candidate.delete({ where: { id: candidate.id } });
 
-            console.log(`    ❌ Supprimé: ${candidate.firstName} ${candidate.lastName}`);
+            console.log(`    ❌ Supprimé: ${candidate.firstName} ${candidate.lastName} (créé le ${candidate.createdAt.toLocaleString()})`);
             deletedCount++;
-          } catch (error) {
-            console.error(`    ⚠️  Erreur:`, error);
+          } catch (error: any) {
+            console.error(`    ⚠️  Erreur: ${error.message}`);
             skippedCount++;
           }
         }

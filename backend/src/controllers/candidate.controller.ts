@@ -27,6 +27,7 @@ export const getCandidates = async (
       interviewDateStart,
       interviewDateEnd,
       includeArchived,
+      certification,
       page = 1,
       limit = 10,
       sortBy = 'createdAt',
@@ -126,6 +127,18 @@ export const getCandidates = async (
       if (interviewDateEnd) {
         where.interviewDate.lte = new Date(interviewDateEnd as string);
       }
+    }
+
+    // Filter by certification
+    if (certification) {
+      where.certifications = {
+        some: {
+          name: {
+            contains: certification as string,
+            mode: 'insensitive',
+          },
+        },
+      };
     }
 
     // Get total count
