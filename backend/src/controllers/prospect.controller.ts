@@ -28,6 +28,7 @@ export const getProspects = async (
     // Build filter conditions
     const where: any = {
       isDeleted: false,
+      isConverted: false, // Exclure les prospects déjà convertis en candidats
     };
 
     if (search) {
@@ -373,6 +374,7 @@ export const getProspectsByCity = async (
     const prospects = await prisma.prospectCandidate.findMany({
       where: {
         isDeleted: false,
+        isConverted: false, // Exclure les prospects déjà convertis
       },
       select: {
         city: true,
@@ -419,6 +421,7 @@ export const getCitiesSuggestions = async (
     const prospects = await prisma.prospectCandidate.findMany({
       where: {
         isDeleted: false,
+        isConverted: false, // Exclure les prospects déjà convertis
         city: q ? { contains: q as string, mode: 'insensitive' } : undefined,
       },
       select: {
@@ -462,6 +465,7 @@ export const getProspectsSuggestions = async (
     const prospects = await prisma.prospectCandidate.findMany({
       where: {
         isDeleted: false,
+        isConverted: false, // Exclure les prospects déjà convertis
         OR: [
           { firstName: { contains: q as string, mode: 'insensitive' } },
           { lastName: { contains: q as string, mode: 'insensitive' } },
@@ -501,16 +505,24 @@ export const getProspectsStats = async (
   next: NextFunction
 ) => {
   try {
+    // Total des prospects actifs (non convertis)
     const total = await prisma.prospectCandidate.count({
-      where: { isDeleted: false },
+      where: { isDeleted: false, isConverted: false },
     });
 
+    // Prospects actifs contactés
     const contacted = await prisma.prospectCandidate.count({
-      where: { isDeleted: false, isContacted: true },
+      where: { isDeleted: false, isConverted: false, isContacted: true },
     });
 
+    // Prospects convertis en candidats
     const converted = await prisma.prospectCandidate.count({
       where: { isDeleted: false, isConverted: true },
+    });
+
+    // Total de tous les prospects (pour le taux de conversion)
+    const allTimeTotal = await prisma.prospectCandidate.count({
+      where: { isDeleted: false },
     });
 
     const pending = total - contacted;
@@ -522,7 +534,7 @@ export const getProspectsStats = async (
         contacted,
         pending,
         converted,
-        conversionRate: total > 0 ? ((converted / total) * 100).toFixed(1) : '0',
+        conversionRate: allTimeTotal > 0 ? ((converted / allTimeTotal) * 100).toFixed(1) : '0',
       },
     });
   } catch (error) {
