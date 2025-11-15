@@ -332,7 +332,9 @@ export const convertToCandidate = async (
     // Create qualified candidate from prospect data
     const candidate = await prisma.candidate.create({
       data: {
-        // Copy from prospect
+        // Add candidate-specific data from request first
+        ...candidateData,
+        // Then copy from prospect (this will override any conflicting fields to preserve prospect data)
         firstName: prospect.firstName,
         lastName: prospect.lastName,
         email: prospect.email,
@@ -341,11 +343,10 @@ export const convertToCandidate = async (
         city: prospect.city || 'Non spécifié',
         province: prospect.province || 'QC',
         postalCode: prospect.postalCode,
+        // IMPORTANT: Toujours préserver le CV du prospect
         cvUrl: prospect.cvUrl,
         cvStoragePath: prospect.cvStoragePath,
-        // Add candidate-specific data from request
-        ...candidateData,
-        // Creator
+        // Creator (must be set after spread to ensure it's not overwritten)
         createdById: userId,
         // Nested creates if provided
         availabilities: candidateData.availabilities ? {
