@@ -36,7 +36,7 @@ export const getCandidates = async (
 
     const skip = (Number(page) - 1) * Number(limit);
 
-    // Build filter conditions
+    // Build filter conditions with proper AND/OR logic
     const where: any = {
       isDeleted: false,
       isActive: true,
@@ -47,13 +47,39 @@ export const getCandidates = async (
       where.isArchived = false;
     }
 
+    // Collect OR conditions to combine them properly
+    const orConditions: any[] = [];
+
+    // Search filter
     if (search) {
-      where.OR = [
-        { firstName: { contains: search as string, mode: 'insensitive' } },
-        { lastName: { contains: search as string, mode: 'insensitive' } },
-        { email: { contains: search as string, mode: 'insensitive' } },
-        { phone: { contains: search as string, mode: 'insensitive' } },
-      ];
+      orConditions.push({
+        OR: [
+          { firstName: { contains: search as string, mode: 'insensitive' } },
+          { lastName: { contains: search as string, mode: 'insensitive' } },
+          { email: { contains: search as string, mode: 'insensitive' } },
+          { phone: { contains: search as string, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    // CV filter (was overwriting search OR - BUG FIXED)
+    if (hasCV !== undefined) {
+      if (hasCV === 'true') {
+        orConditions.push({
+          OR: [
+            { cvUrl: { not: null } },
+            { cvStoragePath: { not: null } },
+          ],
+        });
+      } else {
+        where.cvUrl = null;
+        where.cvStoragePath = null;
+      }
+    }
+
+    // Apply OR conditions using AND to combine them
+    if (orConditions.length > 0) {
+      where.AND = orConditions;
     }
 
     if (status) {
@@ -88,19 +114,6 @@ export const getCandidates = async (
     // Filter by driver license
     if (hasDriverLicense !== undefined) {
       where.hasDriverLicense = hasDriverLicense === 'true';
-    }
-
-    // Filter by CV presence
-    if (hasCV !== undefined) {
-      if (hasCV === 'true') {
-        where.OR = [
-          { cvUrl: { not: null } },
-          { cvStoragePath: { not: null } },
-        ];
-      } else {
-        where.cvUrl = null;
-        where.cvStoragePath = null;
-      }
     }
 
     // Filter by urgent work capability
@@ -156,20 +169,61 @@ export const getCandidates = async (
       orderByClause = { [sortBy as string]: sortOrder };
     }
 
-    // Get candidates
+    // Get candidates with optimized select (only fields needed for list view)
     const candidates = await prisma.candidate.findMany({
       where,
       skip,
       take: Number(limit),
       orderBy: orderByClause,
-      include: {
-        availabilities: true,
-        languages: true,
-        experiences: {
-          orderBy: { startDate: 'desc' },
-          take: 3,
+      select: {
+        // Basic info (needed for list)
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        city: true,
+        province: true,
+
+        // Status & ratings (for display and filtering)
+        status: true,
+        globalRating: true,
+        interviewDate: true,
+
+        // Quick checks (for icons/badges)
+        hasBSP: true,
+        hasVehicle: true,
+        hasDriverLicense: true,
+        cvUrl: true,
+        videoUrl: true,
+
+        // Metadata (for display logic)
+        isActive: true,
+        isArchived: true,
+        createdAt: true,
+
+        // HR notes preview (truncated in UI anyway)
+        hrNotes: true,
+
+        // Relations (lightweight, needed for list)
+        availabilities: {
+          select: {
+            type: true,
+            isAvailable: true,
+          },
         },
-        certifications: true,
+        languages: {
+          select: {
+            language: true,
+            level: true,
+          },
+        },
+        certifications: {
+          select: {
+            name: true,
+            expiryDate: true,
+          },
+        },
       },
     });
 

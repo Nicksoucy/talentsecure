@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   Box,
   Button,
@@ -57,6 +57,7 @@ export default function CandidatesListPage() {
 
   // Search and filter states
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState(''); // Debounced value for API calls
   const [showFilters, setShowFilters] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [includeArchived, setIncludeArchived] = useState(false);
@@ -96,20 +97,29 @@ export default function CandidatesListPage() {
   });
   const [selectedClient, setSelectedClient] = useState<any>(null);
 
+  // Debounce search input (300ms delay to avoid spamming API)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [search]);
+
   // Fetch clients
   const { data: clientsData } = useQuery({
     queryKey: ['clients', 'active'],
     queryFn: () => clientService.getClients({ isActive: true, limit: 1000 }),
   });
 
-  // Fetch candidates
+  // Fetch candidates with debounced search and keepPreviousData to prevent UI flashing
   const { data, isLoading, error } = useQuery({
-    queryKey: ['candidates', page, pageSize, search, filters, sortBy, sortOrder, includeArchived],
+    queryKey: ['candidates', page, pageSize, debouncedSearch, filters, sortBy, sortOrder, includeArchived],
     queryFn: () =>
       candidateService.getCandidates({
         page,
         limit: pageSize,
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         status: filters.status || undefined,
         minRating: filters.minRating ? Number(filters.minRating) : undefined,
         city: filters.city || undefined,
@@ -121,6 +131,7 @@ export default function CandidatesListPage() {
         sortBy,
         sortOrder,
       }),
+    placeholderData: keepPreviousData, // Keep previous results while fetching new data
   });
 
   // Handle sort change

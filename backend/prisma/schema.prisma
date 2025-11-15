@@ -195,7 +195,14 @@ model Candidate {
   @@index([hasBSP])
   @@index([hasVehicle])
   @@index([isActive])
+  @@index([isArchived])
+  @@index([isDeleted])
+  @@index([interviewDate])
   @@index([createdAt])
+  // Composite indexes for common queries (PERFORMANCE BOOST)
+  @@index([isDeleted, isActive, isArchived]) // Main filtering combination
+  @@index([city, status]) // City + status filtering
+  @@index([status, globalRating]) // Status + rating filtering
   @@map("candidates")
 }
 
