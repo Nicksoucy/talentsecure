@@ -115,6 +115,9 @@ export const getProspectById = async (
 
 /**
  * Create new prospect candidate
+ * Si le prospect existe déjà (même email OU téléphone) ET n'est pas converti → mise à jour
+ * Si le prospect existe ET est déjà converti → créer un nouveau (nouvelle candidature)
+ * Sinon → créer nouveau
  */
 export const createProspect = async (
   req: Request,
@@ -139,28 +142,66 @@ export const createProspect = async (
       notes,
     } = req.body;
 
-    // Create prospect
-    const prospect = await prisma.prospectCandidate.create({
-      data: {
-        firstName,
-        lastName,
-        email,
-        phone,
-        streetAddress,
-        city,
-        province: province || 'QC',
-        postalCode,
-        country: country || 'CA',
-        fullAddress,
-        cvUrl,
-        timezone,
-        submissionDate: submissionDate ? new Date(submissionDate) : null,
-        notes,
-      },
-    });
+    // Vérifier si un prospect existe déjà avec le même email OU téléphone
+    const whereConditions = [];
+    if (email) {
+      whereConditions.push({ email: { equals: email, mode: 'insensitive' as const } });
+    }
+    if (phone) {
+      whereConditions.push({ phone });
+    }
 
-    res.status(201).json({
-      message: 'Candidat potentiel créé avec succès',
+    let existingProspect = null;
+    if (whereConditions.length > 0) {
+      existingProspect = await prisma.prospectCandidate.findFirst({
+        where: {
+          isDeleted: false,
+          OR: whereConditions,
+        },
+      });
+    }
+
+    const prospectData = {
+      firstName,
+      lastName,
+      email,
+      phone,
+      streetAddress,
+      city,
+      province: province || 'QC',
+      postalCode,
+      country: country || 'CA',
+      fullAddress,
+      cvUrl,
+      timezone,
+      submissionDate: submissionDate ? new Date(submissionDate) : null,
+      notes,
+    };
+
+    let prospect;
+    let message;
+    let statusCode;
+
+    // Si existe ET non converti → mettre à jour
+    if (existingProspect && !existingProspect.isConverted) {
+      prospect = await prisma.prospectCandidate.update({
+        where: { id: existingProspect.id },
+        data: prospectData,
+      });
+      message = 'Candidat potentiel mis à jour avec les nouvelles informations';
+      statusCode = 200;
+    }
+    // Si existe ET converti OU n'existe pas → créer nouveau
+    else {
+      prospect = await prisma.prospectCandidate.create({
+        data: prospectData,
+      });
+      message = 'Candidat potentiel créé avec succès';
+      statusCode = 201;
+    }
+
+    res.status(statusCode).json({
+      message,
       data: prospect,
     });
   } catch (error) {
