@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import {
   getCatalogues,
   getCatalogueById,
@@ -8,6 +9,12 @@ import {
   generateCataloguePDF,
 } from '../controllers/catalogue.controller';
 import { authenticateJWT, authorizeRoles } from '../middleware/auth';
+import { validate } from '../middleware/validation.middleware';
+
+// Validation schemas
+const uuidParam = z.object({
+  id: z.string().uuid('ID invalide'),
+});
 
 const router = Router();
 
@@ -26,7 +33,7 @@ router.get('/', getCatalogues);
  * @desc    Get single catalogue by ID
  * @access  Private (All authenticated users)
  */
-router.get('/:id', getCatalogueById);
+router.get('/:id', validate({ params: uuidParam }), getCatalogueById);
 
 /**
  * @route   POST /api/catalogues
@@ -47,6 +54,7 @@ router.post(
 router.put(
   '/:id',
   authorizeRoles('ADMIN', 'SALES', 'RH_RECRUITER'),
+  validate({ params: uuidParam }),
   updateCatalogue
 );
 
@@ -55,7 +63,7 @@ router.put(
  * @desc    Delete catalogue
  * @access  Private (ADMIN)
  */
-router.delete('/:id', authorizeRoles('ADMIN'), deleteCatalogue);
+router.delete('/:id', authorizeRoles('ADMIN'), validate({ params: uuidParam }), deleteCatalogue);
 
 /**
  * @route   POST /api/catalogues/:id/generate
@@ -65,6 +73,7 @@ router.delete('/:id', authorizeRoles('ADMIN'), deleteCatalogue);
 router.post(
   '/:id/generate',
   authorizeRoles('ADMIN', 'SALES', 'RH_RECRUITER'),
+  validate({ params: uuidParam }),
   generateCataloguePDF
 );
 

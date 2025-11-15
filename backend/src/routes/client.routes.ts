@@ -1,4 +1,5 @@
 import express from 'express';
+import { z } from 'zod';
 import {
   getClients,
   getClientById,
@@ -8,6 +9,12 @@ import {
   reactivateClient,
 } from '../controllers/client.controller';
 import { authenticateJWT, authorizeRoles } from '../middleware/auth';
+import { validate } from '../middleware/validation.middleware';
+
+// Validation schemas
+const uuidParam = z.object({
+  id: z.string().uuid('ID invalide'),
+});
 
 const router = express.Router();
 
@@ -26,7 +33,7 @@ router.get('/', getClients);
  * @desc    Get single client by ID
  * @access  Authenticated users
  */
-router.get('/:id', getClientById);
+router.get('/:id', validate({ params: uuidParam }), getClientById);
 
 /**
  * @route   POST /api/clients
@@ -47,6 +54,7 @@ router.post(
 router.put(
   '/:id',
   authorizeRoles('ADMIN', 'SALES', 'RH_RECRUITER'),
+  validate({ params: uuidParam }),
   updateClient
 );
 
@@ -58,6 +66,7 @@ router.put(
 router.delete(
   '/:id',
   authorizeRoles('ADMIN', 'SALES'),
+  validate({ params: uuidParam }),
   deleteClient
 );
 
@@ -69,6 +78,7 @@ router.delete(
 router.post(
   '/:id/reactivate',
   authorizeRoles('ADMIN', 'SALES'),
+  validate({ params: uuidParam }),
   reactivateClient
 );
 

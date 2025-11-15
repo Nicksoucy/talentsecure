@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import {
   getCandidates,
   getCandidateById,
@@ -21,8 +22,37 @@ import {
   deleteCandidateCV,
 } from '../controllers/upload.controller';
 import { authenticateJWT, authorizeRoles } from '../middleware/auth';
+import { validate } from '../middleware/validation.middleware';
 import { uploadCV } from '../middleware/upload';
 import { videoUpload } from '../services/video.service';
+
+// Validation schemas
+const uuidParam = z.object({
+  id: z.string().uuid('ID invalide'),
+});
+
+const candidateQueryFilters = z.object({
+  search: z.string().max(200).optional(),
+  status: z.string().optional(),
+  minRating: z.string().optional(),
+  city: z.string().max(100).optional(),
+  hasBSP: z.string().optional(),
+  hasVehicle: z.string().optional(),
+  hasVideo: z.string().optional(),
+  hasDriverLicense: z.string().optional(),
+  hasCV: z.string().optional(),
+  canWorkUrgent: z.string().optional(),
+  maxTravelKm: z.string().optional(),
+  bspStatus: z.string().optional(),
+  interviewDateStart: z.string().optional(),
+  interviewDateEnd: z.string().optional(),
+  includeArchived: z.string().optional(),
+  certification: z.string().optional(),
+  page: z.string().optional(),
+  limit: z.string().optional(),
+  sortBy: z.string().optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
+}).strict();
 
 const router = Router();
 
@@ -34,7 +64,7 @@ router.use(authenticateJWT);
  * @desc    Get all candidates with filters
  * @access  Private (All authenticated users)
  */
-router.get('/', getCandidates);
+router.get('/', validate({ query: candidateQueryFilters }), getCandidates);
 
 /**
  * @route   GET /api/candidates/stats/summary
@@ -143,7 +173,7 @@ router.delete(
  * @desc    Get single candidate by ID
  * @access  Private (All authenticated users)
  */
-router.get('/:id', getCandidateById);
+router.get('/:id', validate({ params: uuidParam }), getCandidateById);
 
 /**
  * @route   PUT /api/candidates/:id
@@ -153,6 +183,7 @@ router.get('/:id', getCandidateById);
 router.put(
   '/:id',
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  validate({ params: uuidParam }),
   updateCandidate
 );
 
@@ -164,6 +195,7 @@ router.put(
 router.delete(
   '/:id',
   authorizeRoles('ADMIN'),
+  validate({ params: uuidParam }),
   deleteCandidate
 );
 
@@ -175,6 +207,7 @@ router.delete(
 router.patch(
   '/:id/archive',
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  validate({ params: uuidParam }),
   archiveCandidate
 );
 
@@ -186,6 +219,7 @@ router.patch(
 router.patch(
   '/:id/unarchive',
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  validate({ params: uuidParam }),
   unarchiveCandidate
 );
 

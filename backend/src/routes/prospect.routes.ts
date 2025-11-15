@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import {
   getProspects,
   getProspectById,
@@ -13,6 +14,25 @@ import {
   getProspectsStats,
 } from '../controllers/prospect.controller';
 import { authenticateJWT, authorizeRoles } from '../middleware/auth';
+import { validate } from '../middleware/validation.middleware';
+
+// Validation schemas
+const uuidParam = z.object({
+  id: z.string().uuid('ID invalide'),
+});
+
+const prospectQueryFilters = z.object({
+  search: z.string().max(200).optional(),
+  city: z.string().max(100).optional(),
+  isContacted: z.string().optional(),
+  isConverted: z.string().optional(),
+  submissionDateStart: z.string().optional(),
+  submissionDateEnd: z.string().optional(),
+  page: z.string().optional(),
+  limit: z.string().optional(),
+  sortBy: z.string().optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
+}).strict();
 
 const router = Router();
 
@@ -24,7 +44,7 @@ router.use(authenticateJWT);
  * @desc    Get all prospect candidates with filters
  * @access  Private (All authenticated users)
  */
-router.get('/', getProspects);
+router.get('/', validate({ query: prospectQueryFilters }), getProspects);
 
 /**
  * @route   GET /api/prospects/stats/summary
@@ -73,6 +93,7 @@ router.post(
 router.post(
   '/:id/contact',
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  validate({ params: uuidParam }),
   markAsContacted
 );
 
@@ -84,6 +105,7 @@ router.post(
 router.post(
   '/:id/convert',
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  validate({ params: uuidParam }),
   convertToCandidate
 );
 
@@ -92,7 +114,7 @@ router.post(
  * @desc    Get single prospect by ID
  * @access  Private (All authenticated users)
  */
-router.get('/:id', getProspectById);
+router.get('/:id', validate({ params: uuidParam }), getProspectById);
 
 /**
  * @route   PUT /api/prospects/:id
@@ -102,6 +124,7 @@ router.get('/:id', getProspectById);
 router.put(
   '/:id',
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  validate({ params: uuidParam }),
   updateProspect
 );
 
@@ -113,6 +136,7 @@ router.put(
 router.delete(
   '/:id',
   authorizeRoles('ADMIN'),
+  validate({ params: uuidParam }),
   deleteProspect
 );
 
