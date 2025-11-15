@@ -20,7 +20,6 @@ import {
   DialogActions,
   TextField,
   Grid,
-  CircularProgress,
   Alert,
   Pagination,
   Checkbox,
@@ -38,6 +37,7 @@ import {
 import { useSnackbar } from 'notistack';
 import { useNavigate } from 'react-router-dom';
 import { candidateService } from '@/services/candidate.service';
+import { TableSkeleton } from '@/components/skeletons';
 import { catalogueService } from '@/services/catalogue.service';
 import { clientService } from '@/services/client.service';
 import InterviewEvaluationForm from '@/components/InterviewEvaluationForm';
@@ -525,11 +525,7 @@ export default function CandidatesListPage() {
   };
 
   if (isLoading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
-    );
+    return <TableSkeleton rows={10} columns={8} hasHeader hasFilters hasActions />;
   }
 
   if (error) {

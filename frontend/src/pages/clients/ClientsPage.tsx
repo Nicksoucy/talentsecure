@@ -21,7 +21,6 @@ import {
   DialogActions,
   TextField,
   Grid,
-  CircularProgress,
   Alert,
   Pagination,
   InputAdornment,
@@ -40,6 +39,7 @@ import {
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { clientService, Client } from '@/services/client.service';
+import { TableSkeleton } from '@/components/skeletons';
 
 export default function ClientsPage() {
   const { enqueueSnackbar } = useSnackbar();
@@ -192,11 +192,7 @@ export default function ClientsPage() {
   };
 
   if (isLoading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
-    );
+    return <TableSkeleton rows={10} columns={5} hasHeader hasFilters hasActions />;
   }
 
   if (error) {

@@ -16,7 +16,6 @@ import {
   Chip,
   IconButton,
   TextField,
-  CircularProgress,
   Alert,
   Pagination,
   FormControl,
@@ -49,6 +48,7 @@ import {
   FileDownload as FileDownloadIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
+import { TableSkeleton } from '@/components/skeletons';
 import { useNavigate } from 'react-router-dom';
 import { prospectService } from '@/services/prospect.service';
 import { ProspectCandidate } from '@/types';
@@ -503,9 +503,7 @@ export default function ProspectsPage() {
 
       {/* Table */}
       {isLoading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-          <CircularProgress />
-        </Box>
+        <TableSkeleton rows={10} columns={6} hasActions={false} hasFilters={false} hasHeader={false} />
       ) : (
         <>
           {/* Bulk Actions Toolbar */}

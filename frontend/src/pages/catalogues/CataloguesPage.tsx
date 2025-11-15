@@ -21,7 +21,6 @@ import {
   DialogActions,
   TextField,
   Grid,
-  CircularProgress,
   Alert,
   FormControlLabel,
   Checkbox,
@@ -42,6 +41,7 @@ import { useSnackbar } from 'notistack';
 import { catalogueService } from '@/services/catalogue.service';
 import { candidateService } from '@/services/candidate.service';
 import { clientService } from '@/services/client.service';
+import { TableSkeleton } from '@/components/skeletons';
 import CandidateAdvancedFilters, { CandidateFilters } from '@/components/CandidateAdvancedFilters';
 
 const STATUS_COLORS: Record<string, 'default' | 'info' | 'success' | 'warning' | 'error'> = {
@@ -238,11 +238,7 @@ export default function CataloguesPage() {
   }, [openCreateDialog]);
 
   if (isLoading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
-    );
+    return <TableSkeleton rows={8} columns={5} hasHeader hasActions />;
   }
 
   if (error) {

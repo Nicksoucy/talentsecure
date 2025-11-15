@@ -9,7 +9,6 @@ import {
   Grid,
   Chip,
   Button,
-  CircularProgress,
   Alert,
   Divider,
   IconButton,
@@ -40,6 +39,7 @@ import { candidateService } from '@/services/candidate.service';
 import CVUpload from '@/components/CVUpload';
 import VideoUpload from '@/components/video/VideoUpload';
 import VideoPlayer from '@/components/video/VideoPlayer';
+import { DetailPageSkeleton } from '@/components/skeletons';
 
 const STATUS_COLORS: Record<string, 'success' | 'info' | 'warning' | 'error' | 'default'> = {
   ELITE: 'error',
@@ -122,11 +122,7 @@ const CandidateDetailPage = () => {
   };
 
   if (isLoading) {
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
-    );
+    return <DetailPageSkeleton hasBackButton sections={6} />;
   }
 
   if (error || !data?.data) {

@@ -8,7 +8,6 @@ import {
   Grid,
   Chip,
   Button,
-  CircularProgress,
   Alert,
   Divider,
 } from '@mui/material';
@@ -18,6 +17,7 @@ import {
   Transform as TransformIcon,
 } from '@mui/icons-material';
 import { prospectService } from '@/services/prospect.service';
+import { DetailPageSkeleton } from '@/components/skeletons';
 
 export default function ProspectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -32,11 +32,7 @@ export default function ProspectDetailPage() {
   const prospect = data?.data;
 
   if (isLoading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <DetailPageSkeleton hasBackButton sections={3} />;
   }
 
   if (error || !prospect) {
