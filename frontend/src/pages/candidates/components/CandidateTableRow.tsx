@@ -72,7 +72,18 @@ export default function CandidateTableRow({
       </TableCell>
 
       <TableCell>
-        {candidate.firstName} {candidate.lastName}
+        <span
+          onClick={onView}
+          style={{
+            cursor: 'pointer',
+            color: '#1976d2',
+            fontWeight: 500,
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
+          onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
+        >
+          {candidate.firstName} {candidate.lastName}
+        </span>
         {candidate.isArchived && (
           <Chip
             label="Archivé"
