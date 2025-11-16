@@ -787,7 +787,7 @@ export const uploadCandidateVideo = async (
     }
 
     // Import video service
-    const { processVideoUpload, deleteVideo } = require('../services/video.service');
+    const { processVideoUpload, deleteVideo, getVideoUrl } = require('../services/video.service');
 
     // If candidate already has a video, delete the old one
     if (candidate.videoStoragePath) {
@@ -805,11 +805,15 @@ export const uploadCandidateVideo = async (
       req.file.originalname
     );
 
+    // Generate the video URL (handles Google Drive, GCS, or local)
+    const videoUrl = getVideoUrl(videoStoragePath);
+
     // Update candidate with video info
     const updatedCandidate = await prisma.candidate.update({
       where: { id },
       data: {
         videoStoragePath,
+        videoUrl,
         videoUploadedAt: new Date(),
       },
     });
@@ -866,13 +870,24 @@ export const getCandidateVideoUrl = async (
       });
     }
 
-    // Get video URL (handles Google Drive, GCS, or local)
-    const { getVideoUrl } = require('../services/video.service');
+    // Get video URL (handles R2, Google Drive, GCS, or local)
+    const { getVideoUrl, getR2SignedUrl } = require('../services/video.service');
+    const { useR2 } = require('../services/r2.service');
     const { useGoogleDrive } = require('../services/googleDrive.service');
 
     let videoUrl: string;
 
-    if (useGoogleDrive) {
+    if (useR2) {
+      // For R2, check if we have a custom domain (public URL) or need signed URL
+      const publicUrl = getVideoUrl(candidate.videoStoragePath);
+
+      // If publicUrl doesn't start with http, it's just the key - generate signed URL
+      if (!publicUrl.startsWith('http')) {
+        videoUrl = await getR2SignedUrl(candidate.videoStoragePath, 3600);
+      } else {
+        videoUrl = publicUrl;
+      }
+    } else if (useGoogleDrive) {
       // For Google Drive, directly use the embed URL
       videoUrl = getVideoUrl(candidate.videoStoragePath);
     } else {

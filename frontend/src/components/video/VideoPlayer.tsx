@@ -39,6 +39,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       setLoading(true);
       setError(null);
 
+      console.log('🎥 VideoPlayer - candidateId reçu:', candidateId);
+      console.log('🎥 VideoPlayer - type de candidateId:', typeof candidateId);
+
       const response = await candidateService.getVideoUrl(candidateId);
 
       if (response.success && response.data.videoUrl) {

@@ -22,6 +22,8 @@
   "author": "XGUARD Security",
   "license": "MIT",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.932.0",
+    "@aws-sdk/s3-request-presigner": "^3.932.0",
     "@google-cloud/storage": "^7.17.3",
     "@prisma/client": "^5.7.0",
     "@types/json2csv": "^5.0.7",

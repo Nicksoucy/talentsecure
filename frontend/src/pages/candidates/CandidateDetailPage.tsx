@@ -271,44 +271,11 @@ const CandidateDetailPage = () => {
           </Card>
 
           {/* Video Section */}
-          {candidate.videoUrl && (
-            <Card sx={{ mb: 3 }}>
-              <CardContent>
-                <Box display="flex" alignItems="center" gap={1} mb={2}>
-                  <VideoIcon color="action" />
-                  <Typography variant="h6" fontWeight="bold">
-                    Vidéo d'entretien
-                  </Typography>
-                </Box>
-                <Divider sx={{ mb: 2 }} />
-
-                <Box
-                  sx={{
-                    position: 'relative',
-                    paddingBottom: '56.25%', // 16:9 aspect ratio
-                    height: 0,
-                    overflow: 'hidden',
-                    borderRadius: 1,
-                    bgcolor: 'black',
-                  }}
-                >
-                  <iframe
-                    src={candidate.videoUrl}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: '100%',
-                      border: 'none',
-                    }}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    title="Vidéo d'entretien"
-                  />
-                </Box>
-              </CardContent>
-            </Card>
+          {candidate.videoStoragePath && (
+            <VideoPlayer
+              candidateId={candidate.id}
+              candidateName={`${candidate.firstName} ${candidate.lastName}`}
+            />
           )}
 
           {/* Interview Details Sections */}

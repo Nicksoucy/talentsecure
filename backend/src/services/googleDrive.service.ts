@@ -187,11 +187,12 @@ export async function getTokensFromCode(code: string): Promise<any> {
 }
 
 /**
- * Get embeddable video URL for iframe
- * Google Drive videos can be embedded using a specific URL format
+ * Get embeddable video URL for video tag
+ * Google Drive preview URLs don't work in iframes due to CSP restrictions
+ * Instead, we use the direct download URL which works in <video> tags
  */
 export function getEmbedUrl(fileId: string): string {
-  return `https://drive.google.com/file/d/${fileId}/preview`;
+  return `https://drive.google.com/uc?export=download&id=${fileId}`;
 }
 
 /**
