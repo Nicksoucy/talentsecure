@@ -866,9 +866,20 @@ export const getCandidateVideoUrl = async (
       });
     }
 
-    // Generate signed URL
-    const { getSignedUrl, GCS_VIDEO_BUCKET } = require('../config/storage');
-    const videoUrl = await getSignedUrl(GCS_VIDEO_BUCKET, candidate.videoStoragePath, 3600);
+    // Get video URL (handles Google Drive, GCS, or local)
+    const { getVideoUrl } = require('../services/video.service');
+    const { useGoogleDrive } = require('../services/googleDrive.service');
+
+    let videoUrl: string;
+
+    if (useGoogleDrive) {
+      // For Google Drive, directly use the embed URL
+      videoUrl = getVideoUrl(candidate.videoStoragePath);
+    } else {
+      // For GCS/local, generate signed URL
+      const { getSignedUrl, GCS_VIDEO_BUCKET } = require('../config/storage');
+      videoUrl = await getSignedUrl(GCS_VIDEO_BUCKET, candidate.videoStoragePath, 3600);
+    }
 
     res.json({
       success: true,
