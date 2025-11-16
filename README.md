@@ -16,7 +16,24 @@ L'application TalentSecure est maintenant opérationnelle avec les fonctionnalit
 
 ---
 
-## 🚀 Optimisations Récentes (15 Nov 2025)
+## 🚀 Optimisations Récentes (16 Nov 2025)
+
+### Stockage Vidéo Cloudflare R2 🎥 (16 Nov 2025)
+**Migration réussie vers Cloudflare R2** pour le stockage et streaming des vidéos d'entretien:
+
+- ✅ **Intégration Cloudflare R2** - Remplacement de Google Drive par R2
+- ✅ **10 GB gratuits** + **bande passante ILLIMITÉE gratuite** (vs coûts GCS)
+- ✅ **API S3-compatible** - Utilisation de @aws-sdk/client-s3
+- ✅ **URLs signées sécurisées** - Génération d'URLs temporaires (1h d'expiration)
+- ✅ **Fix lecteur vidéo** - Correction du bug d'affichage vidéo principale
+- ✅ **Fix suppression vidéo** - Correction du bug d'authentification lors de la suppression
+- ✅ **Scripts de migration** - Outils pour migrer les vidéos existantes vers R2
+
+**Avantages:**
+- 💰 **Économies:** Bande passante gratuite illimitée (vs $0.12/GB sur GCS)
+- ⚡ **Performance:** Streaming optimisé avec CDN global Cloudflare
+- 🔒 **Sécurité:** URLs signées avec expiration automatique
+- 🌍 **Global:** Edge network Cloudflare pour faible latence mondiale
 
 Suite à un audit complet du code, **7 améliorations critiques** ont été déployées en production:
 
@@ -335,11 +352,12 @@ talentsecure/
 - **Node.js 18** + TypeScript
 - **Express.js** - Framework API
 - **Prisma** - ORM
-- **PostgreSQL 15** - Base de données
+- **PostgreSQL 15** - Base de données (Neon)
 - **Passport.js** - Authentification (Local + Google OAuth)
 - **JWT** - Tokens d'authentification
 - **PDFKit** - Génération PDF
-- **Google Cloud Storage** - Stockage fichiers
+- **Cloudflare R2** - Stockage vidéos (S3-compatible)
+- **@aws-sdk/client-s3** - Client S3 pour R2
 
 ### Frontend
 - **React 18** + TypeScript
@@ -599,6 +617,136 @@ Format du CSV :
 - Notes
 
 Encodage : UTF-8 avec BOM (support accents français)
+
+---
+
+## Stockage Vidéo avec Cloudflare R2
+
+### Configuration R2
+
+TalentSecure utilise **Cloudflare R2** pour le stockage et le streaming des vidéos d'entretien.
+
+**Avantages de R2:**
+- 🆓 **10 GB de stockage gratuit**
+- 🚀 **Bande passante ILLIMITÉE gratuite** (parfait pour le streaming vidéo!)
+- 💰 **Économies massives** vs Google Cloud Storage ($0.12/GB de bande passante)
+- ⚡ **CDN global Cloudflare** pour streaming rapide partout dans le monde
+- 🔒 **URLs signées sécurisées** avec expiration automatique
+
+### Variables d'environnement requises
+
+Ajouter dans `backend/.env`:
+
+```bash
+# Cloudflare R2 Storage
+USE_R2=true
+R2_ACCOUNT_ID=votre-account-id
+R2_ACCESS_KEY_ID=votre-access-key
+R2_SECRET_ACCESS_KEY=votre-secret-key
+R2_BUCKET_NAME=talentsecure-videos
+R2_ENDPOINT=https://ACCOUNT_ID.r2.cloudflarestorage.com
+R2_PUBLIC_URL=  # Optionnel: domaine personnalisé
+```
+
+### Configuration initiale
+
+1. **Créer un compte Cloudflare** (gratuit)
+2. **Créer un bucket R2:**
+   ```
+   Dashboard > R2 > Create Bucket
+   Nom: talentsecure-videos
+   ```
+
+3. **Créer un API Token:**
+   ```
+   R2 > Manage R2 API Tokens > Create API Token
+   Permissions: Object Read & Write
+   ```
+
+4. **Configurer les variables d'environnement** (voir ci-dessus)
+
+5. **Déployer sur Cloud Run:**
+   - Ajouter les 6 variables R2 dans Cloud Run
+   - Redéployer le backend
+
+### Fonctionnalités
+
+#### Upload de vidéos
+- Formats acceptés: MP4, MOV, AVI, WebM
+- Taille maximale: 500 MB
+- Upload multipart automatique pour gros fichiers
+- Nettoyage automatique des fichiers locaux temporaires
+
+#### Streaming vidéos
+- URLs signées sécurisées (expiration 1h)
+- Régénération automatique si expiré
+- Support navigateurs modernes (HTML5 video)
+- Contrôles: play/pause, volume, plein écran
+
+#### Suppression vidéos
+- Suppression R2 + base de données
+- Confirmation utilisateur requise
+- Nettoyage automatique des références
+
+### Migration depuis Google Drive
+
+Si vous avez des vidéos existantes sur Google Drive, utilisez le script de migration:
+
+```bash
+cd backend
+npx tsx src/scripts/migrate-videos-to-r2.ts
+```
+
+Le script:
+- ✅ Télécharge les vidéos depuis Google Drive
+- ✅ Upload vers R2
+- ✅ Met à jour les références en base de données
+- ✅ Vérifie l'intégrité des fichiers
+
+### Scripts utiles
+
+```bash
+# Vérifier la vidéo d'un candidat
+npx tsx src/scripts/check-candidate-video.ts <candidate-id>
+
+# Fixer un candidat spécifique
+npx tsx src/scripts/fix-specific-candidate.ts <candidate-id>
+
+# Fixer toutes les URLs vidéo
+npx tsx src/scripts/fix-video-urls.ts
+```
+
+### Monitoring
+
+#### Voir l'utilisation R2:
+```
+Cloudflare Dashboard > R2 > talentsecure-videos
+```
+
+Métriques disponibles:
+- Stockage utilisé (GB)
+- Nombre d'objets
+- Requêtes API (upload/download)
+- Trafic sortant (toujours $0!)
+
+### Coûts
+
+| Service | Gratuit | Payant (si dépassement) |
+|---------|---------|-------------------------|
+| Stockage | 10 GB | $0.015/GB/mois |
+| Opérations Classe A | 1M/mois | $4.50/million |
+| Opérations Classe B | 10M/mois | $0.36/million |
+| **Bande passante** | **ILLIMITÉE** | **$0** |
+
+**Note:** Pour un système avec 100 vidéos de 50MB chacune = 5GB stockage = **$0/mois** 🎉
+
+### Sécurité
+
+- ✅ Bucket privé (non accessible publiquement)
+- ✅ URLs signées avec expiration (1h par défaut)
+- ✅ Authentification requise pour upload/delete
+- ✅ CORS configuré pour domaine frontend uniquement
+- ✅ Credentials jamais exposés au frontend
 
 ---
 
