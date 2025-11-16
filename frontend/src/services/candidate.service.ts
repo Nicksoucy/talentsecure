@@ -182,4 +182,16 @@ export const candidateService = {
     const response = await api.get('/api/candidates/stats/summary');
     return response.data;
   },
+
+  /**
+   * Export candidates as CSV
+   * Supports same filters as getCandidates
+   */
+  async exportCandidatesCSV(params?: GetCandidatesParams): Promise<Blob> {
+    const response = await api.get('/api/candidates/export/csv', {
+      params,
+      responseType: 'blob', // Important for file downloads
+    });
+    return response.data;
+  },
 };

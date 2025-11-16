@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { getStatusFromRating } from '../utils/candidate.utils';
+import { Parser } from 'json2csv';
 
 /**
  * Get all candidates with filters
@@ -1017,6 +1018,238 @@ export const getCandidatesStats = async (
     });
   } catch (error) {
     console.error('Error getting candidates stats:', error);
+    next(error);
+  }
+};
+
+/**
+ * Export candidates as CSV
+ * Supports same filters as getCandidates
+ */
+export const exportCandidatesCSV = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const {
+      search,
+      status,
+      minRating,
+      city,
+      hasBSP,
+      hasVehicle,
+      hasDriverLicense,
+      hasCV,
+      canWorkUrgent,
+      maxTravelKm,
+      bspStatus,
+      interviewDateStart,
+      interviewDateEnd,
+      includeArchived,
+      certification,
+    } = req.query;
+
+    // Build where clause (same logic as getCandidates)
+    const where: any = {
+      isDeleted: false,
+    };
+
+    // Only include archived if specifically requested
+    if (includeArchived !== 'true') {
+      where.isArchived = false;
+    }
+
+    // Search filter
+    const orConditions: any[] = [];
+    if (search) {
+      orConditions.push({
+        OR: [
+          { firstName: { contains: search as string, mode: 'insensitive' } },
+          { lastName: { contains: search as string, mode: 'insensitive' } },
+          { email: { contains: search as string, mode: 'insensitive' } },
+          { phone: { contains: search as string, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    // Status filter
+    if (status) {
+      where.status = status;
+    }
+
+    // Rating filter
+    if (minRating) {
+      where.globalRating = { gte: Number(minRating) };
+    }
+
+    // City filter
+    if (city) {
+      where.city = { contains: city as string, mode: 'insensitive' };
+    }
+
+    // Boolean filters
+    if (hasBSP !== undefined) {
+      where.hasBSP = hasBSP === 'true';
+    }
+    if (hasVehicle !== undefined) {
+      where.hasVehicle = hasVehicle === 'true';
+    }
+    if (hasDriverLicense !== undefined) {
+      where.hasDriverLicense = hasDriverLicense === 'true';
+    }
+    if (canWorkUrgent !== undefined) {
+      where.canWorkUrgent = canWorkUrgent === 'true';
+    }
+
+    // CV filter
+    if (hasCV !== undefined) {
+      if (hasCV === 'true') {
+        orConditions.push({
+          OR: [
+            { cvUrl: { not: null } },
+            { cvStoragePath: { not: null } },
+          ],
+        });
+      } else {
+        where.AND = [
+          { cvUrl: null },
+          { cvStoragePath: null },
+        ];
+      }
+    }
+
+    // Travel distance filter
+    if (maxTravelKm) {
+      where.maxTravelKm = { gte: Number(maxTravelKm) };
+    }
+
+    // BSP status filter
+    if (bspStatus) {
+      where.bspStatus = bspStatus;
+    }
+
+    // Interview date range filter
+    if (interviewDateStart || interviewDateEnd) {
+      where.interviewDate = {};
+      if (interviewDateStart) {
+        where.interviewDate.gte = new Date(interviewDateStart as string);
+      }
+      if (interviewDateEnd) {
+        where.interviewDate.lte = new Date(interviewDateEnd as string);
+      }
+    }
+
+    // Certification filter
+    if (certification) {
+      where.certifications = {
+        some: {
+          name: certification as string,
+        },
+      };
+    }
+
+    // Combine OR conditions if any
+    if (orConditions.length > 0) {
+      where.AND = orConditions;
+    }
+
+    // Fetch all matching candidates (no pagination for export)
+    const candidates = await prisma.candidate.findMany({
+      where,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        city: true,
+        province: true,
+        postalCode: true,
+        status: true,
+        globalRating: true,
+        interviewDate: true,
+        hasBSP: true,
+        bspStatus: true,
+        bspExpiryDate: true,
+        hasVehicle: true,
+        hasDriverLicense: true,
+        canWorkUrgent: true,
+        maxTravelKm: true,
+        cvUrl: true,
+        videoUrl: true,
+        isArchived: true,
+        createdAt: true,
+        certifications: {
+          select: {
+            name: true,
+            expiryDate: true,
+          },
+        },
+        languages: {
+          select: {
+            language: true,
+            level: true,
+          },
+        },
+      },
+      orderBy: [
+        { globalRating: { sort: 'desc', nulls: 'last' } },
+        { lastName: 'asc' },
+      ],
+    });
+
+    // Transform data for CSV
+    const csvData = candidates.map((candidate) => ({
+      ID: candidate.id,
+      Prénom: candidate.firstName,
+      Nom: candidate.lastName,
+      Email: candidate.email || '',
+      Téléphone: candidate.phone || '',
+      Ville: candidate.city || '',
+      Province: candidate.province || '',
+      'Code postal': candidate.postalCode || '',
+      Statut: candidate.status || '',
+      'Note globale': candidate.globalRating || '',
+      'Date entrevue': candidate.interviewDate
+        ? new Date(candidate.interviewDate).toLocaleDateString('fr-CA')
+        : '',
+      'A BSP': candidate.hasBSP ? 'Oui' : 'Non',
+      'Statut BSP': candidate.bspStatus || '',
+      'BSP expiration': candidate.bspExpiryDate
+        ? new Date(candidate.bspExpiryDate).toLocaleDateString('fr-CA')
+        : '',
+      'A véhicule': candidate.hasVehicle ? 'Oui' : 'Non',
+      'Permis de conduire': candidate.hasDriverLicense ? 'Oui' : 'Non',
+      'Disponible urgent': candidate.canWorkUrgent ? 'Oui' : 'Non',
+      'Distance max (km)': candidate.maxTravelKm || '',
+      'A CV': candidate.cvUrl ? 'Oui' : 'Non',
+      'A vidéo': candidate.videoUrl ? 'Oui' : 'Non',
+      Certifications: candidate.certifications
+        .map((c) => c.name)
+        .join(', '),
+      Langues: candidate.languages
+        .map((l) => `${l.language} (${l.level})`)
+        .join(', '),
+      Archivé: candidate.isArchived ? 'Oui' : 'Non',
+      'Créé le': new Date(candidate.createdAt).toLocaleDateString('fr-CA'),
+    }));
+
+    // Generate CSV
+    const json2csvParser = new Parser({
+      delimiter: ',',
+      withBOM: true, // Add BOM for Excel compatibility with French characters
+    });
+    const csv = json2csvParser.parse(csvData);
+
+    // Set headers for file download
+    const filename = `candidats_export_${new Date().toISOString().split('T')[0]}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    res.send(csv);
+  } catch (error) {
+    console.error('Error exporting candidates CSV:', error);
     next(error);
   }
 };

@@ -33,6 +33,7 @@ import {
   ArrowDownward as ArrowDownwardIcon,
   Cancel as CancelIcon,
   Map as MapIcon,
+  FileDownload as FileDownloadIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useNavigate } from 'react-router-dom';
@@ -78,6 +79,9 @@ export default function CandidatesListPage() {
   const [loadingCities, setLoadingCities] = useState(false);
   const [candidateSuggestions, setCandidateSuggestions] = useState<Array<{ id: string; label: string; email: string }>>([]);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
+
+  // Export state
+  const [isExporting, setIsExporting] = useState(false);
 
   // Local input states for debouncing (to prevent page refresh on every keystroke)
   const [cityInput, setCityInput] = useState('');
@@ -143,6 +147,41 @@ export default function CandidatesListPage() {
       setSortOrder('asc');
     }
     setPage(1);
+  };
+
+  // Handle CSV export
+  const handleExportCSV = async () => {
+    try {
+      setIsExporting(true);
+
+      // Build params with current filters
+      const exportParams = {
+        search: debouncedSearch || undefined,
+        ...filters,
+        includeArchived,
+        sortBy,
+        sortOrder,
+      };
+
+      const blob = await candidateService.exportCandidatesCSV(exportParams);
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `candidats_export_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      enqueueSnackbar('Export CSV réussi', { variant: 'success' });
+    } catch (error) {
+      console.error('Error exporting CSV:', error);
+      enqueueSnackbar('Erreur lors de l\'export CSV', { variant: 'error' });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // Handle filter change
@@ -552,6 +591,14 @@ export default function CandidatesListPage() {
           Candidats ({data?.pagination.total || 0})
         </Typography>
         <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="outlined"
+            startIcon={<FileDownloadIcon />}
+            onClick={handleExportCSV}
+            disabled={isExporting || isLoading}
+          >
+            {isExporting ? 'Export en cours...' : 'Exporter CSV'}
+          </Button>
           <Button
             variant="outlined"
             startIcon={<MapIcon />}

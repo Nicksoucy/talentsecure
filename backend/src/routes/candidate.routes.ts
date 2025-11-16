@@ -15,6 +15,7 @@ import {
   getCandidateVideoUrl,
   deleteCandidateVideo,
   getCandidatesStats,
+  exportCandidatesCSV,
 } from '../controllers/candidate.controller';
 import {
   uploadCandidateCV,
@@ -93,6 +94,13 @@ router.get('/suggestions/cities', getCitiesSuggestions);
  * @access  Private (All authenticated users)
  */
 router.get('/suggestions/names', getCandidatesSuggestions);
+
+/**
+ * @route   GET /api/candidates/export/csv
+ * @desc    Export candidates as CSV (supports same filters as GET /api/candidates)
+ * @access  Private (All authenticated users)
+ */
+router.get('/export/csv', validate({ query: candidateQueryFilters }), exportCandidatesCSV);
 
 /**
  * @route   POST /api/candidates
