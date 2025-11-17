@@ -113,32 +113,48 @@ export const catalogueService = {
    * Generate catalogue PDF
    */
   generateCataloguePDF: async (id: string) => {
-    const response = await api.post(`/api/catalogues/${id}/generate`, null, {
-      responseType: 'blob',
-    });
+    try {
+      const response = await api.post(`/api/catalogues/${id}/generate`, {}, {
+        responseType: 'blob',
+      });
 
-    // Create a download link for the PDF
-    const blob = new Blob([response.data], { type: 'application/pdf' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
+      // Create a download link for the PDF
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
 
-    // Extract filename from Content-Disposition header or use default
-    const contentDisposition = response.headers['content-disposition'];
-    let filename = 'catalogue.pdf';
-    if (contentDisposition) {
-      const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
-      if (filenameMatch) {
-        filename = filenameMatch[1];
+      // Extract filename from Content-Disposition header or use default
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = 'catalogue.pdf';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
       }
+
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      return { message: 'PDF téléchargé avec succès' };
+    } catch (error: any) {
+      // Handle blob error responses
+      if (error.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          if (text && text !== 'null') {
+            const errorData = JSON.parse(text);
+            throw { ...error, response: { ...error.response, data: errorData } };
+          }
+        } catch (parseError) {
+          console.error('Failed to parse blob error:', parseError);
+        }
+      }
+      throw error;
     }
-
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-
-    return { message: 'PDF téléchargé avec succès' };
   },
 };

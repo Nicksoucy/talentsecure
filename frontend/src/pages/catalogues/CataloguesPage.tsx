@@ -134,10 +134,10 @@ export default function CataloguesPage() {
       );
     },
     onError: (error: any) => {
-      enqueueSnackbar(
-        error.response?.data?.error || 'Erreur lors de la génération du PDF',
-        { variant: 'error' }
-      );
+      console.error('PDF Generation Error:', error);
+      console.error('Error Response:', error.response?.data);
+      const errorMessage = error.response?.data?.error || error.message || 'Erreur lors de la génération du PDF';
+      enqueueSnackbar(errorMessage, { variant: 'error' });
     },
   });
 
