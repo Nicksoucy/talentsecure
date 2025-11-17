@@ -2,7 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
 import path from 'path';
 import fs from 'fs';
+import axios from 'axios';
 import { PDFService } from '../services/pdf.service';
+import { useR2, getSignedFileUrl } from '../services/r2.service';
 
 const prisma = new PrismaClient();
 
@@ -463,20 +465,16 @@ export const generateCataloguePDF = async (
     // If includeCV is true, merge CVs
     let finalPdfBuffer: Buffer;
     if (catalogue.includeCV) {
-      // Import R2 service functions
-      const { useR2, getSignedFileUrl } = await import('../services/r2.service');
-
       // Collect CV paths
       const cvPaths: string[] = [];
       for (const item of catalogue.items) {
         const candidate = item.candidate;
-        if (candidate.cvStoragePath) {
+        if (candidate && candidate.cvStoragePath) {
           if (useR2 && candidate.cvStoragePath.startsWith('cvs/')) {
             // CV is on R2 - download it to temp
             try {
-              const axios = await import('axios');
               const signedUrl = await getSignedFileUrl(candidate.cvStoragePath, 3600);
-              const response = await axios.default.get(signedUrl, { responseType: 'arraybuffer' });
+              const response = await axios.get(signedUrl, { responseType: 'arraybuffer' });
 
               // Save to temp file
               const tempCvPath = path.join(tempDir, `cv_${item.id}_${Date.now()}.pdf`);
