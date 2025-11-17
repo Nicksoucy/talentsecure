@@ -222,3 +222,102 @@ export async function videoExistsInR2(key: string): Promise<boolean> {
     throw error;
   }
 }
+
+/**
+ * Generic file upload to R2 (for CVs, documents, etc.)
+ *
+ * @param filePath - Local path to the file
+ * @param key - The R2 object key (e.g., "cvs/uuid_filename.pdf")
+ * @param contentType - MIME type of the file
+ * @returns The storage key and URL
+ */
+export async function uploadFileToR2(
+  filePath: string,
+  key: string,
+  contentType: string = 'application/octet-stream'
+): Promise<{ key: string; url: string }> {
+  try {
+    const client = getR2Client();
+
+    // Read file
+    const fileContent = fs.readFileSync(filePath);
+
+    // Upload to R2
+    console.log(`Uploading file to Cloudflare R2: ${key}`);
+
+    await client.send(
+      new PutObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: key,
+        Body: fileContent,
+        ContentType: contentType,
+        ContentDisposition: contentType.startsWith('application/') ? 'attachment' : 'inline',
+        CacheControl: 'public, max-age=31536000', // Cache for 1 year
+      })
+    );
+
+    console.log(`File uploaded successfully to R2. Key: ${key}`);
+
+    // Generate public URL
+    const url = getPublicUrl(key);
+
+    return {
+      key: key,
+      url: url,
+    };
+  } catch (error: any) {
+    console.error('Error uploading file to R2:', error.message);
+    throw new Error(`Failed to upload file to R2: ${error.message}`);
+  }
+}
+
+/**
+ * Generic file deletion from R2
+ *
+ * @param key - The R2 object key
+ */
+export async function deleteFileFromR2(key: string): Promise<void> {
+  try {
+    const client = getR2Client();
+
+    await client.send(
+      new DeleteObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: key,
+      })
+    );
+
+    console.log(`File deleted from R2. Key: ${key}`);
+  } catch (error: any) {
+    console.error('Error deleting file from R2:', error.message);
+    throw new Error(`Failed to delete file from R2: ${error.message}`);
+  }
+}
+
+/**
+ * Generate a signed URL for any file type
+ *
+ * @param key - The R2 object key
+ * @param expiresIn - Expiration time in seconds (default: 1 hour)
+ * @returns Signed URL
+ */
+export async function getSignedFileUrl(key: string, expiresIn: number = 3600): Promise<string> {
+  try {
+    const client = getR2Client();
+
+    const command = new GetObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: key,
+    });
+
+    // Generate signed URL (valid for specified time)
+    const signedUrl = await getSignedUrl(client, command, {
+      expiresIn: expiresIn,
+    });
+
+    return signedUrl;
+  } catch (error: any) {
+    console.error('Error generating signed URL:', error.message);
+    throw new Error(`Failed to generate signed URL: ${error.message}`);
+  }
+}

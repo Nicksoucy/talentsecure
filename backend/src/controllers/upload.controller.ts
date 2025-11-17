@@ -3,6 +3,7 @@ import { prisma } from '../config/database';
 import path from 'path';
 import fs from 'fs';
 import { deleteFile } from '../middleware/upload';
+import { processCVUpload, deleteCV, getCVSignedUrl, getLocalCVPath, useR2 } from '../services/cv.service';
 
 /**
  * Upload CV for a candidate
@@ -33,12 +34,11 @@ export const uploadCandidateCV = async (
 
     // Supprimer l'ancien CV s'il existe
     if (candidate.cvStoragePath) {
-      const oldPath = path.join(__dirname, '../../', candidate.cvStoragePath);
-      await deleteFile(oldPath).catch(() => {});
+      await deleteCV(candidate.cvStoragePath).catch(() => {});
     }
 
-    // Mettre à jour le candidat avec le nouveau CV
-    const cvStoragePath = `uploads/cvs/${req.file.filename}`;
+    // Upload to R2 (or local storage if R2 is disabled)
+    const cvStoragePath = await processCVUpload(req.file.path, req.file.originalname);
     const cvUrl = `/api/candidates/${id}/cv/download`;
 
     const updatedCandidate = await prisma.candidate.update({
@@ -96,16 +96,25 @@ export const downloadCandidateCV = async (
       return res.status(404).json({ error: 'CV non trouvé' });
     }
 
-    const filePath = path.join(__dirname, '../../', candidate.cvStoragePath);
+    if (useR2) {
+      // Generate signed URL for R2
+      const signedUrl = await getCVSignedUrl(candidate.cvStoragePath, 3600);
 
-    // Vérifier que le fichier existe
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'Fichier CV introuvable' });
+      // Redirect to the signed URL
+      return res.redirect(signedUrl);
+    } else {
+      // Local storage
+      const filePath = getLocalCVPath(candidate.cvStoragePath);
+
+      // Vérifier que le fichier existe
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'Fichier CV introuvable' });
+      }
+
+      // Envoyer le fichier
+      const filename = `CV_${candidate.firstName}_${candidate.lastName}${path.extname(filePath)}`;
+      res.download(filePath, filename);
     }
-
-    // Envoyer le fichier
-    const filename = `CV_${candidate.firstName}_${candidate.lastName}${path.extname(filePath)}`;
-    res.download(filePath, filename);
   } catch (error) {
     next(error);
   }
@@ -136,9 +145,8 @@ export const deleteCandidateCV = async (
       return res.status(404).json({ error: 'Aucun CV à supprimer' });
     }
 
-    // Supprimer le fichier
-    const filePath = path.join(__dirname, '../../', candidate.cvStoragePath);
-    await deleteFile(filePath).catch(() => {});
+    // Supprimer le fichier (R2 ou local)
+    await deleteCV(candidate.cvStoragePath);
 
     // Mettre à jour le candidat
     await prisma.candidate.update({
