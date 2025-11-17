@@ -3,7 +3,8 @@ import { prisma } from '../config/database';
 import path from 'path';
 import fs from 'fs';
 import { deleteFile } from '../middleware/upload';
-import { processCVUpload, deleteCV, getCVSignedUrl, getLocalCVPath, useR2 } from '../services/cv.service';
+import { processCVUpload, deleteCV, getCVSignedUrl, getLocalCVPath } from '../services/cv.service';
+import { useR2 } from '../services/r2.service';
 
 /**
  * Upload CV for a candidate

@@ -84,3 +84,4 @@ out/
 # Misc
 .turbo
 .eslintcache
+get-token.sh

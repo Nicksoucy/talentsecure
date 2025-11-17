@@ -414,6 +414,7 @@ export const generateCataloguePDF = async (
   next: NextFunction
 ) => {
   let tempPdfPath: string | null = null;
+  const tempCvPaths: string[] = [];
 
   try {
     const { id } = req.params;
@@ -461,7 +462,6 @@ export const generateCataloguePDF = async (
 
     // If includeCV is true, merge CVs
     let finalPdfBuffer: Buffer;
-    const tempCvPaths: string[] = [];
     if (catalogue.includeCV) {
       // Import R2 service functions
       const { useR2, getSignedFileUrl } = await import('../services/r2.service');

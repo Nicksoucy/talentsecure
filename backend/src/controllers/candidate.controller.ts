@@ -1201,7 +1201,7 @@ export const exportCandidatesCSV = async (
         hasVehicle: true,
         hasDriverLicense: true,
         canWorkUrgent: true,
-        maxTravelKm: true,
+        canTravelKm: true,
         cvUrl: true,
         videoUrl: true,
         isArchived: true,
@@ -1248,7 +1248,7 @@ export const exportCandidatesCSV = async (
       'A véhicule': candidate.hasVehicle ? 'Oui' : 'Non',
       'Permis de conduire': candidate.hasDriverLicense ? 'Oui' : 'Non',
       'Disponible urgent': candidate.canWorkUrgent ? 'Oui' : 'Non',
-      'Distance max (km)': candidate.maxTravelKm || '',
+      'Distance max (km)': candidate.canTravelKm || '',
       'A CV': candidate.cvUrl ? 'Oui' : 'Non',
       'A vidéo': candidate.videoUrl ? 'Oui' : 'Non',
       Certifications: candidate.certifications
