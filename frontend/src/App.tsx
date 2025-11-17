@@ -10,6 +10,7 @@ import CataloguesPage from './pages/catalogues/CataloguesPage';
 import ClientsPage from './pages/clients/ClientsPage';
 import ProspectsPage from './pages/prospects/ProspectsPage';
 import ProspectDetailPage from './pages/prospects/ProspectDetailPage';
+import CatalogueViewPage from './pages/public/CatalogueViewPage';
 import { useAuthStore } from './store/authStore';
 
 function App() {
@@ -23,6 +24,8 @@ function App() {
   return (
     <Routes>
       {/* Public routes */}
+      <Route path="/catalogue/:token" element={<CatalogueViewPage />} />
+
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<LoginPage />} />
       </Route>

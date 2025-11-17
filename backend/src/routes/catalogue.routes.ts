@@ -7,6 +7,8 @@ import {
   updateCatalogue,
   deleteCatalogue,
   generateCataloguePDF,
+  generateShareLink,
+  getCatalogueByToken,
 } from '../controllers/catalogue.controller';
 import { authenticateJWT, authorizeRoles } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
@@ -76,5 +78,24 @@ router.post(
   validate({ params: uuidParam }),
   generateCataloguePDF
 );
+
+/**
+ * @route   POST /api/catalogues/:id/share
+ * @desc    Generate shareable link for catalogue
+ * @access  Private (ADMIN, SALES, RH_RECRUITER)
+ */
+router.post(
+  '/:id/share',
+  authorizeRoles('ADMIN', 'SALES', 'RH_RECRUITER'),
+  validate({ params: uuidParam }),
+  generateShareLink
+);
+
+/**
+ * @route   GET /api/catalogues/view/:token
+ * @desc    View catalogue by share token (PUBLIC)
+ * @access  Public
+ */
+router.get('/view/:token', getCatalogueByToken);
 
 export default router;

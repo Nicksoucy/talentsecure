@@ -158,3 +158,11 @@ export const catalogueService = {
     }
   },
 };
+
+  /**
+   * Generate shareable link for catalogue
+   */
+  generateShareLink: async (id: string, expirationDays?: number) => {
+    const response = await api.post(`/api/catalogues/${id}/share`, { expirationDays });
+    return response.data;
+  },

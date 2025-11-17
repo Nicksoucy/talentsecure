@@ -566,3 +566,164 @@ export const generateCataloguePDF = async (
     next(error);
   }
 };
+/**
+ * Generate shareable link for catalogue
+ */
+export const generateShareLink = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.id;
+    const { expirationDays = 30 } = req.body;
+
+    const catalogue = await prisma.catalogue.findUnique({
+      where: { id },
+      include: { client: true },
+    });
+
+    if (!catalogue) {
+      return res.status(404).json({ error: 'Catalogue non trouvé' });
+    }
+
+    // Import token utilities
+    const { generateShareToken, getTokenExpiration } = await import('../utils/token');
+
+    // Generate new share token
+    const shareToken = generateShareToken();
+    const shareTokenExpiresAt = getTokenExpiration(expirationDays);
+
+    // Update catalogue with share token
+    const updatedCatalogue = await prisma.catalogue.update({
+      where: { id },
+      data: {
+        shareToken,
+        shareTokenExpiresAt,
+        status: 'ENVOYE', // Mark as sent when link is generated
+        sentAt: catalogue.sentAt || new Date(),
+      },
+    });
+
+    // Audit log
+    await prisma.auditLog.create({
+      data: {
+        userId,
+        action: 'CREATE',
+        resource: 'Catalogue',
+        resourceId: id,
+        details: `Lien de partage généré pour catalogue: ${catalogue.title}`,
+      },
+    });
+
+    // Generate full URL
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const shareUrl = `${frontendUrl}/catalogue/${shareToken}`;
+
+    res.json({
+      message: 'Lien de partage généré avec succès',
+      shareToken,
+      shareUrl,
+      expiresAt: shareTokenExpiresAt,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get catalogue by share token (PUBLIC - no auth required)
+ */
+export const getCatalogueByToken = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { token } = req.params;
+
+    const catalogue = await prisma.catalogue.findFirst({
+      where: { shareToken: token },
+      include: {
+        client: {
+          select: {
+            id: true,
+            name: true,
+            companyName: true,
+          },
+        },
+        items: {
+          include: {
+            candidate: {
+              include: {
+                languages: true,
+                experiences: true,
+                availabilities: true,
+                certifications: true,
+              },
+            },
+          },
+          orderBy: {
+            order: 'asc',
+          },
+        },
+      },
+    });
+
+    if (!catalogue) {
+      return res.status(404).json({ error: 'Catalogue non trouvé' });
+    }
+
+    // Check if token has expired
+    const { isTokenExpired } = await import('../utils/token');
+    if (isTokenExpired(catalogue.shareTokenExpiresAt)) {
+      return res.status(410).json({ error: 'Ce lien a expiré' });
+    }
+
+    // Update view tracking
+    await prisma.catalogue.update({
+      where: { id: catalogue.id },
+      data: {
+        viewedAt: catalogue.viewedAt || new Date(),
+        lastViewedAt: new Date(),
+        viewCount: { increment: 1 },
+      },
+    });
+
+    // Filter sensitive data based on payment status
+    const isContentRestricted = catalogue.requiresPayment && !catalogue.isPaid;
+
+    // If content is restricted, hide sensitive information
+    if (isContentRestricted) {
+      catalogue.items = catalogue.items.map((item) => ({
+        ...item,
+        candidate: {
+          ...item.candidate,
+          // Hide sensitive fields
+          phone: null,
+          email: null,
+          address: null,
+          postalCode: null,
+          cvUrl: null,
+          cvStoragePath: null,
+          videoUrl: null,
+          videoStoragePath: null,
+          hrNotes: null,
+          strengths: null,
+          weaknesses: null,
+          interviewDetails: null,
+          experiences: [],
+          certifications: [],
+        },
+      }));
+    }
+
+    res.json({
+      ...catalogue,
+      isContentRestricted,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
