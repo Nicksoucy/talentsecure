@@ -61,6 +61,27 @@ passport.use(
     },
     async (payload, done) => {
       try {
+        // Check if this is a client token
+        if (payload.role === 'CLIENT') {
+          const client = await prisma.client.findUnique({
+            where: { id: payload.userId },
+          });
+
+          if (!client) {
+            return done(null, false);
+          }
+
+          // Return client as user with CLIENT role
+          return done(null, {
+            id: client.id,
+            email: client.email,
+            role: 'CLIENT',
+            firstName: client.name,
+            lastName: client.companyName || '',
+          } as any);
+        }
+
+        // Otherwise, it's a regular user
         const user = await prisma.user.findUnique({
           where: { id: payload.userId },
         });

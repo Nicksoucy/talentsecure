@@ -157,7 +157,6 @@ export const catalogueService = {
       throw error;
     }
   },
-};
 
   /**
    * Generate shareable link for catalogue
@@ -166,3 +165,4 @@ export const catalogueService = {
     const response = await api.post(`/api/catalogues/${id}/share`, { expirationDays });
     return response.data;
   },
+};

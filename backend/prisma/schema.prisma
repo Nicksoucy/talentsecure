@@ -307,6 +307,7 @@ model Client {
   name        String
   companyName String?
   email       String  @unique
+  password    String? // Mot de passe pour login client
   phone       String?
   address     String?
   city        String?

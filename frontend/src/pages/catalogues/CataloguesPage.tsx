@@ -36,6 +36,7 @@ import {
   Delete as DeleteIcon,
   PictureAsPdf as PdfIcon,
   Close as CloseIcon,
+  Share as ShareIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { catalogueService } from '@/services/catalogue.service';
@@ -43,6 +44,7 @@ import { candidateService } from '@/services/candidate.service';
 import { clientService } from '@/services/client.service';
 import { TableSkeleton } from '@/components/skeletons';
 import CandidateAdvancedFilters, { CandidateFilters } from '@/components/CandidateAdvancedFilters';
+import ShareCatalogueDialog from '@/components/catalogues/ShareCatalogueDialog';
 
 const STATUS_COLORS: Record<string, 'default' | 'info' | 'success' | 'warning' | 'error'> = {
   BROUILLON: 'default',
@@ -64,6 +66,8 @@ export default function CataloguesPage() {
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
   const [openCreateDialog, setOpenCreateDialog] = useState(false);
+  const [openShareDialog, setOpenShareDialog] = useState(false);
+  const [selectedCatalogueForShare, setSelectedCatalogueForShare] = useState<any>(null);
   const [selectedCandidates, setSelectedCandidates] = useState<any[]>([]);
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [searchFilters, setSearchFilters] = useState<CandidateFilters>({});
@@ -184,6 +188,16 @@ export default function CataloguesPage() {
 
   const handleGeneratePDF = (id: string) => {
     generateMutation.mutate(id);
+  };
+
+  const handleShareCatalogue = (catalogue: any) => {
+    setSelectedCatalogueForShare(catalogue);
+    setOpenShareDialog(true);
+  };
+
+  const handleCloseShareDialog = () => {
+    setOpenShareDialog(false);
+    setSelectedCatalogueForShare(null);
   };
 
   const handleRemoveCandidate = (candidateId: string) => {
@@ -318,6 +332,14 @@ export default function CataloguesPage() {
                         {new Date(catalogue.createdAt).toLocaleDateString('fr-FR')}
                       </TableCell>
                       <TableCell align="right">
+                        <IconButton
+                          size="small"
+                          color="success"
+                          onClick={() => handleShareCatalogue(catalogue)}
+                          title="Partager"
+                        >
+                          <ShareIcon fontSize="small" />
+                        </IconButton>
                         <IconButton
                           size="small"
                           color="primary"
@@ -607,6 +629,15 @@ export default function CataloguesPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Share Catalogue Dialog */}
+      {selectedCatalogueForShare && (
+        <ShareCatalogueDialog
+          open={openShareDialog}
+          onClose={handleCloseShareDialog}
+          catalogue={selectedCatalogueForShare}
+        />
+      )}
     </Box>
   );
 }

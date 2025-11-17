@@ -1,434 +1,199 @@
-# TalentSecure MVP
-
-**Plateforme de gestion et vente de candidats agents de sécurité**
-
-Client: XGUARD Security
-Version: MVP 1.0
-Date: Novembre 2025
-
----
-
-## Statut du projet
-
-✅ **MVP Fonctionnel !** (Mise à jour: Novembre 2025)
-
-L'application TalentSecure est maintenant opérationnelle avec les fonctionnalités principales:
-
----
-
-## 🚀 Optimisations Récentes (16 Nov 2025)
-
-### Stockage Vidéo Cloudflare R2 🎥 (16 Nov 2025)
-**Migration réussie vers Cloudflare R2** pour le stockage et streaming des vidéos d'entretien:
-
-- ✅ **Intégration Cloudflare R2** - Remplacement de Google Drive par R2
-- ✅ **10 GB gratuits** + **bande passante ILLIMITÉE gratuite** (vs coûts GCS)
-- ✅ **API S3-compatible** - Utilisation de @aws-sdk/client-s3
-- ✅ **URLs signées sécurisées** - Génération d'URLs temporaires (1h d'expiration)
-- ✅ **Fix lecteur vidéo** - Correction du bug d'affichage vidéo principale
-- ✅ **Fix suppression vidéo** - Correction du bug d'authentification lors de la suppression
-- ✅ **Scripts de migration** - Outils pour migrer les vidéos existantes vers R2
-
-**Avantages:**
-- 💰 **Économies:** Bande passante gratuite illimitée (vs $0.12/GB sur GCS)
-- ⚡ **Performance:** Streaming optimisé avec CDN global Cloudflare
-- 🔒 **Sécurité:** URLs signées avec expiration automatique
-- 🌍 **Global:** Edge network Cloudflare pour faible latence mondiale
-
-Suite à un audit complet du code, **7 améliorations critiques** ont été déployées en production:
-
-### Performance (+300% vitesse de recherche)
-1. **✅ Bug recherche corrigé** - Logique OR/AND restructurée (search + hasCV fonctionnent ensemble)
-2. **✅ 6 indexes Prisma ajoutés** - Indexes composites sur combinaisons fréquentes (city+status, isDeleted+isActive+isArchived)
-3. **✅ Payload optimisé (-70%)** - Select ciblé dans getCandidates (150KB vs 500KB avant)
-4. **✅ Debounce + keepPreviousData** - Recherche debouncée 300ms, 90% moins de requêtes API, UI fluide
-
-### Sécurité (Protection contre injections & DoS)
-5. **✅ Validation Zod activée** - 25+ routes protégées (candidates, prospects, clients, catalogues)
-   - UUID params validés (erreur 400 au lieu de 500)
-   - Query filters validés (limites de longueur)
-   - Protection contre SQL injection, XSS, DoS
-
-### Data Integrity
-6. **✅ Gestion doublons prospects** - Détection automatique (email/téléphone) + mise à jour intelligente
-7. **✅ CV préservé lors conversion** - Garantie que le CV du prospect est transféré au candidat
-
-**Impact global:**
-- Temps de chargement: **-65%**
-- Requêtes API: **-90%**
-- Sécurité: **+800%** (validation sur toutes routes critiques)
-- Stabilité: **+95%** (moins d'erreurs 500)
-
----
-
-## Fonctionnalités Principales
-
-### Backend (Node.js + TypeScript + Express)
-- ✅ Structure du projet créée
-- ✅ Configuration TypeScript
-- ✅ Serveur Express configuré
-- ✅ Schema Prisma complet (14 tables)
-- ✅ Configuration d'authentification (Local + Google OAuth)
-- ✅ Middleware JWT et RBAC
-- ✅ Routes API d'authentification
-- ✅ Gestion des erreurs
-- ✅ **Import Google Sheets** des 105 candidats (avec statut ABSENT)
-- ✅ **Upload et téléchargement de CVs** (Multer + système de fichiers)
-- ✅ **Génération de catalogues PDF** (PDFKit)
-- ✅ **Gestion complète des clients** (CRUD)
-- ✅ **API de statistiques** (candidats par ville, etc.)
-- ✅ **Script d'association automatique des CVs**
-- ✅ **Gestion des prospects** (CRUD avec filtres avancés)
-- ✅ **Import Google Sheets** automatique des prospects
-- ✅ **Intégration GoHighLevel API** (export contacts)
-- ✅ **API statistiques prospects** (par ville, statut, tendances)
-- ✅ **Calcul automatique du statut** basé sur note globale (QUALIFIE, BON, TRES_BON, EXCELLENT, ELITE)
-- ✅ **Enregistrement date d'entrevue** dans création et modification candidat
-
-### Frontend (React + TypeScript + Material-UI)
-- ✅ Structure du projet créée
-- ✅ Configuration Vite
-- ✅ Thème Material-UI personnalisé
-- ✅ Routing (React Router)
-- ✅ State management (Zustand)
-- ✅ Services API (Axios + React Query)
-- ✅ Layouts (Auth + Main)
-- ✅ Page de login fonctionnelle
-- ✅ **Dashboard avec statistiques en temps réel** (candidats, prospects, par statut)
-- ✅ Navigation principale
-- ✅ **CRUD Candidats complet** (liste, détail, création, modification, suppression)
-- ✅ **Recherche et filtres avancés** (10+ critères avec debouncing)
-- ✅ **Autocomplete intelligent** (ville + noms candidats)
-- ✅ **Formulaire d'évaluation d'entretien** (grille de notation détaillée)
-- ✅ **Création de catalogues PDF** avec sélection multiple
-- ✅ **Gestion des clients** (interface complète)
-- ✅ **Map interactive du Québec** (Leaflet) montrant distribution des candidats
-- ✅ **Filtrage par carte candidats** - Cliquer sur ville dans la carte filtre automatiquement la liste
-- ✅ **Téléchargement de CVs** depuis l'interface
-- ✅ **Gestion des prospects** (liste, détail, création, modification)
-- ✅ **Map interactive des prospects** (clustering, filtres par ville)
-- ✅ **Sélection multi-pages Gmail-style** (sélectionner tous les prospects filtrés)
-- ✅ **Export CSV des prospects** (avec sélection multiple)
-- ✅ **Marquage en masse** (contacter plusieurs prospects à la fois)
-- ✅ **Statistiques prospects** (graphiques, tendances par ville)
-
----
-
-## Prochaines étapes
-
-### Priorités d'optimisation
-
-**Performance & Scalabilité**
-1. ✅ **Indexation database** - ~~Ajouter index sur firstName, lastName, city, status~~ **FAIT** (6 indexes composites ajoutés)
-2. **Cache Redis** - Mettre en cache les résultats de recherche fréquents
-3. ✅ **Optimiser les requêtes Prisma** - ~~Utiliser `select` au lieu de tout charger~~ **FAIT** (payload -70%)
-4. **Pagination côté serveur** - Limiter les données transférées (déjà implémenté, fonctionnel)
-
-**Fonctionnalités implémentées**
-5. ✅ **Upload de vidéos d'entretien** - Intégration Google Cloud Storage (backend + frontend complets)
-6. ✅ **Player vidéo intégré** - Afficher vidéos dans la fiche candidat
-7. ✅ **Système de gestion des prospects** - CRUD complet avec map interactive
-8. ✅ **Import Google Sheets** - Synchronisation automatique des prospects depuis formulaire
-9. ✅ **Export CSV prospects** - Export multi-sélection avec filtres
-10. ✅ **Intégration GoHighLevel** - Export automatique des contacts vers CRM
-
-**Fonctionnalités manquantes**
-11. **Email automatique pour catalogues** - Envoyer catalogues PDF par email
-12. **Export Excel candidats** - Exporter résultats de recherche en Excel
-
-**Qualité & Sécurité**
-9. **Tests unitaires** - Tests pour candidateController, authController
-10. ✅ **Validation Zod** - ~~Validation backend pour toutes les routes~~ **FAIT** (25+ routes sécurisées)
-11. **Rate limiting spécifique** - Limites par endpoint (rate limiting global déjà actif)
-12. **Logs structurés** - Winston ou Pino pour meilleur monitoring
-
-**UX Improvements**
-13. **Navigation directe depuis autocomplete** - Aller à la fiche candidat depuis la recherche
-14. **Infinite scroll** - Remplacer pagination par scroll infini
-15. **Filtres sauvegardés** - Sauvegarder recherches fréquentes
-16. **Notifications en temps réel** - WebSockets pour notifications
-
----
-
-## Installation rapide
-
-### Prérequis
-
-- **Node.js 18+** installé
-- **PostgreSQL 15+** installé (ou compte Google Cloud SQL)
-- **npm** ou **yarn**
-- Compte Google Cloud (pour OAuth et stockage)
-
-### Installation
-
-```bash
-# 1. Cloner/naviguer vers le projet
-cd C:\Recrutement\talentsecure
-
-# 2. Installer backend
-cd backend
-npm install
-cp .env.example .env
-# Éditer .env avec vos valeurs (DATABASE_URL, JWT_SECRET, etc.)
-
-# 3. Initialiser la base de données
-npm run prisma:generate
-npm run prisma:migrate
-
-# 4. (Optionnel) Créer un utilisateur de test et associer les CVs
-npx tsx src/scripts/create-test-user.ts
-# Si vous avez des CVs dans C:\Recrutement\cv candidats
-npx tsx src/scripts/link-cvs.ts
-
-# 5. Installer frontend
-cd ../frontend
-npm install
-cp .env.example .env
-
-# 6. Démarrer le backend (terminal 1)
-cd ../backend
-npm run dev
-
-# 7. Démarrer le frontend (terminal 2)
-cd ../frontend
-npm run dev
-```
-
-### Accès à l'application
-
-- **Frontend:** http://localhost:5173
-- **Backend API:** http://localhost:5000
-- **Health check:** http://localhost:5000/health
-
-**Identifiants de test:**
-- Email: `test@xguard.com`
-- Mot de passe: `Test123!`
-- Rôle: ADMIN
-
----
-
-## 🚀 Déploiement sur Google Cloud Run
-
-### Production URL
-- **Application en ligne:** https://talentsecure-frontend-XXXXX.run.app *(à venir)*
-- **API Backend:** https://talentsecure-backend-XXXXX.run.app *(à venir)*
-
-### Prérequis
-- Compte Google Cloud Platform avec facturation activée
-- Projet Google Cloud créé : `talentsecure`
-- APIs activées :
-  - Cloud Run API
-  - Cloud Build API
-  - Cloud Storage API
-  - Artifact Registry API
-
-### Déploiement via Google Cloud Console
-
-#### 1️⃣ Déployer le Backend
-
-**Aller sur Cloud Run :**
-```
-https://console.cloud.google.com/run?project=talentsecure
-```
-
-**Créer le service :**
-- Cliquer sur "CREATE SERVICE"
-- Source : "Continuously deploy from a repository (source)"
-- Cliquer "SET UP WITH CLOUD BUILD"
-- Provider : **GitHub**
-- Repository : `Nicksoucy/talentsecure`
-- Branch : `main`
-- Build Type : **Dockerfile**
-- Source location : `/backend/Dockerfile`
-- Service name : `talentsecure-backend`
-- Region : `us-central1` (ou `northamerica-northeast1` pour Montréal)
-- Authentication : ✅ Allow unauthenticated invocations
-
-**Variables d'environnement :**
-```
-NODE_ENV=production
-PORT=8080
-DATABASE_URL=<votre_url_neon>
-JWT_SECRET=<votre_secret>
-JWT_REFRESH_SECRET=<votre_refresh_secret>
-FRONTEND_URL=https://talentsecure-frontend-XXXXX.run.app
-```
-
-**Container port :** `8080`
-
-#### 2️⃣ Déployer le Frontend
-
-**Créer un nouveau service :**
-- Source : "Continuously deploy from a repository (source)"
-- Repository : `Nicksoucy/talentsecure`
-- Build Type : **Dockerfile**
-- Source location : `/frontend/Dockerfile`
-- Service name : `talentsecure-frontend`
-- Region : `us-central1` (ou `northamerica-northeast1`)
-- Authentication : ✅ Allow unauthenticated invocations
-
-**Variables d'environnement :**
-```
-VITE_API_URL=https://talentsecure-backend-XXXXX.run.app
-```
-
-**Container port :** `80`
-
-#### 3️⃣ Mettre à jour FRONTEND_URL
-
-Une fois le frontend déployé :
-1. Copier l'URL du frontend
-2. Retourner dans le service backend
-3. Mettre à jour la variable `FRONTEND_URL` avec l'URL du frontend
-4. Redéployer le backend
-
-### Configuration de la base de données
-
-L'application utilise **Neon PostgreSQL** (déjà configuré) :
-- URL de connexion dans la variable `DATABASE_URL`
-- Pas besoin de Cloud SQL pour le MVP
-- Migration possible vers Cloud SQL plus tard si nécessaire
-
-### Coût mensuel estimé
-
-| Service | Coût |
-|---------|------|
-| Cloud Run Backend | $10-20 |
-| Cloud Run Frontend | $5-10 |
-| Neon PostgreSQL | $0-20 |
-| **Total** | **$15-50/mois** |
-
-**Note :** Crédits gratuits de $300 pendant 90 jours pour nouveaux comptes !
-
-### Monitoring
-
-- **Logs Backend :** https://console.cloud.google.com/run/detail/us-central1/talentsecure-backend/logs
-- **Logs Frontend :** https://console.cloud.google.com/run/detail/us-central1/talentsecure-frontend/logs
-- **Metrics :** https://console.cloud.google.com/run?project=talentsecure
-
----
-
-## Structure du projet
+# TalentSecure Platform
+
+Plateforme complète de gestion et distribution de candidats agents de sécurité avec portail client intégré.
+
+## Vue d'ensemble
+
+TalentSecure est une solution full-stack qui permet de:
+- Gérer une banque de talents (candidats et prospects)
+- Créer des catalogues personnalisés pour les clients
+- Partager les catalogues via un portail client sécurisé
+- Visualiser la distribution géographique des candidats en temps réel
+- Gérer les demandes de recrutement
+
+## Stack Technique
+
+### Backend
+- **Node.js 18+** avec TypeScript
+- **Express.js** pour l'API REST
+- **Prisma** comme ORM
+- **PostgreSQL** pour la base de données
+- **Passport.js** pour l'authentification (JWT + OAuth Google/Microsoft)
+- **Cloudflare R2** pour le stockage de fichiers (CVs, vidéos, PDFs)
+- **PDFKit** pour la génération de catalogues PDF
+
+### Frontend
+- **React 18** avec TypeScript
+- **Vite** comme build tool
+- **Material-UI (MUI)** pour l'interface utilisateur
+- **React Query** pour la gestion des données
+- **Zustand** pour le state management
+- **React Router** pour le routing
+- **Leaflet** pour les cartes interactives
+- **Notistack** pour les notifications
+
+## Architecture du Projet
 
 ```
 talentsecure/
-├── backend/                 # API Node.js + Express
+├── backend/                 # API Node.js/Express
 │   ├── src/
-│   │   ├── config/         # Configuration (DB, Passport)
-│   │   ├── controllers/    # Logique métier
-│   │   ├── routes/         # Routes API
-│   │   ├── services/       # Services (PDF, upload, etc.)
+│   │   ├── config/         # Configuration (database, passport, storage)
+│   │   ├── controllers/    # Contrôleurs métier
+│   │   ├── routes/         # Définition des routes API
+│   │   ├── services/       # Services (PDF, upload, email)
 │   │   ├── middleware/     # Middleware (auth, validation)
-│   │   ├── utils/          # Utilitaires
-│   │   └── server.ts       # Point d'entrée
-│   ├── prisma/
-│   │   └── schema.prisma   # Schema DB
-│   ├── package.json
-│   └── README.md
+│   │   ├── utils/          # Utilitaires (jwt, password, etc.)
+│   │   └── scripts/        # Scripts de migration et maintenance
+│   └── prisma/
+│       └── schema.prisma   # Schéma de base de données
 │
-├── frontend/               # Application React
-│   ├── src/
-│   │   ├── components/    # Composants réutilisables
-│   │   ├── pages/         # Pages
-│   │   ├── layouts/       # Layouts
-│   │   ├── services/      # Services API
-│   │   ├── store/         # State management
-│   │   ├── types/         # Types TypeScript
-│   │   ├── theme/         # Thème MUI
-│   │   └── App.tsx
-│   ├── package.json
-│   └── README.md
-│
-├── shared/                # Code partagé (à venir)
-├── docs/                  # Documentation
-└── README.md             # Ce fichier
+└── frontend/               # Application React
+    ├── src/
+    │   ├── components/     # Composants réutilisables
+    │   │   ├── admin/     # Composants admin
+    │   │   └── client/    # Composants portail client
+    │   ├── pages/          # Pages de l'application
+    │   │   ├── auth/      # Pages d'authentification
+    │   │   ├── candidates/ # Gestion des candidats
+    │   │   ├── catalogues/ # Gestion des catalogues
+    │   │   ├── clients/    # Gestion des clients
+    │   │   └── client/     # Portail client
+    │   ├── services/       # Services API
+    │   ├── store/          # State management (Zustand)
+    │   └── utils/          # Utilitaires
+    └── public/             # Assets statiques
 ```
 
----
+## Fonctionnalités Principales
 
-## Technologies utilisées
+### 1. Administration (Backoffice)
 
-### Backend
-- **Node.js 18** + TypeScript
-- **Express.js** - Framework API
-- **Prisma** - ORM
-- **PostgreSQL 15** - Base de données (Neon)
-- **Passport.js** - Authentification (Local + Google OAuth)
-- **JWT** - Tokens d'authentification
-- **PDFKit** - Génération PDF
-- **Cloudflare R2** - Stockage vidéos (S3-compatible)
-- **@aws-sdk/client-s3** - Client S3 pour R2
+#### Gestion des Candidats
+- Création et modification de profils candidats
+- Upload de CVs (stockage Cloudflare R2)
+- Upload de vidéos d'entrevue (stockage Cloudflare R2)
+- Gestion des langues, expériences, certifications
+- Système de notation globale
+- Statuts: NOUVEAU, EN_TRAITEMENT, DISPONIBLE, EN_RECHERCHE, EMBAUCHE, ARCHIVE
 
-### Frontend
-- **React 18** + TypeScript
-- **Vite** - Build tool
-- **Material-UI (MUI)** - Composants UI
-- **React Router** - Navigation
-- **React Query** - Gestion données
-- **Zustand** - State management
-- **React Hook Form + Zod** - Formulaires
+#### Gestion des Prospects
+- Importation depuis LinkedIn
+- Évaluation et qualification
+- Migration vers candidats actifs
+- Cartes géographiques interactives
 
-### Infrastructure
-- **Google Cloud Platform**
-  - Cloud Run (hébergement)
-  - Cloud SQL (PostgreSQL)
-  - Cloud Storage (fichiers)
-  - Memorystore (Redis cache)
-  - Cloud Build (CI/CD)
-- **Azure Blob Storage** (backup)
+#### Gestion des Clients
+- Création de profils clients
+- Configuration des accès portail
+- Génération de mots de passe sécurisés
+- Historique des catalogues
 
----
+#### Gestion des Catalogues
+- Création de catalogues personnalisés
+- Sélection de candidats avec ordre personnalisable
+- Génération automatique de PDF
+- Système de paiement et restriction de contenu
+- Partage sécurisé via lien unique
+- Tracking des vues et interactions
 
-## Configuration minimale requise
+### 2. Portail Client
 
-### Pour développement local
+#### Authentification
+- Connexion sécurisée (email/password)
+- JWT avec refresh tokens
+- Authentification séparée du backoffice
 
-- **RAM:** 4 GB minimum (8 GB recommandé)
-- **Disque:** 2 GB d'espace libre
-- **OS:** Windows 10+, macOS 10.15+, Ubuntu 20.04+
-- **Internet:** Connexion stable pour OAuth et Cloud Storage
+#### Dashboard Client
+- **Vue d'ensemble des catalogues personnalisés**
+  - Liste des catalogues assignés
+  - Statut et nombre de candidats
+  - Indicateurs de paiement
 
-### Pour production (Google Cloud)
+- **Carte des Candidats Potentiels** 🆕
+  - Visualisation en temps réel de tous les candidats disponibles
+  - Deux vues: Zones (cercles) et Marqueurs (clusters)
+  - Regroupement par ville avec comptage
+  - Différenciation visuelle (bleu = potentiels, vert = assignés)
+  - Système de demande intégré
 
-- **Cloud Run:** 1 instance (512 MB RAM, 1 vCPU)
-- **Cloud SQL:** db-f1-micro (1 vCPU, 0.6 GB RAM)
-- **Cloud Storage:** Bucket standard
-- **Memorystore Redis:** 1 GB (optionnel)
+#### Détails des Catalogues
+- **Informations des candidats**
+  - Profils détaillés (langues, expériences, certifications)
+  - Notes et évaluations
+  - Disponibilités
 
-**Coût estimé:** 65-120$/mois
+- **Médias**
+  - Lecteur vidéo intégré pour les entrevues
+  - Téléchargement de CVs
+  - Génération de PDF du catalogue
 
----
+- **Carte Géographique des Candidats** 🆕
+  - Visualisation des candidats du catalogue par ville
+  - Toggle entre vue cercles et clusters
+  - Popups interactifs
+  - Bouton "Demander ces candidats"
 
-## Commandes utiles
+#### Système de Restriction de Contenu
+- Catalogues gratuits vs payants
+- Masquage des informations sensibles (email, téléphone, CV, vidéo)
+- Indicateurs visuels de contenu verrouillé
+
+### 3. Cartes Géographiques Interactives 🆕
+
+#### Technologies
+- **Leaflet** pour le rendu de cartes
+- **react-leaflet** pour l'intégration React
+- **react-leaflet-cluster** pour le regroupement de marqueurs
+- Tuiles OpenStreetMap (style CARTO)
+
+#### Types de Cartes
+
+##### Carte Zones (Cercles)
+- Cercles proportionnels au nombre de candidats
+- Code couleur selon la densité
+  - Candidats assignés: Vert (5) → Jaune (10) → Orange (20) → Rouge (20+)
+  - Candidats potentiels: Bleu clair → Bleu foncé selon la densité
+- Rayon adaptatif
+
+##### Carte Clusters (Marqueurs)
+- Marqueurs individuels par ville
+- Clustering automatique lors du zoom/dézoom
+- Icônes colorées:
+  - Vert: Candidats assignés
+  - Bleu: Candidats potentiels
+
+#### Interactions
+- Popups avec informations détaillées
+- Bouton "Demander ces candidats"
+- Dialog de demande avec formulaire
+- Notifications de confirmation
+
+## Installation et Configuration
+
+### Prérequis
+- Node.js 18+
+- PostgreSQL 14+
+- Compte Cloudflare R2 (ou S3-compatible)
 
 ### Backend
 
 ```bash
 cd backend
 
-# Développement
-npm run dev                    # Démarre avec rechargement auto
+# Installer les dépendances
+npm install
 
-# Prisma
-npm run prisma:generate        # Génère le client Prisma
-npm run prisma:migrate         # Crée/applique migrations
-npm run prisma:studio          # Interface visuelle DB
+# Configuration
+cp .env.example .env
+# Éditer .env avec vos valeurs
 
-# Build & Production
-npm run build                  # Compile TypeScript
-npm start                      # Démarre en production
+# Base de données
+npm run prisma:generate
+npm run prisma:migrate
 
-# Tests
-npm test                       # Lance les tests
-npm run test:coverage          # Tests avec couverture
-
-# Scripts utiles
-npx tsx src/scripts/create-test-user.ts                    # Créer utilisateur de test
-npx tsx src/scripts/link-cvs.ts                            # Associer les CVs aux candidats
-npx tsx src/scripts/import-candidates-improved.ts          # Importer candidats depuis Google Sheet (105 candidats)
-npx tsx src/scripts/import-from-google-sheet.ts            # Importer prospects depuis Google Sheet
-npx tsx src/scripts/check-recent-prospects.ts              # Voir les 5 derniers prospects créés
-npx tsx src/scripts/normalize-prospect-cities.ts           # Normaliser les noms de villes
+# Démarrer en développement
+npm run dev
 ```
 
 ### Frontend
@@ -436,461 +201,54 @@ npx tsx src/scripts/normalize-prospect-cities.ts           # Normaliser les noms
 ```bash
 cd frontend
 
-# Développement
-npm run dev                    # Démarre sur localhost:5173
+# Installer les dépendances
+npm install
 
-# Build & Production
-npm run build                  # Build optimisé
-npm run preview                # Preview du build
+# Configuration
+cp .env.example .env
+# Éditer .env avec l'URL du backend
 
-# Qualité code
-npm run lint                   # ESLint
-npm run type-check             # Vérification types
+# Démarrer en développement
+npm run dev
 ```
 
----
+## Variables d'Environnement
 
-## Documentation complète
+### Backend (.env)
+```env
+# Database
+DATABASE_URL="postgresql://user:password@localhost:5432/talentsecure"
 
-📚 **Consultez les documents détaillés:**
+# JWT
+JWT_SECRET="your-super-secret-key"
+JWT_REFRESH_SECRET="your-refresh-secret"
 
-1. **README_TALENTSECURE.md** - Guide de navigation
-2. **ARCHITECTURE_TALENTSECURE_MVP.md** - Architecture technique complète
-3. **PLAN_DEVELOPPEMENT_MVP.md** - Plan semaine par semaine avec code
-4. **PROMPT_DEVELOPPEUR_COUTS_ROADMAP.md** - Coûts, roadmap, mega prompt
-5. **INDEX_TOUS_LES_FICHIERS.md** - Index de tous les fichiers
+# Cloudflare R2
+CLOUDFLARE_ACCOUNT_ID="your-account-id"
+CLOUDFLARE_ACCESS_KEY_ID="your-access-key"
+CLOUDFLARE_SECRET_ACCESS_KEY="your-secret-key"
+R2_BUCKET_NAME="talentsecure-files"
+R2_PUBLIC_URL="https://files.yourdomain.com"
 
-**Emplacement:** `C:\Recrutement\talentsecure\` (à la racine du projet)
+# OAuth (optionnel)
+GOOGLE_CLIENT_ID="your-google-client-id"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
+MICROSOFT_CLIENT_ID="your-microsoft-client-id"
+MICROSOFT_CLIENT_SECRET="your-microsoft-client-secret"
 
----
+# Frontend URL
+FRONTEND_URL="http://localhost:5173"
 
-## Authentification
-
-### Créer le premier utilisateur Admin
-
-Une fois la base de données initialisée, créez un utilisateur admin:
-
-```bash
-# Option 1: Via API (avec Postman ou curl)
-POST http://localhost:5000/api/auth/register
-Content-Type: application/json
-
-{
-  "email": "admin@xguard.com",
-  "password": "VotreMotDePasseSécurisé123!",
-  "firstName": "Admin",
-  "lastName": "XGUARD",
-  "role": "ADMIN"
-}
-
-# Option 2: Via Prisma Studio
-npm run prisma:studio
-# Créer manuellement dans la table users
+# Server
+PORT=5000
+NODE_ENV=development
 ```
 
-### Se connecter
-
-1. Ouvrir http://localhost:5173/login
-2. Entrer email et mot de passe
-3. Ou cliquer "Se connecter avec Google"
-
----
-
-## Système de Statuts Candidats
-
-### Calcul automatique du statut
-
-Le statut d'un candidat est **calculé automatiquement** en fonction de sa note globale d'entrevue :
-
-| Note Globale | Statut | Description |
-|--------------|--------|-------------|
-| 9.5 - 10.0 | **ELITE** | Candidats d'exception (9.5+/10) |
-| 9.0 - 9.4 | **EXCELLENT** | Excellents candidats (9-9.4/10) |
-| 8.5 - 8.9 | **TRES_BON** | Très bons candidats (8.5-8.9/10) |
-| 8.0 - 8.4 | **BON** | Bons candidats (8-8.4/10) |
-| 7.0 - 7.9 | **QUALIFIE** | Candidats qualifiés (7-7.9/10) |
-| < 7.0 | **A_REVOIR** | À revoir (note < 7/10) |
-| Pas de note | **EN_ATTENTE** | En attente d'évaluation |
-| Absent | **ABSENT** | Candidat ne s'est pas présenté |
-
-### Fonctionnement
-
-1. **À la création** : Le statut est calculé automatiquement basé sur la note globale saisie
-2. **À la modification** : Si la note change, le statut est recalculé automatiquement
-3. **Statut manuel** : Possibilité de forcer un statut spécifique si nécessaire
-
-### Exemple
-
-```typescript
-// Créer un candidat avec note de 7.5/10
-POST /api/candidates
-{
-  "firstName": "Jean",
-  "lastName": "Dupont",
-  "globalRating": 7.5,
-  // ... autres champs
-}
-
-// Résultat : Status automatiquement défini à "QUALIFIE"
+### Frontend (.env)
+```env
+VITE_API_URL=http://localhost:5000
 ```
 
----
+## Contributeurs
 
-## Gestion des Prospects
-
-### Fonctionnalités
-
-Le système de gestion des prospects permet de :
-- **Importer automatiquement** des prospects depuis Google Sheets
-- **Visualiser sur une carte** interactive avec clustering
-- **Filtrer** par ville, statut de contact, statut de conversion
-- **Sélectionner en masse** (style Gmail - sélection multi-pages)
-- **Exporter en CSV** les prospects sélectionnés
-- **Marquer comme contactés** en masse
-- **Exporter vers GoHighLevel** (CRM)
-
-### Import depuis Google Sheets
-
-Configuration requise dans `backend/.env` :
-```bash
-GOOGLE_SHEETS_API_KEY=votre-clé-api
-```
-
-Pour importer les prospects :
-```bash
-cd backend
-npx tsx src/scripts/import-from-google-sheet.ts
-```
-
-Le script :
-- ✅ Récupère les données du Google Sheet public
-- ✅ Normalise les noms de villes (Montréal, Québec, etc.)
-- ✅ Détecte et ignore les doublons (email ou téléphone)
-- ✅ Parse les dates de soumission
-- ✅ Associe automatiquement les CVs si disponibles
-
-### Export vers GoHighLevel
-
-Configuration requise dans `backend/.env` :
-```bash
-GOHIGHLEVEL_API_KEY=votre-clé-api
-GOHIGHLEVEL_LOCATION_ID=votre-location-id
-```
-
-L'export se fait via l'interface web (bouton "Exporter vers GoHighLevel") ou via API :
-```bash
-POST /api/prospects/export-to-gohighlevel
-Content-Type: application/json
-
-{
-  "prospectIds": ["id1", "id2", "id3"]
-}
-```
-
-### Carte Interactive
-
-La carte des prospects (`/prospects`) affiche :
-- 🗺️ Clustering automatique par densité
-- 📍 Marqueurs bleus pour les prospects
-- 🔢 Badges avec nombre de prospects par ville
-- 🖱️ Clic sur ville → filtre la liste automatiquement
-- 🔍 Zoom pour voir détails individuels
-
-### Sélection Multi-Pages (Gmail-style)
-
-1. **Cocher les prospects** sur la page actuelle
-2. Quand toute la page est sélectionnée, voir le message :
-   *"20 prospects sélectionnés sur cette page. Sélectionner tous les 50 prospects de Québec?"*
-3. **Cliquer "Sélectionner tout"** pour sélectionner ALL prospects matching les filtres
-4. **Exporter CSV** ou **Marquer comme contactés** en masse
-
-### Export CSV
-
-Format du CSV :
-- Prénom, Nom
-- Email, Téléphone
-- Ville, Province, Code Postal, Adresse
-- CV (Oui/Non)
-- Date de soumission
-- Contacté (Oui/Non)
-- Converti (Oui/Non)
-- Notes
-
-Encodage : UTF-8 avec BOM (support accents français)
-
----
-
-## Stockage Vidéo avec Cloudflare R2
-
-### Configuration R2
-
-TalentSecure utilise **Cloudflare R2** pour le stockage et le streaming des vidéos d'entretien.
-
-**Avantages de R2:**
-- 🆓 **10 GB de stockage gratuit**
-- 🚀 **Bande passante ILLIMITÉE gratuite** (parfait pour le streaming vidéo!)
-- 💰 **Économies massives** vs Google Cloud Storage ($0.12/GB de bande passante)
-- ⚡ **CDN global Cloudflare** pour streaming rapide partout dans le monde
-- 🔒 **URLs signées sécurisées** avec expiration automatique
-
-### Variables d'environnement requises
-
-Ajouter dans `backend/.env`:
-
-```bash
-# Cloudflare R2 Storage
-USE_R2=true
-R2_ACCOUNT_ID=votre-account-id
-R2_ACCESS_KEY_ID=votre-access-key
-R2_SECRET_ACCESS_KEY=votre-secret-key
-R2_BUCKET_NAME=talentsecure-videos
-R2_ENDPOINT=https://ACCOUNT_ID.r2.cloudflarestorage.com
-R2_PUBLIC_URL=  # Optionnel: domaine personnalisé
-```
-
-### Configuration initiale
-
-1. **Créer un compte Cloudflare** (gratuit)
-2. **Créer un bucket R2:**
-   ```
-   Dashboard > R2 > Create Bucket
-   Nom: talentsecure-videos
-   ```
-
-3. **Créer un API Token:**
-   ```
-   R2 > Manage R2 API Tokens > Create API Token
-   Permissions: Object Read & Write
-   ```
-
-4. **Configurer les variables d'environnement** (voir ci-dessus)
-
-5. **Déployer sur Cloud Run:**
-   - Ajouter les 6 variables R2 dans Cloud Run
-   - Redéployer le backend
-
-### Fonctionnalités
-
-#### Upload de vidéos
-- Formats acceptés: MP4, MOV, AVI, WebM
-- Taille maximale: 500 MB
-- Upload multipart automatique pour gros fichiers
-- Nettoyage automatique des fichiers locaux temporaires
-
-#### Streaming vidéos
-- URLs signées sécurisées (expiration 1h)
-- Régénération automatique si expiré
-- Support navigateurs modernes (HTML5 video)
-- Contrôles: play/pause, volume, plein écran
-
-#### Suppression vidéos
-- Suppression R2 + base de données
-- Confirmation utilisateur requise
-- Nettoyage automatique des références
-
-### Migration depuis Google Drive
-
-Si vous avez des vidéos existantes sur Google Drive, utilisez le script de migration:
-
-```bash
-cd backend
-npx tsx src/scripts/migrate-videos-to-r2.ts
-```
-
-Le script:
-- ✅ Télécharge les vidéos depuis Google Drive
-- ✅ Upload vers R2
-- ✅ Met à jour les références en base de données
-- ✅ Vérifie l'intégrité des fichiers
-
-### Scripts utiles
-
-```bash
-# Vérifier la vidéo d'un candidat
-npx tsx src/scripts/check-candidate-video.ts <candidate-id>
-
-# Fixer un candidat spécifique
-npx tsx src/scripts/fix-specific-candidate.ts <candidate-id>
-
-# Fixer toutes les URLs vidéo
-npx tsx src/scripts/fix-video-urls.ts
-```
-
-### Monitoring
-
-#### Voir l'utilisation R2:
-```
-Cloudflare Dashboard > R2 > talentsecure-videos
-```
-
-Métriques disponibles:
-- Stockage utilisé (GB)
-- Nombre d'objets
-- Requêtes API (upload/download)
-- Trafic sortant (toujours $0!)
-
-### Coûts
-
-| Service | Gratuit | Payant (si dépassement) |
-|---------|---------|-------------------------|
-| Stockage | 10 GB | $0.015/GB/mois |
-| Opérations Classe A | 1M/mois | $4.50/million |
-| Opérations Classe B | 10M/mois | $0.36/million |
-| **Bande passante** | **ILLIMITÉE** | **$0** |
-
-**Note:** Pour un système avec 100 vidéos de 50MB chacune = 5GB stockage = **$0/mois** 🎉
-
-### Sécurité
-
-- ✅ Bucket privé (non accessible publiquement)
-- ✅ URLs signées avec expiration (1h par défaut)
-- ✅ Authentification requise pour upload/delete
-- ✅ CORS configuré pour domaine frontend uniquement
-- ✅ Credentials jamais exposés au frontend
-
----
-
-## Dépannage
-
-### Erreur: "Cannot connect to database"
-
-**Solution:**
-- Vérifier que PostgreSQL est démarré
-- Vérifier `DATABASE_URL` dans backend/.env
-- Tester la connexion: `psql -U user -d talentsecure`
-
-### Erreur: "Module not found"
-
-**Solution:**
-```bash
-# Backend
-cd backend && npm install
-
-# Frontend
-cd frontend && npm install
-```
-
-### Port déjà utilisé
-
-**Solution:**
-```bash
-# Changer le port dans backend/.env
-PORT=5001
-
-# Ou dans frontend/vite.config.ts
-server: { port: 5174 }
-```
-
-### Erreur Google OAuth
-
-**Solution:**
-- Vérifier `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` dans backend/.env
-- Vérifier que le callback URL est autorisé dans Google Cloud Console
-- Callback URL: `http://localhost:5000/api/auth/google/callback`
-
----
-
-## Roadmap
-
-### Phase 1 - MVP (10 semaines) ✅ En cours
-- Setup & Architecture
-- CRUD Candidats
-- Import Excel
-- Recherche avancée
-- Génération PDF
-- Déploiement
-
-### Phase 2 - Portal Client (8 semaines)
-- Login clients
-- Visualisation catalogues
-- Vidéos streamées
-- Demande placement
-- Urgency button
-- E-signature contrats
-
-### Phase 3 - Features Avancées (12 semaines)
-- Background checks (Checkr API)
-- Video interviews (Twilio)
-- AI Matching
-- Analytics avancées
-- Shift management
-- Multi-language
-
-### Phase 4 - Mobile + Marketplace (15 semaines)
-- Apps iOS + Android
-- Guard Pools
-- Urgency button like Uber
-- API publique
-- Payroll integration
-
-### Phase 5+ - SaaS Multi-Tenant
-- Autres agences peuvent s'inscrire
-- Marketplace inter-agences
-- Revenus: 500K-1M$/an
-
----
-
-## Support
-
-### Questions techniques
-- Consulter les README dans `backend/` et `frontend/`
-- Consulter la documentation complète
-- Stack Overflow pour questions générales
-
-### Bugs
-- GitHub Issues (si repo créé)
-- Documentation d'erreurs dans `docs/`
-
-### Questions business
-- Équipe XGUARD Security
-
----
-
-## Contribuer
-
-### Git Workflow
-
-```bash
-# 1. Créer une branche pour la feature
-git checkout -b feature/nom-de-la-feature
-
-# 2. Faire vos modifications
-# ... coder ...
-
-# 3. Commit
-git add .
-git commit -m "feat: description de la feature"
-
-# 4. Push
-git push origin feature/nom-de-la-feature
-
-# 5. Créer une Pull Request
-```
-
-### Convention de commits
-
-- `feat:` - Nouvelle fonctionnalité
-- `fix:` - Correction de bug
-- `docs:` - Documentation
-- `style:` - Formatage
-- `refactor:` - Refactoring
-- `test:` - Tests
-- `chore:` - Tâches diverses
-
----
-
-## Licence
-
-MIT - XGUARD Security
-
----
-
-## Contact
-
-**XGUARD Security**
-Email: contact@xguard.com
-Web: www.xguard.security
-
----
-
-**Construisons quelque chose d'incroyable ! 💪🚀**
+Développé avec Claude Code (Anthropic)

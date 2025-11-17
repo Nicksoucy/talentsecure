@@ -13,6 +13,7 @@ import passport from './config/passport';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
+import clientAuthRoutes from './routes/client-auth.routes';
 import candidateRoutes from './routes/candidate.routes';
 import catalogueRoutes from './routes/catalogue.routes';
 import clientRoutes from './routes/client.routes';
@@ -90,6 +91,7 @@ app.get('/health', (req: Request, res: Response) => {
 
 // API routes
 app.use('/api/auth', authRoutes);
+app.use('/api/client-auth', clientAuthRoutes);
 app.use('/api/candidates', candidateRoutes);
 app.use('/api/catalogues', catalogueRoutes);
 app.use('/api/clients', clientRoutes);
