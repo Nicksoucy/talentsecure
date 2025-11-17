@@ -461,15 +461,37 @@ export const generateCataloguePDF = async (
 
     // If includeCV is true, merge CVs
     let finalPdfBuffer: Buffer;
+    const tempCvPaths: string[] = [];
     if (catalogue.includeCV) {
+      // Import R2 service functions
+      const { useR2, getSignedFileUrl } = await import('../services/r2.service');
+
       // Collect CV paths
       const cvPaths: string[] = [];
       for (const item of catalogue.items) {
         const candidate = item.candidate;
         if (candidate.cvStoragePath) {
-          const cvPath = path.join(__dirname, '../../', candidate.cvStoragePath);
-          if (fs.existsSync(cvPath)) {
-            cvPaths.push(cvPath);
+          if (useR2 && candidate.cvStoragePath.startsWith('cvs/')) {
+            // CV is on R2 - download it to temp
+            try {
+              const axios = await import('axios');
+              const signedUrl = await getSignedFileUrl(candidate.cvStoragePath, 3600);
+              const response = await axios.default.get(signedUrl, { responseType: 'arraybuffer' });
+
+              // Save to temp file
+              const tempCvPath = path.join(tempDir, `cv_${item.id}_${Date.now()}.pdf`);
+              fs.writeFileSync(tempCvPath, response.data);
+              cvPaths.push(tempCvPath);
+              tempCvPaths.push(tempCvPath);
+            } catch (error) {
+              console.error(`Error downloading CV from R2 for candidate ${candidate.firstName} ${candidate.lastName}:`, error);
+            }
+          } else {
+            // CV is local
+            const cvPath = path.join(__dirname, '../../', candidate.cvStoragePath);
+            if (fs.existsSync(cvPath)) {
+              cvPaths.push(cvPath);
+            }
           }
         }
       }
@@ -506,9 +528,15 @@ export const generateCataloguePDF = async (
       },
     });
 
-    // Clean up temp file
+    // Clean up temp files
     if (tempPdfPath && fs.existsSync(tempPdfPath)) {
       fs.unlinkSync(tempPdfPath);
+    }
+    // Clean up temp CV files
+    for (const tempCvPath of tempCvPaths) {
+      if (fs.existsSync(tempCvPath)) {
+        fs.unlinkSync(tempCvPath);
+      }
     }
 
     // Send PDF as download
@@ -519,12 +547,22 @@ export const generateCataloguePDF = async (
     );
     res.send(finalPdfBuffer);
   } catch (error) {
-    // Clean up temp file on error
+    // Clean up temp files on error
     if (tempPdfPath && fs.existsSync(tempPdfPath)) {
       try {
         fs.unlinkSync(tempPdfPath);
       } catch (e) {
         console.error('Error deleting temp file:', e);
+      }
+    }
+    // Clean up temp CV files on error
+    for (const tempCvPath of tempCvPaths) {
+      if (fs.existsSync(tempCvPath)) {
+        try {
+          fs.unlinkSync(tempCvPath);
+        } catch (e) {
+          console.error('Error deleting temp CV file:', e);
+        }
       }
     }
     next(error);
