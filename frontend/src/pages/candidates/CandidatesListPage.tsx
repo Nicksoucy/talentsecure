@@ -46,6 +46,7 @@ import CandidatesMap from '@/components/map/CandidatesMap';
 import CandidateFiltersBar from './components/CandidateFiltersBar';
 import CandidateTableRow from './components/CandidateTableRow';
 import CandidateBulkActions from './components/CandidateBulkActions';
+import { candidateFormSchema } from '@/validation/candidate';
 
 export default function CandidatesListPage() {
   const navigate = useNavigate();
@@ -374,62 +375,68 @@ export default function CandidatesListPage() {
   });
 
   const handleSaveCandidate = (formData: any) => {
-    // Transform the form data to match the API structure
+    const validationResult = candidateFormSchema.safeParse(formData);
+
+    if (!validationResult.success) {
+      const firstIssue = validationResult.error.issues[0];
+      enqueueSnackbar(firstIssue?.message || 'Les informations saisies sont invalides.', { variant: 'error' });
+      return;
+    }
+
+    const safeValues = validationResult.data;
+
     const candidateData = {
       // Personal info
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      email: formData.email,
-      phone: formData.phone,
-      address: formData.address,
-      city: formData.city,
-      postalCode: formData.postalCode,
-      interviewDate: formData.interviewDate,
+      firstName: safeValues.firstName,
+      lastName: safeValues.lastName,
+      email: safeValues.email,
+      phone: safeValues.phone,
+      address: safeValues.address,
+      city: safeValues.city,
+      postalCode: safeValues.postalCode,
+      interviewDate: safeValues.interviewDate,
 
       // Transport
-      hasVehicle: formData.hasVehicle,
-      hasDriverLicense: formData.hasDriverLicense,
-      driverLicenseClass: formData.driverLicenseClass,
-      driverLicenseNumber: formData.driverLicenseNumber,
-      canTravelKm: formData.canTravelKm,
+      hasVehicle: safeValues.hasVehicle,
+      hasDriverLicense: safeValues.hasDriverLicense,
+      driverLicenseClass: safeValues.driverLicenseClass,
+      driverLicenseNumber: safeValues.driverLicenseNumber,
+      canTravelKm: safeValues.canTravelKm,
 
       // Certifications
-      hasBSP: formData.hasBSP,
-      bspNumber: formData.bspNumber,
-      bspExpiryDate: formData.bspExpiryDate,
-      bspStatus: formData.bspStatus,
+      hasBSP: safeValues.hasBSP,
+      bspNumber: safeValues.bspNumber,
+      bspExpiryDate: safeValues.bspExpiryDate,
+      bspStatus: safeValues.bspStatus,
 
       // Ratings
-      professionalismRating: formData.professionalismRating,
-      communicationRating: formData.communicationRating,
-      appearanceRating: formData.appearanceRating,
-      motivationRating: formData.motivationRating,
-      experienceRating: formData.experienceRating,
-      globalRating: formData.globalRating,
+      professionalismRating: safeValues.professionalismRating,
+      communicationRating: safeValues.communicationRating,
+      appearanceRating: safeValues.appearanceRating,
+      motivationRating: safeValues.motivationRating,
+      experienceRating: safeValues.experienceRating,
+      globalRating: safeValues.globalRating,
 
       // Notes
-      hrNotes: formData.hrNotes,
-      strengths: formData.strengths,
-      weaknesses: formData.weaknesses,
+      hrNotes: safeValues.hrNotes,
+      strengths: safeValues.strengths,
+      weaknesses: safeValues.weaknesses,
 
       // Nested data
-      languages: formData.languages,
-      experiences: formData.experiences,
-      certifications: formData.certifications,
+      languages: safeValues.languages,
+      experiences: safeValues.experiences,
+      certifications: safeValues.certifications,
 
-      // We'll need to create situationTests from the three text fields
       situationTests: [
-        formData.situationTest1 && { scenario: 'Conflit avec un collègue', response: formData.situationTest1 },
-        formData.situationTest2 && { scenario: 'Situation d\'urgence inattendue', response: formData.situationTest2 },
-        formData.situationTest3 && { scenario: 'Assurer la sécurité d\'un site', response: formData.situationTest3 },
+        safeValues.situationTest1 && { scenario: 'Conflit avec un collegue', response: safeValues.situationTest1 },
+        safeValues.situationTest2 && { scenario: 'Situation d\'urgence inattendue', response: safeValues.situationTest2 },
+        safeValues.situationTest3 && { scenario: 'Assurer la securite d\'un site', response: safeValues.situationTest3 },
       ].filter(Boolean),
     };
 
     if (editingCandidate) {
-      // Update existing candidate
       updateMutation.mutate({ id: editingCandidate.id, data: candidateData });
     } else {
-      // Create new candidate
       createMutation.mutate(candidateData);
     }
   };

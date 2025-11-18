@@ -1,12 +1,24 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
 import path from 'path';
 import fs from 'fs';
 import axios from 'axios';
 import { PDFService } from '../services/pdf.service';
 import { useR2, getSignedFileUrl } from '../services/r2.service';
+import { prisma } from '../config/database';
+import { getCache, setCache, deleteCache, invalidateCacheByPrefix } from '../config/cache';
+import { buildCacheKey } from '../utils/cache';
 
-const prisma = new PrismaClient();
+const CATALOGUE_LIST_CACHE_PREFIX = 'catalogues:list';
+const CATALOGUE_DETAIL_CACHE_PREFIX = 'catalogues:detail';
+
+const invalidateCatalogueCaches = async (catalogueId?: string) => {
+  const tasks = [invalidateCacheByPrefix(CATALOGUE_LIST_CACHE_PREFIX)];
+  if (catalogueId) {
+    tasks.push(deleteCache(`${CATALOGUE_DETAIL_CACHE_PREFIX}:${catalogueId}`));
+  }
+
+  await Promise.all(tasks);
+};
 
 /**
  * Get all catalogues with filters
@@ -29,6 +41,12 @@ export const getCatalogues = async (
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
     const skip = (pageNum - 1) * limitNum;
+    const cacheKey = buildCacheKey(CATALOGUE_LIST_CACHE_PREFIX, req.query);
+    const cachedResponse = await getCache<{ data: any; pagination: any }>(cacheKey);
+
+    if (cachedResponse) {
+      return res.json(cachedResponse);
+    }
 
     // Build filters
     const where: any = {};
@@ -77,7 +95,7 @@ export const getCatalogues = async (
       prisma.catalogue.count({ where }),
     ]);
 
-    res.json({
+    const responsePayload = {
       data: catalogues,
       pagination: {
         page: pageNum,
@@ -85,7 +103,11 @@ export const getCatalogues = async (
         total,
         totalPages: Math.ceil(total / limitNum),
       },
-    });
+    };
+
+    await setCache(cacheKey, responsePayload, 300);
+
+    res.json(responsePayload);
   } catch (error) {
     next(error);
   }
@@ -101,6 +123,12 @@ export const getCatalogueById = async (
 ) => {
   try {
     const { id } = req.params;
+
+    const cacheKey = `${CATALOGUE_DETAIL_CACHE_PREFIX}:${id}`;
+    const cachedCatalogue = await getCache<{ data: any }>(cacheKey);
+    if (cachedCatalogue) {
+      return res.json(cachedCatalogue);
+    }
 
     const catalogue = await prisma.catalogue.findUnique({
       where: { id },
@@ -135,6 +163,8 @@ export const getCatalogueById = async (
     if (!catalogue) {
       return res.status(404).json({ error: 'Catalogue non trouvé' });
     }
+
+    await setCache(cacheKey, catalogue, 300);
 
     res.json(catalogue);
   } catch (error) {
@@ -242,6 +272,8 @@ export const createCatalogue = async (
         details: `Catalogue créé: ${catalogue.title} pour ${client.companyName || client.name}`,
       },
     });
+
+    await invalidateCatalogueCaches(catalogue.id);
 
     res.status(201).json(catalogue);
   } catch (error) {
@@ -358,6 +390,8 @@ export const updateCatalogue = async (
       },
     });
 
+    await invalidateCatalogueCaches(id);
+
     res.json(catalogue);
   } catch (error) {
     next(error);
@@ -400,6 +434,8 @@ export const deleteCatalogue = async (
         details: `Catalogue supprimé: ${catalogue.title}`,
       },
     });
+
+    await invalidateCatalogueCaches(id);
 
     res.json({ message: 'Catalogue supprimé avec succès' });
   } catch (error) {

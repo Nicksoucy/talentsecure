@@ -24,6 +24,7 @@ import {
 } from '../controllers/upload.controller';
 import { authenticateJWT, authorizeRoles } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
+import { createCandidateSchema, updateCandidateSchema, candidateFiltersSchema, candidateIdSchema } from '../validation/candidate.validation';
 import { uploadCV } from '../middleware/upload';
 import { videoUpload } from '../services/video.service';
 
@@ -65,7 +66,7 @@ router.use(authenticateJWT);
  * @desc    Get all candidates with filters
  * @access  Private (All authenticated users)
  */
-router.get('/', validate({ query: candidateQueryFilters }), getCandidates);
+router.get('/', validate({ query: candidateFiltersSchema }), getCandidates);
 
 /**
  * @route   GET /api/candidates/stats/summary
@@ -110,6 +111,7 @@ router.get('/export/csv', validate({ query: candidateQueryFilters }), exportCand
 router.post(
   '/',
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  validate({ body: createCandidateSchema }),
   createCandidate
 );
 
@@ -122,6 +124,7 @@ router.post(
 router.post(
   '/:id/cv',
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  validate({ params: candidateIdSchema }),
   uploadCV,
   uploadCandidateCV
 );
@@ -131,7 +134,7 @@ router.post(
  * @desc    Download CV for candidate
  * @access  Private (All authenticated users)
  */
-router.get('/:id/cv/download', downloadCandidateCV);
+router.get('/:id/cv/download', validate({ params: candidateIdSchema }), downloadCandidateCV);
 
 /**
  * @route   DELETE /api/candidates/:id/cv
@@ -141,6 +144,7 @@ router.get('/:id/cv/download', downloadCandidateCV);
 router.delete(
   '/:id/cv',
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  validate({ params: candidateIdSchema }),
   deleteCandidateCV
 );
 
@@ -153,6 +157,7 @@ router.delete(
 router.post(
   '/:id/video',
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  validate({ params: candidateIdSchema }),
   videoUpload.single('video'),
   uploadCandidateVideo
 );
@@ -162,7 +167,7 @@ router.post(
  * @desc    Get video URL for candidate
  * @access  Private (All authenticated users)
  */
-router.get('/:id/video', getCandidateVideoUrl);
+router.get('/:id/video', validate({ params: candidateIdSchema }), getCandidateVideoUrl);
 
 /**
  * @route   DELETE /api/candidates/:id/video
@@ -172,6 +177,7 @@ router.get('/:id/video', getCandidateVideoUrl);
 router.delete(
   '/:id/video',
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  validate({ params: candidateIdSchema }),
   deleteCandidateVideo
 );
 
@@ -181,7 +187,7 @@ router.delete(
  * @desc    Get single candidate by ID
  * @access  Private (All authenticated users)
  */
-router.get('/:id', validate({ params: uuidParam }), getCandidateById);
+router.get('/:id', validate({ params: candidateIdSchema }), getCandidateById);
 
 /**
  * @route   PUT /api/candidates/:id
@@ -191,7 +197,7 @@ router.get('/:id', validate({ params: uuidParam }), getCandidateById);
 router.put(
   '/:id',
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
-  validate({ params: uuidParam }),
+  validate({ params: candidateIdSchema, body: updateCandidateSchema }),
   updateCandidate
 );
 
@@ -203,7 +209,7 @@ router.put(
 router.delete(
   '/:id',
   authorizeRoles('ADMIN'),
-  validate({ params: uuidParam }),
+  validate({ params: candidateIdSchema }),
   deleteCandidate
 );
 
@@ -215,7 +221,7 @@ router.delete(
 router.patch(
   '/:id/archive',
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
-  validate({ params: uuidParam }),
+  validate({ params: candidateIdSchema }),
   archiveCandidate
 );
 
@@ -227,7 +233,7 @@ router.patch(
 router.patch(
   '/:id/unarchive',
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
-  validate({ params: uuidParam }),
+  validate({ params: candidateIdSchema }),
   unarchiveCandidate
 );
 

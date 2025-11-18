@@ -45,6 +45,7 @@ import { clientService } from '@/services/client.service';
 import { TableSkeleton } from '@/components/skeletons';
 import CandidateAdvancedFilters, { CandidateFilters } from '@/components/CandidateAdvancedFilters';
 import ShareCatalogueDialog from '@/components/catalogues/ShareCatalogueDialog';
+import { catalogueFormSchema } from '@/validation/catalogue';
 
 const STATUS_COLORS: Record<string, 'default' | 'info' | 'success' | 'warning' | 'error'> = {
   BROUILLON: 'default',
@@ -161,23 +162,23 @@ export default function CataloguesPage() {
   };
 
   const handleCreateCatalogue = () => {
-    if (!formData.title || !selectedClient) {
-      enqueueSnackbar('Veuillez remplir le titre et sélectionner un client', { variant: 'warning' });
-      return;
-    }
-
-    if (selectedCandidates.length === 0) {
-      enqueueSnackbar('Veuillez sélectionner au moins un candidat', { variant: 'warning' });
-      return;
-    }
-
     const payload = {
       ...formData,
-      clientId: selectedClient.id,
+      clientId: selectedClient?.id || '',
       candidateIds: selectedCandidates.map((c) => c.id),
     };
 
-    createMutation.mutate(payload);
+    const validation = catalogueFormSchema.safeParse(payload);
+
+    if (!validation.success) {
+      const firstIssue = validation.error.issues[0];
+      enqueueSnackbar(firstIssue?.message || 'Les informations du catalogue sont invalides.', {
+        variant: 'error',
+      });
+      return;
+    }
+
+    createMutation.mutate(validation.data);
   };
 
   const handleDeleteCatalogue = (id: string) => {

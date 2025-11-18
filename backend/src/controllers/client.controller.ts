@@ -1,5 +1,19 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
+import { getCache, setCache, deleteCache, invalidateCacheByPrefix } from '../config/cache';
+import { buildCacheKey } from '../utils/cache';
+
+const CLIENT_LIST_CACHE_PREFIX = 'clients:list';
+const CLIENT_DETAIL_CACHE_PREFIX = 'clients:detail';
+
+const invalidateClientCaches = async (clientId?: string) => {
+  const tasks = [invalidateCacheByPrefix(CLIENT_LIST_CACHE_PREFIX)];
+  if (clientId) {
+    tasks.push(deleteCache(`${CLIENT_DETAIL_CACHE_PREFIX}:${clientId}`));
+  }
+
+  await Promise.all(tasks);
+};
 
 /**
  * Get all clients with filters
@@ -20,6 +34,12 @@ export const getClients = async (
     } = req.query;
 
     const skip = (Number(page) - 1) * Number(limit);
+    const cacheKey = buildCacheKey(CLIENT_LIST_CACHE_PREFIX, req.query);
+    const cachedResponse = await getCache<{ data: any; pagination: any }>(cacheKey);
+
+    if (cachedResponse) {
+      return res.json(cachedResponse);
+    }
 
     // Build filter conditions
     const where: any = {};
@@ -36,26 +56,25 @@ export const getClients = async (
       where.isActive = isActive === 'true';
     }
 
-    // Get total count
-    const total = await prisma.client.count({ where });
-
-    // Get clients
-    const clients = await prisma.client.findMany({
-      where,
-      skip,
-      take: Number(limit),
-      orderBy: { [sortBy as string]: sortOrder },
-      include: {
-        _count: {
-          select: {
-            catalogues: true,
-            placements: true,
+    const [total, clients] = await prisma.$transaction([
+      prisma.client.count({ where }),
+      prisma.client.findMany({
+        where,
+        skip,
+        take: Number(limit),
+        orderBy: { [sortBy as string]: sortOrder },
+        include: {
+          _count: {
+            select: {
+              catalogues: true,
+              placements: true,
+            },
           },
         },
-      },
-    });
+      }),
+    ]);
 
-    res.json({
+    const responsePayload = {
       data: clients,
       pagination: {
         total,
@@ -63,7 +82,11 @@ export const getClients = async (
         limit: Number(limit),
         totalPages: Math.ceil(total / Number(limit)),
       },
-    });
+    };
+
+    await setCache(cacheKey, responsePayload, 300);
+
+    res.json(responsePayload);
   } catch (error) {
     next(error);
   }
@@ -79,6 +102,12 @@ export const getClientById = async (
 ) => {
   try {
     const { id } = req.params;
+
+    const cacheKey = `${CLIENT_DETAIL_CACHE_PREFIX}:${id}`;
+    const cachedClient = await getCache<{ data: any }>(cacheKey);
+    if (cachedClient) {
+      return res.json(cachedClient);
+    }
 
     const client = await prisma.client.findUnique({
       where: { id },
@@ -100,7 +129,10 @@ export const getClientById = async (
       return res.status(404).json({ error: 'Client non trouvé' });
     }
 
-    res.json({ data: client });
+    const payload = { data: client };
+    await setCache(cacheKey, payload, 300);
+
+    res.json(payload);
   } catch (error) {
     next(error);
   }
@@ -163,6 +195,8 @@ export const createClient = async (
       },
     });
 
+    await invalidateClientCaches(client.id);
+
     res.status(201).json({
       message: 'Client créé avec succès',
       data: client,
@@ -222,6 +256,8 @@ export const updateClient = async (
       },
     });
 
+    await invalidateClientCaches(id);
+
     res.json({
       message: 'Client mis à jour avec succès',
       data: client,
@@ -261,6 +297,8 @@ export const deleteClient = async (
       },
     });
 
+    await invalidateClientCaches(id);
+
     res.json({ message: 'Client désactivé avec succès' });
   } catch (error) {
     next(error);
@@ -296,6 +334,8 @@ export const reactivateClient = async (
         details: `Client réactivé: ${client.name}`,
       },
     });
+
+    await invalidateClientCaches(id);
 
     res.json({
       message: 'Client réactivé avec succès',

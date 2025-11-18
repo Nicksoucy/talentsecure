@@ -1,7 +1,20 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
+import logger from '../config/logger';
+import { getCache, setCache, deleteCache, invalidateCacheByPrefix } from '../config/cache';
+import { buildCacheKey } from '../utils/cache';
 import { getStatusFromRating } from '../utils/candidate.utils';
 import { Parser } from 'json2csv';
+
+const CANDIDATE_LIST_CACHE_PREFIX = 'candidates:list';
+const CANDIDATE_STATS_CACHE_KEY = 'candidates:stats';
+
+const invalidateCandidateCaches = async () => {
+  await Promise.all([
+    invalidateCacheByPrefix(CANDIDATE_LIST_CACHE_PREFIX),
+    deleteCache(CANDIDATE_STATS_CACHE_KEY),
+  ]);
+};
 
 /**
  * Get all candidates with filters
@@ -36,6 +49,12 @@ export const getCandidates = async (
     } = req.query;
 
     const skip = (Number(page) - 1) * Number(limit);
+    const cacheKey = buildCacheKey(CANDIDATE_LIST_CACHE_PREFIX, req.query);
+    const cachedResponse = await getCache<{ data: any; pagination: any }>(cacheKey);
+
+    if (cachedResponse) {
+      return res.json(cachedResponse);
+    }
 
     // Build filter conditions with proper AND/OR logic
     const where: any = {
@@ -155,9 +174,6 @@ export const getCandidates = async (
       };
     }
 
-    // Get total count
-    const total = await prisma.candidate.count({ where });
-
     // Build orderBy with special handling for globalRating to place NULL values last
     let orderByClause: any;
     if (sortBy === 'globalRating') {
@@ -171,64 +187,67 @@ export const getCandidates = async (
     }
 
     // Get candidates with optimized select (only fields needed for list view)
-    const candidates = await prisma.candidate.findMany({
-      where,
-      skip,
-      take: Number(limit),
-      orderBy: orderByClause,
-      select: {
-        // Basic info (needed for list)
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        phone: true,
-        city: true,
-        province: true,
+    const [total, candidates] = await prisma.$transaction([
+      prisma.candidate.count({ where }),
+      prisma.candidate.findMany({
+        where,
+        skip,
+        take: Number(limit),
+        orderBy: orderByClause,
+        select: {
+          // Basic info (needed for list)
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          city: true,
+          province: true,
 
-        // Status & ratings (for display and filtering)
-        status: true,
-        globalRating: true,
-        interviewDate: true,
+          // Status & ratings (for display and filtering)
+          status: true,
+          globalRating: true,
+          interviewDate: true,
 
-        // Quick checks (for icons/badges)
-        hasBSP: true,
-        hasVehicle: true,
-        hasDriverLicense: true,
-        cvUrl: true,
-        videoUrl: true,
+          // Quick checks (for icons/badges)
+          hasBSP: true,
+          hasVehicle: true,
+          hasDriverLicense: true,
+          cvUrl: true,
+          videoUrl: true,
 
-        // Metadata (for display logic)
-        isActive: true,
-        isArchived: true,
-        createdAt: true,
+          // Metadata (for display logic)
+          isActive: true,
+          isArchived: true,
+          createdAt: true,
 
-        // HR notes preview (truncated in UI anyway)
-        hrNotes: true,
+          // HR notes preview (truncated in UI anyway)
+          hrNotes: true,
 
-        // Relations (lightweight, needed for list)
-        availabilities: {
-          select: {
-            type: true,
-            isAvailable: true,
+          // Relations (lightweight, needed for list)
+          availabilities: {
+            select: {
+              type: true,
+              isAvailable: true,
+            },
+          },
+          languages: {
+            select: {
+              language: true,
+              level: true,
+            },
+          },
+          certifications: {
+            select: {
+              name: true,
+              expiryDate: true,
+            },
           },
         },
-        languages: {
-          select: {
-            language: true,
-            level: true,
-          },
-        },
-        certifications: {
-          select: {
-            name: true,
-            expiryDate: true,
-          },
-        },
-      },
-    });
+      }),
+    ])
 
-    res.json({
+    const responsePayload = {
       data: candidates,
       pagination: {
         total,
@@ -236,7 +255,11 @@ export const getCandidates = async (
         limit: Number(limit),
         totalPages: Math.ceil(total / Number(limit)),
       },
-    });
+    };
+
+    await setCache(cacheKey, responsePayload, 120);
+
+    res.json(responsePayload);
   } catch (error) {
     next(error);
   }
@@ -431,6 +454,8 @@ export const createCandidate = async (
       },
     });
 
+    await invalidateCandidateCaches();
+
     res.status(201).json({
       message: 'Candidat créé avec succès',
       data: candidate,
@@ -499,6 +524,8 @@ export const updateCandidate = async (
       },
     });
 
+    await invalidateCandidateCaches();
+
     res.json({
       message: 'Candidat mis à jour avec succès',
       data: candidate,
@@ -539,6 +566,8 @@ export const deleteCandidate = async (
       },
     });
 
+    await invalidateCandidateCaches();
+
     res.json({ message: 'Candidat supprimé avec succès' });
   } catch (error) {
     next(error);
@@ -577,6 +606,8 @@ export const archiveCandidate = async (
       },
     });
 
+    await invalidateCandidateCaches();
+
     res.json({ message: 'Candidat archivé avec succès', data: candidate });
   } catch (error) {
     next(error);
@@ -614,6 +645,8 @@ export const unarchiveCandidate = async (
         details: `Candidat désarchivé: ${candidate.firstName} ${candidate.lastName}`,
       },
     });
+
+    await invalidateCandidateCaches();
 
     res.json({ message: 'Candidat désarchivé avec succès', data: candidate });
   } catch (error) {
@@ -794,7 +827,7 @@ export const uploadCandidateVideo = async (
       try {
         await deleteVideo(candidate.videoStoragePath);
       } catch (error) {
-        console.error('Error deleting old video:', error);
+        logger.error('Error deleting old video', { error });
         // Continue even if deletion fails
       }
     }
@@ -818,6 +851,8 @@ export const uploadCandidateVideo = async (
       },
     });
 
+    await invalidateCandidateCaches();
+
     res.json({
       success: true,
       message: 'Vidéo uploadée avec succès',
@@ -828,7 +863,7 @@ export const uploadCandidateVideo = async (
       },
     });
   } catch (error: any) {
-    console.error('Error uploading video:', error);
+    logger.error('Error uploading video', { error });
     next(error);
   }
 };
@@ -905,7 +940,7 @@ export const getCandidateVideoUrl = async (
       },
     });
   } catch (error) {
-    console.error('Error getting video URL:', error);
+    logger.error('Error getting video URL', { error });
     next(error);
   }
 };
@@ -954,12 +989,14 @@ export const deleteCandidateVideo = async (
       },
     });
 
+    await invalidateCandidateCaches();
+
     res.json({
       success: true,
       message: 'Vidéo supprimée avec succès',
     });
   } catch (error) {
-    console.error('Error deleting video:', error);
+    logger.error('Error deleting video', { error });
     next(error);
   }
 };
@@ -973,6 +1010,11 @@ export const getCandidatesStats = async (
   next: NextFunction
 ) => {
   try {
+    const cachedStats = await getCache<{ success: boolean; data: any }>(CANDIDATE_STATS_CACHE_KEY);
+    if (cachedStats) {
+      return res.json(cachedStats);
+    }
+
     // Get total count (active, non-deleted)
     const total = await prisma.candidate.count({
       where: {
@@ -1026,7 +1068,7 @@ export const getCandidatesStats = async (
     // Get inactive candidates
     const inactive = statusCounts['INACTIF'] || 0;
 
-    res.json({
+    const payload = {
       success: true,
       data: {
         total,
@@ -1041,9 +1083,13 @@ export const getCandidatesStats = async (
         absent,
         inactive,
       },
-    });
+    };
+
+    await setCache(CANDIDATE_STATS_CACHE_KEY, payload, 300);
+
+    res.json(payload);
   } catch (error) {
-    console.error('Error getting candidates stats:', error);
+    logger.error('Error getting candidates stats', { error });
     next(error);
   }
 };

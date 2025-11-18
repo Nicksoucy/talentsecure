@@ -5,6 +5,18 @@ import fs from 'fs';
 import { deleteFile } from '../middleware/upload';
 import { processCVUpload, deleteCV, getCVSignedUrl, getLocalCVPath } from '../services/cv.service';
 import { useR2 } from '../services/r2.service';
+import { optimizeImage } from '../services/image.service';
+import { invalidateCacheByPrefix, deleteCache } from '../config/cache';
+
+const CANDIDATE_CACHE_PREFIX = 'candidates:list';
+const CANDIDATE_STATS_CACHE_KEY = 'candidates:stats';
+
+const invalidateCandidateCaches = async () => {
+  await Promise.all([
+    invalidateCacheByPrefix(CANDIDATE_CACHE_PREFIX),
+    deleteCache(CANDIDATE_STATS_CACHE_KEY),
+  ]);
+};
 
 /**
  * Upload CV for a candidate
@@ -38,6 +50,11 @@ export const uploadCandidateCV = async (
       await deleteCV(candidate.cvStoragePath).catch(() => {});
     }
 
+    // Optimize image if it's an image file
+    if (req.file.mimetype && req.file.mimetype.startsWith('image/')) {
+      await optimizeImage(req.file.path).catch(() => undefined);
+    }
+
     // Upload to R2 (or local storage if R2 is disabled)
     const cvStoragePath = await processCVUpload(req.file.path, req.file.originalname);
     const cvUrl = `/api/candidates/${id}/cv/download`;
@@ -49,6 +66,8 @@ export const uploadCandidateCV = async (
         cvStoragePath,
       },
     });
+
+    await invalidateCandidateCaches();
 
     // Log audit
     await prisma.auditLog.create({
@@ -157,6 +176,8 @@ export const deleteCandidateCV = async (
         cvStoragePath: null,
       },
     });
+
+    await invalidateCandidateCaches();
 
     // Log audit
     await prisma.auditLog.create({

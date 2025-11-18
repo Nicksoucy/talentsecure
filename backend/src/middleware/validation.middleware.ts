@@ -1,5 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 import { z, ZodError } from 'zod';
+import { ApiError, ErrorDetail } from '../utils/apiError';
+
+type Target = 'body' | 'params' | 'query';
+
+const mapZodErrors = (error: ZodError, location?: Target): ErrorDetail[] =>
+  error.errors.map((err) => ({
+    location,
+    field: err.path.join('.'),
+    message: err.message,
+  }));
 
 /**
  * Validation middleware factory
@@ -7,34 +17,19 @@ import { z, ZodError } from 'zod';
  */
 export const validateRequest = (
   schema: z.ZodSchema,
-  target: 'body' | 'params' | 'query' = 'body'
+  target: Target = 'body'
 ) => {
-  return async (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, _res: Response, next: NextFunction) => {
     try {
-      // Validate the specified part of the request
       const validated = await schema.parseAsync(req[target]);
-
-      // Replace the original data with the validated (and potentially transformed) data
       req[target] = validated;
-
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        // Format validation errors for better readability
-        const formattedErrors = error.errors.map((err) => ({
-          field: err.path.join('.'),
-          message: err.message,
-        }));
-
-        return res.status(400).json({
-          success: false,
-          error: 'Validation échouée',
-          details: formattedErrors,
-        });
+        return next(new ApiError(400, 'Validation échouée', 'ERREUR_VALIDATION', mapZodErrors(error, target)));
       }
 
-      // Pass other errors to the global error handler
-      next(error);
+      return next(error);
     }
   };
 };
@@ -48,67 +43,52 @@ export const validate = (schemas: {
   params?: z.ZodSchema;
   query?: z.ZodSchema;
 }) => {
-  return async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const errors: any[] = [];
+  return async (req: Request, _res: Response, next: NextFunction) => {
+    const errors: ErrorDetail[] = [];
 
-      // Validate body if schema provided
+    try {
       if (schemas.body) {
         try {
           req.body = await schemas.body.parseAsync(req.body);
         } catch (error) {
           if (error instanceof ZodError) {
-            errors.push(...error.errors.map(err => ({
-              location: 'body',
-              field: err.path.join('.'),
-              message: err.message,
-            })));
+            errors.push(...mapZodErrors(error, 'body'));
+          } else {
+            return next(error);
           }
         }
       }
 
-      // Validate params if schema provided
       if (schemas.params) {
         try {
           req.params = await schemas.params.parseAsync(req.params);
         } catch (error) {
           if (error instanceof ZodError) {
-            errors.push(...error.errors.map(err => ({
-              location: 'params',
-              field: err.path.join('.'),
-              message: err.message,
-            })));
+            errors.push(...mapZodErrors(error, 'params'));
+          } else {
+            return next(error);
           }
         }
       }
 
-      // Validate query if schema provided
       if (schemas.query) {
         try {
           req.query = await schemas.query.parseAsync(req.query);
         } catch (error) {
           if (error instanceof ZodError) {
-            errors.push(...error.errors.map(err => ({
-              location: 'query',
-              field: err.path.join('.'),
-              message: err.message,
-            })));
+            errors.push(...mapZodErrors(error, 'query'));
+          } else {
+            return next(error);
           }
         }
       }
 
-      // If any validation errors occurred, return them
       if (errors.length > 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'Validation échouée',
-          details: errors,
-        });
+        return next(new ApiError(400, 'Validation échouée', 'ERREUR_VALIDATION', errors));
       }
 
       next();
     } catch (error) {
-      // Pass unexpected errors to the global error handler
       next(error);
     }
   };

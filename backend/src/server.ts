@@ -1,15 +1,21 @@
-import express, { Application, Request, Response, NextFunction } from 'express';
+﻿import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
+import { randomUUID } from 'crypto';
 
 // Load environment variables
 dotenv.config();
 
 // Import passport configuration
 import passport from './config/passport';
+import logger from './config/logger';
+import { httpLoggerWithSkip } from './middleware/logging.middleware';
+import { sanitizeRequest } from './middleware/sanitize.middleware';
+import { ApiError } from './utils/apiError';
+import { errorResponse } from './utils/response';
 
 // Import routes
 import authRoutes from './routes/auth.routes';
@@ -31,38 +37,40 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
   process.env.FRONTEND_URL,
-].filter(Boolean);
+].filter(Boolean) as string[];
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
 
-    // Allow all localhost origins in development
     if (process.env.NODE_ENV === 'development' && origin.startsWith('http://localhost:')) {
       return callback(null, true);
     }
 
     if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+      return callback(null, true);
     }
+
+    return callback(new Error('Origine non autorisee par la politique CORS'));
   },
   credentials: true,
 }));
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
-  message: 'Trop de requêtes depuis cette IP, veuillez réessayer plus tard.',
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Trop de requetes depuis cette IP, veuillez reessayer plus tard.',
 });
 app.use('/api', limiter);
+app.use(httpLoggerWithSkip);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(sanitizeRequest);
 
 // Initialize Passport
 app.use(passport.initialize());
@@ -83,7 +91,7 @@ app.use('/uploads/videos', express.static(path.join(__dirname, '../uploads/video
 app.get('/health', (req: Request, res: Response) => {
   res.status(200).json({
     status: 'OK',
-    message: 'TalentSecure API is running',
+    message: 'TalentSecure API en ligne',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
   });
@@ -100,32 +108,38 @@ app.use('/api/webhooks', webhookRoutes);
 // app.use('/api/users', userRoutes);
 
 // 404 handler
-app.use((req: Request, res: Response) => {
-  res.status(404).json({
-    error: 'Route non trouvée',
-    path: req.path,
-  });
+app.use((req: Request, res: Response, next: NextFunction) => {
+  next(new ApiError(404, 'Route non trouvee', 'ROUTE_NON_TROUVEE', [
+    {
+      field: 'path',
+      message: `La ressource ${req.method} ${req.path} est introuvable`,
+    },
+  ]));
 });
 
 // Global error handler
-app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  console.error('Error:', err);
+app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+  const apiError = ApiError.fromUnknown(err);
+  const requestId = (req.headers['x-request-id'] as string) || randomUUID();
+  res.setHeader('X-Request-ID', requestId);
 
-  const statusCode = err.statusCode || 500;
-  const message = err.message || 'Erreur interne du serveur';
-
-  res.status(statusCode).json({
-    error: message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+  logger.error('Erreur API', {
+    requestId,
+    path: req.path,
+    method: req.method,
+    statusCode: apiError.statusCode,
+    stack: err instanceof Error ? err.stack : undefined,
   });
+
+  errorResponse(res, apiError, requestId);
 });
 
 // Start server
 const HOST = '0.0.0.0'; // CRITICAL for Cloud Run - must bind to all interfaces
 app.listen(PORT, HOST, () => {
-  console.log(`🚀 TalentSecure API démarrée sur http://${HOST}:${PORT}`);
-  console.log(`📊 Environnement: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔒 CORS activé pour: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+  logger.info(`TalentSecure API demarree sur http://${HOST}:${PORT}`);
+  logger.info(`Environnement: ${process.env.NODE_ENV || 'development'}`);
+  logger.info(`CORS active pour: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
 });
 
 export default app;

@@ -1,5 +1,19 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
+import { getCache, setCache, deleteCache, invalidateCacheByPrefix } from '../config/cache';
+import { buildCacheKey } from '../utils/cache';
+
+const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
+const PROSPECT_STATS_CACHE_KEY = 'prospects:stats';
+const PROSPECT_CITY_CACHE_KEY = 'prospects:city-stats';
+
+const invalidateProspectCaches = async () => {
+  await Promise.all([
+    invalidateCacheByPrefix(PROSPECT_LIST_CACHE_PREFIX),
+    deleteCache(PROSPECT_STATS_CACHE_KEY),
+    deleteCache(PROSPECT_CITY_CACHE_KEY),
+  ]);
+};
 
 /**
  * Get all prospect candidates with filters
@@ -24,6 +38,12 @@ export const getProspects = async (
     } = req.query;
 
     const skip = (Number(page) - 1) * Number(limit);
+    const cacheKey = buildCacheKey(PROSPECT_LIST_CACHE_PREFIX, req.query);
+    const cachedResponse = await getCache<{ data: any; pagination: any }>(cacheKey);
+
+    if (cachedResponse) {
+      return res.json(cachedResponse);
+    }
 
     // Build filter conditions
     const where: any = {
@@ -63,18 +83,17 @@ export const getProspects = async (
       }
     }
 
-    // Get total count
-    const total = await prisma.prospectCandidate.count({ where });
+    const [total, prospects] = await prisma.$transaction([
+      prisma.prospectCandidate.count({ where }),
+      prisma.prospectCandidate.findMany({
+        where,
+        skip,
+        take: Number(limit),
+        orderBy: { [sortBy as string]: sortOrder },
+      }),
+    ]);
 
-    // Get prospects
-    const prospects = await prisma.prospectCandidate.findMany({
-      where,
-      skip,
-      take: Number(limit),
-      orderBy: { [sortBy as string]: sortOrder },
-    });
-
-    res.json({
+    const responsePayload = {
       data: prospects,
       pagination: {
         total,
@@ -82,7 +101,11 @@ export const getProspects = async (
         limit: Number(limit),
         totalPages: Math.ceil(total / Number(limit)),
       },
-    });
+    };
+
+    await setCache(cacheKey, responsePayload, 120);
+
+    res.json(responsePayload);
   } catch (error) {
     next(error);
   }
@@ -200,6 +223,8 @@ export const createProspect = async (
       statusCode = 201;
     }
 
+    await invalidateProspectCaches();
+
     res.status(statusCode).json({
       message,
       data: prospect,
@@ -236,6 +261,8 @@ export const updateProspect = async (
       data: updateData,
     });
 
+    await invalidateProspectCaches();
+
     res.json({
       message: 'Candidat potentiel mis à jour avec succès',
       data: prospect,
@@ -264,6 +291,8 @@ export const deleteProspect = async (
       },
     });
 
+    await invalidateProspectCaches();
+
     res.json({ message: 'Candidat potentiel supprimé avec succès' });
   } catch (error) {
     next(error);
@@ -290,6 +319,8 @@ export const markAsContacted = async (
         notes,
       },
     });
+
+    await invalidateProspectCaches();
 
     res.json({
       message: 'Candidat marqué comme contacté',
@@ -395,6 +426,8 @@ export const convertToCandidate = async (
       },
     });
 
+    await invalidateProspectCaches();
+
     res.status(201).json({
       message: 'Candidat potentiel converti en candidat qualifié avec succès',
       data: candidate,
@@ -413,6 +446,11 @@ export const getProspectsByCity = async (
   next: NextFunction
 ) => {
   try {
+    const cachedCities = await getCache<{ success: boolean; data: Array<{ city: string; count: number }> }>(PROSPECT_CITY_CACHE_KEY);
+    if (cachedCities) {
+      return res.json(cachedCities);
+    }
+
     const prospects = await prisma.prospectCandidate.findMany({
       where: {
         isDeleted: false,
@@ -440,10 +478,14 @@ export const getProspectsByCity = async (
       }))
       .sort((a, b) => b.count - a.count);
 
-    res.json({
+    const payload = {
       success: true,
       data: stats,
-    });
+    };
+
+    await setCache(PROSPECT_CITY_CACHE_KEY, payload, 300);
+
+    res.json(payload);
   } catch (error) {
     next(error);
   }
@@ -547,29 +589,21 @@ export const getProspectsStats = async (
   next: NextFunction
 ) => {
   try {
-    // Total des prospects actifs (non convertis)
-    const total = await prisma.prospectCandidate.count({
-      where: { isDeleted: false, isConverted: false },
-    });
+    const cachedStats = await getCache<{ success: boolean; data: any }>(PROSPECT_STATS_CACHE_KEY);
+    if (cachedStats) {
+      return res.json(cachedStats);
+    }
 
-    // Prospects actifs contactés
-    const contacted = await prisma.prospectCandidate.count({
-      where: { isDeleted: false, isConverted: false, isContacted: true },
-    });
-
-    // Prospects convertis en candidats
-    const converted = await prisma.prospectCandidate.count({
-      where: { isDeleted: false, isConverted: true },
-    });
-
-    // Total de tous les prospects (pour le taux de conversion)
-    const allTimeTotal = await prisma.prospectCandidate.count({
-      where: { isDeleted: false },
-    });
+    const [total, contacted, converted, allTimeTotal] = await prisma.$transaction([
+      prisma.prospectCandidate.count({ where: { isDeleted: false, isConverted: false } }),
+      prisma.prospectCandidate.count({ where: { isDeleted: false, isConverted: false, isContacted: true } }),
+      prisma.prospectCandidate.count({ where: { isDeleted: false, isConverted: true } }),
+      prisma.prospectCandidate.count({ where: { isDeleted: false } }),
+    ]);
 
     const pending = total - contacted;
 
-    res.json({
+    const payload = {
       success: true,
       data: {
         total,
@@ -578,7 +612,11 @@ export const getProspectsStats = async (
         converted,
         conversionRate: allTimeTotal > 0 ? ((converted / allTimeTotal) * 100).toFixed(1) : '0',
       },
-    });
+    };
+
+    await setCache(PROSPECT_STATS_CACHE_KEY, payload, 300);
+
+    res.json(payload);
   } catch (error) {
     next(error);
   }

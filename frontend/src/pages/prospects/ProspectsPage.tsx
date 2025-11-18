@@ -53,6 +53,7 @@ import { useNavigate } from 'react-router-dom';
 import { prospectService } from '@/services/prospect.service';
 import { ProspectCandidate } from '@/types';
 import ProspectsMapClustered from '@/components/map/ProspectsMapClustered';
+import { prospectContactSchema } from '@/validation/prospect';
 
 export default function ProspectsPage() {
   const navigate = useNavigate();
@@ -150,9 +151,17 @@ export default function ProspectsPage() {
 
   const handleConfirmContact = () => {
     if (contactDialog.prospect) {
+      const validation = prospectContactSchema.safeParse({ notes: contactNotes });
+
+      if (!validation.success) {
+        const firstIssue = validation.error.issues[0];
+        enqueueSnackbar(firstIssue?.message || 'Notes invalides.', { variant: 'error' });
+        return;
+      }
+
       markContactedMutation.mutate({
         id: contactDialog.prospect.id,
-        notes: contactNotes,
+        notes: validation.data.notes?.trim() || undefined,
       });
     }
   };

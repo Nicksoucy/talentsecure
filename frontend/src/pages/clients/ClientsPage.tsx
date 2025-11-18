@@ -41,6 +41,7 @@ import {
 import { useSnackbar } from 'notistack';
 import { clientService, Client } from '@/services/client.service';
 import { TableSkeleton } from '@/components/skeletons';
+import { clientFormSchema } from '@/validation/client';
 
 export default function ClientsPage() {
   const { enqueueSnackbar } = useSnackbar();
@@ -175,10 +176,22 @@ export default function ClientsPage() {
   };
 
   const handleSave = () => {
+    const validation = clientFormSchema.safeParse(formData);
+
+    if (!validation.success) {
+      const firstIssue = validation.error.issues[0];
+      enqueueSnackbar(firstIssue?.message || 'Les informations client sont invalides.', {
+        variant: 'error',
+      });
+      return;
+    }
+
+    const safeData = validation.data;
+
     if (editingClient) {
-      updateMutation.mutate({ id: editingClient.id, data: formData });
+      updateMutation.mutate({ id: editingClient.id, data: safeData });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(safeData);
     }
   };
 

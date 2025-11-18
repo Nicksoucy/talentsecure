@@ -252,3 +252,245 @@ VITE_API_URL=http://localhost:5000
 ## Contributeurs
 
 Développé avec Claude Code (Anthropic)
+
+---
+
+## Gestion des Prospects
+
+### Fonctionnalités
+
+Le système de gestion des prospects permet de :
+- **Importer automatiquement** des prospects depuis Google Sheets
+- **Visualiser sur une carte** interactive avec clustering
+- **Filtrer** par ville, statut de contact, statut de conversion
+- **Sélectionner en masse** (style Gmail - sélection multi-pages)
+- **Exporter en CSV** les prospects sélectionnés
+- **Marquer comme contactés** en masse
+- **Exporter vers GoHighLevel** (CRM)
+
+### Import depuis Google Sheets
+
+Configuration requise dans `backend/.env` :
+```bash
+GOOGLE_SHEETS_API_KEY=votre-clé-api
+```
+
+Pour importer les prospects :
+```bash
+cd backend
+npx tsx src/scripts/import-from-google-sheet.ts
+```
+
+Le script :
+- ✅ Récupère les données du Google Sheet public
+- ✅ Normalise les noms de villes (Montréal, Québec, etc.)
+- ✅ Détecte et ignore les doublons (email ou téléphone)
+- ✅ Parse les dates de soumission
+- ✅ Associe automatiquement les CVs si disponibles
+
+### Export vers GoHighLevel
+
+Configuration requise dans `backend/.env` :
+```bash
+GOHIGHLEVEL_API_KEY=votre-clé-api
+GOHIGHLEVEL_LOCATION_ID=votre-location-id
+```
+
+L'export se fait via l'interface web (bouton "Exporter vers GoHighLevel") ou via API :
+```bash
+POST /api/prospects/export-to-gohighlevel
+Content-Type: application/json
+
+{
+  "prospectIds": ["id1", "id2", "id3"]
+}
+```
+
+### Carte Interactive
+
+La carte des prospects (`/prospects`) affiche :
+- 🗺️ Clustering automatique par densité
+- 📍 Marqueurs bleus pour les prospects
+- 🔢 Badges avec nombre de prospects par ville
+- 🖱️ Clic sur ville → filtre la liste automatiquement
+- 🔍 Zoom pour voir détails individuels
+
+### Sélection Multi-Pages (Gmail-style)
+
+1. **Cocher les prospects** sur la page actuelle
+2. Quand toute la page est sélectionnée, voir le message :
+   *"20 prospects sélectionnés sur cette page. Sélectionner tous les 50 prospects de Québec?"*
+3. **Cliquer "Sélectionner tout"** pour sélectionner ALL prospects matching les filtres
+4. **Exporter CSV** ou **Marquer comme contactés** en masse
+
+### Export CSV
+
+Format du CSV :
+- Prénom, Nom
+- Email, Téléphone
+- Ville, Province, Code Postal, Adresse
+- CV (Oui/Non)
+- Date de soumission
+- Contacté (Oui/Non)
+- Converti (Oui/Non)
+- Notes
+
+Encodage : UTF-8 avec BOM (support accents français)
+
+---
+
+## Dépannage
+
+### Erreur: "Cannot connect to database"
+
+**Solution:**
+- Vérifier que PostgreSQL est démarré
+- Vérifier `DATABASE_URL` dans backend/.env
+- Tester la connexion: `psql -U user -d talentsecure`
+
+### Erreur: "Module not found"
+
+**Solution:**
+```bash
+# Backend
+cd backend && npm install
+
+# Frontend
+cd frontend && npm install
+```
+
+### Port déjà utilisé
+
+**Solution:**
+```bash
+# Changer le port dans backend/.env
+PORT=5001
+
+# Ou dans frontend/vite.config.ts
+server: { port: 5174 }
+```
+
+### Erreur Google OAuth
+
+**Solution:**
+- Vérifier `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` dans backend/.env
+- Vérifier que le callback URL est autorisé dans Google Cloud Console
+- Callback URL: `http://localhost:5000/api/auth/google/callback`
+
+---
+
+## Roadmap
+
+### Phase 1 - MVP (10 semaines) ✅ En cours
+- Setup & Architecture
+- CRUD Candidats
+- Import Excel
+- Recherche avancée
+- Génération PDF
+- Déploiement
+
+### Phase 2 - Portal Client (8 semaines)
+- Login clients
+- Visualisation catalogues
+- Vidéos streamées
+- Demande placement
+- Urgency button
+- E-signature contrats
+
+### Phase 3 - Features Avancées (12 semaines)
+- Background checks (Checkr API)
+- Video interviews (Twilio)
+- AI Matching
+- Analytics avancées
+- Shift management
+- Multi-language
+
+### Phase 4 - Mobile + Marketplace (15 semaines)
+- Apps iOS + Android
+- Guard Pools
+- Urgency button like Uber
+- API publique
+- Payroll integration
+
+### Phase 5+ - SaaS Multi-Tenant
+- Autres agences peuvent s'inscrire
+- Marketplace inter-agences
+- Revenus: 500K-1M$/an
+
+---
+
+## Support
+
+### Questions techniques
+- Consulter les README dans `backend/` et `frontend/`
+- Consulter la documentation complète
+- Stack Overflow pour questions générales
+
+### Bugs
+- GitHub Issues (si repo créé)
+- Documentation d'erreurs dans `docs/`
+
+### Questions business
+- Équipe XGUARD Security
+
+---
+
+## Contribuer
+
+### Git Workflow
+
+```bash
+# 1. Créer une branche pour la feature
+git checkout -b feature/nom-de-la-feature
+
+# 2. Faire vos modifications
+# ... coder ...
+
+# 3. Commit
+git add .
+git commit -m "feat: description de la feature"
+
+# 4. Push
+git push origin feature/nom-de-la-feature
+
+# 5. Créer une Pull Request
+```
+
+### Convention de commits
+
+- `feat:` - Nouvelle fonctionnalité
+- `fix:` - Correction de bug
+- `docs:` - Documentation
+- `style:` - Formatage
+- `refactor:` - Refactoring
+- `test:` - Tests
+- `chore:` - Tâches diverses
+
+---
+
+## Mises à jour et instructions
+
+Ces points couvrent les changements livrés en novembre 2025. Merci de les parcourir avant tout nouveau développement :
+
+1. **Gestion d'erreurs & validation** : consultez `backend/src/middleware` et `backend/src/utils` pour les nouveaux helpers (`ApiError`, sanitisation XSS, validation Zod). Toute nouvelle route doit s'appuyer dessus.
+2. **Cache Redis optionnel** : la configuration se trouve dans `backend/src/config/cache.ts` et `backend/src/utils/cache.ts`. Activez-le via `CACHE_ENABLED=true` et les variables `REDIS_*` dans `.env`. Sans Redis, l'API fonctionne en mode sans cache.
+3. **Optimisation des fichiers** : `backend/src/services/image.service.ts` compresse automatiquement les images uploadées; les vidéos restent gérées par `video.service.ts`.
+4. **Frontend lazy loading & validation** : `frontend/src/App.tsx` utilise désormais `React.lazy`/`Suspense` et `frontend/src/validation/candidate.ts` centralise la validation des formulaires candidats.
+
+En cas de doute, revenez à cette section : elle indique où lire le code mis à jour.
+
+## Licence
+
+MIT - XGUARD Security
+
+---
+
+## Contact
+
+**XGUARD Security**
+Email: contact@xguard.com
+Web: www.xguard.security
+
+---
+
+**Construisons quelque chose d'incroyable ! 💪🚀**
