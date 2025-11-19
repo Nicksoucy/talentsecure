@@ -258,11 +258,12 @@ export class CVExtractionService {
     candidateId: string,
     extractedSkills: ExtractionResult[],
     overwrite: boolean = false,
-    isProspect: boolean = false
+    isProspect: boolean = false,
+    userId?: string
   ): Promise<{ added: number; skipped: number; updated: number }> {
     // If this is a prospect, convert to candidate first
-    if (isProspect) {
-      await this.convertProspectToCandidate(candidateId);
+    if (isProspect && userId) {
+      await this.convertProspectToCandidate(candidateId, userId);
     }
 
     let added = 0;
@@ -553,7 +554,7 @@ export class CVExtractionService {
    * Convert prospect to candidate
    * This is called automatically when extracting skills from a prospect
    */
-  private async convertProspectToCandidate(prospectId: string): Promise<void> {
+  private async convertProspectToCandidate(prospectId: string, userId: string): Promise<void> {
     const prospect = await prisma.prospectCandidate.findUnique({
       where: { id: prospectId },
     });
@@ -584,6 +585,7 @@ export class CVExtractionService {
         source: 'Prospect Auto-Converti',
         isActive: true,
         isDeleted: false,
+        createdById: userId, // Required field
       },
     });
 

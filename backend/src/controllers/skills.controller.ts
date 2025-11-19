@@ -662,6 +662,7 @@ export const getExtractionLogs = async (req: Request, res: Response, next: NextF
 export const batchExtractSkills = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { candidateIds, model, overwrite = false } = req.body;
+    const userId = req.user!.id; // Get user ID for prospect conversion
 
     if (!candidateIds || candidateIds.length === 0) {
       return res.status(400).json({ error: 'Au moins un candidat est requis' });
@@ -743,7 +744,8 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
               candidateId,
               extraction.skillsFound,
               overwrite,
-              isProspect // Pass isProspect flag to save service
+              isProspect, // Pass isProspect flag to save service
+              userId // Pass userId for prospect conversion
             );
           } catch (saveError: any) {
             console.error(`Error saving skills for ${candidateId}:`, saveError);
