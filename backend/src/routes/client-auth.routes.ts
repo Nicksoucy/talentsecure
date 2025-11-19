@@ -8,6 +8,7 @@ import {
   getClientCatalogueById,
   getCatalogueStatsByCity,
   getAllCandidatesStatsByCity,
+  getProspectsOnlyStatsByCity,
 } from '../controllers/client-auth.controller';
 import { authenticateJWT } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
@@ -105,6 +106,17 @@ router.get(
   '/prospects/stats/by-city',
   authenticateJWT,
   getAllCandidatesStatsByCity
+);
+
+/**
+ * @route   GET /api/client-auth/prospects-only/stats/by-city
+ * @desc    Get prospects-only (CVs only, not yet evaluated) statistics by city
+ * @access  Private (Client only)
+ */
+router.get(
+  '/prospects-only/stats/by-city',
+  authenticateJWT,
+  getProspectsOnlyStatsByCity
 );
 
 export default router;

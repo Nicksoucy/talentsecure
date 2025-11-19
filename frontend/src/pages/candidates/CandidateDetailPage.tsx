@@ -40,6 +40,7 @@ import CVUpload from '@/components/CVUpload';
 import VideoUpload from '@/components/video/VideoUpload';
 import VideoPlayer from '@/components/video/VideoPlayer';
 import { DetailPageSkeleton } from '@/components/skeletons';
+import SkillsExtractionPanel from '@/components/candidates/SkillsExtractionPanel';
 
 const STATUS_COLORS: Record<string, 'success' | 'info' | 'warning' | 'error' | 'default'> = {
   ELITE: 'error',
@@ -269,6 +270,14 @@ const CandidateDetailPage = () => {
               )}
             </CardContent>
           </Card>
+
+          {/* Skills Extraction Section */}
+          <SkillsExtractionPanel
+            candidateId={candidate.id}
+            candidateName={`${candidate.firstName} ${candidate.lastName}`}
+            hasCv={!!(candidate.cvUrl || candidate.cvStoragePath)}
+            onSkillsUpdated={refetchCandidate}
+          />
 
           {/* Video Section */}
           {candidate.videoStoragePath && (

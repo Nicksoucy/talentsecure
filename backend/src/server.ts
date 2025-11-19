@@ -25,6 +25,8 @@ import catalogueRoutes from './routes/catalogue.routes';
 import clientRoutes from './routes/client.routes';
 import prospectRoutes from './routes/prospect.routes';
 import webhookRoutes from './routes/webhook.routes';
+import wishlistRoutes from './routes/wishlist.routes';
+import skillsRoutes from './routes/skills.routes';
 
 const app: Application = express();
 const PORT = parseInt(process.env.PORT || '8080', 10);
@@ -105,6 +107,8 @@ app.use('/api/catalogues', catalogueRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/prospects', prospectRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/skills', skillsRoutes);
 // app.use('/api/users', userRoutes);
 
 // 404 handler

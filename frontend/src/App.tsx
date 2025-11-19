@@ -15,6 +15,8 @@ const CataloguesPage = lazy(() => import('./pages/catalogues/CataloguesPage'));
 const ClientsPage = lazy(() => import('./pages/clients/ClientsPage'));
 const ProspectsPage = lazy(() => import('./pages/prospects/ProspectsPage'));
 const ProspectDetailPage = lazy(() => import('./pages/prospects/ProspectDetailPage'));
+const AutresCompetancesPage = lazy(() => import('./pages/autres-competances/AutresCompetancesPage'));
+const WishlistsPage = lazy(() => import('./pages/wishlists/WishlistsPage'));
 const CatalogueViewPage = lazy(() => import('./pages/public/CatalogueViewPage'));
 const ClientLoginPage = lazy(() => import('./pages/client/ClientLoginPage'));
 const ClientDashboardPage = lazy(() => import('./pages/client/ClientDashboardPage'));
@@ -81,6 +83,8 @@ function App() {
             <Route path="/prospects/:id" element={<ProspectDetailPage />} />
             <Route path="/catalogues" element={<CataloguesPage />} />
             <Route path="/clients" element={<ClientsPage />} />
+            <Route path="/autres-competances" element={<AutresCompetancesPage />} />
+            <Route path="/wishlists" element={<WishlistsPage />} />
           </Route>
 
           {/* 404 */}

@@ -349,7 +349,7 @@ export default function ProspectsPage() {
         variant: 'success',
       });
     } catch (error) {
-      enqueueSnackbar('Erreur lors de l\'export CSV', { variant: 'error' });
+      enqueueSnackbar("Erreur lors de l'export CSV", { variant: 'error' });
     }
   };
 
