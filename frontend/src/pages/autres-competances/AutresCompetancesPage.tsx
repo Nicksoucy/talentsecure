@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -16,6 +16,9 @@ import {
   TableRow,
   Paper,
   Avatar,
+  AvatarGroup,
+  Stack,
+  Divider,
   IconButton,
   Tooltip,
   Button,
@@ -30,6 +33,8 @@ import {
   Tab,
   Alert,
   CircularProgress,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -37,6 +42,12 @@ import {
   WorkOutline as WorkIcon,
   Psychology as AiIcon,
   CloudUpload as UploadIcon,
+  Category as CategoryIcon,
+  BarChart as BarChartIcon,
+  PersonOutline as PersonIcon,
+  LocationOnOutlined as LocationIcon,
+  EmailOutlined as EmailIcon,
+  PhoneOutlined as PhoneIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -59,6 +70,33 @@ const LEVEL_LABELS = {
   EXPERT: 'Expert',
 } as const;
 
+const SKILL_COLORS = ['#6366F1', '#0EA5E9', '#10B981', '#F97316', '#8B5CF6', '#EC4899'];
+const AVATAR_COLORS = ['#1D4ED8', '#059669', '#7C3AED', '#B91C1C', '#0369A1', '#D97706'];
+
+const getSkillColor = (name: string): string => {
+  if (!name) {
+    return SKILL_COLORS[0];
+  }
+  const firstCode = name.charCodeAt(0);
+  const lastCode = name.charCodeAt(Math.max(name.length - 1, 0));
+  return SKILL_COLORS[(firstCode + lastCode) % SKILL_COLORS.length];
+};
+
+const getAvatarColor = (name?: string): string => {
+  if (!name) {
+    return AVATAR_COLORS[0];
+  }
+  const code = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return AVATAR_COLORS[code % AVATAR_COLORS.length];
+};
+
+const getCandidateInitials = (candidate?: { firstName?: string; lastName?: string }): string => {
+  const initials = `${candidate?.firstName?.[0] || ''}${candidate?.lastName?.[0] || ''}`.trim();
+  return initials || '?';
+};
+
+const formatPercentage = (value: number): string => `${Math.round(value)}%`;
+
 const AutresCompetancesPage = () => {
   const navigate = useNavigate();
   const { accessToken } = useAuthStore();
@@ -78,6 +116,60 @@ const AutresCompetancesPage = () => {
   const [skillSearchQuery, setSkillSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+
+  const theme = useTheme();
+  const isCompactView = useMediaQuery(theme.breakpoints.down('md'));
+
+  const aggregatedStats = useMemo(() => {
+    const categoryCounts: Record<string, number> = {};
+    const levelCounts: Record<string, number> = {};
+    const confidenceSummary: Array<{ skill: string; avgConfidence: number; totalCandidates: number; category: string }> = [];
+
+    if (searchResults.length === 0) {
+      return {
+        categoryCounts,
+        levelCounts,
+        totalCandidates: 0,
+        topConfidenceSkills: confidenceSummary,
+      };
+    }
+
+    searchResults.forEach((result: any) => {
+      const candidates = result.candidates || [];
+      const total = result.totalCandidates || candidates.length || 0;
+      const category = result.category || 'Autres';
+      categoryCounts[category] = (categoryCounts[category] || 0) + total;
+
+      if (candidates.length > 0) {
+        const avgConfidence =
+          candidates.reduce((sum: number, candidate: any) => sum + (candidate.confidence || 0), 0) / candidates.length;
+        confidenceSummary.push({
+          skill: result.skillName,
+          avgConfidence,
+          totalCandidates: total,
+          category,
+        });
+      }
+
+      candidates.forEach((candidate: any) => {
+        const level = candidate.level || 'INCONNU';
+        levelCounts[level] = (levelCounts[level] || 0) + 1;
+      });
+    });
+
+    confidenceSummary.sort((a, b) => b.avgConfidence - a.avgConfidence);
+
+    return {
+      categoryCounts,
+      levelCounts,
+      totalCandidates: Object.values(categoryCounts).reduce((acc, value) => acc + value, 0),
+      topConfidenceSkills: confidenceSummary.slice(0, 4),
+    };
+  }, [searchResults]);
+
+  const categoryEntries = Object.entries(aggregatedStats.categoryCounts);
+  const levelEntries = Object.entries(aggregatedStats.levelCounts);
+
 
   // Fetch prospects (potential candidates) for extraction
   const { data: prospectsData, isLoading, refetch } = useQuery({
@@ -920,42 +1012,206 @@ const AutresCompetancesPage = () => {
         <Box>
           {/* Summary Card */}
           {searchResults.length > 0 && (
-            <Card sx={{ mb: 3, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+            <Card
+              sx={{
+                mb: 3,
+                background: 'linear-gradient(135deg, #111827 0%, #1f2937 100%)',
+                color: 'white',
+                borderRadius: 3,
+              }}
+            >
               <CardContent>
                 <Grid container spacing={3}>
                   <Grid item xs={12} sm={4}>
-                    <Box textAlign="center">
-                      <Typography variant="h3" sx={{ color: 'white', fontWeight: 'bold' }}>
+                    <Stack alignItems="center" spacing={1.5}>
+                      <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: 'white', width: 56, height: 56 }}>
+                        <SearchIcon />
+                      </Avatar>
+                      <Typography variant="h3" fontWeight="bold">
                         {searchResults.length}
                       </Typography>
-                      <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.9)' }}>
-                        Compétences Extraites
+                      <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                        Compétences extraites
                       </Typography>
-                    </Box>
+                    </Stack>
                   </Grid>
                   <Grid item xs={12} sm={4}>
-                    <Box textAlign="center">
-                      <Typography variant="h3" sx={{ color: 'white', fontWeight: 'bold' }}>
-                        {searchResults.reduce((acc: number, r: any) => acc + r.totalCandidates, 0)}
+                    <Stack alignItems="center" spacing={1.5}>
+                      <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: 'white', width: 56, height: 56 }}>
+                        <PersonIcon />
+                      </Avatar>
+                      <Typography variant="h3" fontWeight="bold">
+                        {aggregatedStats.totalCandidates}
                       </Typography>
-                      <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.9)' }}>
-                        Candidats Totaux
+                      <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                        Candidats totaux
                       </Typography>
-                    </Box>
+                    </Stack>
                   </Grid>
                   <Grid item xs={12} sm={4}>
-                    <Box textAlign="center">
-                      <Typography variant="h3" sx={{ color: 'white', fontWeight: 'bold' }}>
-                        {[...new Set(searchResults.map((r: any) => r.category))].length}
+                    <Stack alignItems="center" spacing={1.5}>
+                      <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: 'white', width: 56, height: 56 }}>
+                        <CategoryIcon />
+                      </Avatar>
+                      <Typography variant="h3" fontWeight="bold">
+                        {categoryEntries.length}
                       </Typography>
-                      <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.9)' }}>
-                        Catégories
+                      <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                        Catégories représentées
                       </Typography>
-                    </Box>
+                    </Stack>
                   </Grid>
                 </Grid>
               </CardContent>
             </Card>
+          )}
+
+          {searchResults.length > 0 && (
+            <Grid container spacing={3} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                      <Typography variant="h6" fontWeight="bold">
+                        Répartition par catégorie
+                      </Typography>
+                      <CategoryIcon color="primary" />
+                    </Box>
+                    {categoryEntries.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        Aucune donnée pour l'instant
+                      </Typography>
+                    ) : (
+                      <Stack spacing={1.5}>
+                        {categoryEntries.map(([category, count]) => {
+                          const percentage = aggregatedStats.totalCandidates
+                            ? Math.round((count / aggregatedStats.totalCandidates) * 100)
+                            : 0;
+                          return (
+                            <Box key={category}>
+                              <Box display="flex" justifyContent="space-between" alignItems="center">
+                                <Typography variant="body2" fontWeight="bold">
+                                  {category}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                  {count} ({percentage}%)
+                                </Typography>
+                              </Box>
+                              <LinearProgress
+                                variant="determinate"
+                                value={percentage}
+                                sx={{ height: 8, borderRadius: 4, mt: 0.5 }}
+                              />
+                            </Box>
+                          );
+                        })}
+                      </Stack>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                      <Typography variant="h6" fontWeight="bold">
+                        Niveaux d'expérience
+                      </Typography>
+                      <BarChartIcon color="primary" />
+                    </Box>
+                    {levelEntries.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        Les niveaux apparaîtront après une première recherche
+                      </Typography>
+                    ) : (
+                      <Stack spacing={1.5}>
+                        {levelEntries.map(([level, count]) => {
+                          const label = LEVEL_LABELS[level as keyof typeof LEVEL_LABELS] || level;
+                          const percentage = aggregatedStats.totalCandidates
+                            ? Math.round((count / aggregatedStats.totalCandidates) * 100)
+                            : 0;
+                          return (
+                            <Box key={level}>
+                              <Box display="flex" justifyContent="space-between" alignItems="center">
+                                <Typography variant="body2" fontWeight="bold">
+                                  {label}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                  {count} ({percentage}%)
+                                </Typography>
+                              </Box>
+                              <LinearProgress
+                                variant="determinate"
+                                value={percentage}
+                                sx={{ height: 8, borderRadius: 4, mt: 0.5 }}
+                              />
+                            </Box>
+                          );
+                        })}
+                      </Stack>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+              {aggregatedStats.topConfidenceSkills.length > 0 && (
+                <Grid item xs={12}>
+                  <Card>
+                    <CardContent>
+                      <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                        <Typography variant="h6" fontWeight="bold">
+                          Compétences les plus fiables
+                        </Typography>
+                        <BarChartIcon color="primary" />
+                      </Box>
+                      <Stack spacing={1.5}>
+                        {aggregatedStats.topConfidenceSkills.map((skill) => {
+                          const percentage = Math.round(skill.avgConfidence * 100);
+                          return (
+                            <Paper
+                              key={skill.skill}
+                              variant="outlined"
+                              sx={{ p: 2, borderRadius: 2, display: 'flex', flexWrap: 'wrap', gap: 2 }}
+                            >
+                              <Box flex={1} minWidth={200}>
+                                <Typography variant="subtitle1" fontWeight="bold">
+                                  {skill.skill}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                  {skill.category}
+                                </Typography>
+                              </Box>
+                              <Chip
+                                label={`${skill.totalCandidates} candidat${skill.totalCandidates > 1 ? 's' : ''}`}
+                                color="primary"
+                                variant="outlined"
+                              />
+                              <Box flexBasis="100%" />
+                              <Box display="flex" alignItems="center" gap={2} width="100%">
+                                <Typography variant="h5" fontWeight="bold">
+                                  {formatPercentage(percentage)}
+                                </Typography>
+                                <LinearProgress
+                                  variant="determinate"
+                                  value={percentage}
+                                  sx={{
+                                    flex: 1,
+                                    height: 8,
+                                    borderRadius: 4,
+                                    '& .MuiLinearProgress-bar': {
+                                      bgcolor: getConfidenceColor(skill.avgConfidence),
+                                    },
+                                  }}
+                                />
+                              </Box>
+                            </Paper>
+                          );
+                        })}
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              )}
+            </Grid>
           )}
 
           {/* Search Filter */}
@@ -1014,115 +1270,322 @@ const AutresCompetancesPage = () => {
 
           {/* Search Results */}
           {!isSearching && searchResults.length > 0 && (
-            <Box>
-              {searchResults.map((result: any) => (
-                <Card key={result.skillId} sx={{ mb: 3 }}>
-                  <CardContent>
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                      <Box>
-                        <Typography variant="h6" fontWeight="bold">
-                          {result.skillName}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {result.category}
-                        </Typography>
-                      </Box>
-                      <Chip
-                        label={`${result.totalCandidates} candidat${result.totalCandidates > 1 ? 's' : ''}`}
-                        color="primary"
-                        size="large"
-                      />
-                    </Box>
+            <Grid container spacing={3}>
+              {searchResults.map((result: any) => {
+                const candidates = result.candidates || [];
+                const totalCandidatesForSkill = result.totalCandidates || candidates.length || 0;
+                const averageConfidence =
+                  candidates.length > 0
+                    ? candidates.reduce((sum: number, c: any) => sum + (c.confidence || 0), 0) / candidates.length
+                    : 0;
+                const averageExperience =
+                  candidates.length > 0
+                    ? (
+                        candidates.reduce((sum: number, c: any) => sum + (c.yearsExperience || 0), 0) / candidates.length
+                      ).toFixed(1)
+                    : '-';
+                const displayedCandidates = candidates.slice(0, 4);
+                const uniqueCities = [
+                  ...new Set(
+                    candidates
+                      .map((c: any) => [c.candidate?.city, c.candidate?.province].filter(Boolean).join(', '))
+                      .filter(Boolean)
+                  ),
+                ];
+                const skillColor = getSkillColor(result.skillName);
+                const skillInitials = (result.skillName || '?').slice(0, 2).toUpperCase();
 
-                    {result.description && (
-                      <Typography variant="body2" color="text.secondary" mb={2}>
-                        {result.description}
-                      </Typography>
-                    )}
+                return (
+                  <Grid item xs={12} md={6} key={result.skillId || result.skillName}>
+                    <Card
+                      sx={{
+                        height: '100%',
+                        borderRadius: 3,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxShadow: '0 20px 45px rgba(15, 23, 42, 0.1)',
+                      }}
+                    >
+                      <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 2,
+                            p: 2,
+                            borderRadius: 2,
+                            bgcolor: `${skillColor}15`,
+                          }}
+                        >
+                          <Avatar
+                            sx={{
+                              bgcolor: skillColor,
+                              color: 'white',
+                              width: 56,
+                              height: 56,
+                              fontSize: 18,
+                              fontWeight: 'bold',
+                            }}
+                          >
+                            {skillInitials}
+                          </Avatar>
+                          <Box flexGrow={1}>
+                            <Typography variant="h6" fontWeight="bold">
+                              {result.skillName}
+                            </Typography>
+                            <Chip
+                              label={result.category || 'Autre'}
+                              icon={<CategoryIcon fontSize="small" />}
+                              variant="outlined"
+                              size="small"
+                              sx={{ mt: 0.5 }}
+                            />
+                          </Box>
+                          <Chip
+                            label={`${totalCandidatesForSkill} candidat${totalCandidatesForSkill > 1 ? 's' : ''}`}
+                            color="primary"
+                            variant="outlined"
+                          />
+                        </Box>
 
-                    <TableContainer component={Paper} variant="outlined">
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Candidat</TableCell>
-                            <TableCell>Contact</TableCell>
-                            <TableCell>Ville</TableCell>
-                            <TableCell>Niveau</TableCell>
-                            <TableCell>Exp. (ans)</TableCell>
-                            <TableCell align="right">Confiance</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {result.candidates.map((c: any) => (
-                            <TableRow key={c.candidateId} hover>
-                              <TableCell>
-                                <Box display="flex" alignItems="center" gap={1}>
-                                  <Avatar sx={{ width: 32, height: 32 }}>
-                                    {c.candidate.firstName[0]}{c.candidate.lastName[0]}
-                                  </Avatar>
-                                  <Box>
-                                    <Typography variant="body2" fontWeight="bold">
-                                      {c.candidate.firstName} {c.candidate.lastName}
-                                    </Typography>
-                                  </Box>
-                                </Box>
-                              </TableCell>
-                              <TableCell>
-                                <Typography variant="caption" display="block">
-                                  {c.candidate.email}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {c.candidate.phone || 'N/A'}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                <Typography variant="body2">
-                                  {c.candidate.city}, {c.candidate.province}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                <Chip
-                                  label={LEVEL_LABELS[c.level] || c.level}
-                                  color={LEVEL_COLORS[c.level] || 'default'}
-                                  size="small"
-                                />
-                              </TableCell>
-                              <TableCell>
-                                {c.yearsExperience || '-'}
-                              </TableCell>
-                              <TableCell align="right">
-                                <Box display="flex" alignItems="center" justifyContent="flex-end" gap={1}>
-                                  <Typography variant="caption" fontWeight="bold">
-                                    {(c.confidence * 100).toFixed(0)}%
-                                  </Typography>
-                                  <Box
-                                    sx={{
-                                      width: 40,
-                                      height: 6,
-                                      bgcolor: 'grey.200',
-                                      borderRadius: 3,
-                                      overflow: 'hidden',
-                                    }}
-                                  >
-                                    <Box
-                                      sx={{
-                                        width: `${c.confidence * 100}%`,
-                                        height: '100%',
-                                        bgcolor: getConfidenceColor(c.confidence),
-                                      }}
-                                    />
-                                  </Box>
-                                </Box>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </CardContent>
-                </Card>
-              ))}
-            </Box>
+                        {result.description && (
+                          <Typography variant="body2" color="text.secondary">
+                            {result.description}
+                          </Typography>
+                        )}
+
+                        <Grid container spacing={2}>
+                          <Grid item xs={6}>
+                            <Typography variant="body2" color="text.secondary">
+                              Confiance moyenne
+                            </Typography>
+                            <Typography variant="h5" fontWeight="bold">
+                              {formatPercentage(averageConfidence * 100)}
+                            </Typography>
+                            <LinearProgress
+                              variant="determinate"
+                              value={Math.round(averageConfidence * 100)}
+                              sx={{
+                                height: 8,
+                                borderRadius: 4,
+                                '& .MuiLinearProgress-bar': {
+                                  bgcolor: getConfidenceColor(averageConfidence),
+                                },
+                              }}
+                            />
+                          </Grid>
+                          <Grid item xs={6}>
+                            <Typography variant="body2" color="text.secondary">
+                              Expérience moyenne
+                            </Typography>
+                            <Typography variant="h5" fontWeight="bold">
+                              {averageExperience === '-' ? '-' : `${averageExperience} ans`}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {uniqueCities.length || 0} ville{uniqueCities.length > 1 ? 's' : ''}
+                            </Typography>
+                          </Grid>
+                        </Grid>
+
+                        {candidates.length > 0 && (
+                          <Box>
+                            <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                              <Typography variant="subtitle2" color="text.secondary">
+                                Candidats correspondants
+                              </Typography>
+                              <AvatarGroup max={4}>
+                                {displayedCandidates.map((candidateItem: any) => {
+                                  const name = `${candidateItem.candidate?.firstName || ''} ${candidateItem.candidate?.lastName || ''}`.trim();
+                                  const initials = getCandidateInitials(candidateItem.candidate);
+                                  return (
+                                    <Tooltip
+                                      key={candidateItem.candidateId}
+                                      title={name || 'Candidat'}
+                                      arrow
+                                    >
+                                      <Avatar sx={{ bgcolor: getAvatarColor(name), width: 36, height: 36 }}>
+                                        {initials !== '?' ? initials : <PersonIcon fontSize="small" />}
+                                      </Avatar>
+                                    </Tooltip>
+                                  );
+                                })}
+                              </AvatarGroup>
+                            </Box>
+                          </Box>
+                        )}
+
+                        <Divider />
+
+                        {candidates.length === 0 ? (
+                          <Typography variant="body2" color="text.secondary">
+                            Aucun candidat ne correspond à cette compétence pour le moment.
+                          </Typography>
+                        ) : isCompactView ? (
+                          <Stack spacing={2}>
+                            {candidates.map((c: any) => {
+                              const candidateName = `${c.candidate?.firstName || ''} ${c.candidate?.lastName || ''}`.trim();
+                              const candidateLocation = [c.candidate?.city, c.candidate?.province]
+                                .filter(Boolean)
+                                .join(', ');
+                              return (
+                                <Paper key={c.candidateId} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                                  <Stack spacing={1.5}>
+                                    <Box display="flex" alignItems="center" gap={1.5}>
+                                      <Avatar sx={{ bgcolor: getAvatarColor(candidateName) }}>
+                                        {getCandidateInitials(c.candidate)}
+                                      </Avatar>
+                                      <Box>
+                                        <Typography variant="subtitle2" fontWeight="bold">
+                                          {candidateName || 'Candidat inconnu'}
+                                        </Typography>
+                                        <Chip
+                                          size="small"
+                                          label={LEVEL_LABELS[c.level] || c.level}
+                                          color={LEVEL_COLORS[c.level] || 'default'}
+                                          sx={{ mt: 0.5 }}
+                                        />
+                                      </Box>
+                                    </Box>
+                                    <Stack spacing={0.5}>
+                                      {candidateLocation && (
+                                        <Stack direction="row" spacing={1} alignItems="center">
+                                          <LocationIcon fontSize="small" color="action" />
+                                          <Typography variant="body2">{candidateLocation}</Typography>
+                                        </Stack>
+                                      )}
+                                      {c.candidate?.email && (
+                                        <Stack direction="row" spacing={1} alignItems="center">
+                                          <EmailIcon fontSize="small" color="action" />
+                                          <Typography variant="body2">{c.candidate.email}</Typography>
+                                        </Stack>
+                                      )}
+                                      <Stack direction="row" spacing={1} alignItems="center">
+                                        <PhoneIcon fontSize="small" color="action" />
+                                        <Typography variant="body2">{c.candidate?.phone || 'N/A'}</Typography>
+                                      </Stack>
+                                    </Stack>
+                                    <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
+                                      <Typography variant="body2">
+                                        Exp: {c.yearsExperience || '-'} an{(c.yearsExperience || 0) > 1 ? 's' : ''}
+                                      </Typography>
+                                      <Box display="flex" alignItems="center" gap={1}>
+                                        <Typography variant="caption" fontWeight="bold">
+                                          {formatPercentage((c.confidence || 0) * 100)}
+                                        </Typography>
+                                        <Box sx={{ width: 80 }}>
+                                          <LinearProgress
+                                            variant="determinate"
+                                            value={Math.round((c.confidence || 0) * 100)}
+                                            sx={{
+                                              height: 6,
+                                              borderRadius: 3,
+                                              '& .MuiLinearProgress-bar': {
+                                                bgcolor: getConfidenceColor(c.confidence || 0),
+                                              },
+                                            }}
+                                          />
+                                        </Box>
+                                      </Box>
+                                    </Stack>
+                                  </Stack>
+                                </Paper>
+                              );
+                            })}
+                          </Stack>
+                        ) : (
+                          <TableContainer component={Paper} variant="outlined">
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>Candidat</TableCell>
+                                  <TableCell>Contact</TableCell>
+                                  <TableCell>Ville</TableCell>
+                                  <TableCell>Niveau</TableCell>
+                                  <TableCell>Exp. (ans)</TableCell>
+                                  <TableCell align="right">Confiance</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {candidates.map((c: any) => {
+                                  const candidateName = `${c.candidate?.firstName || ''} ${c.candidate?.lastName || ''}`.trim();
+                                  const candidateLocation = [c.candidate?.city, c.candidate?.province]
+                                    .filter(Boolean)
+                                    .join(', ');
+                                  return (
+                                    <TableRow key={c.candidateId} hover>
+                                      <TableCell>
+                                        <Box display="flex" alignItems="center" gap={1}>
+                                          <Avatar sx={{ width: 40, height: 40, bgcolor: getAvatarColor(candidateName) }}>
+                                            {getCandidateInitials(c.candidate)}
+                                          </Avatar>
+                                          <Box>
+                                            <Typography variant="body2" fontWeight="bold">
+                                              {candidateName || 'Candidat'}
+                                            </Typography>
+                                            <Typography variant="caption" color="text.secondary">
+                                              {c.candidate?.title || 'Profil'}
+                                            </Typography>
+                                          </Box>
+                                        </Box>
+                                      </TableCell>
+                                      <TableCell>
+                                        <Stack spacing={0.5}>
+                                          {c.candidate?.email && (
+                                            <Stack direction="row" spacing={0.5} alignItems="center">
+                                              <EmailIcon fontSize="inherit" color="action" />
+                                              <Typography variant="caption">{c.candidate.email}</Typography>
+                                            </Stack>
+                                          )}
+                                          <Stack direction="row" spacing={0.5} alignItems="center">
+                                            <PhoneIcon fontSize="inherit" color="action" />
+                                            <Typography variant="caption">{c.candidate?.phone || 'N/A'}</Typography>
+                                          </Stack>
+                                        </Stack>
+                                      </TableCell>
+                                      <TableCell>
+                                        <Typography variant="body2">{candidateLocation || 'N/A'}</Typography>
+                                      </TableCell>
+                                      <TableCell>
+                                        <Chip
+                                          label={LEVEL_LABELS[c.level] || c.level}
+                                          color={LEVEL_COLORS[c.level] || 'default'}
+                                          size="small"
+                                        />
+                                      </TableCell>
+                                      <TableCell>{c.yearsExperience || '-'}</TableCell>
+                                      <TableCell align="right">
+                                        <Box display="flex" alignItems="center" justifyContent="flex-end" gap={1}>
+                                          <Typography variant="caption" fontWeight="bold">
+                                            {formatPercentage((c.confidence || 0) * 100)}
+                                          </Typography>
+                                          <Box sx={{ width: 60 }}>
+                                            <LinearProgress
+                                              variant="determinate"
+                                              value={Math.round((c.confidence || 0) * 100)}
+                                              sx={{
+                                                height: 6,
+                                                borderRadius: 3,
+                                                '& .MuiLinearProgress-bar': {
+                                                  bgcolor: getConfidenceColor(c.confidence || 0),
+                                                },
+                                              }}
+                                            />
+                                          </Box>
+                                        </Box>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                );
+              })}
+            </Grid>
           )}
 
           {searchResults.length === 0 && skillSearchQuery && !isSearching && (
