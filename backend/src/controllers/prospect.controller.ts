@@ -332,6 +332,20 @@ export const markAsContacted = async (
 };
 
 /**
+ * Deep sanitization: converts empty strings and undefined to null recursively
+ */
+const sanitizePayload = (payload: any): any => {
+  if (payload === '' || payload === undefined) return null;
+  if (Array.isArray(payload)) return payload.map(sanitizePayload);
+  if (payload && typeof payload === 'object') {
+    return Object.fromEntries(
+      Object.entries(payload).map(([key, value]) => [key, sanitizePayload(value)])
+    );
+  }
+  return payload;
+};
+
+/**
  * Convert prospect to qualified candidate
  */
 export const convertToCandidate = async (
@@ -342,7 +356,29 @@ export const convertToCandidate = async (
   try {
     const { id } = req.params;
     const userId = req.user!.id;
-    const formData = req.body;
+
+    // Deep sanitize the entire payload before processing
+    const rawBody = req.body;
+    console.log('🔍 RAW req.body received from frontend (before sanitization):', {
+      interviewDate: rawBody.interviewDate,
+      bspExpiryDate: rawBody.bspExpiryDate,
+      consentDate: rawBody.consentDate,
+    });
+
+    const formData = sanitizePayload(rawBody);
+
+    console.log('✅ After sanitization (empty strings → null):', {
+      interviewDate: formData.interviewDate,
+      bspExpiryDate: formData.bspExpiryDate,
+      consentDate: formData.consentDate,
+      experiences: formData.experiences?.map((exp: any) => ({
+        startDate: exp.startDate,
+        endDate: exp.endDate,
+      })),
+      certifications: formData.certifications?.map((cert: any) => ({
+        expiryDate: cert.expiryDate,
+      })),
+    });
 
     // Get prospect
     const prospect = await prisma.prospectCandidate.findUnique({
@@ -367,10 +403,14 @@ export const convertToCandidate = async (
       });
     }
 
-    // Helper: Sanitize date fields (empty strings → null)
+    // Helper: Sanitize date fields (empty strings → null, YYYY-MM-DD → ISO-8601 DateTime)
     const sanitizeDateField = (value: any) => {
       if (value === '' || value === null || value === undefined) {
         return null;
+      }
+      // If date is in YYYY-MM-DD format, convert to ISO-8601 DateTime
+      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return new Date(value + 'T00:00:00.000Z').toISOString();
       }
       return value;
     };
