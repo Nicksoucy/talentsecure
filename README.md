@@ -21,6 +21,7 @@ TalentSecure est une solution full-stack qui permet de:
 - **Passport.js** pour l'authentification (JWT + OAuth Google/Microsoft)
 - **Cloudflare R2** pour le stockage de fichiers (CVs, vidéos, PDFs)
 - **PDFKit** pour la génération de catalogues PDF
+- **OpenAI GPT-4** pour l'extraction intelligente de compétences depuis les CVs
 
 ### Frontend
 - **React 18** avec TypeScript
@@ -96,6 +97,29 @@ talentsecure/
 - Système de paiement et restriction de contenu
 - Partage sécurisé via lien unique
 - Tracking des vues et interactions
+
+#### Gestion des Compétences et Extraction IA 🆕
+- **Extraction automatique de compétences depuis CVs**
+  - Intégration OpenAI GPT-4 pour analyse intelligente
+  - Extraction de compétences techniques et soft skills
+  - Évaluation automatique du niveau d'expérience
+  - Support pour formats PDF et TXT
+
+- **Interface "Autres Compétences"**
+  - Recherche de candidats par compétences spécifiques
+  - Statistiques en temps réel (candidats, compétences uniques, liens)
+  - Traitement batch pour plusieurs candidats/prospects
+  - Auto-conversion prospect → candidat lors de l'extraction
+
+- **Base de données de compétences**
+  - Catalogue de 95+ compétences pré-identifiées
+  - Système de liens candidat-compétence
+  - Recherche et filtrage avancés
+
+#### Wishlists
+- Gestion de listes de souhaits pour les clients
+- Association de candidats favoris
+- Suivi des préférences clients
 
 ### 2. Portail Client
 
@@ -229,6 +253,9 @@ CLOUDFLARE_ACCESS_KEY_ID="your-access-key"
 CLOUDFLARE_SECRET_ACCESS_KEY="your-secret-key"
 R2_BUCKET_NAME="talentsecure-files"
 R2_PUBLIC_URL="https://files.yourdomain.com"
+
+# OpenAI (pour extraction de compétences)
+OPENAI_API_KEY="sk-your-openai-api-key"
 
 # OAuth (optionnel)
 GOOGLE_CLIENT_ID="your-google-client-id"
@@ -473,9 +500,20 @@ git push origin feature/nom-de-la-feature
 Ces points couvrent les changements livrés en novembre 2025. Merci de les parcourir avant tout nouveau développement :
 
 1. **Gestion d'erreurs & validation** : consultez `backend/src/middleware` et `backend/src/utils` pour les nouveaux helpers (`ApiError`, sanitisation XSS, validation Zod). Toute nouvelle route doit s'appuyer dessus.
+
 2. **Cache Redis optionnel** : la configuration se trouve dans `backend/src/config/cache.ts` et `backend/src/utils/cache.ts`. Activez-le via `CACHE_ENABLED=true` et les variables `REDIS_*` dans `.env`. Sans Redis, l'API fonctionne en mode sans cache.
+
 3. **Optimisation des fichiers** : `backend/src/services/image.service.ts` compresse automatiquement les images uploadées; les vidéos restent gérées par `video.service.ts`.
-4. **Frontend lazy loading & validation** : `frontend/src/App.tsx` utilise désormais `React.lazy`/`Suspense` et `frontend/src/validation/candidate.ts` centralise la validation des formulaires candidats.
+
+4. **Frontend lazy loading & validation** : `frontend/src/App.tsx` utilise désormais `React.lazy`/`Suspense` et `frontend/src/validation/candidate.ts` centralise la validation des formulaires candidats. Les composants lourds (Leaflet maps, formulaires d'évaluation) sont chargés à la demande.
+
+5. **Extraction IA de compétences** 🆕 : le système d'extraction automatique de compétences utilise OpenAI GPT-4 via `backend/src/services/cv-extraction.service.ts` et `backend/src/controllers/skills.controller.ts`. L'interface se trouve dans `frontend/src/pages/autres-competances/AutresCompetancesPage.tsx`. **Important** : lors de l'extraction sur un prospect, le système le convertit automatiquement en candidat pour permettre la liaison des compétences.
+
+6. **Conversion prospects → candidats** 🆕 : une page dédiée `frontend/src/pages/prospects/ProspectConvertPage.tsx` permet de convertir un prospect en candidat avec formulaire d'évaluation complet. La route est `/prospects/:id/convert`.
+
+7. **Validation des dates** : les champs de dates utilisent désormais un helper `optionalDateString` dans `candidate.ts` qui transforme les chaînes vides en `null` avant validation pour éviter les erreurs de format.
+
+8. **Sanitization XSS** : temporairement désactivée dans `server.ts` en attendant l'installation du package `xss`. À réactiver après installation de la dépendance manquante.
 
 En cas de doute, revenez à cette section : elle indique où lire le code mis à jour.
 
