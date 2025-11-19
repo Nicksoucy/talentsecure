@@ -88,6 +88,45 @@ enum PaymentStatus {
   CANCELLED // Annulé
 }
 
+enum CandidateType {
+  EVALUATED // Candidat évalué (premium)
+  CV_ONLY // CV seulement (économique)
+}
+
+enum WishlistStatus {
+  DRAFT // Client en train de construire
+  SUBMITTED // Demande envoyée à l'admin
+  APPROVED // Admin a approuvé
+  PAID // Client a payé
+  DELIVERED // Catalogue livré
+  CANCELLED // Annulé
+}
+
+enum SkillCategory {
+  TECHNICAL // Compétences techniques (ex: Informatique, Mécanique)
+  SOFT_SKILL // Compétences comportementales (ex: Leadership, Communication)
+  CERTIFICATION // Certifications et permis (ex: BSP, Premiers soins)
+  LANGUAGE // Langues (déjà géré par Language model, mais peut être utile)
+  INDUSTRY // Domaine d'industrie (ex: Sécurité, Construction, Automobile)
+  TOOL_EQUIPMENT // Outils et équipements (ex: Chariot élévateur, Systèmes de sécurité)
+  OTHER // Autres compétences
+}
+
+enum SkillLevel {
+  BEGINNER // Débutant (0-1 an d'expérience)
+  INTERMEDIATE // Intermédiaire (1-3 ans)
+  ADVANCED // Avancé (3-5 ans)
+  EXPERT // Expert (5+ ans)
+  UNKNOWN // Non spécifié
+}
+
+enum SkillSource {
+  REGEX_EXTRACTED // Extrait par regex automatique
+  AI_EXTRACTED // Extrait par IA (OpenAI/Claude)
+  MANUAL_ENTRY // Ajouté manuellement par admin
+  HUMAN_VERIFIED // Vérifié/corrigé par humain
+}
+
 // Models
 
 model User {
@@ -208,6 +247,8 @@ model Candidate {
   catalogueItems      CatalogueItem[]
   catalogueSelections CatalogueSelection[]
   placements          Placement[]
+  purchases           ClientPurchase[]
+  skills              CandidateSkill[] // Skills extracted from CV
 
   @@index([status])
   @@index([globalRating])
@@ -332,6 +373,8 @@ model Client {
   placements          Placement[]
   catalogueSelections CatalogueSelection[]
   cataloguePayments   CataloguePayment[]
+  wishlists           ClientWishlist[]
+  purchases           ClientPurchase[]
 
   @@index([email])
   @@index([companyName])
@@ -384,6 +427,7 @@ model Catalogue {
   items      CatalogueItem[]
   selections CatalogueSelection[]
   payments   CataloguePayment[]
+  purchases  ClientPurchase[]
 
   @@index([clientId])
   @@index([status])
@@ -501,6 +545,9 @@ model ProspectCandidate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Relations
+  purchases ClientPurchase[]
+
   @@index([email])
   @@index([phone])
   @@index([city])
@@ -587,4 +634,206 @@ model CataloguePayment {
   @@index([paidAt])
   @@index([invoiceNumber])
   @@map("catalogue_payments")
+}
+
+// Pricing par ville/région
+model CityPricing {
+  id       String @id @default(uuid())
+  city     String @unique
+  province String @default("QC")
+
+  // Prix pour candidats évalués
+  evaluatedCandidateMinPrice Decimal @default(15) @db.Decimal(10, 2)
+  evaluatedCandidateMaxPrice Decimal @default(45) @db.Decimal(10, 2)
+  evaluatedCandidatePrice    Decimal @default(30) @db.Decimal(10, 2) // Prix moyen par défaut
+
+  // Prix pour CVs seulement
+  cvOnlyMinPrice Decimal @default(5) @db.Decimal(10, 2)
+  cvOnlyMaxPrice Decimal @default(10) @db.Decimal(10, 2)
+  cvOnlyPrice    Decimal @default(7.50) @db.Decimal(10, 2) // Prix moyen par défaut
+
+  // Multiplicateur de prix (pour villes plus chères/éloignées)
+  priceMultiplier Decimal @default(1.0) @db.Decimal(5, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([city])
+  @@index([province])
+  @@map("city_pricing")
+}
+
+// Panier/Wishlist du client
+model ClientWishlist {
+  id       String         @id @default(uuid())
+  clientId String
+  client   Client         @relation(fields: [clientId], references: [id])
+  status   WishlistStatus @default(DRAFT)
+
+  totalAmount Decimal @default(0) @db.Decimal(10, 2)
+
+  submittedAt DateTime?
+  paidAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items WishlistItem[]
+
+  @@index([clientId])
+  @@index([status])
+  @@map("client_wishlists")
+}
+
+// Items dans le panier (par ville + type)
+model WishlistItem {
+  id         String         @id @default(uuid())
+  wishlistId String
+  wishlist   ClientWishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+
+  city     String
+  province String @default("QC")
+
+  // Type de candidat
+  type CandidateType
+
+  // Quantité demandée
+  quantity Int
+
+  // Prix unitaire au moment de l'ajout
+  unitPrice Decimal @db.Decimal(10, 2)
+
+  // Prix total pour cet item
+  totalPrice Decimal @db.Decimal(10, 2)
+
+  // Notes du client
+  notes String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([wishlistId])
+  @@index([city])
+  @@map("wishlist_items")
+}
+
+// Historique des achats (pour éviter les doublons)
+model ClientPurchase {
+  id       String        @id @default(uuid())
+  clientId String
+  client   Client        @relation(fields: [clientId], references: [id])
+  type     CandidateType
+
+  candidateId String?
+  candidate   Candidate? @relation(fields: [candidateId], references: [id])
+
+  prospectId String?
+  prospect   ProspectCandidate? @relation(fields: [prospectId], references: [id])
+
+  city  String
+  price Decimal @db.Decimal(10, 2)
+
+  catalogueId String?
+  catalogue   Catalogue? @relation(fields: [catalogueId], references: [id])
+
+  purchasedAt DateTime @default(now())
+
+  @@unique([clientId, candidateId])
+  @@unique([clientId, prospectId])
+  @@index([clientId])
+  @@index([candidateId])
+  @@index([prospectId])
+  @@index([city])
+  @@index([purchasedAt])
+  @@map("client_purchases")
+}
+
+// Skills Extraction System
+
+// Master database of all skills
+model Skill {
+  id                String        @id @default(uuid())
+  name              String        @unique // Nom de la compétence (ex: "BSP", "Service à la clientèle")
+  category          SkillCategory
+  description       String?       @db.Text // Description détaillée
+  keywords          String[] // Mots-clés pour extraction (ex: ["bsp", "bureau de la sécurité privée"])
+  isActive          Boolean       @default(true) // Permet de désactiver des compétences obsolètes
+  isSecurityRelated Boolean       @default(false) // Compétence liée aux agents de sécurité (core business)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  candidateSkills CandidateSkill[]
+
+  @@index([category])
+  @@index([name])
+  @@index([isActive])
+  @@index([isSecurityRelated])
+  @@map("skills")
+}
+
+// Many-to-many relationship between Candidate and Skill
+model CandidateSkill {
+  id          String      @id @default(uuid())
+  candidateId String
+  skillId     String
+  level       SkillLevel  @default(UNKNOWN)
+  source      SkillSource @default(MANUAL_ENTRY)
+
+  // Contexte d'extraction
+  yearsExperience Int? // Nombre d'années d'expérience (si détecté)
+  extractedText   String? @db.Text // Texte exact extrait du CV
+  confidence      Float? // Score de confiance de l'IA (0-1)
+
+  // Validation humaine
+  isVerified   Boolean   @default(false)
+  verifiedBy   String? // ID de l'utilisateur qui a vérifié
+  verifiedAt   DateTime?
+  rejectionNote String?   @db.Text // Note si la compétence est rejetée
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  skill     Skill     @relation(fields: [skillId], references: [id])
+
+  @@unique([candidateId, skillId]) // Un candidat ne peut avoir la même compétence qu'une fois
+  @@index([candidateId])
+  @@index([skillId])
+  @@index([level])
+  @@index([source])
+  @@index([isVerified])
+  @@map("candidate_skills")
+}
+
+// Audit trail for CV extraction
+model CvExtractionLog {
+  id          String @id @default(uuid())
+  candidateId String
+
+  // Extraction details
+  extractionMethod String // "REGEX", "OPENAI", "CLAUDE"
+  skillsFound      Int    @default(0)
+  processingTimeMs Int? // Temps de traitement en ms
+
+  // AI details (if applicable)
+  aiModel         String? // "gpt-4", "claude-3-opus", etc.
+  promptTokens    Int? // Tokens utilisés dans le prompt
+  completionTokens Int? // Tokens utilisés dans la réponse
+  totalCost       Float? // Coût estimé en USD
+
+  // Results
+  success      Boolean @default(true)
+  errorMessage String? @db.Text
+  rawResponse  String? @db.Text // Réponse brute de l'IA (pour debugging)
+
+  createdAt DateTime @default(now())
+
+  @@index([candidateId])
+  @@index([extractionMethod])
+  @@index([success])
+  @@index([createdAt])
+  @@map("cv_extraction_logs")
 }

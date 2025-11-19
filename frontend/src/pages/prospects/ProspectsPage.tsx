@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, lazy } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box,
@@ -31,6 +31,7 @@ import {
   Collapse,
   Checkbox,
   Toolbar,
+  CircularProgress,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -52,13 +53,18 @@ import { TableSkeleton } from '@/components/skeletons';
 import { useNavigate } from 'react-router-dom';
 import { prospectService } from '@/services/prospect.service';
 import { ProspectCandidate } from '@/types';
-import ProspectsMapClustered from '@/components/map/ProspectsMapClustered';
+const ProspectsMapClustered = lazy(() => import('@/components/map/ProspectsMapClustered'));
 import { prospectContactSchema } from '@/validation/prospect';
 
 export default function ProspectsPage() {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
+  const renderLazyFallback = (minHeight = 240) => (
+    <Box display="flex" justifyContent="center" alignItems="center" minHeight={minHeight}>
+      <CircularProgress />
+    </Box>
+  );
 
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
@@ -447,7 +453,9 @@ export default function ProspectsPage() {
       {/* Map */}
       <Collapse in={showMap}>
         <Box sx={{ mb: 3 }}>
-          <ProspectsMapClustered onCityClick={handleCityClick} />
+          <Suspense fallback={renderLazyFallback(200)}>
+            <ProspectsMapClustered onCityClick={handleCityClick} />
+          </Suspense>
         </Box>
       </Collapse>
 

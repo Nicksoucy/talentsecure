@@ -26,6 +26,8 @@ import {
   Business as BusinessIcon,
   Settings as SettingsIcon,
   Logout as LogoutIcon,
+  WorkOutline as WorkIcon,
+  ShoppingCart as ShoppingCartIcon,
 } from '@mui/icons-material';
 import { useAuthStore } from '@/store/authStore';
 import { authService } from '@/services/auth.service';
@@ -68,6 +70,7 @@ const MainLayout = () => {
     { text: 'Candidats Potentiels', icon: <PersonSearchIcon />, path: '/prospects' },
     { text: 'Catalogues', icon: <DescriptionIcon />, path: '/catalogues' },
     { text: 'Clients', icon: <BusinessIcon />, path: '/clients' },
+    { text: 'Autre Compétance', icon: <WorkIcon />, path: '/autres-competances' },
   ];
 
   const drawer = (
