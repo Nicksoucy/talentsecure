@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   Box,
@@ -26,6 +26,7 @@ import {
   Collapse,
   Autocomplete,
   FormControlLabel,
+  CircularProgress,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -41,8 +42,9 @@ import { candidateService } from '@/services/candidate.service';
 import { TableSkeleton } from '@/components/skeletons';
 import { catalogueService } from '@/services/catalogue.service';
 import { clientService } from '@/services/client.service';
-import InterviewEvaluationForm from '@/components/InterviewEvaluationForm';
-import CandidatesMap from '@/components/map/CandidatesMap';
+import { lazy } from 'react';
+const InterviewEvaluationForm = lazy(() => import('@/components/InterviewEvaluationForm'));
+const CandidatesMap = lazy(() => import('@/components/map/CandidatesMap'));
 import CandidateFiltersBar from './components/CandidateFiltersBar';
 import CandidateTableRow from './components/CandidateTableRow';
 import CandidateBulkActions from './components/CandidateBulkActions';
@@ -52,6 +54,11 @@ export default function CandidatesListPage() {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
+  const renderLazyFallback = (minHeight = 240) => (
+    <Box display="flex" justifyContent="center" alignItems="center" minHeight={minHeight}>
+      <CircularProgress />
+    </Box>
+  );
   const [openAddDialog, setOpenAddDialog] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState<any>(null);
   const [page, setPage] = useState(1);
@@ -626,7 +633,9 @@ export default function CandidatesListPage() {
       {/* Map */}
       <Collapse in={showMap}>
         <Box sx={{ mb: 3 }}>
-          <CandidatesMap onCityClick={handleCityClick} />
+          <Suspense fallback={renderLazyFallback(200)}>
+            <CandidatesMap onCityClick={handleCityClick} />
+          </Suspense>
         </Box>
       </Collapse>
 
@@ -783,13 +792,15 @@ export default function CandidatesListPage() {
           </Box>
         </DialogTitle>
         <DialogContent>
-          <InterviewEvaluationForm
-            onSubmit={handleSaveCandidate}
-            onCancel={handleCloseDialog}
-            isSubmitting={createMutation.isPending || updateMutation.isPending}
-            initialData={editingCandidate ? transformCandidateToFormData(editingCandidate) : undefined}
-            candidateId={editingCandidate?.id}
-          />
+          <Suspense fallback={renderLazyFallback(320)}>
+            <InterviewEvaluationForm
+              onSubmit={handleSaveCandidate}
+              onCancel={handleCloseDialog}
+              isSubmitting={createMutation.isPending || updateMutation.isPending}
+              initialData={editingCandidate ? transformCandidateToFormData(editingCandidate) : undefined}
+              candidateId={editingCandidate?.id}
+            />
+          </Suspense>
         </DialogContent>
       </Dialog>
 

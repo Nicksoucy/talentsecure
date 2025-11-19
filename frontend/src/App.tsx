@@ -15,6 +15,7 @@ const CataloguesPage = lazy(() => import('./pages/catalogues/CataloguesPage'));
 const ClientsPage = lazy(() => import('./pages/clients/ClientsPage'));
 const ProspectsPage = lazy(() => import('./pages/prospects/ProspectsPage'));
 const ProspectDetailPage = lazy(() => import('./pages/prospects/ProspectDetailPage'));
+const ProspectConvertPage = lazy(() => import('./pages/prospects/ProspectConvertPage'));
 const AutresCompetancesPage = lazy(() => import('./pages/autres-competances/AutresCompetancesPage'));
 const WishlistsPage = lazy(() => import('./pages/wishlists/WishlistsPage'));
 const CatalogueViewPage = lazy(() => import('./pages/public/CatalogueViewPage'));
@@ -81,6 +82,7 @@ function App() {
             <Route path="/candidates/:id" element={<CandidateDetailPage />} />
             <Route path="/prospects" element={<ProspectsPage />} />
             <Route path="/prospects/:id" element={<ProspectDetailPage />} />
+            <Route path="/prospects/:id/convert" element={<ProspectConvertPage />} />
             <Route path="/catalogues" element={<CataloguesPage />} />
             <Route path="/clients" element={<ClientsPage />} />
             <Route path="/autres-competances" element={<AutresCompetancesPage />} />
