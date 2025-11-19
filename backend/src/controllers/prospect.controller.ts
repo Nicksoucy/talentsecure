@@ -360,11 +360,43 @@ export const convertToCandidate = async (
       });
     }
 
+    // Sanitize date fields: convert empty strings to null
+    const sanitizeDateField = (value: any) => {
+      if (value === '' || value === null || value === undefined) {
+        return null;
+      }
+      return value;
+    };
+
+    // Sanitize date fields in candidateData
+    const sanitizedData = {
+      ...candidateData,
+      interviewDate: sanitizeDateField(candidateData.interviewDate),
+      bspExpiryDate: sanitizeDateField(candidateData.bspExpiryDate),
+    };
+
+    // Sanitize nested date fields in experiences
+    if (sanitizedData.experiences && Array.isArray(sanitizedData.experiences)) {
+      sanitizedData.experiences = sanitizedData.experiences.map((exp: any) => ({
+        ...exp,
+        startDate: sanitizeDateField(exp.startDate),
+        endDate: sanitizeDateField(exp.endDate),
+      }));
+    }
+
+    // Sanitize nested date fields in certifications
+    if (sanitizedData.certifications && Array.isArray(sanitizedData.certifications)) {
+      sanitizedData.certifications = sanitizedData.certifications.map((cert: any) => ({
+        ...cert,
+        expiryDate: sanitizeDateField(cert.expiryDate),
+      }));
+    }
+
     // Create qualified candidate from prospect data
     const candidate = await prisma.candidate.create({
       data: {
         // Add candidate-specific data from request first
-        ...candidateData,
+        ...sanitizedData,
         // Then copy from prospect (this will override any conflicting fields to preserve prospect data)
         firstName: prospect.firstName,
         lastName: prospect.lastName,
