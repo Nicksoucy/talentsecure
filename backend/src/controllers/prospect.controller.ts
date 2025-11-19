@@ -342,7 +342,7 @@ export const convertToCandidate = async (
   try {
     const { id } = req.params;
     const userId = req.user!.id;
-    const candidateData = req.body;
+    const formData = req.body;
 
     // Get prospect
     const prospect = await prisma.prospectCandidate.findUnique({
@@ -360,7 +360,14 @@ export const convertToCandidate = async (
       });
     }
 
-    // Sanitize date fields: convert empty strings to null
+    // Validate required fields
+    if (!prospect.phone || prospect.phone.trim() === '') {
+      return res.status(400).json({
+        error: 'Le numéro de téléphone du prospect est requis pour la conversion'
+      });
+    }
+
+    // Helper: Sanitize date fields (empty strings → null)
     const sanitizeDateField = (value: any) => {
       if (value === '' || value === null || value === undefined) {
         return null;
@@ -368,36 +375,79 @@ export const convertToCandidate = async (
       return value;
     };
 
-    // Sanitize date fields in candidateData
-    const sanitizedData = {
-      ...candidateData,
-      interviewDate: sanitizeDateField(candidateData.interviewDate),
-      bspExpiryDate: sanitizeDateField(candidateData.bspExpiryDate),
+    // Helper: Normalize language level to valid enum
+    const normalizeLanguageLevel = (level: string): string => {
+      const normalized = level?.toUpperCase().trim();
+      const validLevels = ['DEBUTANT', 'INTERMEDIAIRE', 'AVANCE', 'COURANT'];
+      return validLevels.includes(normalized) ? normalized : 'INTERMEDIAIRE';
     };
 
-    // Sanitize nested date fields in experiences
-    if (sanitizedData.experiences && Array.isArray(sanitizedData.experiences)) {
-      sanitizedData.experiences = sanitizedData.experiences.map((exp: any) => ({
-        ...exp,
-        startDate: sanitizeDateField(exp.startDate),
-        endDate: sanitizeDateField(exp.endDate),
-      }));
+    // Whitelist: Extract only valid Prisma candidate scalar fields
+    const allowedFields = [
+      'status', 'source', 'globalRating', 'professionalismRating',
+      'communicationRating', 'appearanceRating', 'motivationRating',
+      'experienceRating', 'hrNotes', 'strengths', 'weaknesses',
+      'hasVehicle', 'canTravelKm', 'hasBSP', 'bspNumber', 'bspStatus',
+      'hasDriverLicense', 'driverLicenseNumber', 'driverLicenseClass',
+      'urgency24hScore', 'canWorkUrgent', 'hasConsent', 'consentSignature'
+    ];
+
+    const scalarData: any = {};
+    for (const field of allowedFields) {
+      if (formData[field] !== undefined) {
+        scalarData[field] = formData[field];
+      }
     }
 
-    // Sanitize nested date fields in certifications
-    if (sanitizedData.certifications && Array.isArray(sanitizedData.certifications)) {
-      sanitizedData.certifications = sanitizedData.certifications.map((cert: any) => ({
-        ...cert,
-        expiryDate: sanitizeDateField(cert.expiryDate),
-      }));
-    }
+    // Sanitize date fields
+    scalarData.interviewDate = sanitizeDateField(formData.interviewDate);
+    scalarData.bspExpiryDate = sanitizeDateField(formData.bspExpiryDate);
+    scalarData.consentDate = sanitizeDateField(formData.consentDate);
+
+    // Convert availability booleans to Prisma structure
+    const availabilityTypes = [
+      { key: 'availableDay', type: 'JOUR' },
+      { key: 'availableEvening', type: 'SOIR' },
+      { key: 'availableNight', type: 'NUIT' },
+      { key: 'availableWeekend', type: 'FIN_DE_SEMAINE' },
+    ];
+
+    const availabilities = availabilityTypes
+      .filter(av => formData[av.key] === true)
+      .map(av => ({ type: av.type, isAvailable: true }));
+
+    // Sanitize and normalize nested relations
+    const sanitizedLanguages = (formData.languages || []).map((lang: any) => ({
+      language: lang.language,
+      level: normalizeLanguageLevel(lang.level),
+      notes: lang.notes || null,
+    }));
+
+    const sanitizedExperiences = (formData.experiences || []).map((exp: any) => ({
+      companyName: exp.companyName,
+      position: exp.position,
+      startDate: sanitizeDateField(exp.startDate),
+      endDate: sanitizeDateField(exp.endDate),
+      description: exp.description || null,
+    }));
+
+    const sanitizedCertifications = (formData.certifications || []).map((cert: any) => ({
+      name: cert.name,
+      issuingOrganization: cert.issuingOrganization || null,
+      expiryDate: sanitizeDateField(cert.expiryDate),
+    }));
+
+    const sanitizedSituationTests = (formData.situationTests || []).map((test: any) => ({
+      question: test.question,
+      answer: test.answer,
+      rating: test.rating || null,
+      evaluatorNotes: test.evaluatorNotes || null,
+    }));
 
     // Create qualified candidate from prospect data
     const candidate = await prisma.candidate.create({
       data: {
-        // Add candidate-specific data from request first
-        ...sanitizedData,
-        // Then copy from prospect (this will override any conflicting fields to preserve prospect data)
+        // Prospect identity (always preserved)
         firstName: prospect.firstName,
         lastName: prospect.lastName,
         email: prospect.email,
@@ -405,28 +455,32 @@ export const convertToCandidate = async (
         address: prospect.fullAddress,
         city: prospect.city || 'Non spécifié',
         province: prospect.province || 'QC',
-        postalCode: prospect.postalCode,
-        // IMPORTANT: Toujours préserver le CV du prospect
+        postalCode: prospect.postalCode || '',
         cvUrl: prospect.cvUrl,
         cvStoragePath: prospect.cvStoragePath,
-        // Creator (must be set after spread to ensure it's not overwritten)
+
+        // Form data (ratings, notes, etc.)
+        ...scalarData,
+
+        // Required metadata
         createdById: userId,
-        // Nested creates if provided
-        availabilities: candidateData.availabilities ? {
-          create: candidateData.availabilities,
-        } : undefined,
-        languages: candidateData.languages ? {
-          create: candidateData.languages,
-        } : undefined,
-        experiences: candidateData.experiences ? {
-          create: candidateData.experiences,
-        } : undefined,
-        certifications: candidateData.certifications ? {
-          create: candidateData.certifications,
-        } : undefined,
-        situationTests: candidateData.situationTests ? {
-          create: candidateData.situationTests,
-        } : undefined,
+
+        // Nested creates using SANITIZED data
+        ...(availabilities.length > 0 && {
+          availabilities: { create: availabilities },
+        }),
+        ...(sanitizedLanguages.length > 0 && {
+          languages: { create: sanitizedLanguages },
+        }),
+        ...(sanitizedExperiences.length > 0 && {
+          experiences: { create: sanitizedExperiences },
+        }),
+        ...(sanitizedCertifications.length > 0 && {
+          certifications: { create: sanitizedCertifications },
+        }),
+        ...(sanitizedSituationTests.length > 0 && {
+          situationTests: { create: sanitizedSituationTests },
+        }),
       },
       include: {
         availabilities: true,
@@ -464,7 +518,23 @@ export const convertToCandidate = async (
       message: 'Candidat potentiel converti en candidat qualifié avec succès',
       data: candidate,
     });
-  } catch (error) {
+  } catch (error: any) {
+    // Enhanced error logging for Prisma validation errors
+    if (error.name === 'PrismaClientValidationError' || error.code?.startsWith('P')) {
+      console.error('Prisma validation error during prospect conversion:', {
+        errorCode: error.code,
+        errorMeta: error.meta,
+        prospectId: req.params.id,
+        scalarKeys: Object.keys(scalarData || {}),
+        nestedCounts: {
+          availabilities: availabilities?.length || 0,
+          languages: sanitizedLanguages?.length || 0,
+          experiences: sanitizedExperiences?.length || 0,
+          certifications: sanitizedCertifications?.length || 0,
+          situationTests: sanitizedSituationTests?.length || 0,
+        },
+      });
+    }
     next(error);
   }
 };
