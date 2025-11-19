@@ -25,7 +25,7 @@ export default function ProspectConvertPage() {
   const convertMutation = useMutation({
     mutationFn: (payload: any) => prospectService.convertToCandidate(id!, payload),
     onSuccess: (response) => {
-      enqueueSnackbar('Prospect converti en candidat avec succès', { variant: 'success' });
+      enqueueSnackbar('Prospect converti en candidat avec succï¿½s', { variant: 'success' });
       navigate(`/candidates/${response.data.id}`);
     },
     onError: (err: any) => {
@@ -57,7 +57,25 @@ export default function ProspectConvertPage() {
       return;
     }
 
-    convertMutation.mutate(validation.data);
+    const safeValues = validation.data;
+
+    // Transform form data to match backend schema
+    const candidateData = {
+      ...safeValues,
+      // Transform situationTests to use question/answer instead of scenario/response
+      situationTests: [
+        safeValues.situationTest1 && { question: 'Conflit avec un collegue', answer: safeValues.situationTest1 },
+        safeValues.situationTest2 && { question: 'Situation d\'urgence inattendue', answer: safeValues.situationTest2 },
+        safeValues.situationTest3 && { question: 'Assurer la securite d\'un site', answer: safeValues.situationTest3 },
+      ].filter(Boolean),
+    };
+
+    // Remove individual situationTest fields as they're now in the array
+    delete candidateData.situationTest1;
+    delete candidateData.situationTest2;
+    delete candidateData.situationTest3;
+
+    convertMutation.mutate(candidateData);
   };
 
   if (isLoading) {
@@ -84,7 +102,7 @@ export default function ProspectConvertPage() {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="body1">
-            Complétez l'évaluation d'entretien avant de convertir {prospect.firstName} {prospect.lastName} en candidat officiel.
+            Complï¿½tez l'ï¿½valuation d'entretien avant de convertir {prospect.firstName} {prospect.lastName} en candidat officiel.
           </Typography>
         </CardContent>
       </Card>
