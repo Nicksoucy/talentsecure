@@ -444,6 +444,13 @@ export const convertToCandidate = async (
       evaluatorNotes: test.evaluatorNotes || null,
     }));
 
+    // Debug logging to see what's being sent to Prisma
+    console.log('DEBUG - scalarData before Prisma create:', {
+      interviewDate: scalarData.interviewDate,
+      bspExpiryDate: scalarData.bspExpiryDate,
+      consentDate: scalarData.consentDate,
+    });
+
     // Create qualified candidate from prospect data
     const candidate = await prisma.candidate.create({
       data: {
@@ -525,14 +532,7 @@ export const convertToCandidate = async (
         errorCode: error.code,
         errorMeta: error.meta,
         prospectId: req.params.id,
-        scalarKeys: Object.keys(scalarData || {}),
-        nestedCounts: {
-          availabilities: availabilities?.length || 0,
-          languages: sanitizedLanguages?.length || 0,
-          experiences: sanitizedExperiences?.length || 0,
-          certifications: sanitizedCertifications?.length || 0,
-          situationTests: sanitizedSituationTests?.length || 0,
-        },
+        errorMessage: error.message,
       });
     }
     next(error);
