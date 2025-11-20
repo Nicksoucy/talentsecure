@@ -19,7 +19,8 @@
     "noImplicitReturns": false,
     "noFallthroughCasesInSwitch": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    "noEmitOnError": false
   },
   "include": ["src/**/*.ts"],
   "exclude": [
