@@ -42,6 +42,7 @@ interface CandidateTableRowProps {
   onArchive: () => void;
   onUnarchive: () => void;
   onDelete: () => void;
+  onRevertToProspect?: () => void;
   userRole?: string;
 }
 
@@ -54,6 +55,7 @@ export default function CandidateTableRow({
   onArchive,
   onUnarchive,
   onDelete,
+  onRevertToProspect,
   userRole,
 }: CandidateTableRowProps) {
   return (
@@ -147,6 +149,7 @@ export default function CandidateTableRow({
           onArchive={onArchive}
           onUnarchive={onUnarchive}
           onDelete={onDelete}
+          onRevertToProspect={onRevertToProspect}
           userRole={userRole}
         />
       </TableCell>

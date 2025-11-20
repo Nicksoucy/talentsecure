@@ -27,6 +27,7 @@ import {
   Autocomplete,
   FormControlLabel,
   CircularProgress,
+  Tooltip,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -39,9 +40,11 @@ import {
 import { useSnackbar } from 'notistack';
 import { useNavigate } from 'react-router-dom';
 import { candidateService } from '@/services/candidate.service';
+import { adminService } from '@/services/admin.service';
 import { TableSkeleton } from '@/components/skeletons';
 import { catalogueService } from '@/services/catalogue.service';
 import { clientService } from '@/services/client.service';
+import { useAuthStore } from '@/store/authStore';
 import { lazy } from 'react';
 const InterviewEvaluationForm = lazy(() => import('@/components/InterviewEvaluationForm'));
 const CandidatesMap = lazy(() => import('@/components/map/CandidatesMap'));
@@ -49,11 +52,84 @@ import CandidateFiltersBar from './components/CandidateFiltersBar';
 import CandidateTableRow from './components/CandidateTableRow';
 import CandidateBulkActions from './components/CandidateBulkActions';
 import { candidateFormSchema } from '@/validation/candidate';
+import { HelpDialog } from '@/components/HelpDialog';
+
+const CANDIDATES_HELP_SECTIONS = [
+  {
+    title: 'Gestion quotidienne',
+    bullets: [
+      'Utilisez la recherche deboucee pour filtrer sans rechargements incessants.',
+      'Les filtres avances permettent de cibler certifications, villes et notes minimales.',
+      'Les actions groupees declenchent la creation de catalogues et la selection rapide.',
+    ],
+  },
+  {
+    title: 'Exports et partage',
+    bullets: [
+      'Le bouton Export CSV respecte vos filtres actifs et l\'ordre de tri.',
+      'Les catalogues clients incluent uniquement les candidats selectionnes.',
+      'Affichez la carte pour filtrer en cliquant directement sur une ville.',
+    ],
+  },
+];
+
+const CANDIDATES_HELP_FAQ = [
+  {
+    question: 'Pourquoi certains candidats sont manquants dans l\'export ?',
+    answer: 'Assurez-vous d\'inclure les archives si necessaire et verifiez que le filtre de recherche est vide.',
+  },
+  {
+    question: 'Comment partager une selection avec un client ?',
+    answer: 'Selectionnez les candidats, ouvrez "Actions groupees" puis creez un catalogue en choisissant le client cible.',
+  },
+];
+
+const CANDIDATE_FORM_HELP_SECTIONS = [
+  {
+    title: 'Champs critiques',
+    bullets: [
+      'Courriel, telephone et evaluation doivent etre completes avant enregistrement.',
+      'Les reponses aux tests de situation sont reinterpretees automatiquement dans le format attendu.',
+      'Renseignez licences BSP et permis de conduire pour faciliter les recherches ulterieures.',
+    ],
+  },
+  {
+    title: 'Conseils pratiques',
+    bullets: [
+      'Utilisez les notes RH pour conserver le contexte de l'entrevue.',
+      'Ajoutez forces et faiblesses afin d'alimenter les catalogues clients.',
+    ],
+  },
+];
+
+const CANDIDATE_FORM_HELP_FAQ = [
+  {
+    question: 'Pourquoi le formulaire refuse ma soumission ?',
+    answer: 'Un champ obligatoire est probablement vide ou mal formate (date, e-mail). Verifiez chaque section avant de reessayer.',
+  },
+  {
+    question: 'Comment conserver les anciennes notes ?',
+    answer: 'Les notes RH restent sur le candidat apres sauvegarde. Ajoutez un recap dans la section dediee pour suivre l'historique.',
+  },
+];
+
+const CATALOGUE_HELP_SECTIONS = [
+  {
+    title: 'Avant de generer',
+    bullets: [
+      'Selectionnez au moins un candidat et choisissez le client cible.',
+      'Personnalisez le message pour contextualiser l'envoi.',
+      'Desactivez les sections inutiles (video, experience, CV) pour alleger le document.',
+    ],
+  },
+];
+
 
 export default function CandidatesListPage() {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
   const renderLazyFallback = (minHeight = 240) => (
     <Box display="flex" justifyContent="center" alignItems="center" minHeight={minHeight}>
       <CircularProgress />
@@ -186,7 +262,7 @@ export default function CandidatesListPage() {
       enqueueSnackbar('Export CSV réussi', { variant: 'success' });
     } catch (error) {
       console.error('Error exporting CSV:', error);
-      enqueueSnackbar('Erreur lors de l\'export CSV', { variant: 'error' });
+      enqueueSnackbar('Impossible de generer le CSV avec les filtres actuels', { variant: 'error' });
     } finally {
       setIsExporting(false);
     }
@@ -280,15 +356,16 @@ export default function CandidatesListPage() {
   // Create candidate mutation
   const createMutation = useMutation({
     mutationFn: candidateService.createCandidate,
-    onSuccess: () => {
+    onSuccess: (_response, variables) => {
       queryClient.invalidateQueries({ queryKey: ['candidates'] });
-      enqueueSnackbar('Candidat ajouté avec succès !', { variant: 'success' });
+      const fullName = `${variables?.firstName || ''} ${variables?.lastName || ''}`.trim() || 'Nouveau candidat';
+      enqueueSnackbar(`${fullName} ajoute a la base`, { variant: 'success' });
       setOpenAddDialog(false);
       setEditingCandidate(null);
-      setPage(1); // Retour à la première page
+      setPage(1); // Retour a la premiere page
     },
     onError: (error: any) => {
-      enqueueSnackbar(error.response?.data?.error || 'Erreur lors de l\'ajout', {
+      enqueueSnackbar(error.response?.data?.error || 'Impossible d\'ajouter ce candidat. Verifiez les champs requis.', {
         variant: 'error',
       });
     },
@@ -298,14 +375,15 @@ export default function CandidatesListPage() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) =>
       candidateService.updateCandidate(id, data),
-    onSuccess: () => {
+    onSuccess: (_response, variables) => {
       queryClient.invalidateQueries({ queryKey: ['candidates'] });
-      enqueueSnackbar('Candidat modifié avec succès !', { variant: 'success' });
+      const fullName = `${variables.data?.firstName || ''} ${variables.data?.lastName || ''}`.trim() || 'Candidat';
+      enqueueSnackbar(`${fullName} mis a jour`, { variant: 'success' });
       setOpenAddDialog(false);
       setEditingCandidate(null);
     },
     onError: (error: any) => {
-      enqueueSnackbar(error.response?.data?.error || 'Erreur lors de la modification', {
+      enqueueSnackbar(error.response?.data?.error || 'Impossible de mettre a jour ce candidat.', {
         variant: 'error',
       });
     },
@@ -313,41 +391,68 @@ export default function CandidatesListPage() {
 
   // Delete candidate mutation
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => candidateService.deleteCandidate(id),
-    onSuccess: () => {
+    mutationFn: ({ id }: { id: string; label?: string }) => candidateService.deleteCandidate(id),
+    onSuccess: (_response, variables) => {
       queryClient.invalidateQueries({ queryKey: ['candidates'] });
-      enqueueSnackbar('Candidat supprimé avec succès !', { variant: 'success' });
+      const label = variables?.label || `ID ${variables?.id}`;
+      enqueueSnackbar(`${label} supprime de la base`, { variant: 'success' });
     },
-    onError: (error: any) => {
-      enqueueSnackbar(error.response?.data?.error || 'Erreur lors de la suppression', {
+    onError: (error: any, variables) => {
+      const label = variables?.label || `ID ${variables?.id}`;
+      enqueueSnackbar(error.response?.data?.error || `Impossible de supprimer ${label}`, {
         variant: 'error',
       });
+    },
+  });
     },
   });
 
   // Archive candidate mutation
   const archiveMutation = useMutation({
-    mutationFn: (id: string) => candidateService.archiveCandidate(id),
-    onSuccess: () => {
+    mutationFn: ({ id }: { id: string; label?: string }) => candidateService.archiveCandidate(id),
+    onSuccess: (_response, variables) => {
       queryClient.invalidateQueries({ queryKey: ['candidates'] });
-      enqueueSnackbar('Candidat archivé avec succès !', { variant: 'success' });
+      const label = variables?.label || `ID ${variables?.id}`;
+      enqueueSnackbar(`${label} archive`, { variant: 'success' });
     },
-    onError: (error: any) => {
-      enqueueSnackbar(error.response?.data?.error || 'Erreur lors de l\'archivage', {
+    onError: (error: any, variables) => {
+      const label = variables?.label || `ID ${variables?.id}`;
+      enqueueSnackbar(error.response?.data?.error || `Impossible d'archiver ${label}`, {
         variant: 'error',
       });
+    },
+  });
     },
   });
 
   // Unarchive candidate mutation
   const unarchiveMutation = useMutation({
-    mutationFn: (id: string) => candidateService.unarchiveCandidate(id),
-    onSuccess: () => {
+    mutationFn: ({ id }: { id: string; label?: string }) => candidateService.unarchiveCandidate(id),
+    onSuccess: (_response, variables) => {
       queryClient.invalidateQueries({ queryKey: ['candidates'] });
-      enqueueSnackbar('Candidat désarchivé avec succès !', { variant: 'success' });
+      const label = variables?.label || `ID ${variables?.id}`;
+      enqueueSnackbar(`${label} reactive`, { variant: 'success' });
     },
-    onError: (error: any) => {
-      enqueueSnackbar(error.response?.data?.error || 'Erreur lors de la désarchivage', {
+    onError: (error: any, variables) => {
+      const label = variables?.label || `ID ${variables?.id}`;
+      enqueueSnackbar(error.response?.data?.error || `Impossible de desarchiver ${label}`, {
+        variant: 'error',
+      });
+    },
+  });
+
+  // Revert candidate to prospect mutation (ADMIN ONLY)
+  const revertToProspectMutation = useMutation({
+    mutationFn: ({ id }: { id: string; label?: string }) => adminService.revertCandidateToProspect(id),
+    onSuccess: (_response, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
+      queryClient.invalidateQueries({ queryKey: ['prospects'] });
+      const label = variables?.label || `ID ${variables?.id}`;
+      enqueueSnackbar(`${label} re-converti en candidat potentiel avec succes`, { variant: 'success' });
+    },
+    onError: (error: any, variables) => {
+      const label = variables?.label || `ID ${variables?.id}`;
+      enqueueSnackbar(error.response?.data?.error || `Impossible de re-convertir ${label}`, {
         variant: 'error',
       });
     },
@@ -356,9 +461,11 @@ export default function CandidatesListPage() {
   // Create catalogue mutation
   const createCatalogueMutation = useMutation({
     mutationFn: catalogueService.createCatalogue,
-    onSuccess: () => {
+    onSuccess: (_response, variables) => {
       queryClient.invalidateQueries({ queryKey: ['catalogues'] });
-      enqueueSnackbar('Catalogue créé avec succès !', { variant: 'success' });
+      enqueueSnackbar(`Catalogue "${variables?.title || 'Sans titre'}" cree pour ${selectedClient?.companyName || selectedClient?.name}`, {
+        variant: 'success',
+      });
       setOpenCatalogueDialog(false);
       setSelectedCandidates(new Set());
       setSelectedClient(null);
@@ -372,6 +479,37 @@ export default function CandidatesListPage() {
         includeSituation: true,
         includeCV: true,
       });
+    },
+    onError: (error: any, variables) => {
+      const label = variables?.title || 'Sans titre';
+      enqueueSnackbar(
+        error.response?.data?.error || `Impossible de creer le catalogue "${label}"`,
+        { variant: 'error' }
+      );
+    },
+  });
+      setOpenCatalogueDialog(false);
+      setSelectedCandidates(new Set());
+      setSelectedClient(null);
+      setCatalogueForm({
+        title: '',
+        customMessage: '',
+        includeSummary: true,
+        includeDetails: true,
+        includeVideo: true,
+        includeExperience: true,
+        includeSituation: true,
+        includeCV: true,
+      });
+    },
+    onError: (error: any) => {
+      const label = variables?.title || 'Sans titre';
+      enqueueSnackbar(
+        error.response?.data?.error || `Impossible de creer le catalogue "${label}"`,
+        { variant: 'error' }
+      );
+    },
+  });
     },
     onError: (error: any) => {
       enqueueSnackbar(
@@ -456,7 +594,7 @@ export default function CandidatesListPage() {
       setEditingCandidate(candidate);
       setOpenAddDialog(true);
     } catch (error) {
-      enqueueSnackbar('Erreur lors du chargement du candidat', { variant: 'error' });
+      enqueueSnackbar(`Impossible de charger le candidat ${candidateId}. Reessayez ou verifiez son statut.`, { variant: 'error' });
     }
   };
 
@@ -584,7 +722,7 @@ export default function CandidatesListPage() {
   if (error) {
     return (
       <Alert severity="error">
-        Erreur lors du chargement des candidats. Veuillez réessayer.
+        Impossible de charger la liste des candidats. Verifiez votre connexion puis reessayez.
       </Alert>
     );
   }
@@ -604,29 +742,48 @@ export default function CandidatesListPage() {
         <Typography variant="h4" fontWeight="bold">
           Candidats ({data?.pagination.total || 0})
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="outlined"
-            startIcon={<FileDownloadIcon />}
-            onClick={handleExportCSV}
-            disabled={isExporting || isLoading}
-          >
-            {isExporting ? 'Export en cours...' : 'Exporter CSV'}
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<MapIcon />}
-            onClick={() => setShowMap(!showMap)}
-          >
-            {showMap ? 'Masquer carte' : 'Afficher carte'}
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setOpenAddDialog(true)}
-          >
-            Ajouter un candidat
-          </Button>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <HelpDialog
+            title="Guide liste candidats"
+            subtitle="Filtres, exports et actions groupées"
+            sections={CANDIDATES_HELP_SECTIONS}
+            faq={CANDIDATES_HELP_FAQ}
+            triggerLabel="Guide & FAQ"
+          />
+          <Tooltip title="Exporter les candidats visibles avec les filtres actifs">
+            <span>
+              <Button
+                variant="outlined"
+                startIcon={<FileDownloadIcon />}
+                onClick={handleExportCSV}
+                disabled={isExporting || isLoading}
+              >
+                {isExporting ? 'Export en cours...' : 'Exporter CSV'}
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip title="Afficher la carte pour filtrer par ville">
+            <span>
+              <Button
+                variant="outlined"
+                startIcon={<MapIcon />}
+                onClick={() => setShowMap(!showMap)}
+              >
+                {showMap ? 'Masquer carte' : 'Afficher carte'}
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip title="Ajouter manuellement un nouveau candidat">
+            <span>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => setOpenAddDialog(true)}
+              >
+                Ajouter un candidat
+              </Button>
+            </span>
+          </Tooltip>
         </Box>
       </Box>
 
@@ -736,19 +893,24 @@ export default function CandidatesListPage() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {candidates.map((candidate: any) => (
-                    <CandidateTableRow
-                      key={candidate.id}
-                      candidate={candidate}
-                      isSelected={selectedCandidates.has(candidate.id)}
-                      onSelect={() => handleSelectCandidate(candidate.id)}
-                      onView={() => navigate(`/candidates/${candidate.id}`)}
-                      onEdit={() => handleEditCandidate(candidate.id)}
-                      onArchive={() => archiveMutation.mutate(candidate.id)}
-                      onUnarchive={() => unarchiveMutation.mutate(candidate.id)}
-                      onDelete={() => deleteMutation.mutate(candidate.id)}
-                    />
-                  ))}
+                  {candidates.map((candidate: any) => {
+                    const label = `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || candidate.email || `ID ${candidate.id}`;
+                    return (
+                      <CandidateTableRow
+                        key={candidate.id}
+                        candidate={candidate}
+                        isSelected={selectedCandidates.has(candidate.id)}
+                        onSelect={() => handleSelectCandidate(candidate.id)}
+                        onView={() => navigate(`/candidates/${candidate.id}`)}
+                        onEdit={() => handleEditCandidate(candidate.id)}
+                        onArchive={() => archiveMutation.mutate({ id: candidate.id, label })}
+                        onUnarchive={() => unarchiveMutation.mutate({ id: candidate.id, label })}
+                        onDelete={() => deleteMutation.mutate({ id: candidate.id, label })}
+                        onRevertToProspect={() => revertToProspectMutation.mutate({ id: candidate.id, label })}
+                        userRole={user?.role}
+                      />
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -781,14 +943,23 @@ export default function CandidatesListPage() {
         fullWidth
         fullScreen
       >
-        <DialogTitle>
+                <DialogTitle>
           <Box display="flex" justifyContent="space-between" alignItems="center">
             <Typography variant="h5">
-              {editingCandidate ? '✏️ Modifier le candidat' : '📋 Feuille d\'évaluation d\'entrevue'}
+              {editingCandidate ? '✏️ Modifier le candidat' : '📋 Feuille d\\'\xe9valuation d\\'entrevue'}
             </Typography>
-            <IconButton edge="end" onClick={handleCloseDialog}>
-              <CancelIcon />
-            </IconButton>
+            <Box display="flex" alignItems="center" gap={1}>
+              <HelpDialog
+                title="Guide formulaire candidat"
+                subtitle="Champs requis et astuces"
+                sections={CANDIDATE_FORM_HELP_SECTIONS}
+                faq={CANDIDATE_FORM_HELP_FAQ}
+                triggerLabel="Aide formulaire"
+              />
+              <IconButton edge="end" onClick={handleCloseDialog}>
+                <CancelIcon />
+              </IconButton>
+            </Box>
           </Box>
         </DialogTitle>
         <DialogContent>
@@ -812,7 +983,17 @@ export default function CandidatesListPage() {
         fullWidth
       >
         <DialogTitle>
-          Créer un catalogue avec {selectedCandidates.size} candidat{selectedCandidates.size !== 1 ? 's' : ''}
+          <Box display="flex" alignItems="center" justifyContent="space-between">
+            <Typography variant="h6">
+              Créer un catalogue avec {selectedCandidates.size} candidat{selectedCandidates.size !== 1 ? 's' : ''}
+            </Typography>
+            <HelpDialog
+              title="Guide catalogue"
+              subtitle="Conseils avant partage client"
+              sections={CATALOGUE_HELP_SECTIONS}
+              triggerLabel="Astuces catalogue"
+            />
+          </Box>
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>

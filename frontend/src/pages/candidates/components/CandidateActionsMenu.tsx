@@ -19,6 +19,7 @@ import {
   Delete as DeleteIcon,
   Edit as EditIcon,
   Visibility as ViewIcon,
+  Undo as UndoIcon,
 } from '@mui/icons-material';
 import { Candidate } from '@/types';
 
@@ -29,6 +30,7 @@ interface CandidateActionsMenuProps {
   onArchive: () => void;
   onUnarchive: () => void;
   onDelete: () => void;
+  onRevertToProspect?: () => void;
   userRole?: string;
 }
 
@@ -39,12 +41,13 @@ export default function CandidateActionsMenu({
   onArchive,
   onUnarchive,
   onDelete,
+  onRevertToProspect,
   userRole = 'ADMIN',
 }: CandidateActionsMenuProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
-    type: 'archive' | 'unarchive' | 'delete' | null;
+    type: 'archive' | 'unarchive' | 'delete' | 'revert' | null;
   }>({ open: false, type: null });
 
   const handleOpenMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -56,7 +59,7 @@ export default function CandidateActionsMenu({
     setAnchorEl(null);
   };
 
-  const handleOpenConfirmDialog = (type: 'archive' | 'unarchive' | 'delete') => {
+  const handleOpenConfirmDialog = (type: 'archive' | 'unarchive' | 'delete' | 'revert') => {
     setConfirmDialog({ open: true, type });
     handleCloseMenu();
   };
@@ -75,6 +78,11 @@ export default function CandidateActionsMenu({
         break;
       case 'delete':
         onDelete();
+        break;
+      case 'revert':
+        if (onRevertToProspect) {
+          onRevertToProspect();
+        }
         break;
     }
     handleCloseConfirmDialog();
@@ -102,6 +110,13 @@ export default function CandidateActionsMenu({
           message: `Êtes-vous sûr de vouloir supprimer ${candidate.firstName} ${candidate.lastName} ? Cette action est irréversible.`,
           confirmText: 'Supprimer',
           confirmColor: 'error' as const,
+        };
+      case 'revert':
+        return {
+          title: 'Re-convertir en candidat potentiel',
+          message: `Êtes-vous sûr de vouloir re-convertir ${candidate.firstName} ${candidate.lastName} en candidat potentiel ? Le candidat sera supprimé et un nouveau prospect sera créé avec toutes ses informations (y compris le CV).`,
+          confirmText: 'Re-convertir',
+          confirmColor: 'primary' as const,
         };
       default:
         return null;
@@ -153,6 +168,15 @@ export default function CandidateActionsMenu({
               <ArchiveIcon fontSize="small" color="warning" />
             </ListItemIcon>
             <ListItemText>Archiver</ListItemText>
+          </MenuItem>
+        )}
+
+        {userRole === 'ADMIN' && onRevertToProspect && (
+          <MenuItem onClick={() => handleOpenConfirmDialog('revert')}>
+            <ListItemIcon>
+              <UndoIcon fontSize="small" sx={{ color: 'primary.main' }} />
+            </ListItemIcon>
+            <ListItemText>Re-convertir en candidat potentiel</ListItemText>
           </MenuItem>
         )}
 
