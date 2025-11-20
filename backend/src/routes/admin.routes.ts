@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate } from '../middleware/auth';
+import { authenticateJWT } from '../middleware/auth';
 import {
   revertAutoConvertedCandidates,
   findAutoConvertedCandidates,
@@ -14,18 +14,18 @@ const router = Router();
  * GET /api/admin/auto-converted-candidates
  * Liste tous les candidats auto-convertis (sans les modifier)
  */
-router.get('/auto-converted-candidates', authenticate, findAutoConvertedCandidates);
+router.get('/auto-converted-candidates', authenticateJWT, findAutoConvertedCandidates);
 
 /**
  * POST /api/admin/revert-auto-converted-candidates
  * Re-convertit tous les candidats auto-convertis en prospects
  */
-router.post('/revert-auto-converted-candidates', authenticate, revertAutoConvertedCandidates);
+router.post('/revert-auto-converted-candidates', authenticateJWT, revertAutoConvertedCandidates);
 
 /**
  * POST /api/admin/revert-candidate-to-prospect/:id
  * Re-convertit UN SEUL candidat en prospect (utilisé depuis le menu "3 points")
  */
-router.post('/revert-candidate-to-prospect/:id', authenticate, revertSingleCandidateToProspect);
+router.post('/revert-candidate-to-prospect/:id', authenticateJWT, revertSingleCandidateToProspect);
 
 export default router;
