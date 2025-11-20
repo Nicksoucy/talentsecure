@@ -3,6 +3,7 @@ import { authenticate } from '../middleware/auth';
 import {
   revertAutoConvertedCandidates,
   findAutoConvertedCandidates,
+  revertSingleCandidateToProspect,
 } from '../controllers/admin.controller';
 
 const router = Router();
@@ -20,5 +21,11 @@ router.get('/auto-converted-candidates', authenticate, findAutoConvertedCandidat
  * Re-convertit tous les candidats auto-convertis en prospects
  */
 router.post('/revert-auto-converted-candidates', authenticate, revertAutoConvertedCandidates);
+
+/**
+ * POST /api/admin/revert-candidate-to-prospect/:id
+ * Re-convertit UN SEUL candidat en prospect (utilisé depuis le menu "3 points")
+ */
+router.post('/revert-candidate-to-prospect/:id', authenticate, revertSingleCandidateToProspect);
 
 export default router;

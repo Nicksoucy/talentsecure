@@ -27,6 +27,7 @@ import prospectRoutes from './routes/prospect.routes';
 import webhookRoutes from './routes/webhook.routes';
 import adminRoutes from './routes/admin.routes';
 import wishlistRoutes from './routes/wishlist.routes';
+import exportRoutes from './routes/export.routes';
 import skillsRoutes from './routes/skills.routes';
 
 const app: Application = express();
@@ -110,6 +111,7 @@ app.use('/api/prospects', prospectRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/exports', exportRoutes);
 app.use('/api/skills', skillsRoutes);
 // app.use('/api/users', userRoutes);
 

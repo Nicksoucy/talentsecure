@@ -18,6 +18,7 @@ const ProspectDetailPage = lazy(() => import('./pages/prospects/ProspectDetailPa
 const ProspectConvertPage = lazy(() => import('./pages/prospects/ProspectConvertPage'));
 const AutresCompetancesPage = lazy(() => import('./pages/autres-competances/AutresCompetancesPage'));
 const WishlistsPage = lazy(() => import('./pages/wishlists/WishlistsPage'));
+const ExportPage = lazy(() => import('./pages/exports/ExportPage'));
 const CatalogueViewPage = lazy(() => import('./pages/public/CatalogueViewPage'));
 const ClientLoginPage = lazy(() => import('./pages/client/ClientLoginPage'));
 const ClientDashboardPage = lazy(() => import('./pages/client/ClientDashboardPage'));
@@ -87,6 +88,7 @@ function App() {
             <Route path="/clients" element={<ClientsPage />} />
             <Route path="/autres-competances" element={<AutresCompetancesPage />} />
             <Route path="/wishlists" element={<WishlistsPage />} />
+            <Route path="/exports" element={<ExportPage />} />
           </Route>
 
           {/* 404 */}
@@ -98,3 +100,4 @@ function App() {
 }
 
 export default App;
+

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -28,6 +28,7 @@ import {
   Logout as LogoutIcon,
   WorkOutline as WorkIcon,
   ShoppingCart as ShoppingCartIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
 import { useAuthStore } from '@/store/authStore';
 import { authService } from '@/services/auth.service';
@@ -71,7 +72,7 @@ const MainLayout = () => {
     { text: 'Catalogues', icon: <DescriptionIcon />, path: '/catalogues' },
     { text: 'Clients', icon: <BusinessIcon />, path: '/clients' },
     { text: 'Demandes Clients', icon: <ShoppingCartIcon />, path: '/wishlists' },
-    { text: 'Autre Compétance', icon: <WorkIcon />, path: '/autres-competances' },
+    { text: 'Autre CompÃ©tance', icon: <WorkIcon />, path: '/autres-competances' },
   ];
 
   const drawer = (
@@ -157,13 +158,13 @@ const MainLayout = () => {
               <ListItemIcon>
                 <SettingsIcon fontSize="small" />
               </ListItemIcon>
-              Paramètres
+              ParamÃ¨tres
             </MenuItem>
             <MenuItem onClick={handleLogout}>
               <ListItemIcon>
                 <LogoutIcon fontSize="small" />
               </ListItemIcon>
-              Déconnexion
+              DÃ©connexion
             </MenuItem>
           </Menu>
         </Toolbar>
@@ -226,3 +227,4 @@ const MainLayout = () => {
 };
 
 export default MainLayout;
+

@@ -1,4 +1,4 @@
-import axios from 'axios';
+﻿import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -128,4 +128,35 @@ export const skillsService = {
     );
     return response.data;
   },
+  exportSkills: async (
+    format: 'csv' | 'excel' | 'pdf',
+    params: { query?: string; category?: string; minConfidence?: number; limit?: number } = {},
+    accessToken?: string
+  ) => {
+    const queryParams: Record<string, string> = {};
+    if (params.query) queryParams.q = params.query;
+    if (params.category) queryParams.category = params.category;
+    if (typeof params.minConfidence === 'number') {
+      queryParams.minConfidence = params.minConfidence.toString();
+    }
+    if (typeof params.limit === 'number') {
+      queryParams.limit = params.limit.toString();
+    }
+
+    const response = await axios.get(`${API_URL}/api/exports/skills/${format}`, {
+      params: queryParams,
+      responseType: 'blob',
+      headers: accessToken
+        ? {
+            Authorization: `Bearer ${accessToken}`,
+          }
+        : undefined,
+    });
+
+    return response;
+  }
 };
+
+
+
+

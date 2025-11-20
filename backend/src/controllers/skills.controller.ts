@@ -1,6 +1,7 @@
-import { Request, Response, NextFunction } from 'express';
+﻿import { Request, Response, NextFunction } from 'express';
 import { PrismaClient, SkillCategory, SkillLevel, SkillSource } from '@prisma/client';
 import { cvExtractionService } from '../services/cv-extraction.service';
+import { buildExtractedSkillsFilters, fetchExtractedSkillsResults } from '../services/skill-search.service';
 import { aiExtractionService } from '../services/ai-extraction.service';
 
 const prisma = new PrismaClient();
@@ -85,7 +86,7 @@ export const getSkillById = async (req: Request, res: Response, next: NextFuncti
     });
 
     if (!skill) {
-      return res.status(404).json({ error: 'Compétence non trouvée' });
+      return res.status(404).json({ error: 'CompÃ©tence non trouvÃ©e' });
     }
 
     res.json({ skill });
@@ -109,7 +110,7 @@ export const createSkill = async (req: Request, res: Response, next: NextFunctio
     });
 
     if (existing) {
-      return res.status(400).json({ error: 'Une compétence avec ce nom existe déjà' });
+      return res.status(400).json({ error: 'Une compÃ©tence avec ce nom existe dÃ©jÃ ' });
     }
 
     const skill = await prisma.skill.create({
@@ -123,7 +124,7 @@ export const createSkill = async (req: Request, res: Response, next: NextFunctio
     });
 
     res.status(201).json({
-      message: 'Compétence créée avec succès',
+      message: 'CompÃ©tence crÃ©Ã©e avec succÃ¨s',
       skill,
     });
   } catch (error) {
@@ -147,7 +148,7 @@ export const updateSkill = async (req: Request, res: Response, next: NextFunctio
     });
 
     if (!existing) {
-      return res.status(404).json({ error: 'Compétence non trouvée' });
+      return res.status(404).json({ error: 'CompÃ©tence non trouvÃ©e' });
     }
 
     // If changing name, check for duplicates
@@ -157,7 +158,7 @@ export const updateSkill = async (req: Request, res: Response, next: NextFunctio
       });
 
       if (duplicate) {
-        return res.status(400).json({ error: 'Une compétence avec ce nom existe déjà' });
+        return res.status(400).json({ error: 'Une compÃ©tence avec ce nom existe dÃ©jÃ ' });
       }
     }
 
@@ -173,7 +174,7 @@ export const updateSkill = async (req: Request, res: Response, next: NextFunctio
     });
 
     res.json({
-      message: 'Compétence mise à jour',
+      message: 'CompÃ©tence mise Ã  jour',
       skill,
     });
   } catch (error) {
@@ -199,7 +200,7 @@ export const deleteSkill = async (req: Request, res: Response, next: NextFunctio
     });
 
     if (!skill) {
-      return res.status(404).json({ error: 'Compétence non trouvée' });
+      return res.status(404).json({ error: 'CompÃ©tence non trouvÃ©e' });
     }
 
     // Soft delete - just mark as inactive
@@ -209,7 +210,7 @@ export const deleteSkill = async (req: Request, res: Response, next: NextFunctio
     });
 
     res.json({
-      message: `Compétence désactivée (${skill._count.candidateSkills} candidat(s) affecté(s))`,
+      message: `CompÃ©tence dÃ©sactivÃ©e (${skill._count.candidateSkills} candidat(s) affectÃ©(s))`,
       skill: updated,
     });
   } catch (error) {
@@ -317,7 +318,7 @@ export const addCandidateSkill = async (req: Request, res: Response, next: NextF
     });
 
     if (!candidate) {
-      return res.status(404).json({ error: 'Candidat non trouvé' });
+      return res.status(404).json({ error: 'Candidat non trouvÃ©' });
     }
 
     // Check if skill exists
@@ -326,7 +327,7 @@ export const addCandidateSkill = async (req: Request, res: Response, next: NextF
     });
 
     if (!skill) {
-      return res.status(404).json({ error: 'Compétence non trouvée' });
+      return res.status(404).json({ error: 'CompÃ©tence non trouvÃ©e' });
     }
 
     // Check if candidate already has this skill
@@ -340,7 +341,7 @@ export const addCandidateSkill = async (req: Request, res: Response, next: NextF
     });
 
     if (existing) {
-      return res.status(400).json({ error: 'Le candidat possède déjà cette compétence' });
+      return res.status(400).json({ error: 'Le candidat possÃ¨de dÃ©jÃ  cette compÃ©tence' });
     }
 
     const candidateSkill = await prisma.candidateSkill.create({
@@ -360,7 +361,7 @@ export const addCandidateSkill = async (req: Request, res: Response, next: NextF
     });
 
     res.status(201).json({
-      message: 'Compétence ajoutée au candidat',
+      message: 'CompÃ©tence ajoutÃ©e au candidat',
       candidateSkill,
     });
   } catch (error) {
@@ -388,7 +389,7 @@ export const updateCandidateSkill = async (req: Request, res: Response, next: Ne
     });
 
     if (!candidateSkill) {
-      return res.status(404).json({ error: 'Compétence non trouvée pour ce candidat' });
+      return res.status(404).json({ error: 'CompÃ©tence non trouvÃ©e pour ce candidat' });
     }
 
     const updated = await prisma.candidateSkill.update({
@@ -412,7 +413,7 @@ export const updateCandidateSkill = async (req: Request, res: Response, next: Ne
     });
 
     res.json({
-      message: 'Compétence mise à jour',
+      message: 'CompÃ©tence mise Ã  jour',
       candidateSkill: updated,
     });
   } catch (error) {
@@ -438,7 +439,7 @@ export const removeCandidateSkill = async (req: Request, res: Response, next: Ne
     });
 
     if (!candidateSkill) {
-      return res.status(404).json({ error: 'Compétence non trouvée pour ce candidat' });
+      return res.status(404).json({ error: 'CompÃ©tence non trouvÃ©e pour ce candidat' });
     }
 
     await prisma.candidateSkill.delete({
@@ -451,7 +452,7 @@ export const removeCandidateSkill = async (req: Request, res: Response, next: Ne
     });
 
     res.json({
-      message: 'Compétence retirée du candidat',
+      message: 'CompÃ©tence retirÃ©e du candidat',
     });
   } catch (error) {
     next(error);
@@ -472,7 +473,7 @@ export const searchCandidatesBySkills = async (
     const { skillIds, level, minYearsExperience, onlyVerified } = req.body;
 
     if (!skillIds || skillIds.length === 0) {
-      return res.status(400).json({ error: 'Au moins une compétence est requise' });
+      return res.status(400).json({ error: 'Au moins une compÃ©tence est requise' });
     }
 
     const where: any = {
@@ -572,7 +573,7 @@ export const extractSkillsFromCandidate = async (
       });
 
       if (!prospect) {
-        return res.status(404).json({ error: 'Candidat ou prospect non trouvé' });
+        return res.status(404).json({ error: 'Candidat ou prospect non trouvÃ©' });
       }
       isProspect = true;
     }
@@ -583,7 +584,7 @@ export const extractSkillsFromCandidate = async (
     if (!cvText || cvText.length < 50) {
       return res.status(400).json({
         error: 'CV insuffisant',
-        message: "Le CV doit contenir au moins 50 caractères pour l'extraction",
+        message: "Le CV doit contenir au moins 50 caractÃ¨res pour l'extraction",
       });
     }
 
@@ -689,7 +690,7 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
             success: true,
             skillsFound: existingLog.skillsFound,
             skipped: true,
-            reason: 'Déjà traité',
+            reason: 'DÃ©jÃ  traitÃ©',
           });
           continue;
         }
@@ -709,7 +710,7 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
             results.push({
               candidateId,
               success: false,
-              error: 'Candidat ou prospect non trouvé',
+              error: 'Candidat ou prospect non trouvÃ©',
             });
             continue;
           }
@@ -723,7 +724,7 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
           results.push({
             candidateId,
             success: false,
-            error: 'CV insuffisant (moins de 50 caractères)',
+            error: 'CV insuffisant (moins de 50 caractÃ¨res)',
           });
           continue;
         }
@@ -781,7 +782,7 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
     const totalSkills = results.reduce((sum, r) => sum + (r.skillsFound || 0), 0);
 
     res.json({
-      message: `Extraction batch terminée: ${successCount}/${candidateIds.length} réussies (${skippedCount} déjà traités, ${processedCount} nouveaux)`,
+      message: `Extraction batch terminÃ©e: ${successCount}/${candidateIds.length} rÃ©ussies (${skippedCount} dÃ©jÃ  traitÃ©s, ${processedCount} nouveaux)`,
       results,
       summary: {
         total: candidateIds.length,
@@ -817,7 +818,7 @@ export const extractSkillsWithAI = async (req: Request, res: Response, next: Nex
     });
 
     if (!candidate) {
-      return res.status(404).json({ error: 'Candidat non trouvé' });
+      return res.status(404).json({ error: 'Candidat non trouvÃ©' });
     }
 
     // Get candidate text
@@ -826,7 +827,7 @@ export const extractSkillsWithAI = async (req: Request, res: Response, next: Nex
     if (!cvText || cvText.length < 50) {
       return res.status(400).json({
         error: 'CV insuffisant',
-        message: "Le CV doit contenir au moins 50 caractères pour l'extraction AI",
+        message: "Le CV doit contenir au moins 50 caractÃ¨res pour l'extraction AI",
       });
     }
 
@@ -853,7 +854,7 @@ export const extractSkillsWithAI = async (req: Request, res: Response, next: Nex
     );
 
     res.json({
-      message: 'Extraction AI terminée',
+      message: 'Extraction AI terminÃ©e',
       extraction: {
         provider: extraction.method,
         model: extraction.model,
@@ -896,7 +897,7 @@ export const extractSkillsHybrid = async (req: Request, res: Response, next: Nex
     });
 
     if (!candidate) {
-      return res.status(404).json({ error: 'Candidat non trouvé' });
+      return res.status(404).json({ error: 'Candidat non trouvÃ©' });
     }
 
     // Get candidate text
@@ -947,7 +948,7 @@ export const extractSkillsHybrid = async (req: Request, res: Response, next: Nex
     );
 
     res.json({
-      message: 'Extraction hybride terminée',
+      message: 'Extraction hybride terminÃ©e',
       extraction: {
         regex: {
           found: regexExtraction.totalSkills,
@@ -1056,92 +1057,16 @@ export const getAIExtractionStats = async (req: Request, res: Response, next: Ne
  */
 export const searchExtractedSkills = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { q, category, minConfidence = 0, limit = 100 } = req.query;
-
-    // Build where clause for skills
-    const skillWhere: any = {
-      isActive: true,
-    };
-
-    if (q) {
-      skillWhere.OR = [
-        { name: { contains: q as string, mode: 'insensitive' } },
-        { keywords: { has: (q as string).toLowerCase() } },
-      ];
-    }
-
-    if (category) {
-      skillWhere.category = category;
-    }
-
-    // Get all matching skills with their candidate relationships
-    const skills = await prisma.skill.findMany({
-      where: skillWhere,
-      include: {
-        candidateSkills: {
-          where: {
-            ...(minConfidence && { confidence: { gte: parseFloat(minConfidence as string) } }),
-          },
-          include: {
-            candidate: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-                phone: true,
-                city: true,
-                province: true,
-                status: true,
-                globalRating: true,
-              },
-            },
-          },
-          orderBy: {
-            confidence: 'desc',
-          },
-        },
-        _count: {
-          select: {
-            candidateSkills: true,
-          },
-        },
-      },
-      take: parseInt(limit as string),
-      orderBy: {
-        candidateSkills: {
-          _count: 'desc', // Most common skills first
-        },
-      },
-    });
-
-    // Format response
-    const results = skills.map((skill) => ({
-      skillId: skill.id,
-      skillName: skill.name,
-      category: skill.category,
-      description: skill.description,
-      keywords: skill.keywords,
-      totalCandidates: skill._count.candidateSkills,
-      candidates: skill.candidateSkills.map((cs) => ({
-        candidateId: cs.candidateId,
-        candidate: cs.candidate,
-        level: cs.level,
-        yearsExperience: cs.yearsExperience,
-        confidence: cs.confidence,
-        source: cs.source,
-        isVerified: cs.isVerified,
-        extractedText: cs.extractedText,
-      })),
-    }));
+    const filters = buildExtractedSkillsFilters(req.query);
+    const { results } = await fetchExtractedSkillsResults(filters);
 
     res.json({
       results,
       count: results.length,
       query: {
-        searchTerm: q || null,
-        category: category || null,
-        minConfidence: parseFloat(minConfidence as string),
+        searchTerm: filters.searchTerm || null,
+        category: filters.category || null,
+        minConfidence: filters.minConfidence ?? 0,
       },
     });
   } catch (error) {

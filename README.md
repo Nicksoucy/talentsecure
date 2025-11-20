@@ -1,15 +1,15 @@
-# TalentSecure Platform
+﻿# TalentSecure Platform
 
-Plateforme complète de gestion et distribution de candidats agents de sécurité avec portail client intégré.
+Plateforme complÃ¨te de gestion et distribution de candidats agents de sÃ©curitÃ© avec portail client intÃ©grÃ©.
 
 ## Vue d'ensemble
 
 TalentSecure est une solution full-stack qui permet de:
-- Gérer une banque de talents (candidats et prospects)
-- Créer des catalogues personnalisés pour les clients
-- Partager les catalogues via un portail client sécurisé
-- Visualiser la distribution géographique des candidats en temps réel
-- Gérer les demandes de recrutement
+- GÃ©rer une banque de talents (candidats et prospects)
+- CrÃ©er des catalogues personnalisÃ©s pour les clients
+- Partager les catalogues via un portail client sÃ©curisÃ©
+- Visualiser la distribution gÃ©ographique des candidats en temps rÃ©el
+- GÃ©rer les demandes de recrutement
 
 ## Stack Technique
 
@@ -17,17 +17,17 @@ TalentSecure est une solution full-stack qui permet de:
 - **Node.js 18+** avec TypeScript
 - **Express.js** pour l'API REST
 - **Prisma** comme ORM
-- **PostgreSQL** pour la base de données
+- **PostgreSQL** pour la base de donnÃ©es
 - **Passport.js** pour l'authentification (JWT + OAuth Google/Microsoft)
-- **Cloudflare R2** pour le stockage de fichiers (CVs, vidéos, PDFs)
-- **PDFKit** pour la génération de catalogues PDF
-- **OpenAI GPT-4** pour l'extraction intelligente de compétences depuis les CVs
+- **Cloudflare R2** pour le stockage de fichiers (CVs, vidÃ©os, PDFs)
+- **PDFKit** pour la gÃ©nÃ©ration de catalogues PDF
+- **OpenAI GPT-4** pour l'extraction intelligente de compÃ©tences depuis les CVs
 
 ### Frontend
 - **React 18** avec TypeScript
 - **Vite** comme build tool
 - **Material-UI (MUI)** pour l'interface utilisateur
-- **React Query** pour la gestion des données
+- **React Query** pour la gestion des donnÃ©es
 - **Zustand** pour le state management
 - **React Router** pour le routing
 - **Leaflet** pour les cartes interactives
@@ -37,137 +37,144 @@ TalentSecure est une solution full-stack qui permet de:
 
 ```
 talentsecure/
-├── backend/                 # API Node.js/Express
-│   ├── src/
-│   │   ├── config/         # Configuration (database, passport, storage)
-│   │   ├── controllers/    # Contrôleurs métier
-│   │   ├── routes/         # Définition des routes API
-│   │   ├── services/       # Services (PDF, upload, email)
-│   │   ├── middleware/     # Middleware (auth, validation)
-│   │   ├── utils/          # Utilitaires (jwt, password, etc.)
-│   │   └── scripts/        # Scripts de migration et maintenance
-│   └── prisma/
-│       └── schema.prisma   # Schéma de base de données
-│
-└── frontend/               # Application React
-    ├── src/
-    │   ├── components/     # Composants réutilisables
-    │   │   ├── admin/     # Composants admin
-    │   │   └── client/    # Composants portail client
-    │   ├── pages/          # Pages de l'application
-    │   │   ├── auth/      # Pages d'authentification
-    │   │   ├── candidates/ # Gestion des candidats
-    │   │   ├── catalogues/ # Gestion des catalogues
-    │   │   ├── clients/    # Gestion des clients
-    │   │   └── client/     # Portail client
-    │   ├── services/       # Services API
-    │   ├── store/          # State management (Zustand)
-    │   └── utils/          # Utilitaires
-    └── public/             # Assets statiques
+â”œâ”€â”€ backend/                 # API Node.js/Express
+â”‚   â”œâ”€â”€ src/
+â”‚   â”‚   â”œâ”€â”€ config/         # Configuration (database, passport, storage)
+â”‚   â”‚   â”œâ”€â”€ controllers/    # ContrÃ´leurs mÃ©tier
+â”‚   â”‚   â”œâ”€â”€ routes/         # DÃ©finition des routes API
+â”‚   â”‚   â”œâ”€â”€ services/       # Services (PDF, upload, email)
+â”‚   â”‚   â”œâ”€â”€ middleware/     # Middleware (auth, validation)
+â”‚   â”‚   â”œâ”€â”€ utils/          # Utilitaires (jwt, password, etc.)
+â”‚   â”‚   â””â”€â”€ scripts/        # Scripts de migration et maintenance
+â”‚   â””â”€â”€ prisma/
+â”‚       â””â”€â”€ schema.prisma   # SchÃ©ma de base de donnÃ©es
+â”‚
+â””â”€â”€ frontend/               # Application React
+    â”œâ”€â”€ src/
+    â”‚   â”œâ”€â”€ components/     # Composants rÃ©utilisables
+    â”‚   â”‚   â”œâ”€â”€ admin/     # Composants admin
+    â”‚   â”‚   â””â”€â”€ client/    # Composants portail client
+    â”‚   â”œâ”€â”€ pages/          # Pages de l'application
+    â”‚   â”‚   â”œâ”€â”€ auth/      # Pages d'authentification
+    â”‚   â”‚   â”œâ”€â”€ candidates/ # Gestion des candidats
+    â”‚   â”‚   â”œâ”€â”€ catalogues/ # Gestion des catalogues
+    â”‚   â”‚   â”œâ”€â”€ clients/    # Gestion des clients
+    â”‚   â”‚   â””â”€â”€ client/     # Portail client
+    â”‚   â”œâ”€â”€ services/       # Services API
+    â”‚   â”œâ”€â”€ store/          # State management (Zustand)
+    â”‚   â””â”€â”€ utils/          # Utilitaires
+    â””â”€â”€ public/             # Assets statiques
 ```
 
-## Fonctionnalités Principales
+## FonctionnalitÃ©s Principales
 
 ### 1. Administration (Backoffice)
 
 #### Gestion des Candidats
-- Création et modification de profils candidats
+- CrÃ©ation et modification de profils candidats
 - Upload de CVs (stockage Cloudflare R2)
-- Upload de vidéos d'entrevue (stockage Cloudflare R2)
-- Gestion des langues, expériences, certifications
-- Système de notation globale
+- Upload de vidÃ©os d'entrevue (stockage Cloudflare R2)
+- Gestion des langues, expÃ©riences, certifications
+- SystÃ¨me de notation globale
 - Statuts: NOUVEAU, EN_TRAITEMENT, DISPONIBLE, EN_RECHERCHE, EMBAUCHE, ARCHIVE
 
 #### Gestion des Prospects
 - Importation depuis LinkedIn
-- Évaluation et qualification
+- Ã‰valuation et qualification
 - Migration vers candidats actifs
-- Cartes géographiques interactives
+- Cartes gÃ©ographiques interactives
 
 #### Gestion des Clients
-- Création de profils clients
-- Configuration des accès portail
-- Génération de mots de passe sécurisés
+- CrÃ©ation de profils clients
+- Configuration des accÃ¨s portail
+- GÃ©nÃ©ration de mots de passe sÃ©curisÃ©s
 - Historique des catalogues
 
 #### Gestion des Catalogues
-- Création de catalogues personnalisés
-- Sélection de candidats avec ordre personnalisable
-- Génération automatique de PDF
-- Système de paiement et restriction de contenu
-- Partage sécurisé via lien unique
+- CrÃ©ation de catalogues personnalisÃ©s
+- SÃ©lection de candidats avec ordre personnalisable
+- GÃ©nÃ©ration automatique de PDF
+- SystÃ¨me de paiement et restriction de contenu
+- Partage sÃ©curisÃ© via lien unique
 - Tracking des vues et interactions
 
-#### Gestion des Compétences et Extraction IA 🆕
-- **Extraction automatique de compétences depuis CVs**
-  - Intégration OpenAI GPT-4 pour analyse intelligente
-  - Extraction de compétences techniques et soft skills
-  - Évaluation automatique du niveau d'expérience
+#### Gestion des CompÃ©tences et Extraction IA ðŸ†•
+- **Extraction automatique de compÃ©tences depuis CVs**
+  - IntÃ©gration OpenAI GPT-4 pour analyse intelligente
+  - Extraction de compÃ©tences techniques et soft skills
+  - Ã‰valuation automatique du niveau d'expÃ©rience
   - Support pour formats PDF et TXT
 
-- **Interface "Autres Compétences"**
-  - Recherche de candidats par compétences spécifiques
-  - Statistiques en temps réel (candidats, compétences uniques, liens)
+- **Interface "Autres CompÃ©tences"**
+  - Recherche de candidats par compÃ©tences spÃ©cifiques
+  - Statistiques en temps rÃ©el (candidats, compÃ©tences uniques, liens)
   - Traitement batch pour plusieurs candidats/prospects
-  - Auto-conversion prospect → candidat lors de l'extraction
+  - Auto-conversion prospect â†’ candidat lors de l'extraction
 
-- **Base de données de compétences**
-  - Catalogue de 95+ compétences pré-identifiées
-  - Système de liens candidat-compétence
-  - Recherche et filtrage avancés
+- **Base de donnÃ©es de compÃ©tences**
+  - Catalogue de 95+ compÃ©tences prÃ©-identifiÃ©es
+  - SystÃ¨me de liens candidat-compÃ©tence
+  - Recherche et filtrage avancÃ©s
+
+- **Optimisation des appels OpenAI**
+  - Calcul d'un checksum SHA-256 pour réutiliser les réponses OpenAI lorsque le CV n'a pas changé et éviter les appels payants inutiles.
+  - Une file d'attente limite le nombre d'appels simultanés et applique un backoff automatique.
+- **Exports CSV/Excel/PDF**
+  - Les admins peuvent lancer /api/exports/skills/{format} ou utiliser la page /exports côté frontend pour générer des fichiers alignés avec les filtres actifs.
+  - Les exports incluent les coordonnées candidates, le niveau, la confiance et l'origine de chaque compétence.
 
 #### Wishlists
 - Gestion de listes de souhaits pour les clients
 - Association de candidats favoris
-- Suivi des préférences clients
+- Suivi des prÃ©fÃ©rences clients
 
 ### 2. Portail Client
 
 #### Authentification
-- Connexion sécurisée (email/password)
+- Connexion sÃ©curisÃ©e (email/password)
 - JWT avec refresh tokens
-- Authentification séparée du backoffice
+- Authentification sÃ©parÃ©e du backoffice
 
 #### Dashboard Client
-- **Vue d'ensemble des catalogues personnalisés**
-  - Liste des catalogues assignés
+- **Vue d'ensemble des catalogues personnalisÃ©s**
+  - Liste des catalogues assignÃ©s
   - Statut et nombre de candidats
   - Indicateurs de paiement
 
-- **Carte des Candidats Potentiels** 🆕
-  - Visualisation en temps réel de tous les candidats disponibles
+- **Carte des Candidats Potentiels** ðŸ†•
+  - Visualisation en temps rÃ©el de tous les candidats disponibles
   - Deux vues: Zones (cercles) et Marqueurs (clusters)
   - Regroupement par ville avec comptage
-  - Différenciation visuelle (bleu = potentiels, vert = assignés)
-  - Système de demande intégré
+  - DiffÃ©renciation visuelle (bleu = potentiels, vert = assignÃ©s)
+  - SystÃ¨me de demande intÃ©grÃ©
 
-#### Détails des Catalogues
+#### DÃ©tails des Catalogues
 - **Informations des candidats**
-  - Profils détaillés (langues, expériences, certifications)
-  - Notes et évaluations
-  - Disponibilités
+  - Profils dÃ©taillÃ©s (langues, expÃ©riences, certifications)
+  - Notes et Ã©valuations
+  - DisponibilitÃ©s
 
-- **Médias**
-  - Lecteur vidéo intégré pour les entrevues
-  - Téléchargement de CVs
-  - Génération de PDF du catalogue
+- **MÃ©dias**
+  - Lecteur vidÃ©o intÃ©grÃ© pour les entrevues
+  - TÃ©lÃ©chargement de CVs
+  - GÃ©nÃ©ration de PDF du catalogue
 
-- **Carte Géographique des Candidats** 🆕
+- **Carte GÃ©ographique des Candidats** ðŸ†•
   - Visualisation des candidats du catalogue par ville
   - Toggle entre vue cercles et clusters
   - Popups interactifs
   - Bouton "Demander ces candidats"
 
-#### Système de Restriction de Contenu
+#### SystÃ¨me de Restriction de Contenu
 - Catalogues gratuits vs payants
-- Masquage des informations sensibles (email, téléphone, CV, vidéo)
-- Indicateurs visuels de contenu verrouillé
+- Masquage des informations sensibles (email, tÃ©lÃ©phone, CV, vidÃ©o)
+- Indicateurs visuels de contenu verrouillÃ©
 
-### 3. Cartes Géographiques Interactives 🆕
+### 3. Cartes GÃ©ographiques Interactives ðŸ†•
 
 #### Technologies
 - **Leaflet** pour le rendu de cartes
-- **react-leaflet** pour l'intégration React
+- **react-leaflet** pour l'intÃ©gration React
 - **react-leaflet-cluster** pour le regroupement de marqueurs
 - Tuiles OpenStreetMap (style CARTO)
 
@@ -175,27 +182,27 @@ talentsecure/
 
 ##### Carte Zones (Cercles)
 - Cercles proportionnels au nombre de candidats
-- Code couleur selon la densité
-  - Candidats assignés: Vert (5) → Jaune (10) → Orange (20) → Rouge (20+)
-  - Candidats potentiels: Bleu clair → Bleu foncé selon la densité
+- Code couleur selon la densitÃ©
+  - Candidats assignÃ©s: Vert (5) â†’ Jaune (10) â†’ Orange (20) â†’ Rouge (20+)
+  - Candidats potentiels: Bleu clair â†’ Bleu foncÃ© selon la densitÃ©
 - Rayon adaptatif
 
 ##### Carte Clusters (Marqueurs)
 - Marqueurs individuels par ville
-- Clustering automatique lors du zoom/dézoom
-- Icônes colorées:
-  - Vert: Candidats assignés
+- Clustering automatique lors du zoom/dÃ©zoom
+- IcÃ´nes colorÃ©es:
+  - Vert: Candidats assignÃ©s
   - Bleu: Candidats potentiels
 
 #### Interactions
-- Popups avec informations détaillées
+- Popups avec informations dÃ©taillÃ©es
 - Bouton "Demander ces candidats"
 - Dialog de demande avec formulaire
 - Notifications de confirmation
 
 ## Installation et Configuration
 
-### Prérequis
+### PrÃ©requis
 - Node.js 18+
 - PostgreSQL 14+
 - Compte Cloudflare R2 (ou S3-compatible)
@@ -205,18 +212,18 @@ talentsecure/
 ```bash
 cd backend
 
-# Installer les dépendances
+# Installer les dÃ©pendances
 npm install
 
 # Configuration
 cp .env.example .env
-# Éditer .env avec vos valeurs
+# Ã‰diter .env avec vos valeurs
 
-# Base de données
+# Base de donnÃ©es
 npm run prisma:generate
 npm run prisma:migrate
 
-# Démarrer en développement
+# DÃ©marrer en dÃ©veloppement
 npm run dev
 ```
 
@@ -225,14 +232,14 @@ npm run dev
 ```bash
 cd frontend
 
-# Installer les dépendances
+# Installer les dÃ©pendances
 npm install
 
 # Configuration
 cp .env.example .env
-# Éditer .env avec l'URL du backend
+# Ã‰diter .env avec l'URL du backend
 
-# Démarrer en développement
+# DÃ©marrer en dÃ©veloppement
 npm run dev
 ```
 
@@ -254,7 +261,7 @@ CLOUDFLARE_SECRET_ACCESS_KEY="your-secret-key"
 R2_BUCKET_NAME="talentsecure-files"
 R2_PUBLIC_URL="https://files.yourdomain.com"
 
-# OpenAI (pour extraction de compétences)
+# OpenAI (pour extraction de compÃ©tences)
 OPENAI_API_KEY="sk-your-openai-api-key"
 
 # OAuth (optionnel)
@@ -278,28 +285,28 @@ VITE_API_URL=http://localhost:5000
 
 ## Contributeurs
 
-Développé avec Claude Code (Anthropic)
+DÃ©veloppÃ© avec Claude Code (Anthropic)
 
 ---
 
 ## Gestion des Prospects
 
-### Fonctionnalités
+### FonctionnalitÃ©s
 
-Le système de gestion des prospects permet de :
+Le systÃ¨me de gestion des prospects permet de :
 - **Importer automatiquement** des prospects depuis Google Sheets
 - **Visualiser sur une carte** interactive avec clustering
 - **Filtrer** par ville, statut de contact, statut de conversion
-- **Sélectionner en masse** (style Gmail - sélection multi-pages)
-- **Exporter en CSV** les prospects sélectionnés
-- **Marquer comme contactés** en masse
+- **SÃ©lectionner en masse** (style Gmail - sÃ©lection multi-pages)
+- **Exporter en CSV** les prospects sÃ©lectionnÃ©s
+- **Marquer comme contactÃ©s** en masse
 - **Exporter vers GoHighLevel** (CRM)
 
 ### Import depuis Google Sheets
 
 Configuration requise dans `backend/.env` :
 ```bash
-GOOGLE_SHEETS_API_KEY=votre-clé-api
+GOOGLE_SHEETS_API_KEY=votre-clÃ©-api
 ```
 
 Pour importer les prospects :
@@ -309,17 +316,17 @@ npx tsx src/scripts/import-from-google-sheet.ts
 ```
 
 Le script :
-- ✅ Récupère les données du Google Sheet public
-- ✅ Normalise les noms de villes (Montréal, Québec, etc.)
-- ✅ Détecte et ignore les doublons (email ou téléphone)
-- ✅ Parse les dates de soumission
-- ✅ Associe automatiquement les CVs si disponibles
+- âœ… RÃ©cupÃ¨re les donnÃ©es du Google Sheet public
+- âœ… Normalise les noms de villes (MontrÃ©al, QuÃ©bec, etc.)
+- âœ… DÃ©tecte et ignore les doublons (email ou tÃ©lÃ©phone)
+- âœ… Parse les dates de soumission
+- âœ… Associe automatiquement les CVs si disponibles
 
 ### Export vers GoHighLevel
 
 Configuration requise dans `backend/.env` :
 ```bash
-GOHIGHLEVEL_API_KEY=votre-clé-api
+GOHIGHLEVEL_API_KEY=votre-clÃ©-api
 GOHIGHLEVEL_LOCATION_ID=votre-location-id
 ```
 
@@ -336,43 +343,43 @@ Content-Type: application/json
 ### Carte Interactive
 
 La carte des prospects (`/prospects`) affiche :
-- 🗺️ Clustering automatique par densité
-- 📍 Marqueurs bleus pour les prospects
-- 🔢 Badges avec nombre de prospects par ville
-- 🖱️ Clic sur ville → filtre la liste automatiquement
-- 🔍 Zoom pour voir détails individuels
+- ðŸ—ºï¸ Clustering automatique par densitÃ©
+- ðŸ“ Marqueurs bleus pour les prospects
+- ðŸ”¢ Badges avec nombre de prospects par ville
+- ðŸ–±ï¸ Clic sur ville â†’ filtre la liste automatiquement
+- ðŸ” Zoom pour voir dÃ©tails individuels
 
-### Sélection Multi-Pages (Gmail-style)
+### SÃ©lection Multi-Pages (Gmail-style)
 
 1. **Cocher les prospects** sur la page actuelle
-2. Quand toute la page est sélectionnée, voir le message :
-   *"20 prospects sélectionnés sur cette page. Sélectionner tous les 50 prospects de Québec?"*
-3. **Cliquer "Sélectionner tout"** pour sélectionner ALL prospects matching les filtres
-4. **Exporter CSV** ou **Marquer comme contactés** en masse
+2. Quand toute la page est sÃ©lectionnÃ©e, voir le message :
+   *"20 prospects sÃ©lectionnÃ©s sur cette page. SÃ©lectionner tous les 50 prospects de QuÃ©bec?"*
+3. **Cliquer "SÃ©lectionner tout"** pour sÃ©lectionner ALL prospects matching les filtres
+4. **Exporter CSV** ou **Marquer comme contactÃ©s** en masse
 
 ### Export CSV
 
 Format du CSV :
-- Prénom, Nom
-- Email, Téléphone
+- PrÃ©nom, Nom
+- Email, TÃ©lÃ©phone
 - Ville, Province, Code Postal, Adresse
 - CV (Oui/Non)
 - Date de soumission
-- Contacté (Oui/Non)
+- ContactÃ© (Oui/Non)
 - Converti (Oui/Non)
 - Notes
 
-Encodage : UTF-8 avec BOM (support accents français)
+Encodage : UTF-8 avec BOM (support accents franÃ§ais)
 
 ---
 
-## Dépannage
+## DÃ©pannage
 
 ### Erreur: "Cannot connect to database"
 
 **Solution:**
-- Vérifier que PostgreSQL est démarré
-- Vérifier `DATABASE_URL` dans backend/.env
+- VÃ©rifier que PostgreSQL est dÃ©marrÃ©
+- VÃ©rifier `DATABASE_URL` dans backend/.env
 - Tester la connexion: `psql -U user -d talentsecure`
 
 ### Erreur: "Module not found"
@@ -386,7 +393,7 @@ cd backend && npm install
 cd frontend && npm install
 ```
 
-### Port déjà utilisé
+### Port dÃ©jÃ  utilisÃ©
 
 **Solution:**
 ```bash
@@ -400,35 +407,35 @@ server: { port: 5174 }
 ### Erreur Google OAuth
 
 **Solution:**
-- Vérifier `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` dans backend/.env
-- Vérifier que le callback URL est autorisé dans Google Cloud Console
+- VÃ©rifier `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` dans backend/.env
+- VÃ©rifier que le callback URL est autorisÃ© dans Google Cloud Console
 - Callback URL: `http://localhost:5000/api/auth/google/callback`
 
 ---
 
 ## Roadmap
 
-### Phase 1 - MVP (10 semaines) ✅ En cours
+### Phase 1 - MVP (10 semaines) âœ… En cours
 - Setup & Architecture
 - CRUD Candidats
 - Import Excel
-- Recherche avancée
-- Génération PDF
-- Déploiement
+- Recherche avancÃ©e
+- GÃ©nÃ©ration PDF
+- DÃ©ploiement
 
 ### Phase 2 - Portal Client (8 semaines)
 - Login clients
 - Visualisation catalogues
-- Vidéos streamées
+- VidÃ©os streamÃ©es
 - Demande placement
 - Urgency button
 - E-signature contrats
 
-### Phase 3 - Features Avancées (12 semaines)
+### Phase 3 - Features AvancÃ©es (12 semaines)
 - Background checks (Checkr API)
 - Video interviews (Twilio)
 - AI Matching
-- Analytics avancées
+- Analytics avancÃ©es
 - Shift management
 - Multi-language
 
@@ -450,15 +457,15 @@ server: { port: 5174 }
 
 ### Questions techniques
 - Consulter les README dans `backend/` et `frontend/`
-- Consulter la documentation complète
-- Stack Overflow pour questions générales
+- Consulter la documentation complÃ¨te
+- Stack Overflow pour questions gÃ©nÃ©rales
 
 ### Bugs
-- GitHub Issues (si repo créé)
+- GitHub Issues (si repo crÃ©Ã©)
 - Documentation d'erreurs dans `docs/`
 
 ### Questions business
-- Équipe XGUARD Security
+- Ã‰quipe XGUARD Security
 
 ---
 
@@ -467,7 +474,7 @@ server: { port: 5174 }
 ### Git Workflow
 
 ```bash
-# 1. Créer une branche pour la feature
+# 1. CrÃ©er une branche pour la feature
 git checkout -b feature/nom-de-la-feature
 
 # 2. Faire vos modifications
@@ -480,42 +487,42 @@ git commit -m "feat: description de la feature"
 # 4. Push
 git push origin feature/nom-de-la-feature
 
-# 5. Créer une Pull Request
+# 5. CrÃ©er une Pull Request
 ```
 
 ### Convention de commits
 
-- `feat:` - Nouvelle fonctionnalité
+- `feat:` - Nouvelle fonctionnalitÃ©
 - `fix:` - Correction de bug
 - `docs:` - Documentation
 - `style:` - Formatage
 - `refactor:` - Refactoring
 - `test:` - Tests
-- `chore:` - Tâches diverses
+- `chore:` - TÃ¢ches diverses
 
 ---
 
-## Mises à jour et instructions
+## Mises Ã  jour et instructions
 
-Ces points couvrent les changements livrés en novembre 2025. Merci de les parcourir avant tout nouveau développement :
+Ces points couvrent les changements livrÃ©s en novembre 2025. Merci de les parcourir avant tout nouveau dÃ©veloppement :
 
 1. **Gestion d'erreurs & validation** : consultez `backend/src/middleware` et `backend/src/utils` pour les nouveaux helpers (`ApiError`, sanitisation XSS, validation Zod). Toute nouvelle route doit s'appuyer dessus.
 
 2. **Cache Redis optionnel** : la configuration se trouve dans `backend/src/config/cache.ts` et `backend/src/utils/cache.ts`. Activez-le via `CACHE_ENABLED=true` et les variables `REDIS_*` dans `.env`. Sans Redis, l'API fonctionne en mode sans cache.
 
-3. **Optimisation des fichiers** : `backend/src/services/image.service.ts` compresse automatiquement les images uploadées; les vidéos restent gérées par `video.service.ts`.
+3. **Optimisation des fichiers** : `backend/src/services/image.service.ts` compresse automatiquement les images uploadÃ©es; les vidÃ©os restent gÃ©rÃ©es par `video.service.ts`.
 
-4. **Frontend lazy loading & validation** : `frontend/src/App.tsx` utilise désormais `React.lazy`/`Suspense` et `frontend/src/validation/candidate.ts` centralise la validation des formulaires candidats. Les composants lourds (Leaflet maps, formulaires d'évaluation) sont chargés à la demande.
+4. **Frontend lazy loading & validation** : `frontend/src/App.tsx` utilise dÃ©sormais `React.lazy`/`Suspense` et `frontend/src/validation/candidate.ts` centralise la validation des formulaires candidats. Les composants lourds (Leaflet maps, formulaires d'Ã©valuation) sont chargÃ©s Ã  la demande.
 
-5. **Extraction IA de compétences** 🆕 : le système d'extraction automatique de compétences utilise OpenAI GPT-4 via `backend/src/services/cv-extraction.service.ts` et `backend/src/controllers/skills.controller.ts`. L'interface se trouve dans `frontend/src/pages/autres-competances/AutresCompetancesPage.tsx`. **Important** : lors de l'extraction sur un prospect, le système le convertit automatiquement en candidat pour permettre la liaison des compétences.
+5. **Extraction IA de compÃ©tences** ðŸ†• : le systÃ¨me d'extraction automatique de compÃ©tences utilise OpenAI GPT-4 via `backend/src/services/cv-extraction.service.ts` et `backend/src/controllers/skills.controller.ts`. L'interface se trouve dans `frontend/src/pages/autres-competances/AutresCompetancesPage.tsx`. **Important** : lors de l'extraction sur un prospect, le systÃ¨me le convertit automatiquement en candidat pour permettre la liaison des compÃ©tences.
 
-6. **Conversion prospects → candidats** 🆕 : une page dédiée `frontend/src/pages/prospects/ProspectConvertPage.tsx` permet de convertir un prospect en candidat avec formulaire d'évaluation complet. La route est `/prospects/:id/convert`.
+6. **Conversion prospects â†’ candidats** ðŸ†• : une page dÃ©diÃ©e `frontend/src/pages/prospects/ProspectConvertPage.tsx` permet de convertir un prospect en candidat avec formulaire d'Ã©valuation complet. La route est `/prospects/:id/convert`.
 
-7. **Validation des dates** : les champs de dates utilisent désormais un helper `optionalDateString` dans `candidate.ts` qui transforme les chaînes vides en `null` avant validation pour éviter les erreurs de format.
+7. **Validation des dates** : les champs de dates utilisent dÃ©sormais un helper `optionalDateString` dans `candidate.ts` qui transforme les chaÃ®nes vides en `null` avant validation pour Ã©viter les erreurs de format.
 
-8. **Sanitization XSS** : temporairement désactivée dans `server.ts` en attendant l'installation du package `xss`. À réactiver après installation de la dépendance manquante.
+8. **Sanitization XSS** : temporairement dÃ©sactivÃ©e dans `server.ts` en attendant l'installation du package `xss`. Ã€ rÃ©activer aprÃ¨s installation de la dÃ©pendance manquante.
 
-En cas de doute, revenez à cette section : elle indique où lire le code mis à jour.
+En cas de doute, revenez Ã  cette section : elle indique oÃ¹ lire le code mis Ã  jour.
 
 ## Licence
 
@@ -531,4 +538,8 @@ Web: www.xguard.security
 
 ---
 
-**Construisons quelque chose d'incroyable ! 💪🚀**
+**Construisons quelque chose d'incroyable ! ðŸ’ªðŸš€**
+
+
+
+

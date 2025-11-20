@@ -147,6 +147,117 @@ export const revertAutoConvertedCandidates = async (
 };
 
 /**
+ * ADMIN ONLY: Re-convertir UN SEUL candidat en prospect
+ * Utilisé depuis le menu "3 points" dans la liste des candidats
+ */
+export const revertSingleCandidateToProspect = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    // SÉCURITÉ: Vérifier que l'utilisateur est admin
+    if (req.user?.role !== 'ADMIN') {
+      return res.status(403).json({
+        error: 'Accès refusé: seuls les administrateurs peuvent exécuter cette action',
+      });
+    }
+
+    const { id } = req.params;
+
+    // Récupérer le candidat
+    const candidate = await prisma.candidate.findUnique({
+      where: { id },
+    });
+
+    if (!candidate || candidate.isDeleted) {
+      return res.status(404).json({
+        error: 'Candidat non trouvé',
+      });
+    }
+
+    console.log(`📝 Re-conversion du candidat: ${candidate.firstName} ${candidate.lastName}`);
+
+    // Vérifier si un prospect existe déjà
+    const existingProspect = await prisma.prospectCandidate.findFirst({
+      where: {
+        OR: [
+          { convertedToId: candidate.id },
+          { email: candidate.email || undefined },
+          { phone: candidate.phone },
+        ],
+        isDeleted: false,
+      },
+    });
+
+    let prospectId: string;
+
+    if (existingProspect) {
+      // Si le prospect était marqué comme converti, le dé-convertir
+      if (existingProspect.isConverted) {
+        await prisma.prospectCandidate.update({
+          where: { id: existingProspect.id },
+          data: {
+            isConverted: false,
+            convertedAt: null,
+            convertedToId: null,
+          },
+        });
+      }
+      prospectId = existingProspect.id;
+    } else {
+      // Créer un nouveau prospect avec TOUTES les données du candidat
+      const newProspect = await prisma.prospectCandidate.create({
+        data: {
+          firstName: candidate.firstName,
+          lastName: candidate.lastName,
+          email: candidate.email,
+          phone: candidate.phone,
+          fullAddress: candidate.address,
+          city: candidate.city,
+          province: candidate.province,
+          postalCode: candidate.postalCode,
+          cvUrl: candidate.cvUrl, // ✅ PRÉSERVÉ
+          cvStoragePath: candidate.cvStoragePath, // ✅ PRÉSERVÉ
+          isContacted: false,
+          isConverted: false,
+          notes: `Re-créé depuis candidat (ID: ${candidate.id})\nRaison: Re-conversion manuelle par admin`,
+        },
+      });
+      prospectId = newProspect.id;
+    }
+
+    // Supprimer le candidat (soft delete)
+    await prisma.candidate.update({
+      where: { id: candidate.id },
+      data: {
+        isDeleted: true,
+        deletedAt: new Date(),
+      },
+    });
+
+    // Log d'audit
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'UPDATE',
+        resource: 'Candidate',
+        resourceId: candidate.id,
+        details: `Candidat re-converti en prospect: ${candidate.firstName} ${candidate.lastName} (nouveau prospect ID: ${prospectId})`,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: `${candidate.firstName} ${candidate.lastName} a été re-converti en candidat potentiel avec succès`,
+      prospectId,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * ADMIN ONLY: Trouver tous les candidats auto-convertis (sans les modifier)
  */
 export const findAutoConvertedCandidates = async (

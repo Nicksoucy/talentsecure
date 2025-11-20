@@ -390,7 +390,7 @@ export const convertToCandidate = async (
 
     // PROTECTION: Interdire les conversions automatiques (détection de patterns d'IA)
     const suspiciousPatterns = ['auto-converti', 'extraction ia', 'ai converted', 'auto converted'];
-    const hrNotesLower = (candidateData.hrNotes || '').toLowerCase();
+    const hrNotesLower = (formData.hrNotes || '').toLowerCase();
     const hasAutoConvertPattern = suspiciousPatterns.some(pattern => hrNotesLower.includes(pattern));
 
     if (hasAutoConvertPattern) {

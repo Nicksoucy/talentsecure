@@ -24,9 +24,9 @@ enum CandidateStatus {
   EXCELLENT // 9-9.4
   ELITE // 9.5+
   A_REVOIR // < 7
-  EN_ATTENTE // En cours d'évaluation
+  EN_ATTENTE // En cours d'Ã©valuation
   INACTIF // Plus disponible
-  ABSENT // Absent à l'entretien
+  ABSENT // Absent Ã  l'entretien
 }
 
 enum AvailabilityType {
@@ -72,59 +72,59 @@ enum AuditAction {
 }
 
 enum CatalogueSelectionStatus {
-  INTERESSE // Client a cliqué "Intéressé"
+  INTERESSE // Client a cliquÃ© "IntÃ©ressÃ©"
   DEMANDE // Client a fait une demande formelle
-  ACCEPTE // Demande acceptée par admin
-  PLACE // Candidat placé chez le client
-  REFUSE // Demande refusée
-  ANNULE // Demande annulée
+  ACCEPTE // Demande acceptÃ©e par admin
+  PLACE // Candidat placÃ© chez le client
+  REFUSE // Demande refusÃ©e
+  ANNULE // Demande annulÃ©e
 }
 
 enum PaymentStatus {
   PENDING // En attente de paiement
-  PAID // Payé
-  FAILED // Échec de paiement
-  REFUNDED // Remboursé
-  CANCELLED // Annulé
+  PAID // PayÃ©
+  FAILED // Ã‰chec de paiement
+  REFUNDED // RemboursÃ©
+  CANCELLED // AnnulÃ©
 }
 
 enum CandidateType {
-  EVALUATED // Candidat évalué (premium)
-  CV_ONLY // CV seulement (économique)
+  EVALUATED // Candidat Ã©valuÃ© (premium)
+  CV_ONLY // CV seulement (Ã©conomique)
 }
 
 enum WishlistStatus {
   DRAFT // Client en train de construire
-  SUBMITTED // Demande envoyée à l'admin
-  APPROVED // Admin a approuvé
-  PAID // Client a payé
-  DELIVERED // Catalogue livré
-  CANCELLED // Annulé
+  SUBMITTED // Demande envoyÃ©e Ã  l'admin
+  APPROVED // Admin a approuvÃ©
+  PAID // Client a payÃ©
+  DELIVERED // Catalogue livrÃ©
+  CANCELLED // AnnulÃ©
 }
 
 enum SkillCategory {
-  TECHNICAL // Compétences techniques (ex: Informatique, Mécanique)
-  SOFT_SKILL // Compétences comportementales (ex: Leadership, Communication)
+  TECHNICAL // CompÃ©tences techniques (ex: Informatique, MÃ©canique)
+  SOFT_SKILL // CompÃ©tences comportementales (ex: Leadership, Communication)
   CERTIFICATION // Certifications et permis (ex: BSP, Premiers soins)
-  LANGUAGE // Langues (déjà géré par Language model, mais peut être utile)
-  INDUSTRY // Domaine d'industrie (ex: Sécurité, Construction, Automobile)
-  TOOL_EQUIPMENT // Outils et équipements (ex: Chariot élévateur, Systèmes de sécurité)
-  OTHER // Autres compétences
+  LANGUAGE // Langues (dÃ©jÃ  gÃ©rÃ© par Language model, mais peut Ãªtre utile)
+  INDUSTRY // Domaine d'industrie (ex: SÃ©curitÃ©, Construction, Automobile)
+  TOOL_EQUIPMENT // Outils et Ã©quipements (ex: Chariot Ã©lÃ©vateur, SystÃ¨mes de sÃ©curitÃ©)
+  OTHER // Autres compÃ©tences
 }
 
 enum SkillLevel {
-  BEGINNER // Débutant (0-1 an d'expérience)
-  INTERMEDIATE // Intermédiaire (1-3 ans)
-  ADVANCED // Avancé (3-5 ans)
+  BEGINNER // DÃ©butant (0-1 an d'expÃ©rience)
+  INTERMEDIATE // IntermÃ©diaire (1-3 ans)
+  ADVANCED // AvancÃ© (3-5 ans)
   EXPERT // Expert (5+ ans)
-  UNKNOWN // Non spécifié
+  UNKNOWN // Non spÃ©cifiÃ©
 }
 
 enum SkillSource {
   REGEX_EXTRACTED // Extrait par regex automatique
   AI_EXTRACTED // Extrait par IA (OpenAI/Claude)
-  MANUAL_ENTRY // Ajouté manuellement par admin
-  HUMAN_VERIFIED // Vérifié/corrigé par humain
+  MANUAL_ENTRY // AjoutÃ© manuellement par admin
+  HUMAN_VERIFIED // VÃ©rifiÃ©/corrigÃ© par humain
 }
 
 // Models
@@ -173,12 +173,12 @@ model Candidate {
   province   String  @default("QC")
   postalCode String?
 
-  // Statut et évaluation
+  // Statut et Ã©valuation
   status        CandidateStatus @default(EN_ATTENTE)
   globalRating  Float? // Note globale /10
   interviewDate DateTime? // Date de l'entrevue RH
 
-  // Évaluation détaillée
+  // Ã‰valuation dÃ©taillÃ©e
   professionalismRating Float? // /10
   communicationRating   Float? // /10
   appearanceRating      Float? // /10
@@ -190,28 +190,28 @@ model Candidate {
   strengths  String? @db.Text
   weaknesses String? @db.Text
 
-  // Détails complets d'entretien (JSON)
+  // DÃ©tails complets d'entretien (JSON)
   interviewDetails Json? // Stocke toutes les infos de l'onglet candidat
 
-  // Disponibilités
+  // DisponibilitÃ©s
   hasVehicle  Boolean @default(false)
-  canTravelKm Int? // Rayon de déplacement en km
+  canTravelKm Int? // Rayon de dÃ©placement en km
 
   // Permis et certifications
   hasBSP        Boolean   @default(false)
   bspNumber     String?
   bspExpiryDate DateTime?
-  bspStatus     String? // "Actif", "En cours", "Expiré"
+  bspStatus     String? // "Actif", "En cours", "ExpirÃ©"
 
   hasDriverLicense    Boolean @default(false)
   driverLicenseNumber String?
   driverLicenseClass  String?
 
   // Urgence 24h
-  urgency24hScore Int?    @default(0) // Score de 0 à 10
+  urgency24hScore Int?    @default(0) // Score de 0 Ã  10
   canWorkUrgent   Boolean @default(false)
 
-  // Vidéo d'entrevue
+  // VidÃ©o d'entrevue
   videoUrl         String?
   videoUploadedAt  DateTime?
   videoStoragePath String?
@@ -283,7 +283,7 @@ model Availability {
 model Language {
   id          String        @id @default(uuid())
   candidateId String
-  language    String // "Français", "Anglais", "Espagnol", etc.
+  language    String // "FranÃ§ais", "Anglais", "Espagnol", etc.
   level       LanguageLevel
   canRead     Boolean       @default(true)
   canWrite    Boolean       @default(true)
@@ -304,7 +304,7 @@ model Experience {
   startDate        DateTime?
   endDate          DateTime?
   isCurrent        Boolean   @default(false)
-  durationMonths   Int? // Durée en mois
+  durationMonths   Int? // DurÃ©e en mois
   description      String?   @db.Text
   responsibilities String?   @db.Text
 
@@ -334,7 +334,7 @@ model SituationTest {
   candidateId    String
   question       String  @db.Text
   answer         String  @db.Text
-  rating         Float? // Note /10 pour cette réponse
+  rating         Float? // Note /10 pour cette rÃ©ponse
   evaluatorNotes String? @db.Text
 
   candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
@@ -357,10 +357,10 @@ model Client {
 
   // Billing & Pricing
   billingEmail             String?
-  defaultPricePerCandidate Decimal? @db.Decimal(10, 2) // Prix par défaut par candidat
+  defaultPricePerCandidate Decimal? @db.Decimal(10, 2) // Prix par dÃ©faut par candidat
   discountPercent          Float? // Pourcentage de rabais (ex: 10 = 10%)
-  paymentTerms             String? // "NET 30", "Paiement immédiat", etc.
-  taxNumber                String? // Numéro de TPS/TVQ
+  paymentTerms             String? // "NET 30", "Paiement immÃ©diat", etc.
+  taxNumber                String? // NumÃ©ro de TPS/TVQ
 
   // Metadata
   isActive  Boolean  @default(true)
@@ -396,26 +396,26 @@ model Catalogue {
   includeSituation  Boolean @default(true)
   includeCV         Boolean @default(true)
 
-  // URLs générés
+  // URLs gÃ©nÃ©rÃ©s
   pdfUrl         String?
   pdfStoragePath String?
 
   // Partage client (lien magique)
-  shareToken          String?   @unique // Token unique pour accès client
+  shareToken          String?   @unique // Token unique pour accÃ¨s client
   shareTokenExpiresAt DateTime? // Date d'expiration du lien
 
-  // Gestion du paiement et visibilité
-  requiresPayment  Boolean   @default(false) // Si true, détails cachés jusqu'au paiement
+  // Gestion du paiement et visibilitÃ©
+  requiresPayment  Boolean   @default(false) // Si true, dÃ©tails cachÃ©s jusqu'au paiement
   isPaid           Boolean   @default(false)
   paidAt           DateTime?
   paymentAmount    Decimal?  @db.Decimal(10, 2)
-  paymentReference String? // Référence de paiement/facture
+  paymentReference String? // RÃ©fÃ©rence de paiement/facture
 
   // Metadata
   generatedAt  DateTime?
   sentAt       DateTime?
-  viewedAt     DateTime? // Première vue
-  lastViewedAt DateTime? // Dernière vue (pour tracking multiple)
+  viewedAt     DateTime? // PremiÃ¨re vue
+  lastViewedAt DateTime? // DerniÃ¨re vue (pour tracking multiple)
   viewCount    Int       @default(0) // Nombre de vues
   createdById  String
   createdAt    DateTime  @default(now())
@@ -458,7 +458,7 @@ model Placement {
   candidateId String
   status      PlacementStatus @default(EN_NEGOCIATION)
 
-  // Détails du placement
+  // DÃ©tails du placement
   position         String
   startDate        DateTime?
   endDate          DateTime?
@@ -504,7 +504,7 @@ model AuditLog {
   @@map("audit_logs")
 }
 
-// Model pour les candidats potentiels (pas encore interviewés)
+// Model pour les candidats potentiels (pas encore interviewÃ©s)
 model ProspectCandidate {
   id String @id @default(uuid())
 
@@ -520,11 +520,11 @@ model ProspectCandidate {
   province      String? @default("QC")
   postalCode    String?
   country       String? @default("CA")
-  fullAddress   String? @db.Text // Adresse complète du CSV
+  fullAddress   String? @db.Text // Adresse complÃ¨te du CSV
 
   // CV
-  cvUrl         String? // URL du CV à télécharger
-  cvStoragePath String? // Chemin local après téléchargement
+  cvUrl         String? // URL du CV Ã  tÃ©lÃ©charger
+  cvStoragePath String? // Chemin local aprÃ¨s tÃ©lÃ©chargement
 
   // Metadata
   timezone       String?
@@ -534,9 +534,9 @@ model ProspectCandidate {
   notes          String?   @db.Text
 
   // Conversion
-  isConverted   Boolean   @default(false) // Converti en candidat qualifié
+  isConverted   Boolean   @default(false) // Converti en candidat qualifiÃ©
   convertedAt   DateTime?
-  convertedToId String? // ID du candidat créé après entrevue
+  convertedToId String? // ID du candidat crÃ©Ã© aprÃ¨s entrevue
 
   // Soft delete
   isDeleted Boolean   @default(false)
@@ -558,7 +558,7 @@ model ProspectCandidate {
   @@map("prospect_candidates")
 }
 
-// Nouveau modèle pour tracker les sélections/demandes des clients
+// Nouveau modÃ¨le pour tracker les sÃ©lections/demandes des clients
 model CatalogueSelection {
   id          String                   @id @default(uuid())
   catalogueId String
@@ -566,19 +566,19 @@ model CatalogueSelection {
   clientId    String
   status      CatalogueSelectionStatus @default(INTERESSE)
 
-  // Détails de la demande
-  quantity       Int? // Nombre de postes demandés
-  location       String? // Ville/lieu demandé
-  startDate      DateTime? // Date de début souhaitée
-  endDate        DateTime? // Date de fin souhaitée
+  // DÃ©tails de la demande
+  quantity       Int? // Nombre de postes demandÃ©s
+  location       String? // Ville/lieu demandÃ©
+  startDate      DateTime? // Date de dÃ©but souhaitÃ©e
+  endDate        DateTime? // Date de fin souhaitÃ©e
   pricePerPerson Decimal?  @db.Decimal(10, 2) // Prix par personne
   totalAmount    Decimal?  @db.Decimal(10, 2) // Montant total
   notes          String?   @db.Text
 
   // Metadata
   requestedAt DateTime  @default(now())
-  respondedAt DateTime? // Quand admin a répondu
-  respondedBy String? // ID de l'utilisateur qui a répondu
+  respondedAt DateTime? // Quand admin a rÃ©pondu
+  respondedBy String? // ID de l'utilisateur qui a rÃ©pondu
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -596,7 +596,7 @@ model CatalogueSelection {
   @@map("catalogue_selections")
 }
 
-// Nouveau modèle pour tracker les paiements de catalogues
+// Nouveau modÃ¨le pour tracker les paiements de catalogues
 model CataloguePayment {
   id          String        @id @default(uuid())
   catalogueId String
@@ -604,10 +604,10 @@ model CataloguePayment {
   amount      Decimal       @db.Decimal(10, 2)
   status      PaymentStatus @default(PENDING)
 
-  // Détails du paiement
-  paymentMethod    String? // "Carte de crédit", "Virement", "Chèque", etc.
-  paymentReference String? // Numéro de transaction / référence
-  invoiceNumber    String? // Numéro de facture
+  // DÃ©tails du paiement
+  paymentMethod    String? // "Carte de crÃ©dit", "Virement", "ChÃ¨que", etc.
+  paymentReference String? // NumÃ©ro de transaction / rÃ©fÃ©rence
+  invoiceNumber    String? // NumÃ©ro de facture
   invoiceUrl       String? // URL de la facture PDF
   paidAt           DateTime?
   dueDate          DateTime?
@@ -615,11 +615,11 @@ model CataloguePayment {
   // Taxes
   subtotal  Decimal? @db.Decimal(10, 2)
   taxAmount Decimal? @db.Decimal(10, 2)
-  taxRate   Float? // Taux de taxe appliqué (ex: 14.975 pour QC)
+  taxRate   Float? // Taux de taxe appliquÃ© (ex: 14.975 pour QC)
 
   // Metadata
   notes       String?  @db.Text
-  processedBy String? // ID de l'utilisateur qui a traité
+  processedBy String? // ID de l'utilisateur qui a traitÃ©
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -636,23 +636,23 @@ model CataloguePayment {
   @@map("catalogue_payments")
 }
 
-// Pricing par ville/région
+// Pricing par ville/rÃ©gion
 model CityPricing {
   id       String @id @default(uuid())
   city     String @unique
   province String @default("QC")
 
-  // Prix pour candidats évalués
+  // Prix pour candidats Ã©valuÃ©s
   evaluatedCandidateMinPrice Decimal @default(15) @db.Decimal(10, 2)
   evaluatedCandidateMaxPrice Decimal @default(45) @db.Decimal(10, 2)
-  evaluatedCandidatePrice    Decimal @default(30) @db.Decimal(10, 2) // Prix moyen par défaut
+  evaluatedCandidatePrice    Decimal @default(30) @db.Decimal(10, 2) // Prix moyen par dÃ©faut
 
   // Prix pour CVs seulement
   cvOnlyMinPrice Decimal @default(5) @db.Decimal(10, 2)
   cvOnlyMaxPrice Decimal @default(10) @db.Decimal(10, 2)
-  cvOnlyPrice    Decimal @default(7.50) @db.Decimal(10, 2) // Prix moyen par défaut
+  cvOnlyPrice    Decimal @default(7.50) @db.Decimal(10, 2) // Prix moyen par dÃ©faut
 
-  // Multiplicateur de prix (pour villes plus chères/éloignées)
+  // Multiplicateur de prix (pour villes plus chÃ¨res/Ã©loignÃ©es)
   priceMultiplier Decimal @default(1.0) @db.Decimal(5, 2)
 
   createdAt DateTime @default(now())
@@ -697,7 +697,7 @@ model WishlistItem {
   // Type de candidat
   type CandidateType
 
-  // Quantité demandée
+  // QuantitÃ© demandÃ©e
   quantity Int
 
   // Prix unitaire au moment de l'ajout
@@ -717,7 +717,7 @@ model WishlistItem {
   @@map("wishlist_items")
 }
 
-// Historique des achats (pour éviter les doublons)
+// Historique des achats (pour Ã©viter les doublons)
 model ClientPurchase {
   id       String        @id @default(uuid())
   clientId String
@@ -753,12 +753,12 @@ model ClientPurchase {
 // Master database of all skills
 model Skill {
   id                String        @id @default(uuid())
-  name              String        @unique // Nom de la compétence (ex: "BSP", "Service à la clientèle")
+  name              String        @unique // Nom de la compÃ©tence (ex: "BSP", "Service Ã  la clientÃ¨le")
   category          SkillCategory
-  description       String?       @db.Text // Description détaillée
-  keywords          String[] // Mots-clés pour extraction (ex: ["bsp", "bureau de la sécurité privée"])
-  isActive          Boolean       @default(true) // Permet de désactiver des compétences obsolètes
-  isSecurityRelated Boolean       @default(false) // Compétence liée aux agents de sécurité (core business)
+  description       String?       @db.Text // Description dÃ©taillÃ©e
+  keywords          String[] // Mots-clÃ©s pour extraction (ex: ["bsp", "bureau de la sÃ©curitÃ© privÃ©e"])
+  isActive          Boolean       @default(true) // Permet de dÃ©sactiver des compÃ©tences obsolÃ¨tes
+  isSecurityRelated Boolean       @default(false) // CompÃ©tence liÃ©e aux agents de sÃ©curitÃ© (core business)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -782,15 +782,15 @@ model CandidateSkill {
   source      SkillSource @default(MANUAL_ENTRY)
 
   // Contexte d'extraction
-  yearsExperience Int? // Nombre d'années d'expérience (si détecté)
+  yearsExperience Int? // Nombre d'annÃ©es d'expÃ©rience (si dÃ©tectÃ©)
   extractedText   String? @db.Text // Texte exact extrait du CV
   confidence      Float? // Score de confiance de l'IA (0-1)
 
   // Validation humaine
   isVerified   Boolean   @default(false)
-  verifiedBy   String? // ID de l'utilisateur qui a vérifié
+  verifiedBy   String? // ID de l'utilisateur qui a vÃ©rifiÃ©
   verifiedAt   DateTime?
-  rejectionNote String?   @db.Text // Note si la compétence est rejetée
+  rejectionNote String?   @db.Text // Note si la compÃ©tence est rejetÃ©e
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -799,7 +799,7 @@ model CandidateSkill {
   candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   skill     Skill     @relation(fields: [skillId], references: [id])
 
-  @@unique([candidateId, skillId]) // Un candidat ne peut avoir la même compétence qu'une fois
+  @@unique([candidateId, skillId]) // Un candidat ne peut avoir la mÃªme compÃ©tence qu'une fois
   @@index([candidateId])
   @@index([skillId])
   @@index([level])
@@ -820,14 +820,14 @@ model CvExtractionLog {
 
   // AI details (if applicable)
   aiModel         String? // "gpt-4", "claude-3-opus", etc.
-  promptTokens    Int? // Tokens utilisés dans le prompt
-  completionTokens Int? // Tokens utilisés dans la réponse
-  totalCost       Float? // Coût estimé en USD
+  promptTokens    Int? // Tokens utilisÃ©s dans le prompt
+  completionTokens Int? // Tokens utilisÃ©s dans la rÃ©ponse
+  totalCost       Float? // CoÃ»t estimÃ© en USD
 
   // Results
   success      Boolean @default(true)
   errorMessage String? @db.Text
-  rawResponse  String? @db.Text // Réponse brute de l'IA (pour debugging)
+  rawResponse  String? @db.Text // RÃ©ponse brute de l'IA (pour debugging)
 
   createdAt DateTime @default(now())
 
@@ -837,3 +837,4 @@ model CvExtractionLog {
   @@index([createdAt])
   @@map("cv_extraction_logs")
 }
+

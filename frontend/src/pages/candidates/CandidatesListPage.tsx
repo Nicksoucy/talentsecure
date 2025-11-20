@@ -96,8 +96,8 @@ const CANDIDATE_FORM_HELP_SECTIONS = [
   {
     title: 'Conseils pratiques',
     bullets: [
-      'Utilisez les notes RH pour conserver le contexte de l'entrevue.',
-      'Ajoutez forces et faiblesses afin d'alimenter les catalogues clients.',
+      "Utilisez les notes RH pour conserver le contexte de l'entrevue.",
+      "Ajoutez forces et faiblesses afin d'alimenter les catalogues clients.",
     ],
   },
 ];
@@ -109,7 +109,7 @@ const CANDIDATE_FORM_HELP_FAQ = [
   },
   {
     question: 'Comment conserver les anciennes notes ?',
-    answer: 'Les notes RH restent sur le candidat apres sauvegarde. Ajoutez un recap dans la section dediee pour suivre l'historique.',
+    answer: "Les notes RH restent sur le candidat apres sauvegarde. Ajoutez un recap dans la section dediee pour suivre l'historique.",
   },
 ];
 
@@ -118,7 +118,7 @@ const CATALOGUE_HELP_SECTIONS = [
     title: 'Avant de generer',
     bullets: [
       'Selectionnez au moins un candidat et choisissez le client cible.',
-      'Personnalisez le message pour contextualiser l'envoi.',
+      'Personnalisez le message pour contextualiser l\'envoi.',
       'Desactivez les sections inutiles (video, experience, CV) pour alleger le document.',
     ],
   },
@@ -404,8 +404,7 @@ export default function CandidatesListPage() {
       });
     },
   });
-    },
-  });
+
 
   // Archive candidate mutation
   const archiveMutation = useMutation({
@@ -422,8 +421,7 @@ export default function CandidatesListPage() {
       });
     },
   });
-    },
-  });
+
 
   // Unarchive candidate mutation
   const unarchiveMutation = useMutation({
@@ -488,36 +486,7 @@ export default function CandidatesListPage() {
       );
     },
   });
-      setOpenCatalogueDialog(false);
-      setSelectedCandidates(new Set());
-      setSelectedClient(null);
-      setCatalogueForm({
-        title: '',
-        customMessage: '',
-        includeSummary: true,
-        includeDetails: true,
-        includeVideo: true,
-        includeExperience: true,
-        includeSituation: true,
-        includeCV: true,
-      });
-    },
-    onError: (error: any) => {
-      const label = variables?.title || 'Sans titre';
-      enqueueSnackbar(
-        error.response?.data?.error || `Impossible de creer le catalogue "${label}"`,
-        { variant: 'error' }
-      );
-    },
-  });
-    },
-    onError: (error: any) => {
-      enqueueSnackbar(
-        error.response?.data?.error || 'Erreur lors de la création du catalogue',
-        { variant: 'error' }
-      );
-    },
-  });
+
 
   const handleSaveCandidate = (formData: any) => {
     const validationResult = candidateFormSchema.safeParse(formData);
@@ -943,10 +912,10 @@ export default function CandidatesListPage() {
         fullWidth
         fullScreen
       >
-                <DialogTitle>
+        <DialogTitle>
           <Box display="flex" justifyContent="space-between" alignItems="center">
             <Typography variant="h5">
-              {editingCandidate ? '✏️ Modifier le candidat' : '📋 Feuille d\\'\xe9valuation d\\'entrevue'}
+              {editingCandidate ? '✏️ Modifier le candidat' : '📋 Feuille d\'évaluation d\'entrevue'}
             </Typography>
             <Box display="flex" alignItems="center" gap={1}>
               <HelpDialog

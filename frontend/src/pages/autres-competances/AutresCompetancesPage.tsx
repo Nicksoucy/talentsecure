@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+﻿import { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -64,9 +64,9 @@ const LEVEL_COLORS = {
 } as const;
 
 const LEVEL_LABELS = {
-  BEGINNER: 'Débutant',
-  INTERMEDIATE: 'Intermédiaire',
-  ADVANCED: 'Avancé',
+  BEGINNER: 'DÃ©butant',
+  INTERMEDIATE: 'IntermÃ©diaire',
+  ADVANCED: 'AvancÃ©',
   EXPERT: 'Expert',
 } as const;
 
@@ -109,7 +109,7 @@ const AutresCompetancesPage = () => {
   const [currentCandidateName, setCurrentCandidateName] = useState('');
   const [showBatchDialog, setShowBatchDialog] = useState(false);
   const [batchResults, setBatchResults] = useState<any>(null);
-  const [batchLimit, setBatchLimit] = useState<number>(10); // Par défaut: 10 CVs
+  const [batchLimit, setBatchLimit] = useState<number>(10); // Par dÃ©faut: 10 CVs
 
   // New states for search tab
   const [mainTab, setMainTab] = useState<'extraction' | 'search'>('extraction');
@@ -198,7 +198,7 @@ const AutresCompetancesPage = () => {
         setExtractedSkills(data.skillsFound);
         setShowResultsDialog(true);
         enqueueSnackbar(
-          `${data.totalSkills} compétence${data.totalSkills > 1 ? 's' : ''} extraite${data.totalSkills > 1 ? 's' : ''} avec succès!`,
+          `${data.totalSkills} compÃ©tence${data.totalSkills > 1 ? 's' : ''} extraite${data.totalSkills > 1 ? 's' : ''} avec succÃ¨s!`,
           { variant: 'success' }
         );
       } else {
@@ -210,7 +210,7 @@ const AutresCompetancesPage = () => {
     },
     onError: (error: any) => {
       enqueueSnackbar(
-        error.response?.data?.error || 'Erreur lors de l\'extraction des compétences',
+        error.response?.data?.error || 'Erreur lors de l\'extraction des compÃ©tences',
         { variant: 'error' }
       );
       setExtractingCandidateId(null);
@@ -223,13 +223,13 @@ const AutresCompetancesPage = () => {
       return skillsService.saveSkills(candidateId, skills, accessToken!);
     },
     onSuccess: () => {
-      enqueueSnackbar('Compétences sauvegardées avec succès!', { variant: 'success' });
+      enqueueSnackbar('CompÃ©tences sauvegardÃ©es avec succÃ¨s!', { variant: 'success' });
       setShowResultsDialog(false);
       refetch();
     },
     onError: (error: any) => {
       enqueueSnackbar(
-        error.response?.data?.error || 'Erreur lors de la sauvegarde des compétences',
+        error.response?.data?.error || 'Erreur lors de la sauvegarde des compÃ©tences',
         { variant: 'error' }
       );
     },
@@ -243,7 +243,7 @@ const AutresCompetancesPage = () => {
       setBatchResults(data);
       setShowBatchDialog(true);
       enqueueSnackbar(
-        `Extraction terminée: ${data.summary.success}/${data.summary.total} réussies, ${data.summary.totalSkillsExtracted} compétences extraites`,
+        `Extraction terminÃ©e: ${data.summary.success}/${data.summary.total} rÃ©ussies, ${data.summary.totalSkillsExtracted} compÃ©tences extraites`,
         { variant: 'success' }
       );
       refetch();
@@ -258,7 +258,7 @@ const AutresCompetancesPage = () => {
 
   const handleExtractSkills = (candidateId: string, candidateName: string, hasCv: boolean) => {
     if (!hasCv) {
-      enqueueSnackbar('Ce candidat n\'a pas de CV uploadé', { variant: 'warning' });
+      enqueueSnackbar('Ce candidat n\'a pas de CV uploadÃ©', { variant: 'warning' });
       return;
     }
     setExtractingCandidateId(candidateId);
@@ -297,11 +297,11 @@ const AutresCompetancesPage = () => {
     const estimatedTime = Math.ceil(count * 2 / 60); // ~2 sec per extraction
 
     const confirmed = window.confirm(
-      `⚠️ ATTENTION - Extraction en masse\n\n` +
-      `Candidats à traiter: ${count}${batchLimit > 0 && prospectsWithCv.length > batchLimit ? ` sur ${prospectsWithCv.length}` : ''}\n` +
-      `Coût estimé: ~$${estimatedCost} USD\n` +
-      `Temps estimé: ~${estimatedTime} minutes\n\n` +
-      `⚠️ Les candidats déjà traités seront ignorés.\n\n` +
+      `âš ï¸ ATTENTION - Extraction en masse\n\n` +
+      `Candidats Ã  traiter: ${count}${batchLimit > 0 && prospectsWithCv.length > batchLimit ? ` sur ${prospectsWithCv.length}` : ''}\n` +
+      `CoÃ»t estimÃ©: ~$${estimatedCost} USD\n` +
+      `Temps estimÃ©: ~${estimatedTime} minutes\n\n` +
+      `âš ï¸ Les candidats dÃ©jÃ  traitÃ©s seront ignorÃ©s.\n\n` +
       `Voulez-vous continuer?`
     );
 
@@ -338,7 +338,7 @@ const AutresCompetancesPage = () => {
       setSearchResults(results.results || []);
       if (results.results.length > 0) {
         enqueueSnackbar(
-          `${results.count} compétence${results.count > 1 ? 's' : ''} chargée${results.count > 1 ? 's' : ''}`,
+          `${results.count} compÃ©tence${results.count > 1 ? 's' : ''} chargÃ©e${results.count > 1 ? 's' : ''}`,
           { variant: 'success' }
         );
       }
@@ -360,10 +360,10 @@ const AutresCompetancesPage = () => {
       );
       setSearchResults(results.results || []);
       if (results.results.length === 0) {
-        enqueueSnackbar('Aucun résultat trouvé', { variant: 'info' });
+        enqueueSnackbar('Aucun rÃ©sultat trouvÃ©', { variant: 'info' });
       } else {
         enqueueSnackbar(
-          `${results.count} compétence${results.count > 1 ? 's' : ''} trouvée${results.count > 1 ? 's' : ''}`,
+          `${results.count} compÃ©tence${results.count > 1 ? 's' : ''} trouvÃ©e${results.count > 1 ? 's' : ''}`,
           { variant: 'success' }
         );
       }
@@ -382,10 +382,10 @@ const AutresCompetancesPage = () => {
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box>
           <Typography variant="h4" fontWeight="bold" gutterBottom>
-            Autre Compétance
+            Autre CompÃ©tance
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Candidats avec des compétences hors du secteur de la sécurité
+            Candidats avec des compÃ©tences hors du secteur de la sÃ©curitÃ©
           </Typography>
         </Box>
       </Box>
@@ -398,11 +398,11 @@ const AutresCompetancesPage = () => {
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
           <Tab
-            label="📤 Extraction de CVs"
+            label="ðŸ“¤ Extraction de CVs"
             value="extraction"
           />
           <Tab
-            label="🔍 Recherche de Compétences"
+            label="ðŸ” Recherche de CompÃ©tences"
             value="search"
           />
         </Tabs>
@@ -470,10 +470,10 @@ const AutresCompetancesPage = () => {
               <AiIcon sx={{ mr: 1.5, color: 'white', fontSize: 32 }} />
               <Box>
                 <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold' }}>
-                  Extraction IA pour Autre Compétance
+                  Extraction IA pour Autre CompÃ©tance
                 </Typography>
                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)' }}>
-                  Identifiez les candidats avec des compétences hors sécurité en analysant leurs CVs
+                  Identifiez les candidats avec des compÃ©tences hors sÃ©curitÃ© en analysant leurs CVs
                 </Typography>
               </Box>
             </Box>
@@ -594,7 +594,7 @@ const AutresCompetancesPage = () => {
       <Card>
         <CardContent>
           <Typography variant="h6" gutterBottom>
-            Liste des Candidats - Autre Compétance
+            Liste des Candidats - Autre CompÃ©tance
           </Typography>
 
           {isLoading ? (
@@ -604,10 +604,10 @@ const AutresCompetancesPage = () => {
           ) : filteredProspects.length === 0 ? (
             <Box textAlign="center" py={4}>
               <Typography variant="body1" color="text.secondary">
-                Aucun candidat potentiel trouvé.
+                Aucun candidat potentiel trouvÃ©.
               </Typography>
               <Typography variant="body2" color="text.secondary" mt={1}>
-                Utilisez l'extraction IA pour identifier les compétences des candidats potentiels.
+                Utilisez l'extraction IA pour identifier les compÃ©tences des candidats potentiels.
               </Typography>
             </Box>
           ) : (
@@ -619,7 +619,7 @@ const AutresCompetancesPage = () => {
                     <TableCell>Ville</TableCell>
                     <TableCell>CV</TableCell>
                     <TableCell>Date de soumission</TableCell>
-                    <TableCell>Contacté</TableCell>
+                    <TableCell>ContactÃ©</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
@@ -679,14 +679,14 @@ const AutresCompetancesPage = () => {
                         <TableCell>
                           {prospect.isContacted ? (
                             <Chip
-                              label="Contacté"
+                              label="ContactÃ©"
                               size="small"
                               color="success"
                               variant="outlined"
                             />
                           ) : (
                             <Chip
-                              label="Non contacté"
+                              label="Non contactÃ©"
                               size="small"
                               color="default"
                               variant="outlined"
@@ -695,7 +695,7 @@ const AutresCompetancesPage = () => {
                         </TableCell>
                         <TableCell align="right">
                           <Box display="flex" gap={1} justifyContent="flex-end">
-                            <Tooltip title={hasCv ? "Extraire les compétences" : "Aucun CV disponible"}>
+                            <Tooltip title={hasCv ? "Extraire les compÃ©tences" : "Aucun CV disponible"}>
                               <span>
                                 <IconButton
                                   size="small"
@@ -745,11 +745,11 @@ const AutresCompetancesPage = () => {
         <DialogTitle>
           <Box display="flex" justifyContent="space-between" alignItems="center">
             <Typography variant="h6">
-              Compétences Extraites - {currentCandidateName}
+              CompÃ©tences Extraites - {currentCandidateName}
             </Typography>
             <Box display="flex" gap={1}>
               <Chip
-                label={`${securitySkills.length} Sécurité`}
+                label={`${securitySkills.length} SÃ©curitÃ©`}
                 color="primary"
                 size="small"
               />
@@ -765,7 +765,7 @@ const AutresCompetancesPage = () => {
           {otherSkills.length > 0 && (
             <Alert severity="success" sx={{ mb: 2 }}>
               <Typography variant="body2">
-                <strong>{otherSkills.length}</strong> compétence{otherSkills.length > 1 ? 's' : ''} non liée{otherSkills.length > 1 ? 's' : ''} à la sécurité {otherSkills.length > 1 ? 'ont' : 'a'} été trouvée{otherSkills.length > 1 ? 's' : ''} !
+                <strong>{otherSkills.length}</strong> compÃ©tence{otherSkills.length > 1 ? 's' : ''} non liÃ©e{otherSkills.length > 1 ? 's' : ''} Ã  la sÃ©curitÃ© {otherSkills.length > 1 ? 'ont' : 'a'} Ã©tÃ© trouvÃ©e{otherSkills.length > 1 ? 's' : ''} !
               </Typography>
             </Alert>
           )}
@@ -776,11 +776,11 @@ const AutresCompetancesPage = () => {
             sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
           >
             <Tab
-              label={`Autre Compétance (${otherSkills.length})`}
+              label={`Autre CompÃ©tance (${otherSkills.length})`}
               value="other"
             />
             <Tab
-              label={`Compétences Sécurité (${securitySkills.length})`}
+              label={`CompÃ©tences SÃ©curitÃ© (${securitySkills.length})`}
               value="security"
             />
           </Tabs>
@@ -862,8 +862,8 @@ const AutresCompetancesPage = () => {
           {(activeTab === 'other' ? otherSkills : securitySkills).length === 0 && (
             <Alert severity="info">
               {activeTab === 'other'
-                ? "Aucune compétence non liée à la sécurité n'a été trouvée dans ce CV."
-                : "Aucune compétence liée à la sécurité n'a été trouvée dans ce CV."}
+                ? "Aucune compÃ©tence non liÃ©e Ã  la sÃ©curitÃ© n'a Ã©tÃ© trouvÃ©e dans ce CV."
+                : "Aucune compÃ©tence liÃ©e Ã  la sÃ©curitÃ© n'a Ã©tÃ© trouvÃ©e dans ce CV."}
             </Alert>
           )}
         </DialogContent>
@@ -875,7 +875,7 @@ const AutresCompetancesPage = () => {
             disabled={extractedSkills.length === 0 || saveMutation.isPending}
             onClick={handleSaveSkills}
           >
-            {saveMutation.isPending ? 'Sauvegarde...' : 'Sauvegarder les Compétences'}
+            {saveMutation.isPending ? 'Sauvegarde...' : 'Sauvegarder les CompÃ©tences'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -888,7 +888,7 @@ const AutresCompetancesPage = () => {
         fullWidth
       >
         <DialogTitle>
-          <Typography variant="h6">Résultats de l'Extraction Batch</Typography>
+          <Typography variant="h6">RÃ©sultats de l'Extraction Batch</Typography>
         </DialogTitle>
         <DialogContent>
           {batchResults && (
@@ -910,7 +910,7 @@ const AutresCompetancesPage = () => {
                       <Typography variant="h3" fontWeight="bold">
                         {batchResults.summary.processed || 0}
                       </Typography>
-                      <Typography variant="body2">Traités</Typography>
+                      <Typography variant="body2">TraitÃ©s</Typography>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -920,7 +920,7 @@ const AutresCompetancesPage = () => {
                       <Typography variant="h3" fontWeight="bold">
                         {batchResults.summary.skipped || 0}
                       </Typography>
-                      <Typography variant="body2">Ignorés</Typography>
+                      <Typography variant="body2">IgnorÃ©s</Typography>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -930,7 +930,7 @@ const AutresCompetancesPage = () => {
                       <Typography variant="h3" fontWeight="bold">
                         {batchResults.summary.failed}
                       </Typography>
-                      <Typography variant="body2">Échecs</Typography>
+                      <Typography variant="body2">Ã‰checs</Typography>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -940,7 +940,7 @@ const AutresCompetancesPage = () => {
                       <Typography variant="h2" fontWeight="bold">
                         {batchResults.summary.totalSkillsExtracted}
                       </Typography>
-                      <Typography variant="body1">Compétences Totales Extraites</Typography>
+                      <Typography variant="body1">CompÃ©tences Totales Extraites</Typography>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -953,7 +953,7 @@ const AutresCompetancesPage = () => {
               </Alert>
 
               <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                Détails par candidat:
+                DÃ©tails par candidat:
               </Typography>
               <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
                 <Table stickyHeader size="small">
@@ -961,7 +961,7 @@ const AutresCompetancesPage = () => {
                     <TableRow>
                       <TableCell>Candidat ID</TableCell>
                       <TableCell>Statut</TableCell>
-                      <TableCell align="right">Compétences</TableCell>
+                      <TableCell align="right">CompÃ©tences</TableCell>
                       <TableCell>Message</TableCell>
                     </TableRow>
                   </TableHead>
@@ -975,9 +975,9 @@ const AutresCompetancesPage = () => {
                         </TableCell>
                         <TableCell>
                           {result.success ? (
-                            <Chip label="Succès" color="success" size="small" />
+                            <Chip label="SuccÃ¨s" color="success" size="small" />
                           ) : (
-                            <Chip label="Échec" color="error" size="small" />
+                            <Chip label="Ã‰chec" color="error" size="small" />
                           )}
                         </TableCell>
                         <TableCell align="right">
@@ -1010,6 +1010,21 @@ const AutresCompetancesPage = () => {
       {/* Search Tab */}
       {mainTab === 'search' && (
         <Box>
+          <Box display="flex" justifyContent="flex-end" mb={2}>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={() => {
+                const params = new URLSearchParams();
+                if (skillSearchQuery) {
+                  params.set('q', skillSearchQuery);
+                }
+                navigate(`/exports?${params.toString()}`);
+              }}
+            >
+              Exporter ces résultats
+            </Button>
+          </Box>
           {/* Summary Card */}
           {searchResults.length > 0 && (
             <Card
@@ -1031,7 +1046,7 @@ const AutresCompetancesPage = () => {
                         {searchResults.length}
                       </Typography>
                       <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                        Compétences extraites
+                        CompÃ©tences extraites
                       </Typography>
                     </Stack>
                   </Grid>
@@ -1057,7 +1072,7 @@ const AutresCompetancesPage = () => {
                         {categoryEntries.length}
                       </Typography>
                       <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                        Catégories représentées
+                        CatÃ©gories reprÃ©sentÃ©es
                       </Typography>
                     </Stack>
                   </Grid>
@@ -1073,13 +1088,13 @@ const AutresCompetancesPage = () => {
                   <CardContent>
                     <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
                       <Typography variant="h6" fontWeight="bold">
-                        Répartition par catégorie
+                        RÃ©partition par catÃ©gorie
                       </Typography>
                       <CategoryIcon color="primary" />
                     </Box>
                     {categoryEntries.length === 0 ? (
                       <Typography variant="body2" color="text.secondary">
-                        Aucune donnée pour l'instant
+                        Aucune donnÃ©e pour l'instant
                       </Typography>
                     ) : (
                       <Stack spacing={1.5}>
@@ -1115,13 +1130,13 @@ const AutresCompetancesPage = () => {
                   <CardContent>
                     <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
                       <Typography variant="h6" fontWeight="bold">
-                        Niveaux d'expérience
+                        Niveaux d'expÃ©rience
                       </Typography>
                       <BarChartIcon color="primary" />
                     </Box>
                     {levelEntries.length === 0 ? (
                       <Typography variant="body2" color="text.secondary">
-                        Les niveaux apparaîtront après une première recherche
+                        Les niveaux apparaÃ®tront aprÃ¨s une premiÃ¨re recherche
                       </Typography>
                     ) : (
                       <Stack spacing={1.5}>
@@ -1159,7 +1174,7 @@ const AutresCompetancesPage = () => {
                     <CardContent>
                       <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
                         <Typography variant="h6" fontWeight="bold">
-                          Compétences les plus fiables
+                          CompÃ©tences les plus fiables
                         </Typography>
                         <BarChartIcon color="primary" />
                       </Box>
@@ -1218,10 +1233,10 @@ const AutresCompetancesPage = () => {
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                🔍 Filtrer les Compétences
+                ðŸ” Filtrer les CompÃ©tences
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Toutes les compétences extraites sont affichées ci-dessous. Utilisez le filtre pour rechercher une compétence spécifique.
+                Toutes les compÃ©tences extraites sont affichÃ©es ci-dessous. Utilisez le filtre pour rechercher une compÃ©tence spÃ©cifique.
               </Typography>
               <TextField
                 fullWidth
@@ -1262,7 +1277,7 @@ const AutresCompetancesPage = () => {
               <CardContent>
                 <Box display="flex" justifyContent="center" alignItems="center" py={4}>
                   <CircularProgress sx={{ mr: 2 }} />
-                  <Typography variant="h6">Chargement des compétences...</Typography>
+                  <Typography variant="h6">Chargement des compÃ©tences...</Typography>
                 </Box>
               </CardContent>
             </Card>
@@ -1376,7 +1391,7 @@ const AutresCompetancesPage = () => {
                           </Grid>
                           <Grid item xs={6}>
                             <Typography variant="body2" color="text.secondary">
-                              Expérience moyenne
+                              ExpÃ©rience moyenne
                             </Typography>
                             <Typography variant="h5" fontWeight="bold">
                               {averageExperience === '-' ? '-' : `${averageExperience} ans`}
@@ -1418,7 +1433,7 @@ const AutresCompetancesPage = () => {
 
                         {candidates.length === 0 ? (
                           <Typography variant="body2" color="text.secondary">
-                            Aucun candidat ne correspond à cette compétence pour le moment.
+                            Aucun candidat ne correspond Ã  cette compÃ©tence pour le moment.
                           </Typography>
                         ) : isCompactView ? (
                           <Stack spacing={2}>
@@ -1593,7 +1608,7 @@ const AutresCompetancesPage = () => {
               <CardContent>
                 <Box textAlign="center" py={4}>
                   <Typography variant="h6" color="text.secondary" gutterBottom>
-                    Aucun résultat trouvé
+                    Aucun rÃ©sultat trouvÃ©
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     Essayez avec un autre terme de recherche
@@ -1609,3 +1624,6 @@ const AutresCompetancesPage = () => {
 };
 
 export default AutresCompetancesPage;
+
+
+
