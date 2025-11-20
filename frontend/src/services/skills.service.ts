@@ -103,4 +103,29 @@ export const skillsService = {
     );
     return response.data;
   },
+
+  /**
+   * Search extracted skills across all candidates
+   */
+  searchSkills: async (
+    query: string,
+    category?: string,
+    minConfidence?: number,
+    accessToken?: string
+  ) => {
+    const params = new URLSearchParams();
+    if (query) params.append('q', query);
+    if (category) params.append('category', category);
+    if (minConfidence) params.append('minConfidence', minConfidence.toString());
+
+    const response = await axios.get(
+      `${API_URL}/api/skills/search?${params.toString()}`,
+      {
+        headers: accessToken ? {
+          Authorization: `Bearer ${accessToken}`,
+        } : {},
+      }
+    );
+    return response.data;
+  },
 };

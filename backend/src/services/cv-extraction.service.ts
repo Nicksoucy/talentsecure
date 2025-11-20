@@ -252,12 +252,20 @@ export class CVExtractionService {
 
   /**
    * Save extracted skills to candidate
+   * If the candidateId is a prospect, auto-convert to candidate first
    */
   async saveExtractedSkills(
     candidateId: string,
     extractedSkills: ExtractionResult[],
-    overwrite: boolean = false
+    overwrite: boolean = false,
+    isProspect: boolean = false,
+    userId?: string
   ): Promise<{ added: number; skipped: number; updated: number }> {
+    // If this is a prospect, convert to candidate first
+    if (isProspect && userId) {
+      await this.convertProspectToCandidate(candidateId, userId);
+    }
+
     let added = 0;
     let skipped = 0;
     let updated = 0;
@@ -540,6 +548,58 @@ export class CVExtractionService {
     }
 
     return textParts.join('\n');
+  }
+
+  /**
+   * Convert prospect to candidate
+   * This is called automatically when extracting skills from a prospect
+   */
+  private async convertProspectToCandidate(prospectId: string, userId: string): Promise<void> {
+    const prospect = await prisma.prospectCandidate.findUnique({
+      where: { id: prospectId },
+    });
+
+    if (!prospect) {
+      throw new Error('Prospect not found');
+    }
+
+    // Check if already converted
+    if (prospect.isConverted) {
+      return; // Already converted, nothing to do
+    }
+
+    // Create candidate from prospect
+    const candidate = await prisma.candidate.create({
+      data: {
+        id: prospect.id, // Use same ID
+        firstName: prospect.firstName,
+        lastName: prospect.lastName,
+        email: prospect.email,
+        phone: prospect.phone || '',
+        city: prospect.city || '',
+        province: prospect.province || 'QC',
+        postalCode: prospect.postalCode || '',
+        streetAddress: prospect.streetAddress || '',
+        cvStoragePath: prospect.cvStoragePath,
+        status: 'LEAD', // Initial status
+        source: 'Prospect Auto-Converti',
+        isActive: true,
+        isDeleted: false,
+        createdById: userId, // Required field
+      },
+    });
+
+    // Mark prospect as converted
+    await prisma.prospectCandidate.update({
+      where: { id: prospectId },
+      data: {
+        isConverted: true,
+        convertedAt: new Date(),
+        convertedToId: candidate.id,
+      },
+    });
+
+    console.log(`✅ Prospect ${prospectId} converted to candidate ${candidate.id}`);
   }
 }
 

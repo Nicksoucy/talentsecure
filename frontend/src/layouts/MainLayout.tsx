@@ -70,6 +70,7 @@ const MainLayout = () => {
     { text: 'Candidats Potentiels', icon: <PersonSearchIcon />, path: '/prospects' },
     { text: 'Catalogues', icon: <DescriptionIcon />, path: '/catalogues' },
     { text: 'Clients', icon: <BusinessIcon />, path: '/clients' },
+    { text: 'Demandes Clients', icon: <ShoppingCartIcon />, path: '/wishlists' },
     { text: 'Autre Compétance', icon: <WorkIcon />, path: '/autres-competances' },
   ];
 

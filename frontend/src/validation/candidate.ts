@@ -2,6 +2,16 @@ import { z } from 'zod';
 
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
+// Helper to transform empty strings to null for optional date fields
+const optionalDateString = z
+  .string()
+  .transform(val => val === '' ? null : val)
+  .nullable()
+  .refine(val => val === null || dateRegex.test(val), {
+    message: 'Format de date invalide (YYYY-MM-DD attendu)',
+  })
+  .optional();
+
 const languageSchema = z.object({
   language: z.string().min(1, 'Le nom de langue est requis'),
   level: z.string().max(50).optional().nullable(),
@@ -10,14 +20,14 @@ const languageSchema = z.object({
 const experienceSchema = z.object({
   companyName: z.string().min(1, 'Le nom de l\'entreprise est requis').max(150),
   position: z.string().min(1, 'Le poste est requis').max(150),
-  startDate: z.string().regex(dateRegex, 'Date de debut invalide').optional().nullable(),
-  endDate: z.string().regex(dateRegex, 'Date de fin invalide').optional().nullable(),
+  startDate: optionalDateString,
+  endDate: optionalDateString,
   description: z.string().max(2000).optional().nullable(),
 });
 
 const certificationSchema = z.object({
   name: z.string().min(1, 'Le nom de la certification est requis').max(150),
-  expiryDate: z.string().regex(dateRegex, 'Date de fin invalide').optional().nullable(),
+  expiryDate: optionalDateString,
 });
 
 export const candidateFormSchema = z.object({
@@ -28,7 +38,7 @@ export const candidateFormSchema = z.object({
   address: z.string().max(200).optional().nullable(),
   city: z.string().max(100).optional().nullable(),
   postalCode: z.string().max(12).optional().nullable(),
-  interviewDate: z.string().regex(dateRegex, 'Date d\'entrevue invalide').optional().nullable(),
+  interviewDate: optionalDateString,
   hasVehicle: z.boolean().optional().nullable(),
   hasDriverLicense: z.boolean().optional().nullable(),
   driverLicenseClass: z.string().max(20).optional().nullable(),
@@ -36,7 +46,7 @@ export const candidateFormSchema = z.object({
   canTravelKm: z.number().min(0).max(1000).optional().nullable(),
   hasBSP: z.boolean().optional().nullable(),
   bspNumber: z.string().max(50).optional().nullable(),
-  bspExpiryDate: z.string().regex(dateRegex, 'Date BSP invalide').optional().nullable(),
+  bspExpiryDate: optionalDateString,
   bspStatus: z.string().max(50).optional().nullable(),
   professionalismRating: z.number().min(0).max(10).optional().nullable(),
   communicationRating: z.number().min(0).max(10).optional().nullable(),

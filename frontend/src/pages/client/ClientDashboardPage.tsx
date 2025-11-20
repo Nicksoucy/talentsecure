@@ -15,9 +15,6 @@ import {
   AppBar,
   Toolbar,
   IconButton,
-  ToggleButton,
-  ToggleButtonGroup,
-  Paper,
   Divider,
 } from '@mui/material';
 import {
@@ -25,16 +22,16 @@ import {
   Person as PersonIcon,
   Visibility as VisibilityIcon,
   Business as BusinessIcon,
-  Map as MapIcon,
-  ViewModule as ViewModuleIcon,
   TravelExplore as TravelExploreIcon,
 } from '@mui/icons-material';
 import { useClientAuthStore } from '@/store/clientAuthStore';
 import { clientAuthService, Catalogue } from '@/services/client-auth.service';
 import { useSnackbar } from 'notistack';
 import ProspectsMap from '@/components/client/ProspectsMap';
-import ProspectsMapClustered from '@/components/client/ProspectsMapClustered';
-import RequestCandidatesDialog from '@/components/client/RequestCandidatesDialog';
+import ProspectsOnlyMap from '@/components/client/ProspectsOnlyMap';
+import CartBadge from '@/components/client/Cart/CartBadge';
+import CartDrawer from '@/components/client/Cart/CartDrawer';
+import CitySelectDialog from '@/components/client/Cart/CitySelectDialog';
 
 const ClientDashboardPage = () => {
   const navigate = useNavigate();
@@ -43,9 +40,8 @@ const ClientDashboardPage = () => {
   const [catalogues, setCatalogues] = useState<Catalogue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [mapView, setMapView] = useState<'circles' | 'clusters'>('circles');
-  const [requestDialogOpen, setRequestDialogOpen] = useState(false);
-  const [selectedCityRequest, setSelectedCityRequest] = useState<{ city: string; count: number } | null>(null);
+  const [cityDialogOpen, setCityDialogOpen] = useState(false);
+  const [selectedCity, setSelectedCity] = useState<{ city: string; province?: string } | null>(null);
 
   useEffect(() => {
     loadCatalogues();
@@ -78,38 +74,14 @@ const ClientDashboardPage = () => {
     navigate(`/client/catalogue/${catalogueId}`);
   };
 
-  const handleMapViewChange = (
-    event: React.MouseEvent<HTMLElement>,
-    newView: 'circles' | 'clusters'
-  ) => {
-    if (newView !== null) {
-      setMapView(newView);
-    }
+  const handleCityClick = (city: string, province?: string) => {
+    setSelectedCity({ city, province: province || 'QC' });
+    setCityDialogOpen(true);
   };
 
-  const handleCityClick = (city: string, count: number) => {
-    setSelectedCityRequest({ city, count });
-    setRequestDialogOpen(true);
-  };
-
-  const handleRequestSubmit = (message: string) => {
-    // In a real application, this would send the request to the backend
-    console.log('Prospect request submitted:', {
-      city: selectedCityRequest?.city,
-      count: selectedCityRequest?.count,
-      message,
-      client: client?.name,
-    });
-
-    enqueueSnackbar(
-      `Demande envoyée pour ${selectedCityRequest?.count} candidat${selectedCityRequest?.count! > 1 ? 's' : ''} potentiel${selectedCityRequest?.count! > 1 ? 's' : ''} à ${selectedCityRequest?.city}`,
-      { variant: 'success' }
-    );
-  };
-
-  const handleCloseRequestDialog = () => {
-    setRequestDialogOpen(false);
-    setSelectedCityRequest(null);
+  const handleCloseCityDialog = () => {
+    setCityDialogOpen(false);
+    setSelectedCity(null);
   };
 
   return (
@@ -121,6 +93,7 @@ const ClientDashboardPage = () => {
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Portail Client - {client?.companyName || client?.name}
           </Typography>
+          <CartBadge />
           <IconButton color="inherit" onClick={handleLogout} title="Déconnexion">
             <LogoutIcon />
           </IconButton>
@@ -138,48 +111,54 @@ const ClientDashboardPage = () => {
           </Typography>
         </Box>
 
-        {/* Prospects Map Section */}
-        <Box sx={{ mb: 5 }}>
-          <Box display="flex" alignItems="center" gap={2} mb={3}>
-            <TravelExploreIcon color="primary" fontSize="large" />
+        {/* Maps Section - Side by Side */}
+        <Grid container spacing={3} sx={{ mb: 5 }}>
+          {/* Tier 1: Evaluated Candidates (Premium) */}
+          <Grid item xs={12} md={6}>
             <Box>
-              <Typography variant="h5" fontWeight="bold">
-                Candidats potentiels disponibles
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Explorez notre banque de talents en temps réel par région
-              </Typography>
+              <Box display="flex" alignItems="center" gap={2} mb={2}>
+                <TravelExploreIcon color="primary" fontSize="large" />
+                <Box>
+                  <Typography variant="h6" fontWeight="bold">
+                    Candidats Évalués
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Prêts à l'embauche
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Alert severity="success" sx={{ mb: 2 }}>
+                <strong>Premium 15-45$ par candidat</strong> - Avec vidéo d'entrevue, évaluations complètes et notes RH
+              </Alert>
+
+              <ProspectsMap onCityClick={handleCityClick} />
             </Box>
-          </Box>
+          </Grid>
 
-          <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-            <Alert severity="info" sx={{ flexGrow: 1, mr: 2 }}>
-              Visualisez la disponibilité des candidats par ville et demandez ceux qui vous intéressent
-            </Alert>
-            <ToggleButtonGroup
-              value={mapView}
-              exclusive
-              onChange={handleMapViewChange}
-              size="small"
-            >
-              <ToggleButton value="circles" aria-label="vue cercles">
-                <MapIcon sx={{ mr: 1 }} fontSize="small" />
-                Zones
-              </ToggleButton>
-              <ToggleButton value="clusters" aria-label="vue marqueurs">
-                <ViewModuleIcon sx={{ mr: 1 }} fontSize="small" />
-                Marqueurs
-              </ToggleButton>
-            </ToggleButtonGroup>
-          </Box>
+          {/* Tier 2: Prospects Only (Economy) */}
+          <Grid item xs={12} md={6}>
+            <Box>
+              <Box display="flex" alignItems="center" gap={2} mb={2}>
+                <PersonIcon color="warning" fontSize="large" />
+                <Box>
+                  <Typography variant="h6" fontWeight="bold">
+                    CVs Seulement
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Entrevues à faire
+                  </Typography>
+                </Box>
+              </Box>
 
-          {mapView === 'circles' && (
-            <ProspectsMap onCityClick={handleCityClick} />
-          )}
-          {mapView === 'clusters' && (
-            <ProspectsMapClustered onCityClick={handleCityClick} />
-          )}
-        </Box>
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                <strong>Économique 5-10$ par CV</strong> - CVs uniquement, entrevue à votre charge. Parfait pour économiser!
+              </Alert>
+
+              <ProspectsOnlyMap onCityClick={handleCityClick} />
+            </Box>
+          </Grid>
+        </Grid>
 
         <Divider sx={{ my: 5 }} />
 
@@ -280,17 +259,18 @@ const ClientDashboardPage = () => {
         )}
       </Container>
 
-      {/* Request Candidates Dialog */}
-      {selectedCityRequest && (
-        <RequestCandidatesDialog
-          open={requestDialogOpen}
-          onClose={handleCloseRequestDialog}
-          city={selectedCityRequest.city}
-          count={selectedCityRequest.count}
-          catalogueTitle="Candidats potentiels"
-          onSubmit={handleRequestSubmit}
+      {/* City Selection Dialog */}
+      {selectedCity && (
+        <CitySelectDialog
+          open={cityDialogOpen}
+          onClose={handleCloseCityDialog}
+          city={selectedCity.city}
+          province={selectedCity.province}
         />
       )}
+
+      {/* Cart Drawer */}
+      <CartDrawer />
     </Box>
   );
 };

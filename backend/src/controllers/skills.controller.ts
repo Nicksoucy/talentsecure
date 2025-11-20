@@ -662,6 +662,7 @@ export const getExtractionLogs = async (req: Request, res: Response, next: NextF
 export const batchExtractSkills = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { candidateIds, model, overwrite = false } = req.body;
+    const userId = req.user!.id; // Get user ID for prospect conversion
 
     if (!candidateIds || candidateIds.length === 0) {
       return res.status(400).json({ error: 'Au moins un candidat est requis' });
@@ -671,45 +672,6 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
 
     for (const candidateId of candidateIds) {
       try {
-        // Check if candidate or prospect exists first to get the name
-        let candidate = await prisma.candidate.findUnique({
-          where: { id: candidateId },
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        });
-
-        let isProspect = false;
-        let candidateName = '';
-        if (!candidate) {
-          const prospect = await prisma.prospectCandidate.findUnique({
-            where: { id: candidateId },
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          });
-
-          if (!prospect) {
-            results.push({
-              candidateId,
-              candidateName: 'Inconnu',
-              success: false,
-              error: 'Candidat ou prospect non trouvé',
-            });
-            continue;
-          }
-          isProspect = true;
-          candidateName = `${prospect.firstName || ''} ${prospect.lastName || ''}`.trim() || prospect.email || 'Prospect';
-        } else {
-          candidateName = `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || candidate.email || 'Candidat';
-        }
-
         // Check if already processed (skip if found in extraction log with success)
         const existingLog = await prisma.cvExtractionLog.findFirst({
           where: {
@@ -721,10 +683,9 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
           },
         });
 
-        if (existingLog && !overwrite && !isProspect) {
+        if (existingLog) {
           results.push({
             candidateId,
-            candidateName,
             success: true,
             skillsFound: existingLog.skillsFound,
             skipped: true,
@@ -733,13 +694,34 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
           continue;
         }
 
+        // Check if candidate or prospect exists
+        let candidate = await prisma.candidate.findUnique({
+          where: { id: candidateId },
+        });
+
+        let isProspect = false;
+        if (!candidate) {
+          const prospect = await prisma.prospectCandidate.findUnique({
+            where: { id: candidateId },
+          });
+
+          if (!prospect) {
+            results.push({
+              candidateId,
+              success: false,
+              error: 'Candidat ou prospect non trouvé',
+            });
+            continue;
+          }
+          isProspect = true;
+        }
+
         // Get candidate/prospect text
         const cvText = await cvExtractionService.getCandidateText(candidateId, isProspect);
 
         if (!cvText || cvText.length < 50) {
           results.push({
             candidateId,
-            candidateName,
             success: false,
             error: 'CV insuffisant (moins de 50 caractères)',
           });
@@ -755,19 +737,23 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
         }
 
         if (extraction.success) {
-          // Save skills only for regular candidates, not prospects
+          // Save skills for both candidates AND prospects
           let saveResult = null;
-          if (!isProspect) {
+          try {
             saveResult = await cvExtractionService.saveExtractedSkills(
               candidateId,
               extraction.skillsFound,
-              overwrite
+              overwrite,
+              isProspect, // Pass isProspect flag to save service
+              userId // Pass userId for prospect conversion
             );
+          } catch (saveError: any) {
+            console.error(`Error saving skills for ${candidateId}:`, saveError);
+            saveResult = { error: saveError.message };
           }
 
           results.push({
             candidateId,
-            candidateName,
             success: true,
             skillsFound: extraction.totalSkills,
             saved: saveResult,
@@ -776,7 +762,6 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
         } else {
           results.push({
             candidateId,
-            candidateName,
             success: false,
             error: extraction.errorMessage,
           });
@@ -784,7 +769,6 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
       } catch (error: any) {
         results.push({
           candidateId,
-          candidateName: 'Erreur',
           success: false,
           error: error.message,
         });
@@ -1061,5 +1045,106 @@ export const getAIExtractionStats = async (req: Request, res: Response, next: Ne
   }
 };
 
+// ============================================
+// SKILLS SEARCH & DISCOVERY
+// ============================================
 
+/**
+ * Search extracted skills across all candidates and prospects
+ * GET /api/skills/search
+ * Query params: q (search term), category, minConfidence, limit
+ */
+export const searchExtractedSkills = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { q, category, minConfidence = 0, limit = 100 } = req.query;
 
+    // Build where clause for skills
+    const skillWhere: any = {
+      isActive: true,
+    };
+
+    if (q) {
+      skillWhere.OR = [
+        { name: { contains: q as string, mode: 'insensitive' } },
+        { keywords: { has: (q as string).toLowerCase() } },
+      ];
+    }
+
+    if (category) {
+      skillWhere.category = category;
+    }
+
+    // Get all matching skills with their candidate relationships
+    const skills = await prisma.skill.findMany({
+      where: skillWhere,
+      include: {
+        candidateSkills: {
+          where: {
+            ...(minConfidence && { confidence: { gte: parseFloat(minConfidence as string) } }),
+          },
+          include: {
+            candidate: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+                city: true,
+                province: true,
+                status: true,
+                globalRating: true,
+              },
+            },
+          },
+          orderBy: {
+            confidence: 'desc',
+          },
+        },
+        _count: {
+          select: {
+            candidateSkills: true,
+          },
+        },
+      },
+      take: parseInt(limit as string),
+      orderBy: {
+        candidateSkills: {
+          _count: 'desc', // Most common skills first
+        },
+      },
+    });
+
+    // Format response
+    const results = skills.map((skill) => ({
+      skillId: skill.id,
+      skillName: skill.name,
+      category: skill.category,
+      description: skill.description,
+      keywords: skill.keywords,
+      totalCandidates: skill._count.candidateSkills,
+      candidates: skill.candidateSkills.map((cs) => ({
+        candidateId: cs.candidateId,
+        candidate: cs.candidate,
+        level: cs.level,
+        yearsExperience: cs.yearsExperience,
+        confidence: cs.confidence,
+        source: cs.source,
+        isVerified: cs.isVerified,
+        extractedText: cs.extractedText,
+      })),
+    }));
+
+    res.json({
+      results,
+      count: results.length,
+      query: {
+        searchTerm: q || null,
+        category: category || null,
+        minConfidence: parseFloat(minConfidence as string),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

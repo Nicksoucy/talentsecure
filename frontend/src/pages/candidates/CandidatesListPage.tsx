@@ -435,9 +435,9 @@ export default function CandidatesListPage() {
       certifications: safeValues.certifications,
 
       situationTests: [
-        safeValues.situationTest1 && { scenario: 'Conflit avec un collegue', response: safeValues.situationTest1 },
-        safeValues.situationTest2 && { scenario: 'Situation d\'urgence inattendue', response: safeValues.situationTest2 },
-        safeValues.situationTest3 && { scenario: 'Assurer la securite d\'un site', response: safeValues.situationTest3 },
+        safeValues.situationTest1 && { question: 'Conflit avec un collegue', answer: safeValues.situationTest1 },
+        safeValues.situationTest2 && { question: 'Situation d\'urgence inattendue', answer: safeValues.situationTest2 },
+        safeValues.situationTest3 && { question: 'Assurer la securite d\'un site', answer: safeValues.situationTest3 },
       ].filter(Boolean),
     };
 
@@ -468,9 +468,9 @@ export default function CandidatesListPage() {
   const transformCandidateToFormData = (candidate: any) => {
     // Extract situation tests responses
     const situationTests = candidate.situationTests || [];
-    const situationTest1 = situationTests.find((t: any) => t.scenario?.includes('collègue'))?.response || '';
-    const situationTest2 = situationTests.find((t: any) => t.scenario?.includes('urgence'))?.response || '';
-    const situationTest3 = situationTests.find((t: any) => t.scenario?.includes('sécurité'))?.response || '';
+    const situationTest1 = situationTests.find((t: any) => t.question?.includes('collègue') || t.question?.includes('collegue'))?.answer || '';
+    const situationTest2 = situationTests.find((t: any) => t.question?.includes('urgence'))?.answer || '';
+    const situationTest3 = situationTests.find((t: any) => t.question?.includes('sécurité') || t.question?.includes('securite'))?.answer || '';
 
     return {
       // Personal info

@@ -95,7 +95,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Erreur lors de l\'upload');
+        throw new Error(errorData.error || "Erreur lors de l'upload");
       }
 
       const data = await response.json();
@@ -111,7 +111,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       }
     } catch (err: any) {
       console.error('Upload error:', err);
-      setError(err.message || 'Erreur lors de l\'upload de la vidéo');
+      setError(err.message || "Erreur lors de l'upload de la vidéo");
     } finally {
       setUploading(false);
       setTimeout(() => setProgress(0), 2000);
@@ -137,7 +137,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Erreur lors de la suppression');
+        throw new Error(errorData.error || "Erreur lors de la suppression");
       }
 
       setSuccess('Vidéo supprimée avec succès!');
@@ -147,7 +147,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       }
     } catch (err: any) {
       console.error('Delete error:', err);
-      setError(err.message || 'Erreur lors de la suppression de la vidéo');
+      setError(err.message || "Erreur lors de la suppression de la vidéo");
     } finally {
       setUploading(false);
     }

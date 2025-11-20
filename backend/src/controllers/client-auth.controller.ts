@@ -365,12 +365,12 @@ export const getAllCandidatesStatsByCity = async (
       return res.status(401).json({ error: 'Non authentifié' });
     }
 
-    // Get all candidates (entire talent pool)
+    // Get all active candidates (entire talent pool)
     const candidates = await prisma.candidate.findMany({
       where: {
-        status: {
-          in: ['DISPONIBLE', 'EN_RECHERCHE'],
-        },
+        isActive: true,
+        isArchived: false,
+        isDeleted: false,
       },
       select: {
         city: true,
@@ -383,6 +383,55 @@ export const getAllCandidatesStatsByCity = async (
 
     candidates.forEach((candidate) => {
       const city = candidate.city;
+      if (city) {
+        cityStats[city] = (cityStats[city] || 0) + 1;
+      }
+    });
+
+    // Convert to array format
+    const data = Object.entries(cityStats).map(([city, count]) => ({
+      city,
+      count,
+    }));
+
+    res.json({ data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get all prospects (CVs only, not yet evaluated) statistics by city
+ * For the cheaper tier - clients interview themselves (5-10$ per CV)
+ */
+export const getProspectsOnlyStatsByCity = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    // req.user is set by the authenticateJWT middleware
+    if (!req.user || req.user.role !== 'CLIENT') {
+      return res.status(401).json({ error: 'Non authentifié' });
+    }
+
+    // Get all prospects that haven't been converted to candidates yet
+    const prospects = await prisma.prospectCandidate.findMany({
+      where: {
+        isDeleted: false,
+        isConverted: false, // Only prospects not yet evaluated
+      },
+      select: {
+        city: true,
+        province: true,
+      },
+    });
+
+    // Group prospects by city and count them
+    const cityStats: { [key: string]: number } = {};
+
+    prospects.forEach((prospect) => {
+      const city = prospect.city;
       if (city) {
         cityStats[city] = (cityStats[city] || 0) + 1;
       }

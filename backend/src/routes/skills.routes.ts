@@ -20,6 +20,7 @@ import {
   extractSkillsWithAI,
   extractSkillsHybrid,
   getAIExtractionStats,
+  searchExtractedSkills,
 } from '../controllers/skills.controller';
 
 const router = Router();
@@ -102,6 +103,9 @@ const searchCandidatesSchema = z.object({
 // Get skills stats (must be before /:id route)
 router.get('/stats', authenticateJWT, getSkillsStats);
 
+// Search extracted skills
+router.get('/search', authenticateJWT, searchExtractedSkills);
+
 // CRUD operations
 router.get('/', authenticateJWT, getAllSkills);
 router.get('/:id', authenticateJWT, getSkillById);
@@ -150,14 +154,14 @@ const batchExtractSchema = z.object({
   }),
 });
 
+// Batch extract (MUST be before /extract/:candidateId to avoid route conflict)
+router.post('/extract/batch', authenticateJWT, validate(batchExtractSchema), batchExtractSkills);
+
 // Extract skills from candidate
 router.post('/extract/:candidateId', authenticateJWT, validate(extractSkillsSchema), extractSkillsFromCandidate);
 
 // Get extraction logs
 router.get('/extract/:candidateId/logs', authenticateJWT, getExtractionLogs);
-
-// Batch extract
-router.post('/extract/batch', authenticateJWT, validate(batchExtractSchema), batchExtractSkills);
 
 // ============================================
 // AI EXTRACTION ROUTES
