@@ -52,7 +52,15 @@ describe('batchExtractSkills controller', () => {
     return res;
   };
 
-  beforeEach(() => {\r\n    jest.clearAllMocks();\r\n    __mockCandidateFindUnique.mockReset();\r\n    __mockProspectFindUnique.mockReset();\r\n    __mockCvExtractionLogFindFirst.mockReset();\r\n    mockCvService.getCandidateText.mockReset();\r\n    mockCvService.extractSkillsFromText.mockReset();\r\n    mockCvService.saveExtractedSkills.mockReset();\r\n  });
+  beforeEach(() => {
+    jest.clearAllMocks();
+    __mockCandidateFindUnique.mockReset();
+    __mockProspectFindUnique.mockReset();
+    __mockCvExtractionLogFindFirst.mockReset();
+    mockCvService.getCandidateText.mockReset();
+    mockCvService.extractSkillsFromText.mockReset();
+    mockCvService.saveExtractedSkills.mockReset();
+  });
 
   it('marks previously processed candidates as skipped when overwrite is false', async () => {
     __mockCandidateFindUnique.mockResolvedValueOnce({
@@ -135,4 +143,5 @@ describe('batchExtractSkills controller', () => {
     expect(mockCvService.extractSkillsFromText).toHaveBeenCalledWith('pros-1', expect.any(String));
   });
 });
+
 
