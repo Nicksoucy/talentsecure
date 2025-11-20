@@ -671,6 +671,45 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
 
     for (const candidateId of candidateIds) {
       try {
+        // Check if candidate or prospect exists first to get the name
+        let candidate = await prisma.candidate.findUnique({
+          where: { id: candidateId },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        });
+
+        let isProspect = false;
+        let candidateName = '';
+        if (!candidate) {
+          const prospect = await prisma.prospectCandidate.findUnique({
+            where: { id: candidateId },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          });
+
+          if (!prospect) {
+            results.push({
+              candidateId,
+              candidateName: 'Inconnu',
+              success: false,
+              error: 'Candidat ou prospect non trouvé',
+            });
+            continue;
+          }
+          isProspect = true;
+          candidateName = `${prospect.firstName || ''} ${prospect.lastName || ''}`.trim() || prospect.email || 'Prospect';
+        } else {
+          candidateName = `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || candidate.email || 'Candidat';
+        }
+
         // Check if already processed (skip if found in extraction log with success)
         const existingLog = await prisma.cvExtractionLog.findFirst({
           where: {
@@ -682,9 +721,10 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
           },
         });
 
-        if (existingLog) {
+        if (existingLog && !overwrite && !isProspect) {
           results.push({
             candidateId,
+            candidateName,
             success: true,
             skillsFound: existingLog.skillsFound,
             skipped: true,
@@ -693,34 +733,13 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
           continue;
         }
 
-        // Check if candidate or prospect exists
-        let candidate = await prisma.candidate.findUnique({
-          where: { id: candidateId },
-        });
-
-        let isProspect = false;
-        if (!candidate) {
-          const prospect = await prisma.prospectCandidate.findUnique({
-            where: { id: candidateId },
-          });
-
-          if (!prospect) {
-            results.push({
-              candidateId,
-              success: false,
-              error: 'Candidat ou prospect non trouvé',
-            });
-            continue;
-          }
-          isProspect = true;
-        }
-
         // Get candidate/prospect text
         const cvText = await cvExtractionService.getCandidateText(candidateId, isProspect);
 
         if (!cvText || cvText.length < 50) {
           results.push({
             candidateId,
+            candidateName,
             success: false,
             error: 'CV insuffisant (moins de 50 caractères)',
           });
@@ -748,6 +767,7 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
 
           results.push({
             candidateId,
+            candidateName,
             success: true,
             skillsFound: extraction.totalSkills,
             saved: saveResult,
@@ -756,6 +776,7 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
         } else {
           results.push({
             candidateId,
+            candidateName,
             success: false,
             error: extraction.errorMessage,
           });
@@ -763,6 +784,7 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
       } catch (error: any) {
         results.push({
           candidateId,
+          candidateName: 'Erreur',
           success: false,
           error: error.message,
         });
@@ -1038,3 +1060,6 @@ export const getAIExtractionStats = async (req: Request, res: Response, next: Ne
     next(error);
   }
 };
+
+
+

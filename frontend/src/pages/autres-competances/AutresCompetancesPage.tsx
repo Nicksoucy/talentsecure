@@ -738,7 +738,7 @@ const AutresCompetancesPage = () => {
                 <Table stickyHeader size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>Candidat ID</TableCell>
+                      <TableCell>Candidat</TableCell>
                       <TableCell>Statut</TableCell>
                       <TableCell align="right">Compétences</TableCell>
                       <TableCell>Message</TableCell>
@@ -748,12 +748,21 @@ const AutresCompetancesPage = () => {
                     {batchResults.results.map((result: any, index: number) => (
                       <TableRow key={index}>
                         <TableCell>
-                          <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                            {result.candidateId.substring(0, 8)}...
+                          <Typography variant="body2" fontWeight="bold">
+                            {result.candidateName || 'Inconnu'}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ fontFamily: 'monospace' }}
+                          >
+                            {result.candidateId ? `${result.candidateId.substring(0, 8)}...` : 'N/A'}
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          {result.success ? (
+                          {result.skipped ? (
+                            <Chip label="Ignorés" color="warning" size="small" />
+                          ) : result.success ? (
                             <Chip label="Succès" color="success" size="small" />
                           ) : (
                             <Chip label="Échec" color="error" size="small" />
@@ -763,6 +772,11 @@ const AutresCompetancesPage = () => {
                           {result.skillsFound || 0}
                         </TableCell>
                         <TableCell>
+                          {result.reason && (
+                            <Typography variant="caption" color="text.secondary">
+                              {result.reason}
+                            </Typography>
+                          )}
                           {result.error && (
                             <Typography variant="caption" color="error">
                               {result.error}
@@ -772,6 +786,7 @@ const AutresCompetancesPage = () => {
                       </TableRow>
                     ))}
                   </TableBody>
+
                 </Table>
               </TableContainer>
             </>

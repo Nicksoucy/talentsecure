@@ -344,6 +344,26 @@ export const convertToCandidate = async (
     const userId = req.user!.id;
     const candidateData = req.body;
 
+    // GARDE-FOU CRITIQUE: Cette fonction NE PEUT être appelée que par un utilisateur humain authentifié
+    // L'IA ne doit JAMAIS convertir automatiquement un prospect en candidat
+    if (!userId || !req.user) {
+      return res.status(403).json({
+        error: 'Accès refusé: seul un utilisateur authentifié peut convertir un prospect en candidat',
+      });
+    }
+
+    // PROTECTION: Interdire les conversions automatiques (détection de patterns d'IA)
+    const suspiciousPatterns = ['auto-converti', 'extraction ia', 'ai converted', 'auto converted'];
+    const hrNotesLower = (candidateData.hrNotes || '').toLowerCase();
+    const hasAutoConvertPattern = suspiciousPatterns.some(pattern => hrNotesLower.includes(pattern));
+
+    if (hasAutoConvertPattern) {
+      return res.status(403).json({
+        error: 'Conversion automatique interdite: seul un humain peut convertir un prospect en candidat',
+        hint: 'Les notes ne doivent pas contenir de marqueurs d\'auto-conversion',
+      });
+    }
+
     // Get prospect
     const prospect = await prisma.prospectCandidate.findUnique({
       where: { id },
