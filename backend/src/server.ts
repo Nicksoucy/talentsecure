@@ -25,6 +25,7 @@ import catalogueRoutes from './routes/catalogue.routes';
 import clientRoutes from './routes/client.routes';
 import prospectRoutes from './routes/prospect.routes';
 import webhookRoutes from './routes/webhook.routes';
+import adminRoutes from './routes/admin.routes';
 import wishlistRoutes from './routes/wishlist.routes';
 import skillsRoutes from './routes/skills.routes';
 
@@ -107,6 +108,7 @@ app.use('/api/catalogues', catalogueRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/prospects', prospectRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/skills', skillsRoutes);
 // app.use('/api/users', userRoutes);
