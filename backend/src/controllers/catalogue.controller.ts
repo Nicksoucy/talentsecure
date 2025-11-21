@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import path from 'path';
-import fs from 'fs';
+import * as path from 'path';
+import * as fs from 'fs';
 import axios from 'axios';
 import { PDFService } from '../services/pdf.service';
 import { useR2, getSignedFileUrl } from '../services/r2.service';

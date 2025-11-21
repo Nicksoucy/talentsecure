@@ -1,6 +1,6 @@
 import winston from 'winston';
-import path from 'path';
-import fs from 'fs';
+import * as path from 'path';
+import * as fs from 'fs';
 
 // Ensure logs directory exists
 const logDir = process.env.LOG_FILE_PATH || path.join(__dirname, '../../logs');

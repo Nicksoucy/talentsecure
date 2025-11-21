@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * Google Drive Service for Video Storage

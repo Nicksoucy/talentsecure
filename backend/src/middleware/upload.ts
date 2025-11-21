@@ -1,6 +1,6 @@
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
+import * as path from 'path';
+import * as fs from 'fs';
 
 // Créer le dossier uploads s'il n'existe pas
 const uploadsDir = path.join(__dirname, '../../uploads');

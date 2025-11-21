@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
-import path from 'path';
-import fs from 'fs';
+import * as path from 'path';
+import * as fs from 'fs';
 import { deleteFile } from '../middleware/upload';
 import { processCVUpload, deleteCV, getCVSignedUrl, getLocalCVPath } from '../services/cv.service';
 import { useR2 } from '../services/r2.service';

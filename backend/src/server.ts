@@ -3,7 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-import path from 'path';
+import * as path from 'path';
 import { randomUUID } from 'crypto';
 
 // Load environment variables

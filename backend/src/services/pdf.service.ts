@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit';
 import { PDFDocument as PDFLib, StandardFonts, rgb } from 'pdf-lib';
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 
 interface CandidateData {
   firstName: string;
