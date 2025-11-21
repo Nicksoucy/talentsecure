@@ -14,7 +14,7 @@ TalentSecure est une solution full-stack qui permet de:
 ## Stack Technique
 
 ### Backend
-- **Node.js 18+** avec TypeScript
+- **Node.js 20.16.0+** avec TypeScript (IMPORTANT: Node 18 n'est plus supporté)
 - **Express.js** pour l'API REST
 - **Prisma** comme ORM
 - **PostgreSQL** pour la base de donnÃ©es
@@ -542,4 +542,143 @@ Web: www.xguard.security
 
 
 
+
+
+---
+
+## 🚀 Déploiement et Production
+
+### Architecture Cloud
+
+**Backend:** Google Cloud Run (northamerica-northeast1)
+- Service: `talentsecure`
+- URL: `https://talentsecure-572017163659.northamerica-northeast1.run.app`
+- Auto-scaling: 0-10 instances
+- Node.js 20 Alpine
+
+**Frontend:** Google Cloud Run (northamerica-northeast1)
+- Service: `talentsecure-frontend`
+- URL: `https://talentsecure-frontend-572017163659.northamerica-northeast1.run.app`
+- React + Vite build
+
+**Base de données:** Neon PostgreSQL (Azure East US 2)
+- Serverless PostgreSQL
+- Connection pooling activé
+
+**Stockage:** Cloudflare R2
+- Vidéos, CVs, PDFs de catalogues
+- CDN global
+
+### Workflow de déploiement automatique
+
+1. **Push sur `main`** déclenche automatiquement:
+   - Cloud Build Trigger backend
+   - Cloud Build Trigger frontend
+
+2. **Build steps:**
+   - Fetch code from GitHub
+   - Build Docker image (Node 20)
+   - Compile TypeScript
+   - Run `npm ci && npm run build`
+   - Push to Artifact Registry
+   - Deploy to Cloud Run
+   - **Total: ~3-4 minutes**
+
+3. **Health checks:**
+   - Backend: `/health` endpoint
+   - Container doit écouter sur `$PORT` (8080)
+   - Timeout: 300s
+
+### Variables d'environnement Cloud Run
+
+**Backend (talentsecure):**
+```
+NODE_ENV=production
+DATABASE_URL=postgresql://...
+JWT_SECRET=...
+JWT_REFRESH_SECRET=...
+FRONTEND_URL=https://talentsecure-frontend-572017163659.northamerica-northeast1.run.app
+USE_R2=true
+R2_ACCOUNT_ID=...
+R2_ACCESS_KEY_ID=...
+R2_SECRET_ACCESS_KEY=...
+R2_BUCKET_NAME=talentsecure-videos
+GOHIGHLEVEL_WEBHOOK_SECRET=...
+```
+
+### Développement local → Production
+
+**📖 Voir le guide complet:** [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md)
+
+**Résumé rapide:**
+
+```bash
+# 1. Développer en local
+npm run dev  # Backend ET Frontend
+
+# 2. Tester localement
+npm run build  # DOIT passer sans erreurs!
+
+# 3. Commit et push
+git add .
+git commit -m "feat: ma nouvelle feature"
+git push origin main
+
+# 4. Cloud Build déploie automatiquement
+# Surveiller: https://console.cloud.google.com/cloud-build/builds?project=talentsecure
+
+# 5. Vérifier en production
+curl https://talentsecure-572017163659.northamerica-northeast1.run.app/health
+```
+
+### Debugging en production
+
+**Logs Cloud Run:**
+```
+https://console.cloud.google.com/logs/query?project=talentsecure
+```
+
+**Filtres utiles:**
+```
+resource.type="cloud_run_revision"
+resource.labels.service_name="talentsecure"
+severity>=ERROR
+```
+
+**Erreurs communes:**
+- "Container failed to start" → Vérifier DATABASE_URL et TypeScript errors
+- "Module not found" → Vérifier les imports et dépendances
+- "EBADENGINE" → Node version (doit être 20+)
+
+### Rollback en cas de problème
+
+```bash
+# Via Cloud Console:
+1. Aller sur Cloud Run → talentsecure
+2. Onglet "Revisions"
+3. Trouver la dernière version qui marchait
+4. Cliquer "..." → "Manage Traffic"
+5. Mettre 100% du traffic sur l'ancienne revision
+
+# Via gcloud:
+gcloud run services update-traffic talentsecure \
+  --to-revisions=talentsecure-00235-xyz=100 \
+  --region=northamerica-northeast1
+```
+
+### Monitoring
+
+**Métriques à surveiller:**
+- Request count
+- Request latency (p50, p95, p99)
+- Error rate
+- Container instances (auto-scaling)
+- Cold start time
+
+**Alertes configurées:**
+- Error rate > 5%
+- Latency p99 > 5s
+- Container crashes
+
+---
 
