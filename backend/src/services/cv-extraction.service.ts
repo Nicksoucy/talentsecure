@@ -1,7 +1,7 @@
-import { PrismaClient, Skill, SkillLevel } from '@prisma/client';
-import pdf from 'pdf-parse';
-import fs from 'fs';
-import path from 'path';
+import { PrismaClient, Skill, SkillLevel, CandidateStatus } from '@prisma/client';
+const pdfParse = require('pdf-parse');
+import * as fs from 'fs';
+import * as path from 'path';
 import { LOCAL_CV_PATH, GCS_CV_BUCKET, storage, useGCS } from '../config/storage';
 
 const prisma = new PrismaClient();
@@ -338,7 +338,7 @@ export class CVExtractionService {
       const dataBuffer = fs.readFileSync(filePath);
 
       // Parse PDF
-      const data = await pdf(dataBuffer);
+      const data = await pdfParse(dataBuffer);
 
       return data.text || '';
     } catch (error: any) {
@@ -579,9 +579,9 @@ export class CVExtractionService {
         city: prospect.city || '',
         province: prospect.province || 'QC',
         postalCode: prospect.postalCode || '',
-        streetAddress: prospect.streetAddress || '',
+        address: prospect.streetAddress || '',
         cvStoragePath: prospect.cvStoragePath,
-        status: 'EN_ATTENTE', // Initial status - En cours d'évaluation
+        status: CandidateStatus.EN_ATTENTE, // Initial status - waiting for evaluation
         source: 'Prospect Auto-Converti',
         isActive: true,
         isDeleted: false,

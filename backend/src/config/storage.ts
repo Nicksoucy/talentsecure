@@ -1,5 +1,5 @@
 import { Storage } from '@google-cloud/storage';
-import path from 'path';
+import * as path from 'path';
 
 /**
  * Configuration Google Cloud Storage

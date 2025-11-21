@@ -28,4 +28,10 @@ router.post('/revert-auto-converted-candidates', authenticateJWT, revertAutoConv
  */
 router.post('/revert-candidate-to-prospect/:id', authenticateJWT, revertSingleCandidateToProspect);
 
+/**
+ * POST /api/admin/revert-candidate-to-prospect/:id
+ * Re-convertit UN SEUL candidat en prospect (utilisé depuis le menu "3 points")
+ */
+router.post('/revert-candidate-to-prospect/:id', authenticate, revertSingleCandidateToProspect);
+
 export default router;

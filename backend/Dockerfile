@@ -1,5 +1,5 @@
 # Dockerfile pour Backend TalentSecure
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Installer les dépendances système nécessaires
 RUN apk add --no-cache \
@@ -28,7 +28,7 @@ COPY . .
 # Générer le client Prisma
 RUN npx prisma generate
 
-# Compiler TypeScript
+# Compiler TypeScript (fail if errors)
 RUN npm run build
 
 # Supprimer les devDependencies après le build
