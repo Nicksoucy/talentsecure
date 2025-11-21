@@ -29,7 +29,7 @@ const router = Router();
 // VALIDATION SCHEMAS
 // ============================================
 
-const createSkillSchema = z.object({
+const createSkillSchema = {
   body: z.object({
     name: z.string().min(2, 'Le nom doit contenir au moins 2 caractères'),
     category: z.enum([
@@ -44,9 +44,9 @@ const createSkillSchema = z.object({
     description: z.string().optional(),
     keywords: z.array(z.string()).min(1, 'Au moins un mot-clé est requis'),
   }),
-});
+};
 
-const updateSkillSchema = z.object({
+const updateSkillSchema = {
   body: z.object({
     name: z.string().min(2).optional(),
     category: z
@@ -64,9 +64,9 @@ const updateSkillSchema = z.object({
     keywords: z.array(z.string()).optional(),
     isActive: z.boolean().optional(),
   }),
-});
+};
 
-const addCandidateSkillSchema = z.object({
+const addCandidateSkillSchema = {
   body: z.object({
     skillId: z.string().uuid('ID de compétence invalide'),
     level: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT', 'UNKNOWN']).optional(),
@@ -75,9 +75,9 @@ const addCandidateSkillSchema = z.object({
     source: z.enum(['REGEX_EXTRACTED', 'AI_EXTRACTED', 'MANUAL_ENTRY', 'HUMAN_VERIFIED']).optional(),
     confidence: z.number().min(0).max(1).optional(),
   }),
-});
+};
 
-const updateCandidateSkillSchema = z.object({
+const updateCandidateSkillSchema = {
   body: z.object({
     level: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT', 'UNKNOWN']).optional(),
     yearsExperience: z.number().int().min(0).max(50).optional(),
@@ -85,16 +85,16 @@ const updateCandidateSkillSchema = z.object({
     verifiedBy: z.string().uuid().optional(),
     rejectionNote: z.string().optional(),
   }),
-});
+};
 
-const searchCandidatesSchema = z.object({
+const searchCandidatesSchema = {
   body: z.object({
     skillIds: z.array(z.string().uuid()).min(1, 'Au moins une compétence est requise'),
     level: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT', 'UNKNOWN']).optional(),
     minYearsExperience: z.number().int().min(0).optional(),
     onlyVerified: z.boolean().optional(),
   }),
-});
+};
 
 // ============================================
 // SKILLS ROUTES
@@ -140,19 +140,19 @@ router.delete('/candidates/:candidateId/skills/:skillId', authenticateJWT, remov
 // EXTRACTION ROUTES
 // ============================================
 
-const extractSkillsSchema = z.object({
+const extractSkillsSchema = {
   body: z.object({
     overwrite: z.boolean().optional(),
   }),
-});
+};
 
-const batchExtractSchema = z.object({
+const batchExtractSchema = {
   body: z.object({
     candidateIds: z.array(z.string().uuid()).min(1, 'Au moins un candidat est requis'),
     model: z.string().optional(),
     overwrite: z.boolean().optional(),
   }),
-});
+};
 
 // Batch extract (MUST be before /extract/:candidateId to avoid route conflict)
 router.post('/extract/batch', authenticateJWT, validate(batchExtractSchema), batchExtractSkills);
@@ -167,13 +167,13 @@ router.get('/extract/:candidateId/logs', authenticateJWT, getExtractionLogs);
 // AI EXTRACTION ROUTES
 // ============================================
 
-const aiExtractionSchema = z.object({
+const aiExtractionSchema = {
   body: z.object({
     provider: z.enum(['openai', 'claude']).optional(),
     model: z.string().optional(),
     overwrite: z.boolean().optional(),
   }),
-});
+};
 
 // AI extraction
 router.post('/extract/:candidateId/ai', authenticateJWT, validate(aiExtractionSchema), extractSkillsWithAI);

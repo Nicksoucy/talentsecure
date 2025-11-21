@@ -15,6 +15,7 @@ enum UserRole {
   ADMIN
   RH_RECRUITER
   SALES
+  CLIENT
 }
 
 enum CandidateStatus {

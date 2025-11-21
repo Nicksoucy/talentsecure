@@ -581,7 +581,7 @@ export class CVExtractionService {
         postalCode: prospect.postalCode || '',
         streetAddress: prospect.streetAddress || '',
         cvStoragePath: prospect.cvStoragePath,
-        status: 'LEAD', // Initial status
+        status: 'EN_ATTENTE', // Initial status - En cours d'évaluation
         source: 'Prospect Auto-Converti',
         isActive: true,
         isDeleted: false,

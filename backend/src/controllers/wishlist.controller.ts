@@ -625,11 +625,7 @@ export const getAllWishlists = async (
             phone: true,
           },
         },
-        items: {
-          include: {
-            _count: true,
-          },
-        },
+        items: true,
         _count: {
           select: {
             items: true,
@@ -731,7 +727,7 @@ export const updateWishlistStatus = async (
     }
 
     const { id } = req.params;
-    const { status, adminNotes } = req.body;
+    const { status } = req.body;
 
     // Validate status
     const validStatuses = ['DRAFT', 'SUBMITTED', 'APPROVED', 'PAID', 'DELIVERED', 'CANCELLED'];
@@ -753,7 +749,6 @@ export const updateWishlistStatus = async (
       where: { id },
       data: {
         status,
-        adminNotes,
         updatedAt: new Date(),
       },
       include: {
