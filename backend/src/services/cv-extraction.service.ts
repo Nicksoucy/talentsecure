@@ -582,7 +582,6 @@ export class CVExtractionService {
         address: prospect.streetAddress || '',
         cvStoragePath: prospect.cvStoragePath,
         status: CandidateStatus.EN_ATTENTE, // Initial status - waiting for evaluation
-        source: 'Prospect Auto-Converti',
         isActive: true,
         isDeleted: false,
         createdById: userId, // Required field
