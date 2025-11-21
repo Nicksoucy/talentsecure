@@ -48,6 +48,10 @@ import {
   LocationOnOutlined as LocationIcon,
   EmailOutlined as EmailIcon,
   PhoneOutlined as PhoneIcon,
+  Settings as SettingsIcon,
+  AutoAwesome as AutoAwesomeIcon,
+  Close as CloseIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -64,9 +68,9 @@ const LEVEL_COLORS = {
 } as const;
 
 const LEVEL_LABELS = {
-  BEGINNER: 'DÃ©butant',
-  INTERMEDIATE: 'IntermÃ©diaire',
-  ADVANCED: 'AvancÃ©',
+  BEGINNER: 'Débutant',
+  INTERMEDIATE: 'Intermédiaire',
+  ADVANCED: 'Avancé',
   EXPERT: 'Expert',
 } as const;
 
@@ -198,7 +202,7 @@ const AutresCompetancesPage = () => {
         setExtractedSkills(data.skillsFound);
         setShowResultsDialog(true);
         enqueueSnackbar(
-          `${data.totalSkills} compÃ©tence${data.totalSkills > 1 ? 's' : ''} extraite${data.totalSkills > 1 ? 's' : ''} avec succÃ¨s!`,
+          `${data.totalSkills} compétence${data.totalSkills > 1 ? 's' : ''} extraite${data.totalSkills > 1 ? 's' : ''} avec succès!`,
           { variant: 'success' }
         );
       } else {
@@ -210,7 +214,7 @@ const AutresCompetancesPage = () => {
     },
     onError: (error: any) => {
       enqueueSnackbar(
-        error.response?.data?.error || 'Erreur lors de l\'extraction des compÃ©tences',
+        error.response?.data?.error || 'Erreur lors de l\'extraction des compétences',
         { variant: 'error' }
       );
       setExtractingCandidateId(null);
@@ -223,13 +227,13 @@ const AutresCompetancesPage = () => {
       return skillsService.saveSkills(candidateId, skills, accessToken!);
     },
     onSuccess: () => {
-      enqueueSnackbar('CompÃ©tences sauvegardÃ©es avec succÃ¨s!', { variant: 'success' });
+      enqueueSnackbar('Compétences sauvegardées avec succès!', { variant: 'success' });
       setShowResultsDialog(false);
       refetch();
     },
     onError: (error: any) => {
       enqueueSnackbar(
-        error.response?.data?.error || 'Erreur lors de la sauvegarde des compÃ©tences',
+        error.response?.data?.error || 'Erreur lors de la sauvegarde des compétences',
         { variant: 'error' }
       );
     },
@@ -243,7 +247,7 @@ const AutresCompetancesPage = () => {
       setBatchResults(data);
       setShowBatchDialog(true);
       enqueueSnackbar(
-        `Extraction terminÃ©e: ${data.summary.success}/${data.summary.total} rÃ©ussies, ${data.summary.totalSkillsExtracted} compÃ©tences extraites`,
+        `Extraction terminée: ${data.summary.success}/${data.summary.total} réussies, ${data.summary.totalSkillsExtracted} compétences extraites`,
         { variant: 'success' }
       );
       refetch();
@@ -258,7 +262,7 @@ const AutresCompetancesPage = () => {
 
   const handleExtractSkills = (candidateId: string, candidateName: string, hasCv: boolean) => {
     if (!hasCv) {
-      enqueueSnackbar('Ce candidat n\'a pas de CV uploadÃ©', { variant: 'warning' });
+      enqueueSnackbar('Ce candidat n\'a pas de CV uploadé', { variant: 'warning' });
       return;
     }
     setExtractingCandidateId(candidateId);
@@ -293,29 +297,26 @@ const AutresCompetancesPage = () => {
       : prospectsWithCv;
 
     const count = limitedProspects.length;
-    const estimatedCost = (count * 0.001).toFixed(2);
+    const estimatedCost = (count * 0.10).toFixed(2);
     const estimatedTime = Math.ceil(count * 2 / 60); // ~2 sec per extraction
 
     const confirmed = window.confirm(
-      `âš ï¸ ATTENTION - Extraction en masse\n\n` +
-      `Candidats Ã  traiter: ${count}${batchLimit > 0 && prospectsWithCv.length > batchLimit ? ` sur ${prospectsWithCv.length}` : ''}\n` +
-      `CoÃ»t estimÃ©: ~$${estimatedCost} USD\n` +
-      `Temps estimÃ©: ~${estimatedTime} minutes\n\n` +
-      `âš ï¸ Les candidats dÃ©jÃ  traitÃ©s seront ignorÃ©s.\n\n` +
+      `⚠️ ATTENTION - Extraction en masse\n\n` +
+      `Candidats à traiter: ${count}${batchLimit > 0 && prospectsWithCv.length > batchLimit ? ` sur ${prospectsWithCv.length}` : ''}\n` +
+      `Coût estimé: ~$${estimatedCost} USD\n` +
+      `Temps estimé: ~${estimatedTime} minutes\n\n` +
+      `⚠️ Les candidats déjà traités seront ignorés.\n\n` +
       `Voulez-vous continuer?`
     );
 
-    if (!confirmed) {
-      return;
+    if (confirmed) {
+      batchExtractMutation.mutate(limitedProspects.map((p: any) => p.id));
     }
-
-    const candidateIds = limitedProspects.map((p: any) => p.id);
-    batchExtractMutation.mutate(candidateIds);
   };
 
-  const getConfidenceColor = (confidence: number): string => {
+  const getConfidenceColor = (confidence: number) => {
     if (confidence >= 0.8) return 'success.main';
-    if (confidence >= 0.6) return 'warning.main';
+    if (confidence >= 0.5) return 'warning.main';
     return 'error.main';
   };
 
@@ -336,12 +337,6 @@ const AutresCompetancesPage = () => {
         accessToken!
       );
       setSearchResults(results.results || []);
-      if (results.results.length > 0) {
-        enqueueSnackbar(
-          `${results.count} compÃ©tence${results.count > 1 ? 's' : ''} chargÃ©e${results.count > 1 ? 's' : ''}`,
-          { variant: 'success' }
-        );
-      }
     } catch (error: any) {
       console.error('Error loading skills:', error);
     } finally {
@@ -354,388 +349,145 @@ const AutresCompetancesPage = () => {
     try {
       const results = await skillsService.searchSkills(
         skillSearchQuery,
-        undefined, // category
-        0.3, // minConfidence
+        undefined,
+        0.3,
         accessToken!
       );
       setSearchResults(results.results || []);
-      if (results.results.length === 0) {
-        enqueueSnackbar('Aucun rÃ©sultat trouvÃ©', { variant: 'info' });
-      } else {
-        enqueueSnackbar(
-          `${results.count} compÃ©tence${results.count > 1 ? 's' : ''} trouvÃ©e${results.count > 1 ? 's' : ''}`,
-          { variant: 'success' }
-        );
-      }
     } catch (error: any) {
-      enqueueSnackbar(
-        error.response?.data?.error || 'Erreur lors de la recherche',
-        { variant: 'error' }
-      );
+      enqueueSnackbar('Erreur lors de la recherche', { variant: 'error' });
     } finally {
       setIsSearching(false);
     }
   };
 
   return (
-    <Box>
+    <Box p={3}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Box>
           <Typography variant="h4" fontWeight="bold" gutterBottom>
-            Autre CompÃ©tance
+            Autre Compétence
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Candidats avec des compÃ©tences hors du secteur de la sÃ©curitÃ©
+            Candidats avec des compétences hors du secteur de la sécurité
           </Typography>
         </Box>
-      </Box>
+        <Box>
 
-      {/* Main Tabs: Extraction vs Search */}
-      <Card sx={{ mb: 3 }}>
-        <Tabs
-          value={mainTab}
-          onChange={(_, newValue) => setMainTab(newValue)}
-          sx={{ borderBottom: 1, borderColor: 'divider' }}
-        >
-          <Tab
-            label="ðŸ“¤ Extraction de CVs"
-            value="extraction"
-          />
-          <Tab
-            label="ðŸ” Recherche de CompÃ©tences"
-            value="search"
-          />
-        </Tabs>
-      </Card>
-
-      {mainTab === 'extraction' && (
-      <Box>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-          <Box display="flex" gap={2} alignItems="center">
-          <Box display="flex" gap={1}>
-            <Button
-              size="small"
-              variant={batchLimit === 10 ? 'contained' : 'outlined'}
-              onClick={() => setBatchLimit(10)}
-              disabled={batchExtractMutation.isPending}
-            >
-              10
-            </Button>
-            <Button
-              size="small"
-              variant={batchLimit === 50 ? 'contained' : 'outlined'}
-              onClick={() => setBatchLimit(50)}
-              disabled={batchExtractMutation.isPending}
-            >
-              50
-            </Button>
-            <Button
-              size="small"
-              variant={batchLimit === 100 ? 'contained' : 'outlined'}
-              onClick={() => setBatchLimit(100)}
-              disabled={batchExtractMutation.isPending}
-            >
-              100
-            </Button>
-            <Button
-              size="small"
-              variant={batchLimit === 0 ? 'contained' : 'outlined'}
-              onClick={() => setBatchLimit(0)}
-              disabled={batchExtractMutation.isPending}
-            >
-              Tous
-            </Button>
-          </Box>
           <Button
             variant="contained"
-            color="primary"
-            size="large"
-            startIcon={batchExtractMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <AiIcon />}
+            startIcon={<AutoAwesomeIcon />}
             onClick={handleBatchExtract}
-            disabled={batchExtractMutation.isPending || isLoading}
-            sx={{ fontWeight: 'bold' }}
+            disabled={batchExtractMutation.isPending}
           >
-            {batchExtractMutation.isPending
-              ? 'Extraction en cours...'
-              : `Extraire ${batchLimit > 0 ? batchLimit : 'Tous'} CV${batchLimit !== 1 ? 's' : ''}`}
+            {batchExtractMutation.isPending ? 'Extraction...' : 'Extraire les compétences'}
           </Button>
         </Box>
       </Box>
 
-      {/* AI Extraction Section */}
-      <Card sx={{ mb: 3, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <AiIcon sx={{ mr: 1.5, color: 'white', fontSize: 32 }} />
-              <Box>
-                <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold' }}>
-                  Extraction IA pour Autre CompÃ©tance
-                </Typography>
-                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)' }}>
-                  Identifiez les candidats avec des compÃ©tences hors sÃ©curitÃ© en analysant leurs CVs
-                </Typography>
-              </Box>
-            </Box>
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Chip
-                label="~$0.001 / extraction"
-                sx={{
-                  bgcolor: 'rgba(255,255,255,0.2)',
-                  color: 'white',
-                  fontWeight: 'bold'
-                }}
-              />
-              <Chip
-                label={`${prospects.filter((p: any) => p.cvUrl || p.cvStoragePath).length} CVs disponibles`}
-                sx={{
-                  bgcolor: 'rgba(255,255,255,0.2)',
-                  color: 'white',
-                  fontWeight: 'bold'
-                }}
-              />
-            </Box>
-          </Box>
-        </CardContent>
-      </Card>
+      <Tabs
+        value={mainTab}
+        onChange={(_, v) => setMainTab(v)}
+        sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
+      >
+        <Tab label="📄 Extraction de CVs" value="extraction" />
+        <Tab label="🔍 Recherche de Compétences" value="search" />
+      </Tabs>
 
-      {/* Stats Cards */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" gap={2}>
-                <WorkIcon sx={{ fontSize: 40, color: 'primary.main' }} />
-                <Box>
-                  <Typography variant="h4" fontWeight="bold">
-                    {filteredProspects.length}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Candidats Potentiels
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
+      {mainTab === 'extraction' && (
+        <Grid container spacing={3}>
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                {prospects.length === 0 ? (
+                  <Box textAlign="center" py={4}>
+                    <Typography variant="body1" color="text.secondary">
+                      Aucun candidat potentiel trouvé.
+                    </Typography>
+                  </Box>
+                ) : (
+                  <TableContainer>
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Candidat Potentiel</TableCell>
+                          <TableCell>Ville</TableCell>
+                          <TableCell>CV</TableCell>
+                          <TableCell>Date de soumission</TableCell>
+                          <TableCell>Contacté</TableCell>
+                          <TableCell align="right">Actions</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {prospects.map((prospect: any) => (
+                          <TableRow key={prospect.id} hover>
+                            <TableCell>
+                              <Box display="flex" alignItems="center" gap={2}>
+                                <Avatar>
+                                  {prospect.firstName?.[0]}
+                                  {prospect.lastName?.[0]}
+                                </Avatar>
+                                <Box>
+                                  <Typography variant="body2" fontWeight="bold">
+                                    {prospect.firstName} {prospect.lastName}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {prospect.email}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              {prospect.city || '-'}
+                            </TableCell>
+                            <TableCell>
+                              {prospect.cvUrl || prospect.cvStoragePath ? (
+                                <Chip label="CV Disponible" color="success" size="small" icon={<UploadIcon />} />
+                              ) : (
+                                <Chip label="Pas de CV" color="default" size="small" />
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {new Date(prospect.createdAt).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              {prospect.contacted ? (
+                                <Chip label="Oui" color="success" size="small" />
+                              ) : (
+                                <Chip label="Non" color="warning" size="small" />
+                              )}
+                            </TableCell>
+                            <TableCell align="right">
+                              <Box display="flex" justifyContent="flex-end" gap={1}>
+                                <Tooltip title="Voir le profil">
+                                  <IconButton size="small" onClick={() => navigate(`/prospects/${prospect.id}`)}>
+                                    <VisibilityIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Extraire les compétences">
+                                  <IconButton
+                                    size="small"
+                                    color="primary"
+                                    onClick={() => handleExtractSkills(prospect.id, `${prospect.firstName} ${prospect.lastName}`, !!(prospect.cvUrl || prospect.cvStoragePath))}
+                                    disabled={!prospect.cvUrl && !prospect.cvStoragePath}
+                                  >
+                                    <AutoAwesomeIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" gap={2}>
-                <WorkIcon sx={{ fontSize: 40, color: 'success.main' }} />
-                <Box>
-                  <Typography variant="h4" fontWeight="bold">
-                    0
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    IT & Technologies
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" gap={2}>
-                <WorkIcon sx={{ fontSize: 40, color: 'warning.main' }} />
-                <Box>
-                  <Typography variant="h4" fontWeight="bold">
-                    0
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Service & Vente
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box display="flex" alignItems="center" gap={2}>
-                <WorkIcon sx={{ fontSize: 40, color: 'info.main' }} />
-                <Box>
-                  <Typography variant="h4" fontWeight="bold">
-                    0
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Autres Secteurs
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      )}
 
-      {/* Search Bar */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <TextField
-            fullWidth
-            placeholder="Rechercher par nom de candidat..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-          />
-        </CardContent>
-      </Card>
-
-      {/* Candidates Table */}
-      <Card>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Liste des Candidats - Autre CompÃ©tance
-          </Typography>
-
-          {isLoading ? (
-            <Box display="flex" justifyContent="center" p={4}>
-              <Typography>Chargement...</Typography>
-            </Box>
-          ) : filteredProspects.length === 0 ? (
-            <Box textAlign="center" py={4}>
-              <Typography variant="body1" color="text.secondary">
-                Aucun candidat potentiel trouvÃ©.
-              </Typography>
-              <Typography variant="body2" color="text.secondary" mt={1}>
-                Utilisez l'extraction IA pour identifier les compÃ©tences des candidats potentiels.
-              </Typography>
-            </Box>
-          ) : (
-            <TableContainer component={Paper} variant="outlined">
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Candidat Potentiel</TableCell>
-                    <TableCell>Ville</TableCell>
-                    <TableCell>CV</TableCell>
-                    <TableCell>Date de soumission</TableCell>
-                    <TableCell>ContactÃ©</TableCell>
-                    <TableCell align="right">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredProspects.map((prospect: any) => {
-                    const hasCv = !!(prospect.cvUrl || prospect.cvStoragePath);
-                    const isExtracting = extractingCandidateId === prospect.id;
-
-                    return (
-                      <TableRow key={prospect.id} hover>
-                        <TableCell>
-                          <Box display="flex" alignItems="center" gap={2}>
-                            <Avatar>
-                              {prospect.firstName[0]}
-                              {prospect.lastName[0]}
-                            </Avatar>
-                            <Box>
-                              <Typography variant="body2" fontWeight="bold">
-                                {prospect.firstName} {prospect.lastName}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {prospect.email}
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {prospect.city}, {prospect.province}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          {hasCv ? (
-                            <Chip
-                              icon={<UploadIcon />}
-                              label="CV Disponible"
-                              size="small"
-                              color="success"
-                              variant="outlined"
-                            />
-                          ) : (
-                            <Chip
-                              label="Aucun CV"
-                              size="small"
-                              color="default"
-                              variant="outlined"
-                            />
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {prospect.submissionDate
-                              ? new Date(prospect.submissionDate).toLocaleDateString('fr-CA')
-                              : 'N/A'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          {prospect.isContacted ? (
-                            <Chip
-                              label="ContactÃ©"
-                              size="small"
-                              color="success"
-                              variant="outlined"
-                            />
-                          ) : (
-                            <Chip
-                              label="Non contactÃ©"
-                              size="small"
-                              color="default"
-                              variant="outlined"
-                            />
-                          )}
-                        </TableCell>
-                        <TableCell align="right">
-                          <Box display="flex" gap={1} justifyContent="flex-end">
-                            <Tooltip title={hasCv ? "Extraire les compÃ©tences" : "Aucun CV disponible"}>
-                              <span>
-                                <IconButton
-                                  size="small"
-                                  color="primary"
-                                  disabled={!hasCv || isExtracting}
-                                  onClick={() => handleExtractSkills(
-                                    prospect.id,
-                                    `${prospect.firstName} ${prospect.lastName}`,
-                                    hasCv
-                                  )}
-                                >
-                                  {isExtracting ? (
-                                    <CircularProgress size={20} />
-                                  ) : (
-                                    <AiIcon fontSize="small" />
-                                  )}
-                                </IconButton>
-                              </span>
-                            </Tooltip>
-                            <Tooltip title="Voir le profil">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleViewProspect(prospect.id)}
-                              >
-                                <VisibilityIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Extraction Results Dialog */}
       <Dialog
         open={showResultsDialog}
         onClose={() => setShowResultsDialog(false)}
@@ -744,20 +496,15 @@ const AutresCompetancesPage = () => {
       >
         <DialogTitle>
           <Box display="flex" justifyContent="space-between" alignItems="center">
-            <Typography variant="h6">
-              CompÃ©tences Extraites - {currentCandidateName}
-            </Typography>
-            <Box display="flex" gap={1}>
-              <Chip
-                label={`${securitySkills.length} SÃ©curitÃ©`}
-                color="primary"
-                size="small"
-              />
-              <Chip
-                label={`${otherSkills.length} Autre`}
+            <Typography variant="h6">Résultats de l'extraction</Typography>
+            <Box>
+              <IconButton
+                onClick={() => setShowResultsDialog(false)}
                 color="default"
                 size="small"
-              />
+              >
+                <CloseIcon />
+              </IconButton>
             </Box>
           </Box>
         </DialogTitle>
@@ -765,7 +512,7 @@ const AutresCompetancesPage = () => {
           {otherSkills.length > 0 && (
             <Alert severity="success" sx={{ mb: 2 }}>
               <Typography variant="body2">
-                <strong>{otherSkills.length}</strong> compÃ©tence{otherSkills.length > 1 ? 's' : ''} non liÃ©e{otherSkills.length > 1 ? 's' : ''} Ã  la sÃ©curitÃ© {otherSkills.length > 1 ? 'ont' : 'a'} Ã©tÃ© trouvÃ©e{otherSkills.length > 1 ? 's' : ''} !
+                <strong>{otherSkills.length}</strong> compétence{otherSkills.length > 1 ? 's' : ''} non liée{otherSkills.length > 1 ? 's' : ''} à la sécurité {otherSkills.length > 1 ? 'ont' : 'a'} été trouvée{otherSkills.length > 1 ? 's' : ''} !
               </Typography>
             </Alert>
           )}
@@ -776,11 +523,11 @@ const AutresCompetancesPage = () => {
             sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
           >
             <Tab
-              label={`Autre CompÃ©tance (${otherSkills.length})`}
+              label={`Autre Compétence (${otherSkills.length})`}
               value="other"
             />
             <Tab
-              label={`CompÃ©tences SÃ©curitÃ© (${securitySkills.length})`}
+              label={`Compétences Sécurité (${securitySkills.length})`}
               value="security"
             />
           </Tabs>
@@ -878,17 +625,17 @@ const AutresCompetancesPage = () => {
             {saveMutation.isPending ? 'Sauvegarde...' : 'Sauvegarder les CompÃ©tences'}
           </Button>
         </DialogActions>
-      </Dialog>
+      </Dialog >
 
       {/* Batch Extraction Results Dialog */}
-      <Dialog
+      < Dialog
         open={showBatchDialog}
         onClose={() => setShowBatchDialog(false)}
         maxWidth="md"
         fullWidth
       >
         <DialogTitle>
-          <Typography variant="h6">RÃ©sultats de l'Extraction Batch</Typography>
+          <Typography variant="h6">Résultats de l'Extraction Batch</Typography>
         </DialogTitle>
         <DialogContent>
           {batchResults && (
@@ -910,7 +657,7 @@ const AutresCompetancesPage = () => {
                       <Typography variant="h3" fontWeight="bold">
                         {batchResults.summary.processed || 0}
                       </Typography>
-                      <Typography variant="body2">TraitÃ©s</Typography>
+                      <Typography variant="body2">Traités</Typography>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -920,7 +667,7 @@ const AutresCompetancesPage = () => {
                       <Typography variant="h3" fontWeight="bold">
                         {batchResults.summary.skipped || 0}
                       </Typography>
-                      <Typography variant="body2">IgnorÃ©s</Typography>
+                      <Typography variant="body2">Ignorés</Typography>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -930,7 +677,7 @@ const AutresCompetancesPage = () => {
                       <Typography variant="h3" fontWeight="bold">
                         {batchResults.summary.failed}
                       </Typography>
-                      <Typography variant="body2">Ã‰checs</Typography>
+                      <Typography variant="body2">Échecs</Typography>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -940,7 +687,7 @@ const AutresCompetancesPage = () => {
                       <Typography variant="h2" fontWeight="bold">
                         {batchResults.summary.totalSkillsExtracted}
                       </Typography>
-                      <Typography variant="body1">CompÃ©tences Totales Extraites</Typography>
+                      <Typography variant="body1">Compétences Totales Extraites</Typography>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -953,7 +700,7 @@ const AutresCompetancesPage = () => {
               </Alert>
 
               <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                DÃ©tails par candidat:
+                Détails par candidat:
               </Typography>
               <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
                 <Table stickyHeader size="small">
@@ -961,7 +708,7 @@ const AutresCompetancesPage = () => {
                     <TableRow>
                       <TableCell>Candidat ID</TableCell>
                       <TableCell>Statut</TableCell>
-                      <TableCell align="right">CompÃ©tences</TableCell>
+                      <TableCell align="right">Compétences</TableCell>
                       <TableCell>Message</TableCell>
                     </TableRow>
                   </TableHead>
@@ -975,9 +722,9 @@ const AutresCompetancesPage = () => {
                         </TableCell>
                         <TableCell>
                           {result.success ? (
-                            <Chip label="SuccÃ¨s" color="success" size="small" />
+                            <Chip label="Succès" color="success" size="small" />
                           ) : (
-                            <Chip label="Ã‰chec" color="error" size="small" />
+                            <Chip label="Échec" color="error" size="small" />
                           )}
                         </TableCell>
                         <TableCell align="right">
@@ -1004,622 +751,629 @@ const AutresCompetancesPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
-      </Box>
-      )}
 
       {/* Search Tab */}
-      {mainTab === 'search' && (
-        <Box>
-          <Box display="flex" justifyContent="flex-end" mb={2}>
-            <Button
-              variant="outlined"
-              startIcon={<DownloadIcon />}
-              onClick={() => {
-                const params = new URLSearchParams();
-                if (skillSearchQuery) {
-                  params.set('q', skillSearchQuery);
-                }
-                navigate(`/exports?${params.toString()}`);
-              }}
-            >
-              Exporter ces résultats
-            </Button>
-          </Box>
-          {/* Summary Card */}
-          {searchResults.length > 0 && (
-            <Card
-              sx={{
-                mb: 3,
-                background: 'linear-gradient(135deg, #111827 0%, #1f2937 100%)',
-                color: 'white',
-                borderRadius: 3,
-              }}
-            >
-              <CardContent>
-                <Grid container spacing={3}>
-                  <Grid item xs={12} sm={4}>
-                    <Stack alignItems="center" spacing={1.5}>
-                      <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: 'white', width: 56, height: 56 }}>
-                        <SearchIcon />
-                      </Avatar>
-                      <Typography variant="h3" fontWeight="bold">
-                        {searchResults.length}
-                      </Typography>
-                      <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                        CompÃ©tences extraites
-                      </Typography>
-                    </Stack>
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Stack alignItems="center" spacing={1.5}>
-                      <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: 'white', width: 56, height: 56 }}>
-                        <PersonIcon />
-                      </Avatar>
-                      <Typography variant="h3" fontWeight="bold">
-                        {aggregatedStats.totalCandidates}
-                      </Typography>
-                      <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                        Candidats totaux
-                      </Typography>
-                    </Stack>
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <Stack alignItems="center" spacing={1.5}>
-                      <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: 'white', width: 56, height: 56 }}>
-                        <CategoryIcon />
-                      </Avatar>
-                      <Typography variant="h3" fontWeight="bold">
-                        {categoryEntries.length}
-                      </Typography>
-                      <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-                        CatÃ©gories reprÃ©sentÃ©es
-                      </Typography>
-                    </Stack>
-                  </Grid>
-                </Grid>
-              </CardContent>
-            </Card>
-          )}
+      {
+        mainTab === 'search' && (
+          <Box>
+            <Box display="flex" justifyContent="flex-end" mb={2}>
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                onClick={() => {
+                  const params = new URLSearchParams();
+                  if (skillSearchQuery) {
+                    params.set('q', skillSearchQuery);
+                  }
+                  navigate(`/exports?${params.toString()}`);
+                }}
+              >
+                Exporter ces résultats
+              </Button>
+            </Box>
 
-          {searchResults.length > 0 && (
-            <Grid container spacing={3} sx={{ mb: 3 }}>
-              <Grid item xs={12} md={6}>
-                <Card>
-                  <CardContent>
-                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-                      <Typography variant="h6" fontWeight="bold">
-                        RÃ©partition par catÃ©gorie
-                      </Typography>
-                      <CategoryIcon color="primary" />
-                    </Box>
-                    {categoryEntries.length === 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        Aucune donnÃ©e pour l'instant
-                      </Typography>
-                    ) : (
-                      <Stack spacing={1.5}>
-                        {categoryEntries.map(([category, count]) => {
-                          const percentage = aggregatedStats.totalCandidates
-                            ? Math.round((count / aggregatedStats.totalCandidates) * 100)
-                            : 0;
-                          return (
-                            <Box key={category}>
-                              <Box display="flex" justifyContent="space-between" alignItems="center">
-                                <Typography variant="body2" fontWeight="bold">
-                                  {category}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                  {count} ({percentage}%)
-                                </Typography>
-                              </Box>
-                              <LinearProgress
-                                variant="determinate"
-                                value={percentage}
-                                sx={{ height: 8, borderRadius: 4, mt: 0.5 }}
-                              />
-                            </Box>
-                          );
-                        })}
+            {/* Summary Card */}
+            {searchResults.length > 0 && (
+              <Card
+                sx={{
+                  mb: 3,
+                  background: 'linear-gradient(135deg, #111827 0%, #1f2937 100%)',
+                  color: 'white',
+                  borderRadius: 3,
+                }}
+              >
+                <CardContent>
+                  <Grid container spacing={3}>
+                    <Grid item xs={12} sm={4}>
+                      <Stack alignItems="center" spacing={1.5}>
+                        <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: 'white', width: 56, height: 56 }}>
+                          <SearchIcon />
+                        </Avatar>
+                        <Typography variant="h3" fontWeight="bold">
+                          {searchResults.length}
+                        </Typography>
+                        <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                          Compétences extraites
+                        </Typography>
                       </Stack>
-                    )}
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Card>
-                  <CardContent>
-                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-                      <Typography variant="h6" fontWeight="bold">
-                        Niveaux d'expÃ©rience
-                      </Typography>
-                      <BarChartIcon color="primary" />
-                    </Box>
-                    {levelEntries.length === 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        Les niveaux apparaÃ®tront aprÃ¨s une premiÃ¨re recherche
-                      </Typography>
-                    ) : (
-                      <Stack spacing={1.5}>
-                        {levelEntries.map(([level, count]) => {
-                          const label = LEVEL_LABELS[level as keyof typeof LEVEL_LABELS] || level;
-                          const percentage = aggregatedStats.totalCandidates
-                            ? Math.round((count / aggregatedStats.totalCandidates) * 100)
-                            : 0;
-                          return (
-                            <Box key={level}>
-                              <Box display="flex" justifyContent="space-between" alignItems="center">
-                                <Typography variant="body2" fontWeight="bold">
-                                  {label}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                  {count} ({percentage}%)
-                                </Typography>
-                              </Box>
-                              <LinearProgress
-                                variant="determinate"
-                                value={percentage}
-                                sx={{ height: 8, borderRadius: 4, mt: 0.5 }}
-                              />
-                            </Box>
-                          );
-                        })}
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <Stack alignItems="center" spacing={1.5}>
+                        <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: 'white', width: 56, height: 56 }}>
+                          <PersonIcon />
+                        </Avatar>
+                        <Typography variant="h3" fontWeight="bold">
+                          {aggregatedStats.totalCandidates}
+                        </Typography>
+                        <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                          Candidats totaux
+                        </Typography>
                       </Stack>
-                    )}
-                  </CardContent>
-                </Card>
-              </Grid>
-              {aggregatedStats.topConfidenceSkills.length > 0 && (
-                <Grid item xs={12}>
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <Stack alignItems="center" spacing={1.5}>
+                        <Avatar sx={{ bgcolor: 'rgba(255,255,255,0.12)', color: 'white', width: 56, height: 56 }}>
+                          <CategoryIcon />
+                        </Avatar>
+                        <Typography variant="h3" fontWeight="bold">
+                          {categoryEntries.length}
+                        </Typography>
+                        <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+                          Catégories représentées
+                        </Typography>
+                      </Stack>
+                    </Grid>
+                  </Grid>
+                </CardContent>
+              </Card>
+            )}
+
+            {searchResults.length > 0 && (
+              <Grid container spacing={3} sx={{ mb: 3 }}>
+                <Grid item xs={12} md={6}>
                   <Card>
                     <CardContent>
                       <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
                         <Typography variant="h6" fontWeight="bold">
-                          CompÃ©tences les plus fiables
+                          Répartition par catégorie
                         </Typography>
-                        <BarChartIcon color="primary" />
+                        <CategoryIcon color="primary" />
                       </Box>
-                      <Stack spacing={1.5}>
-                        {aggregatedStats.topConfidenceSkills.map((skill) => {
-                          const percentage = Math.round(skill.avgConfidence * 100);
-                          return (
-                            <Paper
-                              key={skill.skill}
-                              variant="outlined"
-                              sx={{ p: 2, borderRadius: 2, display: 'flex', flexWrap: 'wrap', gap: 2 }}
-                            >
-                              <Box flex={1} minWidth={200}>
-                                <Typography variant="subtitle1" fontWeight="bold">
-                                  {skill.skill}
-                                </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                  {skill.category}
-                                </Typography>
-                              </Box>
-                              <Chip
-                                label={`${skill.totalCandidates} candidat${skill.totalCandidates > 1 ? 's' : ''}`}
-                                color="primary"
-                                variant="outlined"
-                              />
-                              <Box flexBasis="100%" />
-                              <Box display="flex" alignItems="center" gap={2} width="100%">
-                                <Typography variant="h5" fontWeight="bold">
-                                  {formatPercentage(percentage)}
-                                </Typography>
+                      {categoryEntries.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">
+                          Aucune donnée pour l'instant
+                        </Typography>
+                      ) : (
+                        <Stack spacing={1.5}>
+                          {categoryEntries.map(([category, count]) => {
+                            const percentage = aggregatedStats.totalCandidates
+                              ? Math.round((count / aggregatedStats.totalCandidates) * 100)
+                              : 0;
+                            return (
+                              <Box key={category}>
+                                <Box display="flex" justifyContent="space-between" alignItems="center">
+                                  <Typography variant="body2" fontWeight="bold">
+                                    {category}
+                                  </Typography>
+                                  <Typography variant="body2" color="text.secondary">
+                                    {count} ({percentage}%)
+                                  </Typography>
+                                </Box>
                                 <LinearProgress
                                   variant="determinate"
                                   value={percentage}
-                                  sx={{
-                                    flex: 1,
-                                    height: 8,
-                                    borderRadius: 4,
-                                    '& .MuiLinearProgress-bar': {
-                                      bgcolor: getConfidenceColor(skill.avgConfidence),
-                                    },
-                                  }}
+                                  sx={{ height: 8, borderRadius: 4, mt: 0.5 }}
                                 />
                               </Box>
-                            </Paper>
-                          );
-                        })}
-                      </Stack>
+                            );
+                          })}
+                        </Stack>
+                      )}
                     </CardContent>
                   </Card>
                 </Grid>
-              )}
-            </Grid>
-          )}
+                <Grid item xs={12} md={6}>
+                  <Card>
+                    <CardContent>
+                      <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                        <Typography variant="h6" fontWeight="bold">
+                          Niveaux d'expérience
+                        </Typography>
+                        <BarChartIcon color="primary" />
+                      </Box>
+                      {levelEntries.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">
+                          Les niveaux apparaîtront après une première recherche
+                        </Typography>
+                      ) : (
+                        <Stack spacing={1.5}>
+                          {levelEntries.map(([level, count]) => {
+                            const label = LEVEL_LABELS[level as keyof typeof LEVEL_LABELS] || level;
+                            const percentage = aggregatedStats.totalCandidates
+                              ? Math.round((count / aggregatedStats.totalCandidates) * 100)
+                              : 0;
+                            return (
+                              <Box key={level}>
+                                <Box display="flex" justifyContent="space-between" alignItems="center">
+                                  <Typography variant="body2" fontWeight="bold">
+                                    {label}
+                                  </Typography>
+                                  <Typography variant="body2" color="text.secondary">
+                                    {count} ({percentage}%)
+                                  </Typography>
+                                </Box>
+                                <LinearProgress
+                                  variant="determinate"
+                                  value={percentage}
+                                  sx={{ height: 8, borderRadius: 4, mt: 0.5 }}
+                                />
+                              </Box>
+                            );
+                          })}
+                        </Stack>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+                {aggregatedStats.topConfidenceSkills.length > 0 && (
+                  <Grid item xs={12}>
+                    <Card>
+                      <CardContent>
+                        <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
+                          <Typography variant="h6" fontWeight="bold">
+                            Compétences les plus fiables
+                          </Typography>
+                          <BarChartIcon color="primary" />
+                        </Box>
+                        <Stack spacing={1.5}>
+                          {aggregatedStats.topConfidenceSkills.map((skill) => {
+                            const percentage = Math.round(skill.avgConfidence * 100);
+                            return (
+                              <Paper
+                                key={skill.skill}
+                                variant="outlined"
+                                sx={{ p: 2, borderRadius: 2, display: 'flex', flexWrap: 'wrap', gap: 2 }}
+                              >
+                                <Box flex={1} minWidth={200}>
+                                  <Typography variant="subtitle1" fontWeight="bold">
+                                    {skill.skill}
+                                  </Typography>
+                                  <Typography variant="body2" color="text.secondary">
+                                    {skill.category}
+                                  </Typography>
+                                </Box>
+                                <Chip
+                                  label={`${skill.totalCandidates} candidat${skill.totalCandidates > 1 ? 's' : ''}`}
+                                  color="primary"
+                                  variant="outlined"
+                                />
+                                <Box flexBasis="100%" />
+                                <Box display="flex" alignItems="center" gap={2} width="100%">
+                                  <Typography variant="h5" fontWeight="bold">
+                                    {formatPercentage(percentage)}
+                                  </Typography>
+                                  <LinearProgress
+                                    variant="determinate"
+                                    value={percentage}
+                                    sx={{
+                                      flex: 1,
+                                      height: 8,
+                                      borderRadius: 4,
+                                      '& .MuiLinearProgress-bar': {
+                                        bgcolor: getConfidenceColor(skill.avgConfidence),
+                                      },
+                                    }}
+                                  />
+                                </Box>
+                              </Paper>
+                            );
+                          })}
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                )}
+              </Grid>
+            )}
 
-          {/* Search Filter */}
-          <Card sx={{ mb: 3 }}>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                ðŸ” Filtrer les CompÃ©tences
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Toutes les compÃ©tences extraites sont affichÃ©es ci-dessous. Utilisez le filtre pour rechercher une compÃ©tence spÃ©cifique.
-              </Typography>
-              <TextField
-                fullWidth
-                placeholder="Filtrer par nom (optionnel)..."
-                value={skillSearchQuery}
-                onChange={(e) => setSkillSearchQuery(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    handleSkillSearch();
-                  }
-                }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <Button
-                        variant="contained"
-                        onClick={handleSkillSearch}
-                        disabled={isSearching}
-                        startIcon={isSearching ? <CircularProgress size={20} /> : null}
-                      >
-                        {isSearching ? 'Recherche...' : 'Filtrer'}
-                      </Button>
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Loading State */}
-          {isSearching && searchResults.length === 0 && (
-            <Card>
+            {/* Search Filter */}
+            <Card sx={{ mb: 3 }}>
               <CardContent>
-                <Box display="flex" justifyContent="center" alignItems="center" py={4}>
-                  <CircularProgress sx={{ mr: 2 }} />
-                  <Typography variant="h6">Chargement des compÃ©tences...</Typography>
-                </Box>
+                <Typography variant="h6" gutterBottom>
+                  🔍 Filtrer les Compétences
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Toutes les compétences extraites sont affichées ci-dessous. Utilisez le filtre pour rechercher une compétence spécifique.
+                </Typography>
+                <TextField
+                  fullWidth
+                  placeholder="Filtrer par nom (optionnel)..."
+                  value={skillSearchQuery}
+                  onChange={(e) => setSkillSearchQuery(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSkillSearch();
+                    }
+                  }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon />
+                      </InputAdornment>
+                    ),
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <Button
+                          variant="contained"
+                          onClick={handleSkillSearch}
+                          disabled={isSearching}
+                          startIcon={isSearching ? <CircularProgress size={20} /> : null}
+                        >
+                          {isSearching ? 'Recherche...' : 'Filtrer'}
+                        </Button>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
               </CardContent>
             </Card>
-          )}
 
-          {/* Search Results */}
-          {!isSearching && searchResults.length > 0 && (
-            <Grid container spacing={3}>
-              {searchResults.map((result: any) => {
-                const candidates = result.candidates || [];
-                const totalCandidatesForSkill = result.totalCandidates || candidates.length || 0;
-                const averageConfidence =
-                  candidates.length > 0
-                    ? candidates.reduce((sum: number, c: any) => sum + (c.confidence || 0), 0) / candidates.length
-                    : 0;
-                const averageExperience =
-                  candidates.length > 0
-                    ? (
-                        candidates.reduce((sum: number, c: any) => sum + (c.yearsExperience || 0), 0) / candidates.length
-                      ).toFixed(1)
-                    : '-';
-                const displayedCandidates = candidates.slice(0, 4);
-                const uniqueCities = [
-                  ...new Set(
-                    candidates
-                      .map((c: any) => [c.candidate?.city, c.candidate?.province].filter(Boolean).join(', '))
-                      .filter(Boolean)
-                  ),
-                ];
-                const skillColor = getSkillColor(result.skillName);
-                const skillInitials = (result.skillName || '?').slice(0, 2).toUpperCase();
+            {/* Loading State */}
+            {
+              isSearching && searchResults.length === 0 && (
+                <Card>
+                  <CardContent>
+                    <Box display="flex" justifyContent="center" alignItems="center" py={4}>
+                      <CircularProgress sx={{ mr: 2 }} />
+                      <Typography variant="h6">Chargement des compétences...</Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              )
+            }
 
-                return (
-                  <Grid item xs={12} md={6} key={result.skillId || result.skillName}>
-                    <Card
-                      sx={{
-                        height: '100%',
-                        borderRadius: 3,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        boxShadow: '0 20px 45px rgba(15, 23, 42, 0.1)',
-                      }}
-                    >
-                      <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <Box
+            {/* Search Results */}
+            {
+              !isSearching && searchResults.length > 0 && (
+                <Grid container spacing={3}>
+                  {searchResults.map((result: any) => {
+                    const candidates = result.candidates || [];
+                    const totalCandidatesForSkill = result.totalCandidates || candidates.length || 0;
+                    const averageConfidence =
+                      candidates.length > 0
+                        ? candidates.reduce((sum: number, c: any) => sum + (c.confidence || 0), 0) / candidates.length
+                        : 0;
+                    const averageExperience =
+                      candidates.length > 0
+                        ? (
+                          candidates.reduce((sum: number, c: any) => sum + (c.yearsExperience || 0), 0) / candidates.length
+                        ).toFixed(1)
+                        : '-';
+                    const displayedCandidates = candidates.slice(0, 4);
+                    const uniqueCities = [
+                      ...new Set(
+                        candidates
+                          .map((c: any) => [c.candidate?.city, c.candidate?.province].filter(Boolean).join(', '))
+                          .filter(Boolean)
+                      ),
+                    ];
+                    const skillColor = getSkillColor(result.skillName);
+                    const skillInitials = (result.skillName || '?').slice(0, 2).toUpperCase();
+
+                    return (
+                      <Grid item xs={12} md={6} key={result.skillId || result.skillName}>
+                        <Card
                           sx={{
+                            height: '100%',
+                            borderRadius: 3,
                             display: 'flex',
-                            alignItems: 'center',
-                            gap: 2,
-                            p: 2,
-                            borderRadius: 2,
-                            bgcolor: `${skillColor}15`,
+                            flexDirection: 'column',
+                            boxShadow: '0 20px 45px rgba(15, 23, 42, 0.1)',
                           }}
                         >
-                          <Avatar
-                            sx={{
-                              bgcolor: skillColor,
-                              color: 'white',
-                              width: 56,
-                              height: 56,
-                              fontSize: 18,
-                              fontWeight: 'bold',
-                            }}
-                          >
-                            {skillInitials}
-                          </Avatar>
-                          <Box flexGrow={1}>
-                            <Typography variant="h6" fontWeight="bold">
-                              {result.skillName}
-                            </Typography>
-                            <Chip
-                              label={result.category || 'Autre'}
-                              icon={<CategoryIcon fontSize="small" />}
-                              variant="outlined"
-                              size="small"
-                              sx={{ mt: 0.5 }}
-                            />
-                          </Box>
-                          <Chip
-                            label={`${totalCandidatesForSkill} candidat${totalCandidatesForSkill > 1 ? 's' : ''}`}
-                            color="primary"
-                            variant="outlined"
-                          />
-                        </Box>
-
-                        {result.description && (
-                          <Typography variant="body2" color="text.secondary">
-                            {result.description}
-                          </Typography>
-                        )}
-
-                        <Grid container spacing={2}>
-                          <Grid item xs={6}>
-                            <Typography variant="body2" color="text.secondary">
-                              Confiance moyenne
-                            </Typography>
-                            <Typography variant="h5" fontWeight="bold">
-                              {formatPercentage(averageConfidence * 100)}
-                            </Typography>
-                            <LinearProgress
-                              variant="determinate"
-                              value={Math.round(averageConfidence * 100)}
+                          <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <Box
                               sx={{
-                                height: 8,
-                                borderRadius: 4,
-                                '& .MuiLinearProgress-bar': {
-                                  bgcolor: getConfidenceColor(averageConfidence),
-                                },
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 2,
+                                p: 2,
+                                borderRadius: 2,
+                                bgcolor: `${skillColor}15`,
                               }}
-                            />
-                          </Grid>
-                          <Grid item xs={6}>
-                            <Typography variant="body2" color="text.secondary">
-                              ExpÃ©rience moyenne
-                            </Typography>
-                            <Typography variant="h5" fontWeight="bold">
-                              {averageExperience === '-' ? '-' : `${averageExperience} ans`}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {uniqueCities.length || 0} ville{uniqueCities.length > 1 ? 's' : ''}
-                            </Typography>
-                          </Grid>
-                        </Grid>
-
-                        {candidates.length > 0 && (
-                          <Box>
-                            <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                              <Typography variant="subtitle2" color="text.secondary">
-                                Candidats correspondants
-                              </Typography>
-                              <AvatarGroup max={4}>
-                                {displayedCandidates.map((candidateItem: any) => {
-                                  const name = `${candidateItem.candidate?.firstName || ''} ${candidateItem.candidate?.lastName || ''}`.trim();
-                                  const initials = getCandidateInitials(candidateItem.candidate);
-                                  return (
-                                    <Tooltip
-                                      key={candidateItem.candidateId}
-                                      title={name || 'Candidat'}
-                                      arrow
-                                    >
-                                      <Avatar sx={{ bgcolor: getAvatarColor(name), width: 36, height: 36 }}>
-                                        {initials !== '?' ? initials : <PersonIcon fontSize="small" />}
-                                      </Avatar>
-                                    </Tooltip>
-                                  );
-                                })}
-                              </AvatarGroup>
+                            >
+                              <Avatar
+                                sx={{
+                                  bgcolor: skillColor,
+                                  color: 'white',
+                                  width: 56,
+                                  height: 56,
+                                  fontSize: 18,
+                                  fontWeight: 'bold',
+                                }}
+                              >
+                                {skillInitials}
+                              </Avatar>
+                              <Box flexGrow={1}>
+                                <Typography variant="h6" fontWeight="bold">
+                                  {result.skillName}
+                                </Typography>
+                                <Chip
+                                  label={result.category || 'Autre'}
+                                  icon={<CategoryIcon fontSize="small" />}
+                                  variant="outlined"
+                                  size="small"
+                                  sx={{ mt: 0.5 }}
+                                />
+                              </Box>
+                              <Chip
+                                label={`${totalCandidatesForSkill} candidat${totalCandidatesForSkill > 1 ? 's' : ''}`}
+                                color="primary"
+                                variant="outlined"
+                              />
                             </Box>
-                          </Box>
-                        )}
 
-                        <Divider />
+                            {result.description && (
+                              <Typography variant="body2" color="text.secondary">
+                                {result.description}
+                              </Typography>
+                            )}
 
-                        {candidates.length === 0 ? (
-                          <Typography variant="body2" color="text.secondary">
-                            Aucun candidat ne correspond Ã  cette compÃ©tence pour le moment.
-                          </Typography>
-                        ) : isCompactView ? (
-                          <Stack spacing={2}>
-                            {candidates.map((c: any) => {
-                              const candidateName = `${c.candidate?.firstName || ''} ${c.candidate?.lastName || ''}`.trim();
-                              const candidateLocation = [c.candidate?.city, c.candidate?.province]
-                                .filter(Boolean)
-                                .join(', ');
-                              return (
-                                <Paper key={c.candidateId} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                                  <Stack spacing={1.5}>
-                                    <Box display="flex" alignItems="center" gap={1.5}>
-                                      <Avatar sx={{ bgcolor: getAvatarColor(candidateName) }}>
-                                        {getCandidateInitials(c.candidate)}
-                                      </Avatar>
-                                      <Box>
-                                        <Typography variant="subtitle2" fontWeight="bold">
-                                          {candidateName || 'Candidat inconnu'}
-                                        </Typography>
-                                        <Chip
-                                          size="small"
-                                          label={LEVEL_LABELS[c.level] || c.level}
-                                          color={LEVEL_COLORS[c.level] || 'default'}
-                                          sx={{ mt: 0.5 }}
-                                        />
-                                      </Box>
-                                    </Box>
-                                    <Stack spacing={0.5}>
-                                      {candidateLocation && (
-                                        <Stack direction="row" spacing={1} alignItems="center">
-                                          <LocationIcon fontSize="small" color="action" />
-                                          <Typography variant="body2">{candidateLocation}</Typography>
-                                        </Stack>
-                                      )}
-                                      {c.candidate?.email && (
-                                        <Stack direction="row" spacing={1} alignItems="center">
-                                          <EmailIcon fontSize="small" color="action" />
-                                          <Typography variant="body2">{c.candidate.email}</Typography>
-                                        </Stack>
-                                      )}
-                                      <Stack direction="row" spacing={1} alignItems="center">
-                                        <PhoneIcon fontSize="small" color="action" />
-                                        <Typography variant="body2">{c.candidate?.phone || 'N/A'}</Typography>
-                                      </Stack>
-                                    </Stack>
-                                    <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
-                                      <Typography variant="body2">
-                                        Exp: {c.yearsExperience || '-'} an{(c.yearsExperience || 0) > 1 ? 's' : ''}
-                                      </Typography>
-                                      <Box display="flex" alignItems="center" gap={1}>
-                                        <Typography variant="caption" fontWeight="bold">
-                                          {formatPercentage((c.confidence || 0) * 100)}
-                                        </Typography>
-                                        <Box sx={{ width: 80 }}>
-                                          <LinearProgress
-                                            variant="determinate"
-                                            value={Math.round((c.confidence || 0) * 100)}
-                                            sx={{
-                                              height: 6,
-                                              borderRadius: 3,
-                                              '& .MuiLinearProgress-bar': {
-                                                bgcolor: getConfidenceColor(c.confidence || 0),
-                                              },
-                                            }}
-                                          />
-                                        </Box>
-                                      </Box>
-                                    </Stack>
-                                  </Stack>
-                                </Paper>
-                              );
-                            })}
-                          </Stack>
-                        ) : (
-                          <TableContainer component={Paper} variant="outlined">
-                            <Table size="small">
-                              <TableHead>
-                                <TableRow>
-                                  <TableCell>Candidat</TableCell>
-                                  <TableCell>Contact</TableCell>
-                                  <TableCell>Ville</TableCell>
-                                  <TableCell>Niveau</TableCell>
-                                  <TableCell>Exp. (ans)</TableCell>
-                                  <TableCell align="right">Confiance</TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
+                            <Grid container spacing={2}>
+                              <Grid item xs={6}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Confiance moyenne
+                                </Typography>
+                                <Typography variant="h5" fontWeight="bold">
+                                  {formatPercentage(averageConfidence * 100)}
+                                </Typography>
+                                <LinearProgress
+                                  variant="determinate"
+                                  value={Math.round(averageConfidence * 100)}
+                                  sx={{
+                                    height: 8,
+                                    borderRadius: 4,
+                                    '& .MuiLinearProgress-bar': {
+                                      bgcolor: getConfidenceColor(averageConfidence),
+                                    },
+                                  }}
+                                />
+                              </Grid>
+                              <Grid item xs={6}>
+                                <Typography variant="body2" color="text.secondary">
+                                  Expérience moyenne
+                                </Typography>
+                                <Typography variant="h5" fontWeight="bold">
+                                  {averageExperience === '-' ? '-' : `${averageExperience} ans`}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {uniqueCities.length || 0} ville{uniqueCities.length > 1 ? 's' : ''}
+                                </Typography>
+                              </Grid>
+                            </Grid>
+
+                            {candidates.length > 0 && (
+                              <Box>
+                                <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                                  <Typography variant="subtitle2" color="text.secondary">
+                                    Candidats correspondants
+                                  </Typography>
+                                  <AvatarGroup max={4}>
+                                    {displayedCandidates.map((candidateItem: any) => {
+                                      const name = `${candidateItem.candidate?.firstName || ''} ${candidateItem.candidate?.lastName || ''}`.trim();
+                                      const initials = getCandidateInitials(candidateItem.candidate);
+                                      return (
+                                        <Tooltip
+                                          key={candidateItem.candidateId}
+                                          title={name || 'Candidat'}
+                                          arrow
+                                        >
+                                          <Avatar sx={{ bgcolor: getAvatarColor(name), width: 36, height: 36 }}>
+                                            {initials !== '?' ? initials : <PersonIcon fontSize="small" />}
+                                          </Avatar>
+                                        </Tooltip>
+                                      );
+                                    })}
+                                  </AvatarGroup>
+                                </Box>
+                              </Box>
+                            )}
+
+                            <Divider />
+
+                            {candidates.length === 0 ? (
+                              <Typography variant="body2" color="text.secondary">
+                                Aucun candidat ne correspond à cette compétence pour le moment.
+                              </Typography>
+                            ) : isCompactView ? (
+                              <Stack spacing={2}>
                                 {candidates.map((c: any) => {
                                   const candidateName = `${c.candidate?.firstName || ''} ${c.candidate?.lastName || ''}`.trim();
                                   const candidateLocation = [c.candidate?.city, c.candidate?.province]
                                     .filter(Boolean)
                                     .join(', ');
                                   return (
-                                    <TableRow key={c.candidateId} hover>
-                                      <TableCell>
-                                        <Box display="flex" alignItems="center" gap={1}>
-                                          <Avatar sx={{ width: 40, height: 40, bgcolor: getAvatarColor(candidateName) }}>
+                                    <Paper key={c.candidateId} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                                      <Stack spacing={1.5}>
+                                        <Box display="flex" alignItems="center" gap={1.5}>
+                                          <Avatar sx={{ bgcolor: getAvatarColor(candidateName) }}>
                                             {getCandidateInitials(c.candidate)}
                                           </Avatar>
                                           <Box>
-                                            <Typography variant="body2" fontWeight="bold">
-                                              {candidateName || 'Candidat'}
+                                            <Typography variant="subtitle2" fontWeight="bold">
+                                              {candidateName || 'Candidat inconnu'}
                                             </Typography>
-                                            <Typography variant="caption" color="text.secondary">
-                                              {c.candidate?.title || 'Profil'}
-                                            </Typography>
-                                          </Box>
-                                        </Box>
-                                      </TableCell>
-                                      <TableCell>
-                                        <Stack spacing={0.5}>
-                                          {c.candidate?.email && (
-                                            <Stack direction="row" spacing={0.5} alignItems="center">
-                                              <EmailIcon fontSize="inherit" color="action" />
-                                              <Typography variant="caption">{c.candidate.email}</Typography>
-                                            </Stack>
-                                          )}
-                                          <Stack direction="row" spacing={0.5} alignItems="center">
-                                            <PhoneIcon fontSize="inherit" color="action" />
-                                            <Typography variant="caption">{c.candidate?.phone || 'N/A'}</Typography>
-                                          </Stack>
-                                        </Stack>
-                                      </TableCell>
-                                      <TableCell>
-                                        <Typography variant="body2">{candidateLocation || 'N/A'}</Typography>
-                                      </TableCell>
-                                      <TableCell>
-                                        <Chip
-                                          label={LEVEL_LABELS[c.level] || c.level}
-                                          color={LEVEL_COLORS[c.level] || 'default'}
-                                          size="small"
-                                        />
-                                      </TableCell>
-                                      <TableCell>{c.yearsExperience || '-'}</TableCell>
-                                      <TableCell align="right">
-                                        <Box display="flex" alignItems="center" justifyContent="flex-end" gap={1}>
-                                          <Typography variant="caption" fontWeight="bold">
-                                            {formatPercentage((c.confidence || 0) * 100)}
-                                          </Typography>
-                                          <Box sx={{ width: 60 }}>
-                                            <LinearProgress
-                                              variant="determinate"
-                                              value={Math.round((c.confidence || 0) * 100)}
-                                              sx={{
-                                                height: 6,
-                                                borderRadius: 3,
-                                                '& .MuiLinearProgress-bar': {
-                                                  bgcolor: getConfidenceColor(c.confidence || 0),
-                                                },
-                                              }}
+                                            <Chip
+                                              size="small"
+                                              label={LEVEL_LABELS[c.level] || c.level}
+                                              color={LEVEL_COLORS[c.level] || 'default'}
+                                              sx={{ mt: 0.5 }}
                                             />
                                           </Box>
                                         </Box>
-                                      </TableCell>
-                                    </TableRow>
+                                        <Stack spacing={0.5}>
+                                          {candidateLocation && (
+                                            <Stack direction="row" spacing={1} alignItems="center">
+                                              <LocationIcon fontSize="small" color="action" />
+                                              <Typography variant="body2">{candidateLocation}</Typography>
+                                            </Stack>
+                                          )}
+                                          {c.candidate?.email && (
+                                            <Stack direction="row" spacing={1} alignItems="center">
+                                              <EmailIcon fontSize="small" color="action" />
+                                              <Typography variant="body2">{c.candidate.email}</Typography>
+                                            </Stack>
+                                          )}
+                                          <Stack direction="row" spacing={1} alignItems="center">
+                                            <PhoneIcon fontSize="small" color="action" />
+                                            <Typography variant="body2">{c.candidate?.phone || 'N/A'}</Typography>
+                                          </Stack>
+                                        </Stack>
+                                        <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
+                                          <Typography variant="body2">
+                                            Exp: {c.yearsExperience || '-'} an{(c.yearsExperience || 0) > 1 ? 's' : ''}
+                                          </Typography>
+                                          <Box display="flex" alignItems="center" gap={1}>
+                                            <Typography variant="caption" fontWeight="bold">
+                                              {formatPercentage((c.confidence || 0) * 100)}
+                                            </Typography>
+                                            <Box sx={{ width: 80 }}>
+                                              <LinearProgress
+                                                variant="determinate"
+                                                value={Math.round((c.confidence || 0) * 100)}
+                                                sx={{
+                                                  height: 6,
+                                                  borderRadius: 3,
+                                                  '& .MuiLinearProgress-bar': {
+                                                    bgcolor: getConfidenceColor(c.confidence || 0),
+                                                  },
+                                                }}
+                                              />
+                                            </Box>
+                                          </Box>
+                                        </Stack>
+                                      </Stack>
+                                    </Paper>
                                   );
                                 })}
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                );
-              })}
-            </Grid>
-          )}
+                              </Stack>
+                            ) : (
+                              <TableContainer component={Paper} variant="outlined">
+                                <Table size="small">
+                                  <TableHead>
+                                    <TableRow>
+                                      <TableCell>Candidat</TableCell>
+                                      <TableCell>Contact</TableCell>
+                                      <TableCell>Ville</TableCell>
+                                      <TableCell>Niveau</TableCell>
+                                      <TableCell>Exp. (ans)</TableCell>
+                                      <TableCell align="right">Confiance</TableCell>
+                                    </TableRow>
+                                  </TableHead>
+                                  <TableBody>
+                                    {candidates.map((c: any) => {
+                                      const candidateName = `${c.candidate?.firstName || ''} ${c.candidate?.lastName || ''}`.trim();
+                                      const candidateLocation = [c.candidate?.city, c.candidate?.province]
+                                        .filter(Boolean)
+                                        .join(', ');
+                                      return (
+                                        <TableRow key={c.candidateId} hover>
+                                          <TableCell>
+                                            <Box display="flex" alignItems="center" gap={1}>
+                                              <Avatar sx={{ width: 40, height: 40, bgcolor: getAvatarColor(candidateName) }}>
+                                                {getCandidateInitials(c.candidate)}
+                                              </Avatar>
+                                              <Box>
+                                                <Typography variant="body2" fontWeight="bold">
+                                                  {candidateName || 'Candidat'}
+                                                </Typography>
+                                                <Typography variant="caption" color="text.secondary">
+                                                  {c.candidate?.title || 'Profil'}
+                                                </Typography>
+                                              </Box>
+                                            </Box>
+                                          </TableCell>
+                                          <TableCell>
+                                            <Stack spacing={0.5}>
+                                              {c.candidate?.email && (
+                                                <Stack direction="row" spacing={0.5} alignItems="center">
+                                                  <EmailIcon fontSize="inherit" color="action" />
+                                                  <Typography variant="caption">{c.candidate.email}</Typography>
+                                                </Stack>
+                                              )}
+                                              <Stack direction="row" spacing={0.5} alignItems="center">
+                                                <PhoneIcon fontSize="inherit" color="action" />
+                                                <Typography variant="caption">{c.candidate?.phone || 'N/A'}</Typography>
+                                              </Stack>
+                                            </Stack>
+                                          </TableCell>
+                                          <TableCell>
+                                            <Typography variant="body2">{candidateLocation || 'N/A'}</Typography>
+                                          </TableCell>
+                                          <TableCell>
+                                            <Chip
+                                              label={LEVEL_LABELS[c.level] || c.level}
+                                              color={LEVEL_COLORS[c.level] || 'default'}
+                                              size="small"
+                                            />
+                                          </TableCell>
+                                          <TableCell>{c.yearsExperience || '-'}</TableCell>
+                                          <TableCell align="right">
+                                            <Box display="flex" alignItems="center" justifyContent="flex-end" gap={1}>
+                                              <Typography variant="caption" fontWeight="bold">
+                                                {formatPercentage((c.confidence || 0) * 100)}
+                                              </Typography>
+                                              <Box sx={{ width: 60 }}>
+                                                <LinearProgress
+                                                  variant="determinate"
+                                                  value={Math.round((c.confidence || 0) * 100)}
+                                                  sx={{
+                                                    height: 6,
+                                                    borderRadius: 3,
+                                                    '& .MuiLinearProgress-bar': {
+                                                      bgcolor: getConfidenceColor(c.confidence || 0),
+                                                    },
+                                                  }}
+                                                />
+                                              </Box>
+                                            </Box>
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
+                                  </TableBody>
+                                </Table>
+                              </TableContainer>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    );
+                  })}
+                </Grid>
+              )
+            }
 
-          {searchResults.length === 0 && skillSearchQuery && !isSearching && (
-            <Card>
-              <CardContent>
-                <Box textAlign="center" py={4}>
-                  <Typography variant="h6" color="text.secondary" gutterBottom>
-                    Aucun rÃ©sultat trouvÃ©
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Essayez avec un autre terme de recherche
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          )}
-        </Box>
-      )}
-    </Box>
+            {
+              searchResults.length === 0 && skillSearchQuery && !isSearching && (
+                <Card>
+                  <CardContent>
+                    <Box textAlign="center" py={4}>
+                      <Typography variant="h6" color="text.secondary" gutterBottom>
+                        Aucun résultat trouvé
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Essayez avec un autre terme de recherche
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              )
+            }
+          </Box>
+        )
+      }
+    </Box >
   );
 };
 

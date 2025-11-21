@@ -72,7 +72,7 @@ const MainLayout = () => {
     { text: 'Catalogues', icon: <DescriptionIcon />, path: '/catalogues' },
     { text: 'Clients', icon: <BusinessIcon />, path: '/clients' },
     { text: 'Demandes Clients', icon: <ShoppingCartIcon />, path: '/wishlists' },
-    { text: 'Autre CompÃ©tance', icon: <WorkIcon />, path: '/autres-competances' },
+    { text: 'Autre Compétence', icon: <WorkIcon />, path: '/autres-competances' },
   ];
 
   const drawer = (
@@ -158,13 +158,13 @@ const MainLayout = () => {
               <ListItemIcon>
                 <SettingsIcon fontSize="small" />
               </ListItemIcon>
-              ParamÃ¨tres
+              Paramètres
             </MenuItem>
             <MenuItem onClick={handleLogout}>
               <ListItemIcon>
                 <LogoutIcon fontSize="small" />
               </ListItemIcon>
-              DÃ©connexion
+              Déconnexion
             </MenuItem>
           </Menu>
         </Toolbar>
