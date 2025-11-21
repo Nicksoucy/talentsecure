@@ -17,3 +17,4 @@ uploads/*
 logs
 *.log
 .prisma
+
