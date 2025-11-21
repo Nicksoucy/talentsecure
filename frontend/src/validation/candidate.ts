@@ -33,7 +33,7 @@ const certificationSchema = z.object({
 export const candidateFormSchema = z.object({
   firstName: z.string().trim().min(2, 'Le prenom doit contenir au moins 2 caracteres').max(50),
   lastName: z.string().trim().min(2, 'Le nom doit contenir au moins 2 caracteres').max(50),
-  email: z.string().email('Adresse courriel invalide').max(255).optional().nullable(),
+  email: z.string().transform(val => val === '' ? null : val).nullable().refine(val => val === null || z.string().email().safeParse(val).success, { message: 'Adresse courriel invalide' }).optional(),
   phone: z.string().trim().min(10, 'Le numero de telephone est trop court').max(20).optional().nullable(),
   address: z.string().max(200).optional().nullable(),
   city: z.string().max(100).optional().nullable(),

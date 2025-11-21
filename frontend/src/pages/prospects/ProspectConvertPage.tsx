@@ -25,7 +25,7 @@ export default function ProspectConvertPage() {
   const convertMutation = useMutation({
     mutationFn: (payload: any) => prospectService.convertToCandidate(id!, payload),
     onSuccess: (response) => {
-      enqueueSnackbar('Prospect converti en candidat avec succ�s', { variant: 'success' });
+      enqueueSnackbar('Prospect converti en candidat avec succès', { variant: 'success' });
       navigate(`/candidates/${response.data.id}`);
     },
     onError: (err: any) => {
@@ -102,7 +102,7 @@ export default function ProspectConvertPage() {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="body1">
-            Compl�tez l'�valuation d'entretien avant de convertir {prospect.firstName} {prospect.lastName} en candidat officiel.
+            Complétez l'évaluation d'entretien avant de convertir {prospect.firstName} {prospect.lastName} en candidat officiel.
           </Typography>
         </CardContent>
       </Card>

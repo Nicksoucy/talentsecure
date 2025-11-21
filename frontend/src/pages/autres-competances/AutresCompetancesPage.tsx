@@ -35,6 +35,8 @@ import {
   CircularProgress,
   useMediaQuery,
   useTheme,
+  Checkbox,
+  TablePagination,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -114,6 +116,11 @@ const AutresCompetancesPage = () => {
   const [showBatchDialog, setShowBatchDialog] = useState(false);
   const [batchResults, setBatchResults] = useState<any>(null);
   const [batchLimit, setBatchLimit] = useState<number>(10); // Par dÃ©faut: 10 CVs
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
+
 
   // New states for search tab
   const [mainTab, setMainTab] = useState<'extraction' | 'search'>('extraction');
@@ -284,7 +291,53 @@ const AutresCompetancesPage = () => {
     navigate(`/prospects/${id}`);
   };
 
+  const handleToggleSelect = (id: string) => {
+    setSelectedCandidateIds(prev =>
+      prev.includes(id) ? prev.filter(pid => pid !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.checked) {
+      const allIds = prospects.map((p: any) => p.id);
+      setSelectedCandidateIds(allIds);
+    } else {
+      setSelectedCandidateIds([]);
+    }
+  };
+
+
   const handleBatchExtract = () => {
+    // Si des candidats sont sélectionnés manuellement, on utilise ceux-là
+    if (selectedCandidateIds.length > 0) {
+      const selectedProspects = prospects.filter((p: any) => selectedCandidateIds.includes(p.id));
+      const prospectsWithCv = selectedProspects.filter((p: any) => p.cvUrl || p.cvStoragePath);
+
+      if (prospectsWithCv.length === 0) {
+        enqueueSnackbar('Aucun des candidats sélectionnés n\'a de CV disponible', { variant: 'warning' });
+        return;
+      }
+
+      const count = prospectsWithCv.length;
+      const estimatedCost = (count * 0.10).toFixed(2);
+      const estimatedTime = Math.ceil(count * 2 / 60);
+
+      const confirmed = window.confirm(
+        `⚠️ EXTRACTION MANUELLE\n\n` +
+        `Vous avez sélectionné ${count} candidat(s) avec CV.\n` +
+        `Coût estimé: ~$${estimatedCost} USD\n` +
+        `Temps estimé: ~${estimatedTime} minutes\n\n` +
+        `Voulez-vous lancer l'extraction pour ces candidats spécifiques?`
+      );
+
+      if (confirmed) {
+        batchExtractMutation.mutate(prospectsWithCv.map((p: any) => p.id));
+        setSelectedCandidateIds([]); // Reset selection after launch
+      }
+      return;
+    }
+
+    // Sinon, comportement par défaut (batch automatique)
     const prospectsWithCv = prospects.filter((p: any) => p.cvUrl || p.cvStoragePath);
     if (prospectsWithCv.length === 0) {
       enqueueSnackbar('Aucun candidat avec CV disponible', { variant: 'warning' });
@@ -301,7 +354,7 @@ const AutresCompetancesPage = () => {
     const estimatedTime = Math.ceil(count * 2 / 60); // ~2 sec per extraction
 
     const confirmed = window.confirm(
-      `⚠️ ATTENTION - Extraction en masse\n\n` +
+      `⚠️ ATTENTION - Extraction en masse (Automatique)\n\n` +
       `Candidats à traiter: ${count}${batchLimit > 0 && prospectsWithCv.length > batchLimit ? ` sur ${prospectsWithCv.length}` : ''}\n` +
       `Coût estimé: ~$${estimatedCost} USD\n` +
       `Temps estimé: ~${estimatedTime} minutes\n\n` +
@@ -313,6 +366,7 @@ const AutresCompetancesPage = () => {
       batchExtractMutation.mutate(limitedProspects.map((p: any) => p.id));
     }
   };
+
 
   const getConfidenceColor = (confidence: number) => {
     if (confidence >= 0.8) return 'success.main';
@@ -361,6 +415,22 @@ const AutresCompetancesPage = () => {
     }
   };
 
+  const handleChangePage = (event: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  // Paginate prospects
+  const paginatedProspects = filteredProspects.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
+
   return (
     <Box p={3}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
@@ -380,8 +450,9 @@ const AutresCompetancesPage = () => {
             onClick={handleBatchExtract}
             disabled={batchExtractMutation.isPending}
           >
-            {batchExtractMutation.isPending ? 'Extraction...' : 'Extraire les compétences'}
+            {batchExtractMutation.isPending ? 'Extraction...' : selectedCandidateIds.length > 0 ? `Extraire (${selectedCandidateIds.length})` : 'Extraire les compétences'}
           </Button>
+
         </Box>
       </Box>
 
@@ -406,81 +477,110 @@ const AutresCompetancesPage = () => {
                     </Typography>
                   </Box>
                 ) : (
-                  <TableContainer>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Candidat Potentiel</TableCell>
-                          <TableCell>Ville</TableCell>
-                          <TableCell>CV</TableCell>
-                          <TableCell>Date de soumission</TableCell>
-                          <TableCell>Contacté</TableCell>
-                          <TableCell align="right">Actions</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {prospects.map((prospect: any) => (
-                          <TableRow key={prospect.id} hover>
-                            <TableCell>
-                              <Box display="flex" alignItems="center" gap={2}>
-                                <Avatar>
-                                  {prospect.firstName?.[0]}
-                                  {prospect.lastName?.[0]}
-                                </Avatar>
-                                <Box>
-                                  <Typography variant="body2" fontWeight="bold">
-                                    {prospect.firstName} {prospect.lastName}
-                                  </Typography>
-                                  <Typography variant="caption" color="text.secondary">
-                                    {prospect.email}
-                                  </Typography>
-                                </Box>
-                              </Box>
+                  <>
+                    <TableContainer>
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                indeterminate={selectedCandidateIds.length > 0 && selectedCandidateIds.length < prospects.length}
+                                checked={prospects.length > 0 && selectedCandidateIds.length === prospects.length}
+                                onChange={handleSelectAll}
+                              />
                             </TableCell>
-                            <TableCell>
-                              {prospect.city || '-'}
-                            </TableCell>
-                            <TableCell>
-                              {prospect.cvUrl || prospect.cvStoragePath ? (
-                                <Chip label="CV Disponible" color="success" size="small" icon={<UploadIcon />} />
-                              ) : (
-                                <Chip label="Pas de CV" color="default" size="small" />
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {new Date(prospect.createdAt).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell>
-                              {prospect.contacted ? (
-                                <Chip label="Oui" color="success" size="small" />
-                              ) : (
-                                <Chip label="Non" color="warning" size="small" />
-                              )}
-                            </TableCell>
-                            <TableCell align="right">
-                              <Box display="flex" justifyContent="flex-end" gap={1}>
-                                <Tooltip title="Voir le profil">
-                                  <IconButton size="small" onClick={() => navigate(`/prospects/${prospect.id}`)}>
-                                    <VisibilityIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Extraire les compétences">
-                                  <IconButton
-                                    size="small"
-                                    color="primary"
-                                    onClick={() => handleExtractSkills(prospect.id, `${prospect.firstName} ${prospect.lastName}`, !!(prospect.cvUrl || prospect.cvStoragePath))}
-                                    disabled={!prospect.cvUrl && !prospect.cvStoragePath}
-                                  >
-                                    <AutoAwesomeIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
-                            </TableCell>
+                            <TableCell>Candidat Potentiel</TableCell>
+                            <TableCell>Ville</TableCell>
+                            <TableCell>CV</TableCell>
+                            <TableCell>Date de soumission</TableCell>
+                            <TableCell>Contacté</TableCell>
+                            <TableCell align="right">Actions</TableCell>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+
+                        </TableHead>
+                        <TableBody>
+                          {paginatedProspects.map((prospect: any) => (
+                            <TableRow key={prospect.id} hover selected={selectedCandidateIds.includes(prospect.id)}>
+
+                              <TableCell padding="checkbox">
+                                <Checkbox
+                                  checked={selectedCandidateIds.includes(prospect.id)}
+                                  onChange={() => handleToggleSelect(prospect.id)}
+                                />
+                              </TableCell>
+                              <TableCell>
+
+                                <Box display="flex" alignItems="center" gap={2}>
+                                  <Avatar>
+                                    {prospect.firstName?.[0]}
+                                    {prospect.lastName?.[0]}
+                                  </Avatar>
+                                  <Box>
+                                    <Typography variant="body2" fontWeight="bold">
+                                      {prospect.firstName} {prospect.lastName}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {prospect.email}
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                              </TableCell>
+                              <TableCell>
+                                {prospect.city || '-'}
+                              </TableCell>
+                              <TableCell>
+                                {prospect.cvUrl || prospect.cvStoragePath ? (
+                                  <Chip label="CV Disponible" color="success" size="small" icon={<UploadIcon />} />
+                                ) : (
+                                  <Chip label="Pas de CV" color="default" size="small" />
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {new Date(prospect.createdAt).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell>
+                                {prospect.contacted ? (
+                                  <Chip label="Oui" color="success" size="small" />
+                                ) : (
+                                  <Chip label="Non" color="warning" size="small" />
+                                )}
+                              </TableCell>
+                              <TableCell align="right">
+                                <Box display="flex" justifyContent="flex-end" gap={1}>
+                                  <Tooltip title="Voir le profil">
+                                    <IconButton size="small" onClick={() => navigate(`/prospects/${prospect.id}`)}>
+                                      <VisibilityIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Extraire les compétences">
+                                    <IconButton
+                                      size="small"
+                                      color="primary"
+                                      onClick={() => handleExtractSkills(prospect.id, `${prospect.firstName} ${prospect.lastName}`, !!(prospect.cvUrl || prospect.cvStoragePath))}
+                                      disabled={!prospect.cvUrl && !prospect.cvStoragePath}
+                                    >
+                                      <AutoAwesomeIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                </Box>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                    <TablePagination
+                      rowsPerPageOptions={[5, 10, 25, 50, 100]}
+                      component="div"
+                      count={filteredProspects.length}
+                      rowsPerPage={rowsPerPage}
+                      page={page}
+                      onPageChange={handleChangePage}
+                      onRowsPerPageChange={handleChangeRowsPerPage}
+                      labelRowsPerPage="Lignes par page:"
+                      labelDisplayedRows={({ from, to, count }) => `${from}-${to} sur ${count}`}
+                    />
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -639,102 +739,195 @@ const AutresCompetancesPage = () => {
         </DialogTitle>
         <DialogContent>
           {batchResults && (
-            <>
-              <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid item xs={6} sm={3}>
-                  <Card sx={{ bgcolor: 'primary.light', color: 'white' }}>
-                    <CardContent sx={{ textAlign: 'center', py: 2 }}>
-                      <Typography variant="h3" fontWeight="bold">
-                        {batchResults.summary.total}
-                      </Typography>
-                      <Typography variant="body2">Total</Typography>
-                    </CardContent>
-                  </Card>
+            <Box sx={{ mt: 2 }}>
+              {/* Summary Cards */}
+              <Grid container spacing={2} sx={{ mb: 4 }}>
+                <Grid item xs={6} md={3}>
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2,
+                      textAlign: 'center',
+                      bgcolor: 'primary.50',
+                      border: 1,
+                      borderColor: 'primary.200',
+                      borderRadius: 2,
+                    }}
+                  >
+                    <Typography variant="h4" fontWeight="bold" color="primary.main">
+                      {batchResults.summary.total}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" fontWeight="medium">
+                      TOTAL CANDIDATS
+                    </Typography>
+                  </Paper>
                 </Grid>
-                <Grid item xs={6} sm={3}>
-                  <Card sx={{ bgcolor: 'success.light', color: 'white' }}>
-                    <CardContent sx={{ textAlign: 'center', py: 2 }}>
-                      <Typography variant="h3" fontWeight="bold">
-                        {batchResults.summary.processed || 0}
-                      </Typography>
-                      <Typography variant="body2">Traités</Typography>
-                    </CardContent>
-                  </Card>
+                <Grid item xs={6} md={3}>
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2,
+                      textAlign: 'center',
+                      bgcolor: 'success.50',
+                      border: 1,
+                      borderColor: 'success.200',
+                      borderRadius: 2,
+                    }}
+                  >
+                    <Typography variant="h4" fontWeight="bold" color="success.main">
+                      {batchResults.summary.processed || 0}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" fontWeight="medium">
+                      SUCCÈS
+                    </Typography>
+                  </Paper>
                 </Grid>
-                <Grid item xs={6} sm={3}>
-                  <Card sx={{ bgcolor: 'warning.light', color: 'white' }}>
-                    <CardContent sx={{ textAlign: 'center', py: 2 }}>
-                      <Typography variant="h3" fontWeight="bold">
-                        {batchResults.summary.skipped || 0}
-                      </Typography>
-                      <Typography variant="body2">Ignorés</Typography>
-                    </CardContent>
-                  </Card>
+                <Grid item xs={6} md={3}>
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2,
+                      textAlign: 'center',
+                      bgcolor: 'warning.50',
+                      border: 1,
+                      borderColor: 'warning.200',
+                      borderRadius: 2,
+                    }}
+                  >
+                    <Typography variant="h4" fontWeight="bold" color="warning.main">
+                      {batchResults.summary.skipped || 0}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" fontWeight="medium">
+                      DÉJÀ TRAITÉS
+                    </Typography>
+                  </Paper>
                 </Grid>
-                <Grid item xs={6} sm={3}>
-                  <Card sx={{ bgcolor: 'error.light', color: 'white' }}>
-                    <CardContent sx={{ textAlign: 'center', py: 2 }}>
-                      <Typography variant="h3" fontWeight="bold">
-                        {batchResults.summary.failed}
-                      </Typography>
-                      <Typography variant="body2">Échecs</Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-                <Grid item xs={12}>
-                  <Card sx={{ bgcolor: 'info.light', color: 'white' }}>
-                    <CardContent sx={{ textAlign: 'center', py: 2 }}>
-                      <Typography variant="h2" fontWeight="bold">
-                        {batchResults.summary.totalSkillsExtracted}
-                      </Typography>
-                      <Typography variant="body1">Compétences Totales Extraites</Typography>
-                    </CardContent>
-                  </Card>
+                <Grid item xs={6} md={3}>
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2,
+                      textAlign: 'center',
+                      bgcolor: 'error.50',
+                      border: 1,
+                      borderColor: 'error.200',
+                      borderRadius: 2,
+                    }}
+                  >
+                    <Typography variant="h4" fontWeight="bold" color="error.main">
+                      {batchResults.summary.failed}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" fontWeight="medium">
+                      ÉCHECS
+                    </Typography>
+                  </Paper>
                 </Grid>
               </Grid>
 
-              <Alert severity="success" sx={{ mb: 2 }}>
-                <Typography variant="body2">
-                  <strong>{batchResults.message}</strong>
-                </Typography>
-              </Alert>
+              {/* Total Skills Extracted Banner */}
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 3,
+                  mb: 4,
+                  background: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)',
+                  color: 'white',
+                  borderRadius: 3,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Box>
+                  <Typography variant="h3" fontWeight="bold">
+                    {batchResults.summary.totalSkillsExtracted}
+                  </Typography>
+                  <Typography variant="subtitle1" sx={{ opacity: 0.9 }}>
+                    Nouvelles compétences identifiées
+                  </Typography>
+                </Box>
+                <AutoAwesomeIcon sx={{ fontSize: 64, opacity: 0.2 }} />
+              </Paper>
 
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                Détails par candidat:
+              {/* Detailed Results Table */}
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CategoryIcon fontSize="small" color="action" />
+                Détails par candidat
               </Typography>
-              <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400 }}>
+
+              <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 400, borderRadius: 2 }}>
                 <Table stickyHeader size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>Candidat ID</TableCell>
-                      <TableCell>Statut</TableCell>
-                      <TableCell align="right">Compétences</TableCell>
-                      <TableCell>Message</TableCell>
+                      <TableCell sx={{ bgcolor: 'grey.50', fontWeight: 'bold' }}>Candidat</TableCell>
+                      <TableCell sx={{ bgcolor: 'grey.50', fontWeight: 'bold' }}>Statut</TableCell>
+                      <TableCell align="right" sx={{ bgcolor: 'grey.50', fontWeight: 'bold' }}>Compétences</TableCell>
+                      <TableCell sx={{ bgcolor: 'grey.50', fontWeight: 'bold' }}>Message / Erreur</TableCell>
+                      <TableCell align="right" sx={{ bgcolor: 'grey.50', fontWeight: 'bold' }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {batchResults.results.map((result: any, index: number) => (
-                      <TableRow key={index}>
+                      <TableRow key={index} hover>
                         <TableCell>
-                          <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            {result.name || 'Inconnu'}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
                             {result.candidateId.substring(0, 8)}...
                           </Typography>
                         </TableCell>
                         <TableCell>
                           {result.success ? (
-                            <Chip label="Succès" color="success" size="small" />
+                            result.skipped ? (
+                              <Chip label="Ignoré" color="warning" size="small" variant="outlined" />
+                            ) : (
+                              <Chip label="Succès" color="success" size="small" variant="filled" />
+                            )
                           ) : (
-                            <Chip label="Échec" color="error" size="small" />
+                            <Chip label="Échec" color="error" size="small" variant="filled" />
                           )}
                         </TableCell>
                         <TableCell align="right">
-                          {result.skillsFound || 0}
+                          {(result.skillsCount || result.skillsFound) > 0 ? (
+                            <Typography fontWeight="bold" color="primary.main">
+                              {result.skillsCount || result.skillsFound}
+                            </Typography>
+                          ) : (
+                            <Typography color="text.secondary">-</Typography>
+                          )}
                         </TableCell>
                         <TableCell>
-                          {result.error && (
-                            <Typography variant="caption" color="error">
-                              {result.error}
+                          {result.error ? (
+                            <Typography variant="caption" color="error" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                              <CloseIcon fontSize="inherit" /> {result.error}
                             </Typography>
+                          ) : result.skipped ? (
+                            <Typography variant="caption" color="text.secondary">
+                              Déjà traité précédemment
+                            </Typography>
+                          ) : (
+                            <Typography variant="caption" color="success.main">
+                              Extraction réussie
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell align="right">
+                          {result.success && !result.skipped && result.skills && (
+                            <Tooltip title="Voir les compétences">
+                              <IconButton
+                                size="small"
+                                color="primary"
+                                onClick={() => {
+                                  setExtractedSkills(result.skills);
+                                  setCurrentCandidateName(result.name);
+                                  setExtractingCandidateId(result.candidateId);
+                                  setShowResultsDialog(true);
+                                }}
+                              >
+                                <VisibilityIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
                           )}
                         </TableCell>
                       </TableRow>
@@ -742,7 +935,7 @@ const AutresCompetancesPage = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
-            </>
+            </Box>
           )}
         </DialogContent>
         <DialogActions>

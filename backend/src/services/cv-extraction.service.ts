@@ -568,6 +568,25 @@ export class CVExtractionService {
       return; // Already converted, nothing to do
     }
 
+    // Check if candidate already exists (safety check)
+    const existingCandidate = await prisma.candidate.findUnique({
+      where: { id: prospect.id },
+    });
+
+    if (existingCandidate) {
+      // Candidate already exists, just update the prospect flag
+      await prisma.prospectCandidate.update({
+        where: { id: prospectId },
+        data: {
+          isConverted: true,
+          convertedAt: new Date(),
+          convertedToId: existingCandidate.id,
+        },
+      });
+      console.log(`✅ Prospect ${prospectId} already existed as candidate, updated flag.`);
+      return;
+    }
+
     // Create candidate from prospect
     const candidate = await prisma.candidate.create({
       data: {

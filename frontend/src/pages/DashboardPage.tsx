@@ -184,61 +184,7 @@ const DashboardPage = () => {
         </Grid>
       </Grid>
 
-      {/* AI Skills Extraction Section */}
-      <Grid container spacing={3} sx={{ mt: 2 }}>
-        <Grid item xs={12}>
-          <Card sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <AiIcon sx={{ mr: 1.5, color: 'white', fontSize: 32 }} />
-                  <Box>
-                    <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold' }}>
-                      Extraction IA de Compétences
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)' }}>
-                      Analysez automatiquement les CVs avec OpenAI GPT-3.5-Turbo
-                    </Typography>
-                  </Box>
-                </Box>
-                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <Box sx={{ textAlign: 'center', minWidth: 100 }}>
-                    <Typography variant="h4" sx={{ color: 'white', fontWeight: 'bold' }}>
-                      {candidateStats?.withCV || 0}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.9)' }}>
-                      CVs disponibles
-                    </Typography>
-                  </Box>
-                  <Chip
-                    label="~$0.001 / extraction"
-                    sx={{
-                      bgcolor: 'rgba(255,255,255,0.2)',
-                      color: 'white',
-                      fontWeight: 'bold'
-                    }}
-                  />
-                  <Button
-                    variant="contained"
-                    sx={{
-                      bgcolor: 'white',
-                      color: '#667eea',
-                      fontWeight: 'bold',
-                      '&:hover': {
-                        bgcolor: 'rgba(255,255,255,0.9)'
-                      }
-                    }}
-                    startIcon={<AiIcon />}
-                    onClick={() => navigate('/autres-competances')}
-                  >
-                    Commencer l'extraction
-                  </Button>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+
 
       <Grid container spacing={3} sx={{ mt: 2 }}>
         <Grid item xs={12} md={6}>

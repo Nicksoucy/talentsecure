@@ -669,10 +669,38 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
       return res.status(400).json({ error: 'Au moins un candidat est requis' });
     }
 
-    const results = [];
-
-    for (const candidateId of candidateIds) {
+    // Helper function to process a single candidate
+    const processCandidate = async (candidateId: string) => {
       try {
+        // Check if candidate or prospect exists to get name first
+        let candidate = await prisma.candidate.findUnique({
+          where: { id: candidateId },
+        });
+
+        let isProspect = false;
+        let candidateName = 'Inconnu';
+
+        if (candidate) {
+          candidateName = `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim();
+        } else {
+          const prospect = await prisma.prospectCandidate.findUnique({
+            where: { id: candidateId },
+          });
+
+          if (!prospect) {
+            return {
+              candidateId,
+              name: 'Inconnu',
+              success: false,
+              error: 'Candidat ou prospect non trouvé',
+            };
+          }
+          isProspect = true;
+          candidateName = `${prospect.firstName || ''} ${prospect.lastName || ''}`.trim();
+        }
+
+        if (!candidateName) candidateName = 'Inconnu';
+
         // Check if already processed (skip if found in extraction log with success)
         const existingLog = await prisma.cvExtractionLog.findFirst({
           where: {
@@ -685,48 +713,36 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
         });
 
         if (existingLog) {
-          results.push({
-            candidateId,
-            success: true,
-            skillsFound: existingLog.skillsFound,
-            skipped: true,
-            reason: 'DÃ©jÃ  traitÃ©',
-          });
-          continue;
-        }
-
-        // Check if candidate or prospect exists
-        let candidate = await prisma.candidate.findUnique({
-          where: { id: candidateId },
-        });
-
-        let isProspect = false;
-        if (!candidate) {
-          const prospect = await prisma.prospectCandidate.findUnique({
-            where: { id: candidateId },
+          // Verify if skills were actually saved
+          const savedSkillsCount = await prisma.candidateSkill.count({
+            where: { candidateId },
           });
 
-          if (!prospect) {
-            results.push({
+          // Only skip if we have both a success log AND actual saved skills
+          if (savedSkillsCount > 0) {
+            return {
               candidateId,
-              success: false,
-              error: 'Candidat ou prospect non trouvÃ©',
-            });
-            continue;
+              name: candidateName,
+              success: true,
+              skillsFound: existingLog.skillsFound,
+              skillsCount: savedSkillsCount,
+              skipped: true,
+              reason: 'Déjà traité',
+            };
           }
-          isProspect = true;
+          // If no skills found despite log, proceed to re-extraction
         }
 
         // Get candidate/prospect text
         const cvText = await cvExtractionService.getCandidateText(candidateId, isProspect);
 
         if (!cvText || cvText.length < 50) {
-          results.push({
+          return {
             candidateId,
+            name: candidateName,
             success: false,
-            error: 'CV insuffisant (moins de 50 caractÃ¨res)',
-          });
-          continue;
+            error: 'CV insuffisant (moins de 50 caractères)',
+          };
         }
 
         // Extract skills - use AI if model provided, otherwise use regex
@@ -753,36 +769,50 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
             saveResult = { error: saveError.message };
           }
 
-          results.push({
+          return {
             candidateId,
+            name: candidateName,
             success: true,
-            skillsFound: extraction.totalSkills,
+            skillsCount: extraction.totalSkills,
+            skills: extraction.skillsFound, // Return the actual list of skills
             saved: saveResult,
             isProspect,
-          });
+          };
         } else {
-          results.push({
+          return {
             candidateId,
+            name: candidateName,
             success: false,
             error: extraction.errorMessage,
-          });
+          };
         }
       } catch (error: any) {
-        results.push({
+        return {
           candidateId,
+          name: 'Erreur',
           success: false,
           error: error.message,
-        });
+        };
       }
+    };
+
+    // Process in chunks to limit concurrency
+    const CONCURRENCY_LIMIT = 5;
+    const results = [];
+
+    for (let i = 0; i < candidateIds.length; i += CONCURRENCY_LIMIT) {
+      const chunk = candidateIds.slice(i, i + CONCURRENCY_LIMIT);
+      const chunkResults = await Promise.all(chunk.map((id: string) => processCandidate(id)));
+      results.push(...chunkResults);
     }
 
     const successCount = results.filter((r) => r.success).length;
     const skippedCount = results.filter((r) => r.skipped).length;
     const processedCount = successCount - skippedCount;
-    const totalSkills = results.reduce((sum, r) => sum + (r.skillsFound || 0), 0);
+    const totalSkills = results.reduce((sum, r) => sum + (r.skillsCount || 0), 0);
 
     res.json({
-      message: `Extraction batch terminÃ©e: ${successCount}/${candidateIds.length} rÃ©ussies (${skippedCount} dÃ©jÃ  traitÃ©s, ${processedCount} nouveaux)`,
+      message: `Extraction batch terminée: ${successCount}/${candidateIds.length} réussies (${skippedCount} déjà traités, ${processedCount} nouveaux)`,
       results,
       summary: {
         total: candidateIds.length,
