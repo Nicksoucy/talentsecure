@@ -29,6 +29,7 @@ import adminRoutes from './routes/admin.routes';
 import wishlistRoutes from './routes/wishlist.routes';
 import exportRoutes from './routes/export.routes';
 import skillsRoutes from './routes/skills.routes';
+import extractionRoutes from './routes/extraction.routes';
 
 const app: Application = express();
 const PORT = parseInt(process.env.PORT || '8080', 10);
@@ -113,6 +114,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/exports', exportRoutes);
 app.use('/api/skills', skillsRoutes);
+app.use('/api/extraction', extractionRoutes);
 // app.use('/api/users', userRoutes);
 
 // 404 handler

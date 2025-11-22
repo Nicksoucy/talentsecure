@@ -194,4 +194,12 @@ export const candidateService = {
     });
     return response.data;
   },
+
+  /**
+   * Extract skills using AI
+   */
+  async extractSkills(id: string, model: string = 'gpt-3.5-turbo'): Promise<any> {
+    const response = await api.post(`/api/extraction/candidates/${id}/extract`, { model });
+    return response.data;
+  },
 };

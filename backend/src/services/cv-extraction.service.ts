@@ -1,10 +1,9 @@
-import { PrismaClient, Skill, SkillLevel, CandidateStatus } from '@prisma/client';
+import { Skill, SkillLevel, CandidateStatus } from '@prisma/client';
 const pdfParse = require('pdf-parse');
 import * as fs from 'fs';
 import * as path from 'path';
 import { LOCAL_CV_PATH, GCS_CV_BUCKET, storage, useGCS } from '../config/storage';
-
-const prisma = new PrismaClient();
+import { prisma } from '../config/database';
 
 interface ExtractionResult {
   skillId: string;

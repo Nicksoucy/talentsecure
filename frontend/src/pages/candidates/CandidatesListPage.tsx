@@ -555,6 +555,24 @@ export default function CandidatesListPage() {
     }
   };
 
+  const handleExtractSkills = async (candidate: any) => {
+    try {
+      enqueueSnackbar('Extraction des compétences en cours (IA)...', { variant: 'info' });
+      const result = await candidateService.extractSkills(candidate.id);
+
+      if (result.success) {
+        const count = result.skillsFound?.length || 0;
+        enqueueSnackbar(`${count} compétences extraites avec succès`, { variant: 'success' });
+        queryClient.invalidateQueries({ queryKey: ['candidates'] });
+      } else {
+        enqueueSnackbar(`Erreur: ${result.errorMessage || 'Extraction échouée'}`, { variant: 'error' });
+      }
+    } catch (error: any) {
+      enqueueSnackbar(error.response?.data?.error || 'Erreur lors de l\'extraction', { variant: 'error' });
+      console.error(error);
+    }
+  };
+
   const handleEditCandidate = async (candidateId: string) => {
     try {
       // Fetch full candidate data
@@ -901,6 +919,7 @@ export default function CandidatesListPage() {
                         onUnarchive={() => unarchiveMutation.mutate({ id: candidate.id, label })}
                         onDelete={() => deleteMutation.mutate({ id: candidate.id, label })}
                         onRevertToProspect={() => revertToProspectMutation.mutate({ id: candidate.id, label })}
+                        onExtractSkills={() => handleExtractSkills(candidate)}
                         userRole={user?.role}
                       />
                     );

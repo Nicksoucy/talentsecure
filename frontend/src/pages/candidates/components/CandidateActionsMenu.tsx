@@ -20,6 +20,7 @@ import {
   Edit as EditIcon,
   Visibility as ViewIcon,
   Undo as UndoIcon,
+  Psychology as PsychologyIcon,
 } from '@mui/icons-material';
 import { Candidate } from '@/types';
 
@@ -31,6 +32,7 @@ interface CandidateActionsMenuProps {
   onUnarchive: () => void;
   onDelete: () => void;
   onRevertToProspect?: () => void;
+  onExtractSkills?: () => void;
   userRole?: string;
 }
 
@@ -42,6 +44,7 @@ export default function CandidateActionsMenu({
   onUnarchive,
   onDelete,
   onRevertToProspect,
+  onExtractSkills,
   userRole = 'ADMIN',
 }: CandidateActionsMenuProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -147,6 +150,15 @@ export default function CandidateActionsMenu({
           </ListItemIcon>
           <ListItemText>Voir le détail</ListItemText>
         </MenuItem>
+
+        {onExtractSkills && (
+          <MenuItem onClick={() => { onExtractSkills(); handleCloseMenu(); }}>
+            <ListItemIcon>
+              <PsychologyIcon fontSize="small" color="secondary" />
+            </ListItemIcon>
+            <ListItemText>Analyser CV (IA)</ListItemText>
+          </MenuItem>
+        )}
 
         <MenuItem onClick={() => { onEdit(); handleCloseMenu(); }}>
           <ListItemIcon>

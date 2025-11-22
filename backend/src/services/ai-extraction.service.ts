@@ -1,8 +1,7 @@
-﻿import { PrismaClient, Skill, SkillLevel } from '@prisma/client';
+﻿import { Skill, SkillLevel } from '@prisma/client';
 import axios from 'axios';
 import { createHash } from 'crypto';
-
-const prisma = new PrismaClient();
+import { prisma } from '../config/database';
 
 interface AIExtractionResult {
   skillId: string;
