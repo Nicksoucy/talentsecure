@@ -44,6 +44,8 @@ export type CandidateStatus =
 
 export interface Candidate {
   id: string;
+
+  // Personal information
   firstName: string;
   lastName: string;
   email?: string;
@@ -52,15 +54,66 @@ export interface Candidate {
   city: string;
   province: string;
   postalCode?: string;
+
+  // Status and evaluation
   status: CandidateStatus;
   globalRating?: number;
   interviewDate?: string;
+
+  // Detailed ratings
+  professionalismRating?: number;
+  communicationRating?: number;
+  appearanceRating?: number;
+  motivationRating?: number;
+  experienceRating?: number;
+
+  // HR comments
+  hrNotes?: string;
+  strengths?: string;
+  weaknesses?: string;
+
+  // Interview details (JSON)
+  interviewDetails?: any;
+
+  // Availability
   hasVehicle: boolean;
+  canTravelKm?: number;
+
+  // Licenses and certifications
   hasBSP: boolean;
+  bspNumber?: string;
+  bspExpiryDate?: string;
+  bspStatus?: string;
+
+  hasDriverLicense?: boolean;
+  driverLicenseNumber?: string;
+  driverLicenseClass?: string;
+
+  // 24h urgency
+  urgency24hScore?: number;
+  canWorkUrgent?: boolean;
+
+  // Interview video
   videoUrl?: string;
+  videoUploadedAt?: string;
+  videoStoragePath?: string;
+
+  // CV and documents
+  cvUrl?: string;
+  cvStoragePath?: string;
+  documentsUrls?: string[];
+
+  // LPRPDE consent
+  hasConsent?: boolean;
+  consentDate?: string;
+  consentSignature?: string;
+
+  // Archive
   isArchived: boolean;
   archivedAt?: string;
   archivedById?: string;
+
+  // Metadata
   createdAt: string;
   updatedAt: string;
 }
