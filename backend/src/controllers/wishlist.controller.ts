@@ -50,7 +50,7 @@ export const getCurrentWishlist = async (
   next: NextFunction
 ) => {
   try {
-    if (!req.user || req.user.role !== 'CLIENT') {
+    if (!req.user || (req.user.role as string) !== 'CLIENT') {
       return res.status(401).json({ error: 'Non authentifié' });
     }
 
@@ -98,7 +98,7 @@ export const addWishlistItem = async (
   next: NextFunction
 ) => {
   try {
-    if (!req.user || req.user.role !== 'CLIENT') {
+    if (!req.user || (req.user.role as string) !== 'CLIENT') {
       return res.status(401).json({ error: 'Non authentifié' });
     }
 
@@ -234,7 +234,7 @@ export const updateWishlistItem = async (
   next: NextFunction
 ) => {
   try {
-    if (!req.user || req.user.role !== 'CLIENT') {
+    if (!req.user || (req.user.role as string) !== 'CLIENT') {
       return res.status(401).json({ error: 'Non authentifié' });
     }
 
@@ -323,7 +323,7 @@ export const removeWishlistItem = async (
   next: NextFunction
 ) => {
   try {
-    if (!req.user || req.user.role !== 'CLIENT') {
+    if (!req.user || (req.user.role as string) !== 'CLIENT') {
       return res.status(401).json({ error: 'Non authentifié' });
     }
 
@@ -401,7 +401,7 @@ export const clearWishlist = async (
   next: NextFunction
 ) => {
   try {
-    if (!req.user || req.user.role !== 'CLIENT') {
+    if (!req.user || (req.user.role as string) !== 'CLIENT') {
       return res.status(401).json({ error: 'Non authentifié' });
     }
 
@@ -454,7 +454,7 @@ export const submitWishlist = async (
   next: NextFunction
 ) => {
   try {
-    if (!req.user || req.user.role !== 'CLIENT') {
+    if (!req.user || (req.user.role as string) !== 'CLIENT') {
       return res.status(401).json({ error: 'Non authentifié' });
     }
 
@@ -521,7 +521,7 @@ export const getAvailableCandidatesCount = async (
   next: NextFunction
 ) => {
   try {
-    if (!req.user || req.user.role !== 'CLIENT') {
+    if (!req.user || (req.user.role as string) !== 'CLIENT') {
       return res.status(401).json({ error: 'Non authentifié' });
     }
 
@@ -586,7 +586,7 @@ export const getAllWishlists = async (
   next: NextFunction
 ) => {
   try {
-    if (!req.user || req.user.role !== 'ADMIN') {
+    if (!req.user || (req.user.role as string) !== 'ADMIN') {
       return res.status(403).json({ error: 'Accès interdit - Admin uniquement' });
     }
 
@@ -673,7 +673,7 @@ export const getWishlistById = async (
   next: NextFunction
 ) => {
   try {
-    if (!req.user || req.user.role !== 'ADMIN') {
+    if (!req.user || (req.user.role as string) !== 'ADMIN') {
       return res.status(403).json({ error: 'Accès interdit - Admin uniquement' });
     }
 
@@ -722,7 +722,7 @@ export const updateWishlistStatus = async (
   next: NextFunction
 ) => {
   try {
-    if (!req.user || req.user.role !== 'ADMIN') {
+    if (!req.user || (req.user.role as string) !== 'ADMIN') {
       return res.status(403).json({ error: 'Accès interdit - Admin uniquement' });
     }
 
@@ -782,7 +782,7 @@ export const deleteWishlist = async (
   next: NextFunction
 ) => {
   try {
-    if (!req.user || req.user.role !== 'ADMIN') {
+    if (!req.user || (req.user.role as string) !== 'ADMIN') {
       return res.status(403).json({ error: 'Accès interdit - Admin uniquement' });
     }
 
