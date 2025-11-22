@@ -605,9 +605,17 @@ export const extractSkillsFromCandidate = async (
       });
     }
 
-    // Save extracted skills (only for regular candidates, not prospects)
+    // Save extracted skills
     let saveResult = null;
-    if (!isProspect) {
+    if (isProspect) {
+      // Save to prospect skills (NO conversion to candidate)
+      saveResult = await cvExtractionService.saveProspectSkills(
+        candidateId,
+        extraction.skillsFound,
+        overwrite
+      );
+    } else {
+      // Save to candidate skills
       saveResult = await cvExtractionService.saveExtractedSkills(
         candidateId,
         extraction.skillsFound,
@@ -757,13 +765,21 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
           // Save skills for both candidates AND prospects
           let saveResult = null;
           try {
-            saveResult = await cvExtractionService.saveExtractedSkills(
-              candidateId,
-              extraction.skillsFound,
-              overwrite,
-              isProspect, // Pass isProspect flag to save service
-              userId // Pass userId for prospect conversion
-            );
+            if (isProspect) {
+              // Save to prospect skills (NO conversion)
+              saveResult = await cvExtractionService.saveProspectSkills(
+                candidateId,
+                extraction.skillsFound,
+                overwrite
+              );
+            } else {
+              // Save to candidate skills
+              saveResult = await cvExtractionService.saveExtractedSkills(
+                candidateId,
+                extraction.skillsFound,
+                overwrite
+              );
+            }
           } catch (saveError: any) {
             console.error(`Error saving skills for ${candidateId}:`, saveError);
             saveResult = { error: saveError.message };

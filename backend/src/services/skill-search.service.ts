@@ -6,6 +6,7 @@ export interface ExtractedSkillsSearchFilters {
   category?: SkillCategory | string;
   minConfidence?: number;
   limit?: number;
+  excludeSecurity?: boolean;
 }
 
 export interface ExtractedSkillsSearchResult {
@@ -62,12 +63,14 @@ export const buildExtractedSkillsFilters = (
   const minConfidence = minConfidenceValue ? clampNumber(parseFloat(minConfidenceValue), 0, 1) : 0;
   const limitValue = pickup(query.limit);
   const parsedLimit = limitValue ? Math.floor(Number(limitValue)) : defaultLimit;
+  const excludeSecurity = query.excludeSecurity === 'true' || query.excludeSecurity === true;
 
   return {
     searchTerm,
     category,
     minConfidence,
     limit: clampNumber(isNaN(parsedLimit) ? defaultLimit : parsedLimit, 1, maxLimit),
+    excludeSecurity,
   };
 };
 
@@ -78,6 +81,12 @@ export const fetchExtractedSkillsResults = async (
   const limit = filters.limit ?? 100;
 
   const skillWhere: any = { isActive: true };
+
+  // Exclude security skills if requested
+  if (filters.excludeSecurity) {
+    skillWhere.isSecurityRelated = false;
+  }
+
   if (filters.searchTerm) {
     skillWhere.OR = [
       { name: { contains: filters.searchTerm, mode: 'insensitive' } },
@@ -89,6 +98,7 @@ export const fetchExtractedSkillsResults = async (
     skillWhere.category = filters.category;
   }
 
+
   const skills = await prisma.skill.findMany({
     where: skillWhere,
     include: {
@@ -96,10 +106,10 @@ export const fetchExtractedSkillsResults = async (
         where:
           minConfidence > 0
             ? {
-                confidence: {
-                  gte: minConfidence,
-                },
-              }
+              confidence: {
+                gte: minConfidence,
+              },
+            }
             : undefined,
         include: {
           candidate: {
@@ -120,7 +130,39 @@ export const fetchExtractedSkillsResults = async (
           confidence: 'desc',
         },
       },
-      _count: { select: { candidateSkills: true } },
+      prospectSkills: {
+        where:
+          minConfidence > 0
+            ? {
+              confidence: {
+                gte: minConfidence,
+              },
+            }
+            : undefined,
+        include: {
+          prospect: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+              city: true,
+              province: true,
+              isConverted: true,
+            },
+          },
+        },
+        orderBy: {
+          confidence: 'desc',
+        },
+      },
+      _count: {
+        select: {
+          candidateSkills: true,
+          prospectSkills: true,
+        }
+      },
     },
     take: limit,
     orderBy: {
@@ -130,24 +172,53 @@ export const fetchExtractedSkillsResults = async (
     },
   });
 
-  const results = skills.map((skill) => ({
-    skillId: skill.id,
-    skillName: skill.name,
-    category: skill.category,
-    description: skill.description,
-    keywords: skill.keywords,
-    totalCandidates: skill._count.candidateSkills,
-    candidates: skill.candidateSkills.map((cs) => ({
-      candidateId: cs.candidateId,
-      candidate: cs.candidate,
-      level: cs.level,
-      yearsExperience: cs.yearsExperience,
-      confidence: cs.confidence,
-      source: cs.source,
-      isVerified: cs.isVerified,
-      extractedText: cs.extractedText,
-    })),
-  }));
+  const results = skills.map((skill) => {
+    // Combine candidate skills and prospect skills
+    const allCandidates = [
+      ...skill.candidateSkills.map((cs) => ({
+        candidateId: cs.candidateId,
+        candidate: cs.candidate,
+        level: cs.level,
+        yearsExperience: cs.yearsExperience,
+        confidence: cs.confidence,
+        source: cs.source,
+        isVerified: cs.isVerified,
+        extractedText: cs.extractedText,
+        isProspect: false,
+      })),
+      ...skill.prospectSkills.map((ps) => ({
+        candidateId: ps.prospectId,
+        candidate: ps.prospect ? {
+          id: ps.prospect.id,
+          firstName: ps.prospect.firstName,
+          lastName: ps.prospect.lastName,
+          email: ps.prospect.email,
+          phone: ps.prospect.phone,
+          city: ps.prospect.city,
+          province: ps.prospect.province,
+          status: ps.prospect.isConverted ? 'CONVERTED' : 'PROSPECT',
+          globalRating: null,
+        } : null,
+        level: ps.level,
+        yearsExperience: ps.yearsExperience,
+        confidence: ps.confidence,
+        source: ps.source,
+        isVerified: ps.isVerified,
+        extractedText: ps.extractedText,
+        isProspect: true,
+      })),
+    ];
+
+    return {
+      skillId: skill.id,
+      skillName: skill.name,
+      category: skill.category,
+      description: skill.description,
+      keywords: skill.keywords,
+      totalCandidates: skill._count.candidateSkills + skill._count.prospectSkills,
+      candidates: allCandidates,
+    };
+  });
 
   return { results };
 };

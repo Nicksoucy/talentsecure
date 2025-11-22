@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import api from './api';
 
 export interface WishlistItem {
   id: string;
@@ -52,6 +50,7 @@ export interface WishlistStats {
   cancelled: number;
   totalRevenue: number;
   pendingRevenue: number;
+  // Add other stats if needed
 }
 
 export interface GetAllWishlistsResponse {
@@ -72,13 +71,10 @@ class WishlistAdminService {
    * Get all wishlists (Admin only)
    */
   async getAllWishlists(
-    accessToken: string,
+    accessToken: string, // Kept for compatibility but unused with interceptor
     params?: GetAllWishlistsParams
   ): Promise<GetAllWishlistsResponse> {
-    const response = await axios.get(`${API_URL}/wishlist/admin/all`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+    const response = await api.get('/api/wishlist/admin/all', {
       params,
     });
     return response.data;
@@ -88,11 +84,7 @@ class WishlistAdminService {
    * Get single wishlist by ID (Admin only)
    */
   async getWishlistById(accessToken: string, id: string): Promise<{ wishlist: Wishlist }> {
-    const response = await axios.get(`${API_URL}/wishlist/admin/${id}`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
+    const response = await api.get(`/api/wishlist/admin/${id}`);
     return response.data;
   }
 
@@ -105,15 +97,10 @@ class WishlistAdminService {
     status: Wishlist['status'],
     adminNotes?: string
   ): Promise<{ message: string; wishlist: Wishlist }> {
-    const response = await axios.put(
-      `${API_URL}/wishlist/admin/${id}/status`,
-      { status, adminNotes },
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
+    const response = await api.put(`/api/wishlist/admin/${id}/status`, {
+      status,
+      adminNotes,
+    });
     return response.data;
   }
 
@@ -124,11 +111,7 @@ class WishlistAdminService {
     accessToken: string,
     id: string
   ): Promise<{ message: string; wishlist: Wishlist }> {
-    const response = await axios.delete(`${API_URL}/wishlist/admin/${id}`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
+    const response = await api.delete(`/api/wishlist/admin/${id}`);
     return response.data;
   }
 }

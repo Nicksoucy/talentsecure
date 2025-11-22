@@ -684,6 +684,30 @@ export default function CandidatesListPage() {
     createCatalogueMutation.mutate(payload);
   };
 
+  // Revert BATCH candidates to prospects (ADMIN ONLY)
+  const revertBatchToProspectMutation = useMutation({
+    mutationFn: (ids: string[]) => adminService.revertBatchCandidatesToProspects(ids),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
+      queryClient.invalidateQueries({ queryKey: ['prospects'] });
+      enqueueSnackbar(response.message, { variant: 'success' });
+      setSelectedCandidates(new Set()); // Clear selection
+    },
+    onError: (error: any) => {
+      enqueueSnackbar(error.response?.data?.error || 'Impossible de re-convertir les candidats sélectionnés', {
+        variant: 'error',
+      });
+    },
+  });
+
+  const handleRevertBatch = () => {
+    if (selectedCandidates.size === 0) return;
+
+    if (window.confirm(`Êtes-vous sûr de vouloir re-convertir ces ${selectedCandidates.size} candidats en prospects ?\nIls seront retirés de la liste des candidats.`)) {
+      revertBatchToProspectMutation.mutate(Array.from(selectedCandidates));
+    }
+  };
+
   if (isLoading) {
     return <TableSkeleton rows={10} columns={8} hasHeader hasFilters hasActions />;
   }
@@ -705,6 +729,7 @@ export default function CandidatesListPage() {
         selectedCount={selectedCandidates.size}
         onCreateCatalogue={() => setOpenCatalogueDialog(true)}
         onClearSelection={handleDeselectAll}
+        onRevertToProspect={user?.role === 'ADMIN' ? handleRevertBatch : undefined}
       />
 
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>

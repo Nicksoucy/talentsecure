@@ -111,12 +111,14 @@ export const skillsService = {
     query: string,
     category?: string,
     minConfidence?: number,
+    excludeSecurity?: boolean,
     accessToken?: string
   ) => {
     const params = new URLSearchParams();
     if (query) params.append('q', query);
     if (category) params.append('category', category);
     if (minConfidence) params.append('minConfidence', minConfidence.toString());
+    if (excludeSecurity) params.append('excludeSecurity', 'true');
 
     const response = await axios.get(
       `${API_URL}/api/skills/search?${params.toString()}`,
@@ -148,8 +150,8 @@ export const skillsService = {
       responseType: 'blob',
       headers: accessToken
         ? {
-            Authorization: `Bearer ${accessToken}`,
-          }
+          Authorization: `Bearer ${accessToken}`,
+        }
         : undefined,
     });
 

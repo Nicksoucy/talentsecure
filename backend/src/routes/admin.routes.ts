@@ -4,6 +4,7 @@ import {
   revertAutoConvertedCandidates,
   findAutoConvertedCandidates,
   revertSingleCandidateToProspect,
+  revertBatchCandidatesToProspects,
 } from '../controllers/admin.controller';
 
 const router = Router();
@@ -27,5 +28,11 @@ router.post('/revert-auto-converted-candidates', authenticateJWT, revertAutoConv
  * Re-convertit UN SEUL candidat en prospect (utilisé depuis le menu "3 points")
  */
 router.post('/revert-candidate-to-prospect/:id', authenticateJWT, revertSingleCandidateToProspect);
+
+/**
+ * POST /api/admin/revert-batch-candidates-to-prospects
+ * Re-convertit PLUSIEURS candidats en prospects (Batch)
+ */
+router.post('/revert-batch-candidates-to-prospects', authenticateJWT, revertBatchCandidatesToProspects);
 
 export default router;

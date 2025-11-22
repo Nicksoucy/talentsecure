@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Circle, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import { Box, Typography, CircularProgress, Paper } from '@mui/material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -28,7 +28,42 @@ const ProspectsMap: React.FC = () => {
     const fetchCityStats = async () => {
       try {
         const response = await api.get('/api/prospects/stats/by-city');
-        setCityStats(response.data.data);
+        const rawStats: CityStats[] = response.data.data;
+
+        // Aggregate stats by coordinates to avoid overlapping circles
+        const aggregatedStatsMap = new Map<string, CityStats>();
+
+        rawStats.forEach(stat => {
+          // Normalize city name to match keys in quebecCitiesCoordinates
+          let coords = quebecCitiesCoordinates[stat.city];
+
+          if (!coords) {
+            // Try to find a match ignoring case and accents
+            const normalizedCity = stat.city.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const match = Object.keys(quebecCitiesCoordinates).find(key =>
+              key.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === normalizedCity
+            );
+            if (match) {
+              coords = quebecCitiesCoordinates[match];
+            }
+          }
+
+          if (coords) {
+            const key = `${coords.lat},${coords.lng}`;
+            const existing = aggregatedStatsMap.get(key);
+            if (existing) {
+              existing.count += stat.count;
+              // Keep the name that matches the coordinates key if possible, or the longest one
+              if (!quebecCitiesCoordinates[existing.city] && quebecCitiesCoordinates[stat.city]) {
+                existing.city = stat.city;
+              }
+            } else {
+              aggregatedStatsMap.set(key, { ...stat });
+            }
+          }
+        });
+
+        setCityStats(Array.from(aggregatedStatsMap.values()));
       } catch (err) {
         console.error('Error fetching prospect city stats:', err);
         setError('Erreur lors du chargement des données');
@@ -59,13 +94,13 @@ const ProspectsMap: React.FC = () => {
   // Quebec center coordinates
   const quebecCenter: [number, number] = [46.8, -71.3];
 
-  // Function to get marker size based on prospect count
+  // Function to get marker size in PIXELS based on prospect count
   const getMarkerRadius = (count: number): number => {
-    if (count >= 50) return 30000;
-    if (count >= 20) return 20000;
-    if (count >= 10) return 15000;
-    if (count >= 5) return 10000;
-    return 7000;
+    if (count >= 50) return 30;
+    if (count >= 20) return 25;
+    if (count >= 10) return 20;
+    if (count >= 5) return 15;
+    return 10;
   };
 
   // Function to get color based on prospect count (using blue tones for prospects)
@@ -95,14 +130,14 @@ const ProspectsMap: React.FC = () => {
           if (!coords) return null;
 
           return (
-            <Circle
+            <CircleMarker
               key={stat.city}
               center={[coords.lat, coords.lng]}
               radius={getMarkerRadius(stat.count)}
               pathOptions={{
                 fillColor: getMarkerColor(stat.count),
-                fillOpacity: 0.6,
-                color: getMarkerColor(stat.count),
+                fillOpacity: 0.7,
+                color: 'white',
                 weight: 2,
               }}
             >
@@ -116,7 +151,7 @@ const ProspectsMap: React.FC = () => {
                   </Typography>
                 </Box>
               </Popup>
-            </Circle>
+            </CircleMarker>
           );
         })}
       </MapContainer>

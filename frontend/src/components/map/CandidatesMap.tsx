@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import { Box, Typography, CircularProgress, Paper, Button, Chip } from '@mui/material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -32,7 +32,46 @@ const CandidatesMap: React.FC<CandidatesMapProps> = ({ onCityClick }) => {
     const fetchCityStats = async () => {
       try {
         const response = await api.get('/api/candidates/stats/by-city');
-        setCityStats(response.data.data);
+        const rawStats: CityStats[] = response.data.data;
+
+        // Aggregate stats by coordinates to avoid overlapping circles
+        const aggregatedStatsMap = new Map<string, CityStats>();
+
+        rawStats.forEach(stat => {
+          // Normalize city name to match keys in quebecCitiesCoordinates
+          // Try exact match first, then case-insensitive, then normalized
+          let coords = quebecCitiesCoordinates[stat.city];
+
+          if (!coords) {
+            // Try to find a match ignoring case and accents
+            const normalizedCity = stat.city.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            const match = Object.keys(quebecCitiesCoordinates).find(key =>
+              key.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === normalizedCity
+            );
+            if (match) {
+              coords = quebecCitiesCoordinates[match];
+            }
+          }
+
+          if (coords) {
+            const key = `${coords.lat},${coords.lng}`;
+            const existing = aggregatedStatsMap.get(key);
+            if (existing) {
+              existing.count += stat.count;
+              // Keep the name that matches the coordinates key if possible, or the longest one
+              if (!quebecCitiesCoordinates[existing.city] && quebecCitiesCoordinates[stat.city]) {
+                existing.city = stat.city;
+              }
+            } else {
+              aggregatedStatsMap.set(key, { ...stat });
+            }
+          } else {
+            // If no coordinates found, keep it as is (it won't be rendered but good for debugging)
+            // Or we could try to map it to "Autre"
+          }
+        });
+
+        setCityStats(Array.from(aggregatedStatsMap.values()));
       } catch (err) {
         console.error('Error fetching city stats:', err);
         setError('Erreur lors du chargement des données');
@@ -63,12 +102,12 @@ const CandidatesMap: React.FC<CandidatesMapProps> = ({ onCityClick }) => {
   // Quebec center coordinates
   const quebecCenter: [number, number] = [46.8, -71.3];
 
-  // Function to get marker size based on candidate count
+  // Function to get marker size in PIXELS based on candidate count
   const getMarkerRadius = (count: number): number => {
-    if (count >= 20) return 25000;
-    if (count >= 10) return 15000;
-    if (count >= 5) return 10000;
-    return 7000;
+    if (count >= 20) return 25;
+    if (count >= 10) return 20;
+    if (count >= 5) return 15;
+    return 10;
   };
 
   // Function to get color based on candidate count
@@ -91,20 +130,20 @@ const CandidatesMap: React.FC<CandidatesMapProps> = ({ onCityClick }) => {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
-        
+
         {cityStats.map((stat) => {
           const coords = quebecCitiesCoordinates[stat.city];
           if (!coords) return null;
 
           return (
-            <Circle
+            <CircleMarker
               key={stat.city}
               center={[coords.lat, coords.lng]}
               radius={getMarkerRadius(stat.count)}
               pathOptions={{
                 fillColor: getMarkerColor(stat.count),
-                fillOpacity: 0.6,
-                color: getMarkerColor(stat.count),
+                fillOpacity: 0.7,
+                color: 'white',
                 weight: 2,
               }}
             >
@@ -131,7 +170,7 @@ const CandidatesMap: React.FC<CandidatesMapProps> = ({ onCityClick }) => {
                   )}
                 </Box>
               </Popup>
-            </Circle>
+            </CircleMarker>
           );
         })}
       </MapContainer>

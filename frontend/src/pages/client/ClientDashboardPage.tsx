@@ -56,7 +56,7 @@ const ClientDashboardPage = () => {
       const data = await clientAuthService.getCatalogues(accessToken);
       setCatalogues(data);
     } catch (err: any) {
-      const errorMessage = err.response?.data?.error || 'Erreur lors du chargement des catalogues';
+      const errorMessage = err.response?.data?.message || err.response?.data?.error || 'Erreur lors du chargement des catalogues';
       setError(errorMessage);
       enqueueSnackbar(errorMessage, { variant: 'error' });
     } finally {
@@ -74,8 +74,8 @@ const ClientDashboardPage = () => {
     navigate(`/client/catalogue/${catalogueId}`);
   };
 
-  const handleCityClick = (city: string, province?: string) => {
-    setSelectedCity({ city, province: province || 'QC' });
+  const handleCityClick = (city: string) => {
+    setSelectedCity({ city, province: 'QC' });
     setCityDialogOpen(true);
   };
 

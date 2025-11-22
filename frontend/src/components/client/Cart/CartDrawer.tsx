@@ -217,12 +217,12 @@ const CartDrawer: React.FC = () => {
                           )}
                         </Box>
                         <Typography variant="body2" fontWeight="bold" color="primary">
-                          {item.totalPrice.toFixed(2)}$
+                          {Number(item.totalPrice).toFixed(2)}$
                         </Typography>
                       </Box>
 
                       <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                        {item.unitPrice.toFixed(2)}$ × {item.quantity}
+                        {Number(item.unitPrice).toFixed(2)}$ × {item.quantity}
                       </Typography>
                     </ListItem>
                   </React.Fragment>
@@ -247,7 +247,7 @@ const CartDrawer: React.FC = () => {
                 Total
               </Typography>
               <Typography variant="h5" fontWeight="bold" color="primary">
-                {wishlist.totalAmount.toFixed(2)}$
+                {Number(wishlist.totalAmount).toFixed(2)}$
               </Typography>
             </Box>
 

@@ -302,3 +302,134 @@ export const findAutoConvertedCandidates = async (
     next(error);
   }
 };
+
+/**
+ * ADMIN ONLY: Re-convertir PLUSIEURS candidats en prospects (Batch)
+ */
+export const revertBatchCandidatesToProspects = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    // SÉCURITÉ: Vérifier que l'utilisateur est admin
+    if (req.user?.role !== 'ADMIN') {
+      return res.status(403).json({
+        error: 'Accès refusé: seuls les administrateurs peuvent exécuter cette action',
+      });
+    }
+
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        error: 'Liste d\'IDs invalide ou vide',
+      });
+    }
+
+    console.log(`🔍 Re-conversion batch de ${ids.length} candidats...`);
+
+    const results = [];
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const id of ids) {
+      try {
+        // Récupérer le candidat
+        const candidate = await prisma.candidate.findUnique({
+          where: { id },
+        });
+
+        if (!candidate || candidate.isDeleted) {
+          results.push({ id, status: 'error', message: 'Candidat non trouvé ou déjà supprimé' });
+          errorCount++;
+          continue;
+        }
+
+        // Vérifier si un prospect existe déjà
+        const existingProspect = await prisma.prospectCandidate.findFirst({
+          where: {
+            OR: [
+              { convertedToId: candidate.id },
+              { email: candidate.email || undefined },
+              { phone: candidate.phone },
+            ],
+            isDeleted: false,
+          },
+        });
+
+        let prospectId: string;
+
+        if (existingProspect) {
+          // Si le prospect était marqué comme converti, le dé-convertir
+          if (existingProspect.isConverted) {
+            await prisma.prospectCandidate.update({
+              where: { id: existingProspect.id },
+              data: {
+                isConverted: false,
+                convertedAt: null,
+                convertedToId: null,
+              },
+            });
+          }
+          prospectId = existingProspect.id;
+        } else {
+          // Créer un nouveau prospect avec TOUTES les données du candidat
+          const newProspect = await prisma.prospectCandidate.create({
+            data: {
+              firstName: candidate.firstName,
+              lastName: candidate.lastName,
+              email: candidate.email,
+              phone: candidate.phone,
+              fullAddress: candidate.address,
+              city: candidate.city,
+              province: candidate.province,
+              postalCode: candidate.postalCode,
+              cvUrl: candidate.cvUrl,
+              cvStoragePath: candidate.cvStoragePath,
+              isContacted: false,
+              isConverted: false,
+              notes: `Re-créé depuis candidat (ID: ${candidate.id})\nRaison: Re-conversion batch par admin`,
+            },
+          });
+          prospectId = newProspect.id;
+        }
+
+        // Supprimer le candidat (soft delete)
+        await prisma.candidate.update({
+          where: { id: candidate.id },
+          data: {
+            isDeleted: true,
+            deletedAt: new Date(),
+          },
+        });
+
+        results.push({ id, status: 'success', prospectId, name: `${candidate.firstName} ${candidate.lastName}` });
+        successCount++;
+
+      } catch (error: any) {
+        console.error(`Erreur pour candidat ${id}:`, error);
+        results.push({ id, status: 'error', message: error.message });
+        errorCount++;
+      }
+    }
+
+    // Log d'audit global
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'UPDATE',
+        resource: 'Candidate',
+        details: `Batch re-conversion: ${successCount} succès, ${errorCount} erreurs`,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: `${successCount} candidat(s) re-converti(s) avec succès`,
+      results,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

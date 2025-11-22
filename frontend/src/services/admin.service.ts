@@ -53,4 +53,22 @@ export const adminService = {
     const response = await api.post('/api/admin/revert-auto-converted-candidates');
     return response.data;
   },
+
+  /**
+   * Revert MULTIPLE candidates to prospects (Batch)
+   */
+  async revertBatchCandidatesToProspects(candidateIds: string[]): Promise<{
+    success: boolean;
+    message: string;
+    results: Array<{
+      id: string;
+      status: 'success' | 'error';
+      prospectId?: string;
+      name?: string;
+      message?: string;
+    }>;
+  }> {
+    const response = await api.post('/api/admin/revert-batch-candidates-to-prospects', { ids: candidateIds });
+    return response.data;
+  },
 };

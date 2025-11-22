@@ -388,6 +388,7 @@ const AutresCompetancesPage = () => {
         '', // Empty query to get all skills
         undefined, // category
         0.3, // Lower confidence threshold to get more results
+        true, // excludeSecurity - EXCLUDE security skills
         accessToken!
       );
       setSearchResults(results.results || []);
@@ -405,6 +406,7 @@ const AutresCompetancesPage = () => {
         skillSearchQuery,
         undefined,
         0.3,
+        true, // excludeSecurity - EXCLUDE security skills
         accessToken!
       );
       setSearchResults(results.results || []);

@@ -87,7 +87,7 @@ const CitySelectDialog: React.FC<CitySelectDialogProps> = ({
           city,
           province,
           type: 'EVALUATED',
-          quantity: evaluatedQuantity,
+          quantity: Number(evaluatedQuantity),
           notes,
         });
       }
@@ -98,7 +98,7 @@ const CitySelectDialog: React.FC<CitySelectDialogProps> = ({
           city,
           province,
           type: 'CV_ONLY',
-          quantity: cvOnlyQuantity,
+          quantity: Number(cvOnlyQuantity),
           notes,
         });
       }
@@ -106,7 +106,14 @@ const CitySelectDialog: React.FC<CitySelectDialogProps> = ({
       enqueueSnackbar('Ajouté au panier avec succès!', { variant: 'success' });
       handleClose();
     } catch (error: any) {
-      enqueueSnackbar(error.response?.data?.error || 'Erreur lors de l\'ajout au panier', {
+      let errorMsg = error.response?.data?.message || error.response?.data?.error || 'Erreur lors de l\'ajout au panier';
+
+      if (error.response?.data?.details && Array.isArray(error.response.data.details)) {
+        const details = error.response.data.details.map((d: any) => `${d.field}: ${d.message}`).join(', ');
+        errorMsg += ` (${details})`;
+      }
+
+      enqueueSnackbar(errorMsg, {
         variant: 'error',
       });
     } finally {
@@ -124,8 +131,8 @@ const CitySelectDialog: React.FC<CitySelectDialogProps> = ({
 
   const calculateTotal = () => {
     if (!pricing) return 0;
-    const evaluatedTotal = evaluatedQuantity * pricing.evaluatedCandidatePrice;
-    const cvOnlyTotal = cvOnlyQuantity * pricing.cvOnlyPrice;
+    const evaluatedTotal = evaluatedQuantity * Number(pricing.evaluatedCandidatePrice);
+    const cvOnlyTotal = cvOnlyQuantity * Number(pricing.cvOnlyPrice);
     return evaluatedTotal + cvOnlyTotal;
   };
 
@@ -165,7 +172,7 @@ const CitySelectDialog: React.FC<CitySelectDialogProps> = ({
                 Déjà interviewés avec vidéo, notes RH et évaluations complètes
               </Typography>
               <Typography variant="body2" fontWeight="bold" color="success.main" mb={2}>
-                {pricing.evaluatedCandidatePrice.toFixed(2)}$ par candidat
+                {Number(pricing.evaluatedCandidatePrice).toFixed(2)}$ par candidat
               </Typography>
               <Typography variant="caption" display="block" color="text.secondary" mb={1}>
                 Disponibles: {availability.evaluated}
@@ -193,7 +200,7 @@ const CitySelectDialog: React.FC<CitySelectDialogProps> = ({
                 CVs uniquement - Vous faites l'entrevue vous-même
               </Typography>
               <Typography variant="body2" fontWeight="bold" color="success.main" mb={2}>
-                {pricing.cvOnlyPrice.toFixed(2)}$ par CV
+                {Number(pricing.cvOnlyPrice).toFixed(2)}$ par CV
               </Typography>
               <Typography variant="caption" display="block" color="text.secondary" mb={1}>
                 Disponibles: {availability.cvOnly}
@@ -240,7 +247,7 @@ const CitySelectDialog: React.FC<CitySelectDialogProps> = ({
                       {evaluatedQuantity} candidat{evaluatedQuantity > 1 ? 's' : ''} évalué{evaluatedQuantity > 1 ? 's' : ''}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {(evaluatedQuantity * pricing.evaluatedCandidatePrice).toFixed(2)}$
+                      {(evaluatedQuantity * Number(pricing.evaluatedCandidatePrice)).toFixed(2)}$
                     </Typography>
                   </Box>
                 )}
@@ -250,7 +257,7 @@ const CitySelectDialog: React.FC<CitySelectDialogProps> = ({
                       {cvOnlyQuantity} CV{cvOnlyQuantity > 1 ? 's' : ''}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {(cvOnlyQuantity * pricing.cvOnlyPrice).toFixed(2)}$
+                      {(cvOnlyQuantity * Number(pricing.cvOnlyPrice)).toFixed(2)}$
                     </Typography>
                   </Box>
                 )}

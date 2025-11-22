@@ -160,41 +160,83 @@ export class AIExtractionService {
    * Get system prompt for AI
    */
   private getSystemPrompt(): string {
-    return `Tu es un expert RH spÃ©cialisÃ© dans l'analyse de CVs et l'extraction de compÃ©tences.
+    return `Tu es un expert RH spécialisé dans l'analyse de CVs et l'extraction de compétences.
 
-Ton rÃ´le est d'analyser un CV et d'identifier toutes les compÃ©tences pertinentes du candidat.
+Ton rôle est d'analyser un CV et d'identifier toutes les compétences pertinentes du candidat.
 
-Pour chaque compÃ©tence trouvÃ©e, fournis:
-- name: Nom exact de la compÃ©tence
+🎯 PRIORITÉ ABSOLUE : Cherche ACTIVEMENT les compétences NON-SÉCURITÉ, notamment :
+- Métiers manuels : Soudure (TIG, MIG, ARC), Construction, Mécanique, Plomberie, Électricité, Menuiserie
+- Équipements : Chariot élévateur, Machinerie lourde, Grue, Nacelle
+- Petite enfance : CPE, Garderie, Éducation à l'enfance
+- Administration : Bureautique, Comptabilité, Gestion
+- Langues : Français, Anglais, Espagnol, etc. (avec niveau si mentionné)
+- Informatique : Logiciels, Programmation, Réseaux
+- Certifications professionnelles (HORS sécurité)
+
+Pour chaque compétence trouvée, fournis:
+- name: Nom exact de la compétence
+- category: Catégorie (TECHNICAL, CERTIFICATION, LANGUAGE, TOOL_EQUIPMENT, INDUSTRY, OTHER)
 - level: Niveau (BEGINNER, INTERMEDIATE, ADVANCED, EXPERT, ou UNKNOWN)
-- yearsExperience: Nombre d'annÃ©es d'expÃ©rience (si mentionnÃ©)
-- confidence: Score de confiance 0-1 (Ã  quel point tu es certain que le candidat possÃ¨de cette compÃ©tence)
-- reasoning: Courte explication de pourquoi tu as identifiÃ© cette compÃ©tence
-- context: Citation exacte du CV qui dÃ©montre cette compÃ©tence
-- isSecurityRelated: true si la compÃ©tence est spÃ©cifiquement liÃ©e aux agents de sÃ©curitÃ©/sÃ©curitÃ© privÃ©e, false sinon
+- yearsExperience: Nombre d'années d'expérience (si mentionné)
+- confidence: Score de confiance 0-1 (à quel point tu es certain que le candidat possède cette compétence)
+- reasoning: Courte explication de pourquoi tu as identifié cette compétence
+- context: Citation exacte du CV qui démontre cette compétence
+- isSecurityRelated: true si la compétence est spécifiquement liée aux agents de sécurité/sécurité privée, false sinon
 
-IMPORTANT: isSecurityRelated devrait Ãªtre true SEULEMENT pour les compÃ©tences directement liÃ©es au mÃ©tier d'agent de sÃ©curitÃ© (BSP, surveillance, patrouille, premiers soins, contrÃ´le d'accÃ¨s, etc.). Les compÃ©tences gÃ©nÃ©rales ou liÃ©es Ã  d'autres industries doivent Ãªtre marquÃ©es false.
+⚠️ IMPORTANT - Définition de isSecurityRelated:
+- TRUE uniquement pour: BSP, Gardiennage, Surveillance, Patrouille, Contrôle d'accès, Secourisme (RCR/DEA), SSIAP, Agent de prévention
+- FALSE pour TOUT le reste, même si le candidat a travaillé en sécurité (ex: si un agent de sécurité sait souder, la soudure est FALSE)
 
-RÃ©ponds UNIQUEMENT avec du JSON valide dans ce format:
+📊 Catégories:
+- TECHNICAL: Métiers manuels, construction, mécanique, soudure
+- TOOL_EQUIPMENT: Chariot élévateur, machinerie, équipements spécialisés
+- LANGUAGE: Toutes les langues
+- CERTIFICATION: Certifications professionnelles (incluant sécurité si applicable)
+- INDUSTRY: Connaissances sectorielles spécifiques
+- OTHER: Tout ce qui ne rentre pas ailleurs
+
+Réponds UNIQUEMENT avec du JSON valide dans ce format:
 {
   "skills": [
     {
+      "name": "Chariot élévateur",
+      "category": "TOOL_EQUIPMENT",
+      "level": "ADVANCED",
+      "yearsExperience": 4,
+      "confidence": 0.95,
+      "reasoning": "Certification et expérience mentionnées",
+      "context": "Cariste certifié avec 4 ans d'expérience",
+      "isSecurityRelated": false
+    },
+    {
+      "name": "Anglais",
+      "category": "LANGUAGE",
+      "level": "INTERMEDIATE",
+      "yearsExperience": null,
+      "confidence": 0.85,
+      "reasoning": "Niveau intermédiaire mentionné",
+      "context": "Anglais intermédiaire parlé et écrit",
+      "isSecurityRelated": false
+    },
+    {
+      "name": "Soudure MIG",
+      "category": "TECHNICAL",
+      "level": "EXPERT",
+      "yearsExperience": 8,
+      "confidence": 0.92,
+      "reasoning": "Expérience significative en soudure",
+      "context": "Soudeur MIG certifié, 8 ans d'expérience",
+      "isSecurityRelated": false
+    },
+    {
       "name": "BSP",
+      "category": "CERTIFICATION",
       "level": "ADVANCED",
       "yearsExperience": 5,
       "confidence": 0.95,
-      "reasoning": "Certification BSP mentionnÃ©e explicitement",
-      "context": "DÃ©tenteur du permis BSP depuis 5 ans",
+      "reasoning": "Certification BSP mentionnée explicitement",
+      "context": "Détenteur du permis BSP depuis 5 ans",
       "isSecurityRelated": true
-    },
-    {
-      "name": "Service Ã  la clientÃ¨le",
-      "level": "INTERMEDIATE",
-      "yearsExperience": 3,
-      "confidence": 0.85,
-      "reasoning": "ExpÃ©rience en service Ã  la clientÃ¨le mentionnÃ©e",
-      "context": "3 ans d'expÃ©rience en service Ã  la clientÃ¨le",
-      "isSecurityRelated": false
     }
   ]
 }`;
@@ -303,9 +345,6 @@ RÃ©ponds avec JSON valide uniquement.`;
     return matched;
   }
 
-  /**
-   * Normalize skill level
-   */
   private normalizeLevel(level?: string): SkillLevel {
     if (!level) return 'UNKNOWN';
     const upper = level.toUpperCase();

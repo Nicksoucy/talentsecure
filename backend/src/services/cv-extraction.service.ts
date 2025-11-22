@@ -251,20 +251,14 @@ export class CVExtractionService {
   }
 
   /**
-   * Save extracted skills to candidate
-   * If the candidateId is a prospect, auto-convert to candidate first
+   * Save extracted skills to candidate (ONLY for actual candidates)
+   * For prospects, use saveProspectSkills instead
    */
   async saveExtractedSkills(
     candidateId: string,
     extractedSkills: ExtractionResult[],
-    overwrite: boolean = false,
-    isProspect: boolean = false,
-    userId?: string
+    overwrite: boolean = false
   ): Promise<{ added: number; skipped: number; updated: number }> {
-    // If this is a prospect, convert to candidate first
-    if (isProspect && userId) {
-      await this.convertProspectToCandidate(candidateId, userId);
-    }
 
     let added = 0;
     let skipped = 0;
@@ -321,6 +315,119 @@ export class CVExtractionService {
     }
 
     return { added, skipped, updated };
+  }
+
+  /**
+   * Save extracted skills to prospect (WITHOUT converting to candidate)
+   */
+  async saveProspectSkills(
+    prospectId: string,
+    extractedSkills: ExtractionResult[],
+    overwrite: boolean = false
+  ): Promise<{ added: number; skipped: number; updated: number }> {
+    let added = 0;
+    let skipped = 0;
+    let updated = 0;
+
+    for (const skill of extractedSkills) {
+      // Check if prospect already has this skill
+      const existing = await prisma.prospectSkill.findUnique({
+        where: {
+          prospectId_skillId: {
+            prospectId,
+            skillId: skill.skillId,
+          },
+        },
+      });
+
+      if (existing) {
+        if (overwrite) {
+          // Update if new confidence is higher
+          if (skill.confidence > (existing.confidence || 0)) {
+            await prisma.prospectSkill.update({
+              where: { id: existing.id },
+              data: {
+                level: skill.level || 'UNKNOWN',
+                yearsExperience: skill.yearsExperience,
+                extractedText: skill.extractedText,
+                source: 'AI_EXTRACTED',
+                confidence: skill.confidence,
+              },
+            });
+            updated++;
+          } else {
+            skipped++;
+          }
+        } else {
+          skipped++;
+        }
+      } else {
+        // Create new prospect skill
+        await prisma.prospectSkill.create({
+          data: {
+            prospectId,
+            skillId: skill.skillId,
+            level: skill.level || 'UNKNOWN',
+            yearsExperience: skill.yearsExperience,
+            extractedText: skill.extractedText,
+            source: 'AI_EXTRACTED',
+            confidence: skill.confidence,
+            isVerified: false,
+          },
+        });
+        added++;
+      }
+    }
+
+    return { added, skipped, updated };
+  }
+
+  /**
+   * Transfer prospect skills to candidate during manual conversion
+   */
+  async transferProspectSkillsToCandidate(
+    prospectId: string,
+    candidateId: string
+  ): Promise<{ transferred: number }> {
+    // Get all prospect skills
+    const prospectSkills = await prisma.prospectSkill.findMany({
+      where: { prospectId },
+    });
+
+    let transferred = 0;
+
+    for (const pSkill of prospectSkills) {
+      // Check if candidate already has this skill
+      const existing = await prisma.candidateSkill.findUnique({
+        where: {
+          candidateId_skillId: {
+            candidateId,
+            skillId: pSkill.skillId,
+          },
+        },
+      });
+
+      if (!existing) {
+        // Transfer the skill to candidate
+        await prisma.candidateSkill.create({
+          data: {
+            candidateId,
+            skillId: pSkill.skillId,
+            level: pSkill.level,
+            yearsExperience: pSkill.yearsExperience,
+            extractedText: pSkill.extractedText,
+            source: pSkill.source,
+            confidence: pSkill.confidence,
+            isVerified: pSkill.isVerified,
+            verifiedBy: pSkill.verifiedBy,
+            verifiedAt: pSkill.verifiedAt,
+          },
+        });
+        transferred++;
+      }
+    }
+
+    return { transferred };
   }
 
   /**
@@ -617,7 +724,9 @@ export class CVExtractionService {
       },
     });
 
-    console.log(`✅ Prospect ${prospectId} converted to candidate ${candidate.id}`);
+    // Transfer prospect skills to candidate
+    const transferResult = await this.transferProspectSkillsToCandidate(prospectId, candidate.id);
+    console.log(`✅ Prospect ${prospectId} converted to candidate ${candidate.id}, transferred ${transferResult.transferred} skills`);
   }
 }
 

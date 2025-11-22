@@ -1,8 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import clientApi from '../services/clientApi';
 
 export type CandidateType = 'EVALUATED' | 'CV_ONLY';
 export type WishlistStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'PAID' | 'DELIVERED' | 'CANCELLED';
@@ -89,14 +87,10 @@ export const useWishlistStore = create<WishlistStore>()(
       fetchWishlist: async (accessToken: string) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await axios.get(`${API_URL}/api/wishlist`, {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
-          });
+          const response = await clientApi.get('/api/wishlist');
           set({ wishlist: response.data.wishlist, isLoading: false });
         } catch (error: any) {
-          const errorMsg = error.response?.data?.error || 'Erreur lors du chargement du panier';
+          const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Erreur lors du chargement du panier';
           set({ error: errorMsg, isLoading: false });
           throw error;
         }
@@ -105,18 +99,13 @@ export const useWishlistStore = create<WishlistStore>()(
       addItem: async (accessToken: string, item) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await axios.post(
-            `${API_URL}/api/wishlist/items`,
-            item,
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-              },
-            }
+          const response = await clientApi.post(
+            '/api/wishlist/items',
+            item
           );
           set({ wishlist: response.data.wishlist, isLoading: false });
         } catch (error: any) {
-          const errorMsg = error.response?.data?.error || "Erreur lors de l'ajout au panier";
+          const errorMsg = error.response?.data?.message || error.response?.data?.error || "Erreur lors de l'ajout au panier";
           set({ error: errorMsg, isLoading: false });
           throw error;
         }
@@ -125,18 +114,13 @@ export const useWishlistStore = create<WishlistStore>()(
       updateItem: async (accessToken: string, itemId: string, quantity: number) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await axios.put(
-            `${API_URL}/api/wishlist/items/${itemId}`,
-            { quantity },
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-              },
-            }
+          const response = await clientApi.put(
+            `/api/wishlist/items/${itemId}`,
+            { quantity }
           );
           set({ wishlist: response.data.wishlist, isLoading: false });
         } catch (error: any) {
-          const errorMsg = error.response?.data?.error || "Erreur lors de la mise à jour";
+          const errorMsg = error.response?.data?.message || error.response?.data?.error || "Erreur lors de la mise à jour";
           set({ error: errorMsg, isLoading: false });
           throw error;
         }
@@ -145,17 +129,12 @@ export const useWishlistStore = create<WishlistStore>()(
       removeItem: async (accessToken: string, itemId: string) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await axios.delete(
-            `${API_URL}/api/wishlist/items/${itemId}`,
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-              },
-            }
+          const response = await clientApi.delete(
+            `/api/wishlist/items/${itemId}`
           );
           set({ wishlist: response.data.wishlist, isLoading: false });
         } catch (error: any) {
-          const errorMsg = error.response?.data?.error || 'Erreur lors de la suppression';
+          const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Erreur lors de la suppression';
           set({ error: errorMsg, isLoading: false });
           throw error;
         }
@@ -164,14 +143,10 @@ export const useWishlistStore = create<WishlistStore>()(
       clearWishlist: async (accessToken: string) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await axios.delete(`${API_URL}/api/wishlist`, {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
-          });
+          const response = await clientApi.delete('/api/wishlist');
           set({ wishlist: response.data.wishlist, isLoading: false });
         } catch (error: any) {
-          const errorMsg = error.response?.data?.error || 'Erreur lors du vidage du panier';
+          const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Erreur lors du vidage du panier';
           set({ error: errorMsg, isLoading: false });
           throw error;
         }
@@ -180,18 +155,13 @@ export const useWishlistStore = create<WishlistStore>()(
       submitWishlist: async (accessToken: string) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await axios.post(
-            `${API_URL}/api/wishlist/submit`,
-            {},
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-              },
-            }
+          const response = await clientApi.post(
+            '/api/wishlist/submit',
+            {}
           );
           set({ wishlist: response.data.wishlist, isLoading: false });
         } catch (error: any) {
-          const errorMsg = error.response?.data?.error || 'Erreur lors de la soumission';
+          const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Erreur lors de la soumission';
           set({ error: errorMsg, isLoading: false });
           throw error;
         }
@@ -199,17 +169,12 @@ export const useWishlistStore = create<WishlistStore>()(
 
       getCityPricing: async (accessToken: string, city: string) => {
         try {
-          const response = await axios.get(
-            `${API_URL}/api/wishlist/pricing/${city}`,
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-              },
-            }
+          const response = await clientApi.get(
+            `/api/wishlist/pricing/${city}`
           );
           return response.data.pricing;
         } catch (error: any) {
-          const errorMsg = error.response?.data?.error || 'Erreur lors du chargement des prix';
+          const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Erreur lors du chargement des prix';
           set({ error: errorMsg });
           throw error;
         }
@@ -217,17 +182,12 @@ export const useWishlistStore = create<WishlistStore>()(
 
       getAvailableCount: async (accessToken: string, city: string) => {
         try {
-          const response = await axios.get(
-            `${API_URL}/api/wishlist/available/${city}`,
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-              },
-            }
+          const response = await clientApi.get(
+            `/api/wishlist/available/${city}`
           );
           return response.data.available;
         } catch (error: any) {
-          const errorMsg = error.response?.data?.error || 'Erreur lors du chargement de la disponibilité';
+          const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Erreur lors du chargement de la disponibilité';
           set({ error: errorMsg });
           throw error;
         }

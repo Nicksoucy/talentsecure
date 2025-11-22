@@ -548,6 +548,7 @@ model ProspectCandidate {
 
   // Relations
   purchases ClientPurchase[]
+  skills    ProspectSkill[] // Skills extracted from CV
 
   @@index([email])
   @@index([phone])
@@ -766,6 +767,7 @@ model Skill {
 
   // Relations
   candidateSkills CandidateSkill[]
+  prospectSkills  ProspectSkill[]
 
   @@index([category])
   @@index([name])
@@ -807,6 +809,41 @@ model CandidateSkill {
   @@index([source])
   @@index([isVerified])
   @@map("candidate_skills")
+}
+
+// Skills for Prospects (NOT converted to candidates yet)
+model ProspectSkill {
+  id         String      @id @default(uuid())
+  prospectId String
+  skillId    String
+  level      SkillLevel  @default(UNKNOWN)
+  source     SkillSource @default(MANUAL_ENTRY)
+
+  // Contexte d'extraction
+  yearsExperience Int? // Nombre d'années d'expérience (si détecté)
+  extractedText   String? @db.Text // Texte exact extrait du CV
+  confidence      Float? // Score de confiance de l'IA (0-1)
+
+  // Validation humaine
+  isVerified   Boolean   @default(false)
+  verifiedBy   String? // ID de l'utilisateur qui a vérifié
+  verifiedAt   DateTime?
+  rejectionNote String?   @db.Text // Note si la compétence est rejetée
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  prospect ProspectCandidate @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  skill    Skill             @relation(fields: [skillId], references: [id])
+
+  @@unique([prospectId, skillId]) // Un prospect ne peut avoir la même compétence qu'une fois
+  @@index([prospectId])
+  @@index([skillId])
+  @@index([level])
+  @@index([source])
+  @@index([isVerified])
+  @@map("prospect_skills")
 }
 
 // Audit trail for CV extraction

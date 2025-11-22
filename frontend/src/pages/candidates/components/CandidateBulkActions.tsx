@@ -6,18 +6,21 @@ import {
 import {
   Description as DescriptionIcon,
   Clear as ClearIcon,
+  Undo as UndoIcon,
 } from '@mui/icons-material';
 
 interface CandidateBulkActionsProps {
   selectedCount: number;
   onCreateCatalogue: () => void;
   onClearSelection: () => void;
+  onRevertToProspect?: () => void;
 }
 
 export default function CandidateBulkActions({
   selectedCount,
   onCreateCatalogue,
   onClearSelection,
+  onRevertToProspect,
 }: CandidateBulkActionsProps) {
   if (selectedCount === 0) {
     return null;
@@ -65,6 +68,23 @@ export default function CandidateBulkActions({
       >
         Créer un catalogue
       </Button>
+
+      {onRevertToProspect && (
+        <Button
+          variant="contained"
+          sx={{
+            backgroundColor: 'warning.main',
+            color: 'white',
+            '&:hover': {
+              backgroundColor: 'warning.dark',
+            },
+          }}
+          startIcon={<UndoIcon />}
+          onClick={onRevertToProspect}
+        >
+          Re-convertir
+        </Button>
+      )}
 
       <Button
         variant="text"

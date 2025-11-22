@@ -5,9 +5,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { quebecCitiesCoordinates } from '../../utils/quebecCities';
 import { useClientAuthStore } from '@/store/clientAuthStore';
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import clientApi from '@/services/clientApi';
 
 // Fix for default marker icons in Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -35,14 +33,7 @@ const ProspectsOnlyMap: React.FC<ProspectsOnlyMapProps> = ({ onCityClick }) => {
   useEffect(() => {
     const fetchCityStats = async () => {
       try {
-        const response = await axios.get(
-          `${API_URL}/api/client-auth/prospects-only/stats/by-city`,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
-          }
-        );
+        const response = await clientApi.get('/api/client-auth/prospects-only/stats/by-city');
         setCityStats(response.data.data);
       } catch (err) {
         console.error('Error fetching prospects-only city stats:', err);
