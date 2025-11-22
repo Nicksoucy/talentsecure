@@ -165,6 +165,8 @@ export interface ProspectCandidate {
   isConverted: boolean;
   convertedAt?: string;
   convertedToId?: string;
+  isDeleted: boolean;
+  deletedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
