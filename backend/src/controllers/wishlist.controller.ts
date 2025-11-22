@@ -125,8 +125,8 @@ export const addWishlistItem = async (
     // Use default pricing if not found
     const unitPrice = cityPricing
       ? (type === 'EVALUATED'
-          ? cityPricing.evaluatedCandidatePrice
-          : cityPricing.cvOnlyPrice)
+        ? cityPricing.evaluatedCandidatePrice
+        : cityPricing.cvOnlyPrice)
       : (type === 'EVALUATED' ? new Decimal(30) : new Decimal(7.50));
 
     const totalPrice = unitPrice.mul(quantity);
@@ -633,7 +633,7 @@ export const getAllWishlists = async (
         },
       },
       orderBy: {
-        createdAt: 'desc',
+        updatedAt: 'desc',
       },
     });
 

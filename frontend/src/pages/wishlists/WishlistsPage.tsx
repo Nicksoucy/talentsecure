@@ -303,7 +303,7 @@ const WishlistsPage = () => {
                     <TableCell>Items</TableCell>
                     <TableCell>Total</TableCell>
                     <TableCell>Status</TableCell>
-                    <TableCell>Date</TableCell>
+                    <TableCell>Dernière MAJ</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
@@ -340,7 +340,11 @@ const WishlistsPage = () => {
                       </TableCell>
                       <TableCell>
                         <Typography variant="caption">
-                          {new Date(wishlist.createdAt).toLocaleDateString()}
+                          {new Date(wishlist.updatedAt).toLocaleDateString()}
+                          <br />
+                          <span style={{ color: '#999', fontSize: '0.7em' }}>
+                            Créé: {new Date(wishlist.createdAt).toLocaleDateString()}
+                          </span>
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
