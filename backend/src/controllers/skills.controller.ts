@@ -3,6 +3,7 @@ import { PrismaClient, SkillCategory, SkillLevel, SkillSource } from '@prisma/cl
 import { cvExtractionService } from '../services/cv-extraction.service';
 import { buildExtractedSkillsFilters, fetchExtractedSkillsResults } from '../services/skill-search.service';
 import { aiExtractionService } from '../services/ai-extraction.service';
+import { skillsService } from '../services/skills.service';
 
 const prisma = new PrismaClient();
 
@@ -671,173 +672,21 @@ export const getExtractionLogs = async (req: Request, res: Response, next: NextF
 export const batchExtractSkills = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { candidateIds, model, overwrite = false } = req.body;
-    const userId = req.user!.id; // Get user ID for prospect conversion
 
     if (!candidateIds || candidateIds.length === 0) {
       return res.status(400).json({ error: 'Au moins un candidat est requis' });
     }
 
-    // Helper function to process a single candidate
-    const processCandidate = async (candidateId: string) => {
-      try {
-        // Check if candidate or prospect exists to get name first
-        let candidate = await prisma.candidate.findUnique({
-          where: { id: candidateId },
-        });
-
-        let isProspect = false;
-        let candidateName = 'Inconnu';
-
-        if (candidate) {
-          candidateName = `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim();
-        } else {
-          const prospect = await prisma.prospectCandidate.findUnique({
-            where: { id: candidateId },
-          });
-
-          if (!prospect) {
-            return {
-              candidateId,
-              name: 'Inconnu',
-              success: false,
-              error: 'Candidat ou prospect non trouvé',
-            };
-          }
-          isProspect = true;
-          candidateName = `${prospect.firstName || ''} ${prospect.lastName || ''}`.trim();
-        }
-
-        if (!candidateName) candidateName = 'Inconnu';
-
-        // Check if already processed (skip if found in extraction log with success)
-        const existingLog = await prisma.cvExtractionLog.findFirst({
-          where: {
-            candidateId,
-            success: true,
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
-        });
-
-        if (existingLog) {
-          // Verify if skills were actually saved
-          const savedSkillsCount = await prisma.candidateSkill.count({
-            where: { candidateId },
-          });
-
-          // Only skip if we have both a success log AND actual saved skills
-          if (savedSkillsCount > 0) {
-            return {
-              candidateId,
-              name: candidateName,
-              success: true,
-              skillsFound: existingLog.skillsFound,
-              skillsCount: savedSkillsCount,
-              skipped: true,
-              reason: 'Déjà traité',
-            };
-          }
-          // If no skills found despite log, proceed to re-extraction
-        }
-
-        // Get candidate/prospect text
-        const cvText = await cvExtractionService.getCandidateText(candidateId, isProspect);
-
-        if (!cvText || cvText.length < 50) {
-          return {
-            candidateId,
-            name: candidateName,
-            success: false,
-            error: 'CV insuffisant (moins de 50 caractères)',
-          };
-        }
-
-        // Extract skills - use AI if model provided, otherwise use regex
-        let extraction;
-        if (model) {
-          extraction = await aiExtractionService.extractWithOpenAI(candidateId, cvText, model);
-        } else {
-          extraction = await cvExtractionService.extractSkillsFromText(candidateId, cvText);
-        }
-
-        if (extraction.success) {
-          // Save skills for both candidates AND prospects
-          let saveResult = null;
-          try {
-            if (isProspect) {
-              // Save to prospect skills (NO conversion)
-              saveResult = await cvExtractionService.saveProspectSkills(
-                candidateId,
-                extraction.skillsFound,
-                overwrite
-              );
-            } else {
-              // Save to candidate skills
-              saveResult = await cvExtractionService.saveExtractedSkills(
-                candidateId,
-                extraction.skillsFound,
-                overwrite
-              );
-            }
-          } catch (saveError: any) {
-            console.error(`Error saving skills for ${candidateId}:`, saveError);
-            saveResult = { error: saveError.message };
-          }
-
-          return {
-            candidateId,
-            name: candidateName,
-            success: true,
-            skillsCount: extraction.totalSkills,
-            skills: extraction.skillsFound, // Return the actual list of skills
-            saved: saveResult,
-            isProspect,
-          };
-        } else {
-          return {
-            candidateId,
-            name: candidateName,
-            success: false,
-            error: extraction.errorMessage,
-          };
-        }
-      } catch (error: any) {
-        return {
-          candidateId,
-          name: 'Erreur',
-          success: false,
-          error: error.message,
-        };
-      }
-    };
-
-    // Process in chunks to limit concurrency
-    const CONCURRENCY_LIMIT = 5;
-    const results = [];
-
-    for (let i = 0; i < candidateIds.length; i += CONCURRENCY_LIMIT) {
-      const chunk = candidateIds.slice(i, i + CONCURRENCY_LIMIT);
-      const chunkResults = await Promise.all(chunk.map((id: string) => processCandidate(id)));
-      results.push(...chunkResults);
-    }
-
-    const successCount = results.filter((r) => r.success).length;
-    const skippedCount = results.filter((r) => r.skipped).length;
-    const processedCount = successCount - skippedCount;
-    const totalSkills = results.reduce((sum, r) => sum + (r.skillsCount || 0), 0);
+    // Delegate to service
+    const result = await skillsService.batchProcessCandidates(candidateIds, {
+      model,
+      overwrite,
+    });
 
     res.json({
-      message: `Extraction batch terminée: ${successCount}/${candidateIds.length} réussies (${skippedCount} déjà traités, ${processedCount} nouveaux)`,
-      results,
-      summary: {
-        total: candidateIds.length,
-        success: successCount,
-        failed: candidateIds.length - successCount,
-        skipped: skippedCount,
-        processed: processedCount,
-        totalSkillsExtracted: totalSkills,
-      },
+      message: `Extraction batch terminée: ${result.summary.success}/${result.summary.total} réussies (${result.summary.skipped} déjà traités, ${result.summary.processed} nouveaux)`,
+      results: result.results,
+      summary: result.summary,
     });
   } catch (error) {
     next(error);

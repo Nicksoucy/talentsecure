@@ -22,6 +22,10 @@ import {
   FormControl,
   InputLabel,
   Paper,
+  List,
+  ListItem,
+  ListItemText,
+  CircularProgress,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -41,6 +45,8 @@ import VideoUpload from '@/components/video/VideoUpload';
 import VideoPlayer from '@/components/video/VideoPlayer';
 import { DetailPageSkeleton } from '@/components/skeletons';
 import SkillsExtractionPanel from '@/components/candidates/SkillsExtractionPanel';
+import InterviewEvaluationForm, { InterviewFormData } from '../../components/InterviewEvaluationForm';
+import { candidateFormSchema } from '../../validation/candidate';
 
 const STATUS_COLORS: Record<string, 'success' | 'info' | 'warning' | 'error' | 'default'> = {
   ELITE: 'error',
@@ -69,11 +75,7 @@ const CandidateDetailPage = () => {
   const queryClient = useQueryClient();
 
   const [openEditDialog, setOpenEditDialog] = useState(false);
-  const [editData, setEditData] = useState({
-    status: '',
-    globalRating: '',
-    hrNotes: '',
-  });
+  const [initialFormData, setInitialFormData] = useState<InterviewFormData | null>(null);
 
   // Fetch candidate details
   const { data, isLoading, error } = useQuery({
@@ -97,29 +99,162 @@ const CandidateDetailPage = () => {
       setOpenEditDialog(false);
     },
     onError: (error: any) => {
-      enqueueSnackbar(error.response?.data?.error || 'Erreur lors de la mise à jour', {
+      console.error('Erreur mise à jour candidat:', error);
+      const serverError = error.response?.data?.error;
+      const validationError = error.response?.data?.message;
+      const details = error.response?.data?.details;
+
+      let errorMessage = serverError || validationError || 'Erreur lors de la mise à jour';
+
+      if (Array.isArray(details) && details.length > 0) {
+        const detailMessages = details.map((d: any) => `${d.field}: ${d.message}`).join(', ');
+        errorMessage += ` (${detailMessages})`;
+      }
+
+      enqueueSnackbar(errorMessage, {
         variant: 'error',
+        autoHideDuration: 10000,
       });
     },
   });
 
   const handleOpenEdit = () => {
     if (candidate) {
-      setEditData({
-        status: candidate.status || '',
-        globalRating: candidate.globalRating?.toString() || '',
+      // Transform candidate data to form data
+      const situationTests = candidate.situationTests || [];
+      const situationTest1 = situationTests.find((t: any) => t.question?.includes('collègue') || t.question?.includes('collegue'))?.answer || '';
+      const situationTest2 = situationTests.find((t: any) => t.question?.includes('urgence'))?.answer || '';
+      const situationTest3 = situationTests.find((t: any) => t.question?.includes('sécurité') || t.question?.includes('securite'))?.answer || '';
+
+      // Map availabilities to boolean flags
+      const availabilities = candidate.availabilities || [];
+      const availableDay = availabilities.some((a: any) => a.type === 'JOUR' && a.isAvailable);
+      const availableEvening = availabilities.some((a: any) => a.type === 'SOIR' && a.isAvailable);
+      const availableNight = availabilities.some((a: any) => a.type === 'NUIT' && a.isAvailable);
+      const availableWeekend = availabilities.some((a: any) => a.type === 'FIN_DE_SEMAINE' && a.isAvailable);
+
+      setInitialFormData({
+        firstName: candidate.firstName || '',
+        lastName: candidate.lastName || '',
+        email: candidate.email || '',
+        phone: candidate.phone || '',
+        address: candidate.address || '',
+        city: candidate.city || '',
+        postalCode: candidate.postalCode || '',
+        interviewDate: candidate.interviewDate ? new Date(candidate.interviewDate).toISOString().split('T')[0] : '',
+
+        hasVehicle: candidate.hasVehicle || false,
+        hasDriverLicense: candidate.hasDriverLicense || false,
+        driverLicenseClass: candidate.driverLicenseClass || '',
+        driverLicenseNumber: candidate.driverLicenseNumber || '',
+        canTravelKm: candidate.canTravelKm || 0,
+
+        hasBSP: candidate.hasBSP || false,
+        bspNumber: candidate.bspNumber || '',
+        bspExpiryDate: candidate.bspExpiryDate ? new Date(candidate.bspExpiryDate).toISOString().split('T')[0] : '',
+        bspStatus: candidate.bspStatus || '',
+
+        availableDay,
+        availableEvening,
+        availableNight,
+        availableWeekend,
+        canWorkUrgent: candidate.canWorkUrgent || false,
+
+        languages: candidate.languages || [],
+
+        professionalismRating: candidate.professionalismRating || 0,
+        communicationRating: candidate.communicationRating || 0,
+        appearanceRating: candidate.appearanceRating || 0,
+        motivationRating: candidate.motivationRating || 0,
+        experienceRating: candidate.experienceRating || 0,
+        globalRating: candidate.globalRating || 0,
+
+        experiences: candidate.experiences || [],
+
+        situationTest1,
+        situationTest2,
+        situationTest3,
+
+        strengths: candidate.strengths || '',
+        weaknesses: candidate.weaknesses || '',
         hrNotes: candidate.hrNotes || '',
+
+        certifications: candidate.certifications || [],
       });
       setOpenEditDialog(true);
     }
   };
 
-  const handleSaveEdit = () => {
-    updateMutation.mutate({
-      status: editData.status,
-      globalRating: editData.globalRating ? parseFloat(editData.globalRating) : null,
-      hrNotes: editData.hrNotes || null,
-    });
+  const handleSaveEdit = (formData: InterviewFormData) => {
+    const validationResult = candidateFormSchema.safeParse(formData);
+
+    if (!validationResult.success) {
+      const firstIssue = validationResult.error.issues[0];
+      enqueueSnackbar(firstIssue?.message || 'Les informations saisies sont invalides.', { variant: 'error' });
+      return;
+    }
+
+    const safeValues = validationResult.data;
+
+    // Construct availabilities array from boolean flags
+    const availabilities = [];
+    if (formData.availableDay) availabilities.push({ type: 'JOUR', isAvailable: true });
+    if (formData.availableEvening) availabilities.push({ type: 'SOIR', isAvailable: true });
+    if (formData.availableNight) availabilities.push({ type: 'NUIT', isAvailable: true });
+    if (formData.availableWeekend) availabilities.push({ type: 'FIN_DE_SEMAINE', isAvailable: true });
+
+    const candidateData = {
+      // Personal info
+      firstName: safeValues.firstName,
+      lastName: safeValues.lastName,
+      email: safeValues.email,
+      phone: safeValues.phone,
+      address: safeValues.address,
+      city: safeValues.city,
+      postalCode: safeValues.postalCode,
+      interviewDate: safeValues.interviewDate,
+
+      // Transport
+      hasVehicle: safeValues.hasVehicle,
+      hasDriverLicense: safeValues.hasDriverLicense,
+      driverLicenseClass: safeValues.driverLicenseClass,
+      driverLicenseNumber: safeValues.driverLicenseNumber,
+      canTravelKm: safeValues.canTravelKm,
+
+      // Certifications
+      hasBSP: safeValues.hasBSP,
+      bspNumber: safeValues.bspNumber,
+      bspExpiryDate: safeValues.bspExpiryDate,
+      bspStatus: safeValues.bspStatus,
+
+      // Ratings
+      professionalismRating: safeValues.professionalismRating,
+      communicationRating: safeValues.communicationRating,
+      appearanceRating: safeValues.appearanceRating,
+      motivationRating: safeValues.motivationRating,
+      experienceRating: safeValues.experienceRating,
+      globalRating: safeValues.globalRating,
+
+      // Notes
+      hrNotes: safeValues.hrNotes,
+      strengths: safeValues.strengths,
+      weaknesses: safeValues.weaknesses,
+
+      // Nested data
+      languages: safeValues.languages,
+      experiences: safeValues.experiences,
+      certifications: safeValues.certifications,
+      availabilities: availabilities.length > 0 ? availabilities : undefined,
+      canWorkUrgent: formData.canWorkUrgent,
+
+      situationTests: [
+        safeValues.situationTest1 && { question: 'Conflit avec un collegue', answer: safeValues.situationTest1 },
+        safeValues.situationTest2 && { question: 'Situation d\'urgence inattendue', answer: safeValues.situationTest2 },
+        safeValues.situationTest3 && { question: 'Assurer la securite d\'un site', answer: safeValues.situationTest3 },
+      ].filter(Boolean),
+    };
+
+    updateMutation.mutate(candidateData);
   };
 
   if (isLoading) {
@@ -233,10 +368,10 @@ const CandidateDetailPage = () => {
                       <Typography variant="body1">
                         {candidate.interviewDate
                           ? new Date(candidate.interviewDate).toLocaleDateString('fr-FR', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric',
-                            })
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                          })
                           : 'Non planifié'}
                       </Typography>
                     </Box>
@@ -287,166 +422,116 @@ const CandidateDetailPage = () => {
             />
           )}
 
-          {/* Interview Details Sections */}
-          {candidate.interviewDetails && (
-            <>
-              {/* Mise en situation */}
-              {candidate.interviewDetails.situationTests && candidate.interviewDetails.situationTests.length > 0 && (
-                <Card sx={{ mb: 3 }}>
-                  <CardContent>
-                    <Typography variant="h6" fontWeight="bold" gutterBottom>
-                      Mise en situation
+          {/* Expériences Professionnelles */}
+          {candidate.experiences && candidate.experiences.length > 0 && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={1} mb={2}>
+                  <Typography variant="h6" fontWeight="bold">
+                    Expériences professionnelles
+                  </Typography>
+                </Box>
+                <Divider sx={{ mb: 2 }} />
+
+                {candidate.experiences.map((exp, index) => (
+                  <Box key={index} mb={3}>
+                    <Box display="flex" justifyContent="space-between" alignItems="flex-start">
+                      <Box>
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          {exp.position}
+                        </Typography>
+                        <Typography variant="body1" color="primary.main">
+                          {exp.companyName}
+                        </Typography>
+                      </Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {exp.startDate ? new Date(exp.startDate).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' }) : ''}
+                        {' - '}
+                        {exp.isCurrent ? 'Présent' : (exp.endDate ? new Date(exp.endDate).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' }) : '')}
+                      </Typography>
+                    </Box>
+                    {exp.description && (
+                      <Typography variant="body2" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>
+                        {exp.description}
+                      </Typography>
+                    )}
+                    {index < (candidate.experiences?.length || 0) - 1 && <Divider sx={{ mt: 2 }} />}
+                  </Box>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Langues */}
+          {candidate.languages && candidate.languages.length > 0 && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={1} mb={2}>
+                  <Typography variant="h6" fontWeight="bold">
+                    Langues
+                  </Typography>
+                </Box>
+                <Divider sx={{ mb: 2 }} />
+
+                <Box display="flex" flexWrap="wrap" gap={1}>
+                  {candidate.languages.map((lang, index) => (
+                    <Chip
+                      key={index}
+                      label={`${lang.language} - ${lang.level}`}
+                      variant="outlined"
+                    />
+                  ))}
+                </Box>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Certifications */}
+          {candidate.certifications && candidate.certifications.length > 0 && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Box display="flex" alignItems="center" gap={1} mb={2}>
+                  <Typography variant="h6" fontWeight="bold">
+                    Certifications
+                  </Typography>
+                </Box>
+                <Divider sx={{ mb: 2 }} />
+
+                <List dense>
+                  {candidate.certifications.map((cert, index) => (
+                    <ListItem key={index}>
+                      <ListItemText
+                        primary={cert.name}
+                        secondary={cert.expiryDate ? `Expire le: ${new Date(cert.expiryDate).toLocaleDateString('fr-FR')}` : undefined}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Mise en situation */}
+          {candidate.situationTests && candidate.situationTests.length > 0 && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h6" fontWeight="bold" gutterBottom>
+                  Mise en situation
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+
+                {candidate.situationTests.map((test, idx) => (
+                  <Box key={idx} mb={2}>
+                    <Typography variant="subtitle2" fontWeight="bold" color="primary.main">
+                      {test.question}
                     </Typography>
-                    <Divider sx={{ mb: 2 }} />
-
-                    {candidate.interviewDetails.situationTests.map((test: any, idx: number) => (
-                      <Box key={idx} mb={2}>
-                        <Typography variant="subtitle2" fontWeight="bold" color="primary.main">
-                          {test.question}
-                        </Typography>
-                        <Paper elevation={0} sx={{ p: 2, bgcolor: 'grey.50', mt: 1 }}>
-                          <Typography variant="body2">{test.answer}</Typography>
-                        </Paper>
-                      </Box>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Psychotechnique */}
-              {candidate.interviewDetails.psychoTech && (
-                <Card sx={{ mb: 3 }}>
-                  <CardContent>
-                    <Typography variant="h6" fontWeight="bold" gutterBottom>
-                      Psychotechnique
-                    </Typography>
-                    <Divider sx={{ mb: 2 }} />
-
-                    {candidate.interviewDetails.psychoTech.motivation && (
-                      <Box mb={2}>
-                        <Typography variant="subtitle2" fontWeight="bold" color="primary.main">
-                          Motivation par rapport au poste
-                        </Typography>
-                        <Typography variant="body2" mt={0.5}>
-                          {candidate.interviewDetails.psychoTech.motivation}
-                        </Typography>
-                      </Box>
-                    )}
-
-                    {candidate.interviewDetails.psychoTech.goodAgent && (
-                      <Box mb={2}>
-                        <Typography variant="subtitle2" fontWeight="bold" color="primary.main">
-                          Qu'est-ce qu'un bon agent de sécurité ?
-                        </Typography>
-                        <Typography variant="body2" mt={0.5}>
-                          {candidate.interviewDetails.psychoTech.goodAgent}
-                        </Typography>
-                      </Box>
-                    )}
-
-                    {candidate.interviewDetails.psychoTech.badAgent && (
-                      <Box mb={2}>
-                        <Typography variant="subtitle2" fontWeight="bold" color="primary.main">
-                          Qu'est-ce qu'un mauvais agent de sécurité ?
-                        </Typography>
-                        <Typography variant="body2" mt={0.5}>
-                          {candidate.interviewDetails.psychoTech.badAgent}
-                        </Typography>
-                      </Box>
-                    )}
-
-                    {candidate.interviewDetails.psychoTech.mainTasks && (
-                      <Box mb={2}>
-                        <Typography variant="subtitle2" fontWeight="bold" color="primary.main">
-                          Tâches principales d'un agent de sécurité
-                        </Typography>
-                        <Typography variant="body2" mt={0.5}>
-                          {candidate.interviewDetails.psychoTech.mainTasks}
-                        </Typography>
-                      </Box>
-                    )}
-
-                    {candidate.interviewDetails.psychoTech.stayAwake && (
-                      <Box mb={2}>
-                        <Typography variant="subtitle2" fontWeight="bold" color="primary.main">
-                          Comment rester éveillé la nuit ?
-                        </Typography>
-                        <Typography variant="body2" mt={0.5}>
-                          {candidate.interviewDetails.psychoTech.stayAwake}
-                        </Typography>
-                      </Box>
-                    )}
-
-                    {candidate.interviewDetails.psychoTech.colleagueSleeping && (
-                      <Box mb={2}>
-                        <Typography variant="subtitle2" fontWeight="bold" color="primary.main">
-                          Si un collègue dort sur le lieu de travail
-                        </Typography>
-                        <Typography variant="body2" mt={0.5}>
-                          {candidate.interviewDetails.psychoTech.colleagueSleeping}
-                        </Typography>
-                      </Box>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Évaluation Générale */}
-              {candidate.interviewDetails.evaluation && (
-                <Card sx={{ mb: 3 }}>
-                  <CardContent>
-                    <Typography variant="h6" fontWeight="bold" gutterBottom>
-                      Évaluation générale
-                    </Typography>
-                    <Divider sx={{ mb: 2 }} />
-
-                    <Grid container spacing={2}>
-                      {candidate.interviewDetails.evaluation.attitude && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="caption" color="text.secondary">Attitude</Typography>
-                          <Typography variant="body2">{candidate.interviewDetails.evaluation.attitude}</Typography>
-                        </Grid>
-                      )}
-
-                      {candidate.interviewDetails.evaluation.communication && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="caption" color="text.secondary">Communication</Typography>
-                          <Typography variant="body2">{candidate.interviewDetails.evaluation.communication}</Typography>
-                        </Grid>
-                      )}
-
-                      {candidate.interviewDetails.evaluation.technology && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="caption" color="text.secondary">Technologie</Typography>
-                          <Typography variant="body2">{candidate.interviewDetails.evaluation.technology}</Typography>
-                        </Grid>
-                      )}
-
-                      {candidate.interviewDetails.evaluation.professionalism && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="caption" color="text.secondary">Professionnalisme</Typography>
-                          <Typography variant="body2">{candidate.interviewDetails.evaluation.professionalism}</Typography>
-                        </Grid>
-                      )}
-
-                      {candidate.interviewDetails.evaluation.punctuality && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="caption" color="text.secondary">Ponctualité / Présentation</Typography>
-                          <Typography variant="body2">{candidate.interviewDetails.evaluation.punctuality}</Typography>
-                        </Grid>
-                      )}
-
-                      {candidate.interviewDetails.evaluation.languagesUsed && (
-                        <Grid item xs={12} sm={6}>
-                          <Typography variant="caption" color="text.secondary">Langues utilisées</Typography>
-                          <Typography variant="body2">{candidate.interviewDetails.evaluation.languagesUsed}</Typography>
-                        </Grid>
-                      )}
-                    </Grid>
-                  </CardContent>
-                </Card>
-              )}
-            </>
+                    <Paper elevation={0} sx={{ p: 2, bgcolor: 'grey.50', mt: 1 }}>
+                      <Typography variant="body2">{test.answer}</Typography>
+                    </Paper>
+                  </Box>
+                ))}
+              </CardContent>
+            </Card>
           )}
         </Grid>
 
@@ -610,63 +695,27 @@ const CandidateDetailPage = () => {
       </Grid>
 
       {/* Edit Dialog */}
-      <Dialog open={openEditDialog} onClose={() => setOpenEditDialog(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={openEditDialog}
+        onClose={() => setOpenEditDialog(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: { minHeight: '90vh' }
+        }}
+      >
         <DialogTitle>Modifier le candidat</DialogTitle>
         <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 0.5 }}>
-            <Grid item xs={12}>
-              <FormControl fullWidth>
-                <InputLabel>Statut</InputLabel>
-                <Select
-                  value={editData.status}
-                  label="Statut"
-                  onChange={(e) => setEditData({ ...editData, status: e.target.value })}
-                >
-                  <MenuItem value="EN_ATTENTE">En attente</MenuItem>
-                  <MenuItem value="QUALIFIE">Qualifié</MenuItem>
-                  <MenuItem value="BON">Bon</MenuItem>
-                  <MenuItem value="TRES_BON">Très bon</MenuItem>
-                  <MenuItem value="EXCELLENT">Excellent</MenuItem>
-                  <MenuItem value="ELITE">Élite</MenuItem>
-                  <MenuItem value="A_REVOIR">À revoir</MenuItem>
-                  <MenuItem value="INACTIF">Inactif</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Note globale (/10)"
-                value={editData.globalRating}
-                onChange={(e) => setEditData({ ...editData, globalRating: e.target.value })}
-                inputProps={{ min: 0, max: 10, step: 0.1 }}
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                multiline
-                rows={4}
-                label="Notes RH"
-                value={editData.hrNotes}
-                onChange={(e) => setEditData({ ...editData, hrNotes: e.target.value })}
-              />
-            </Grid>
-          </Grid>
+          {initialFormData && (
+            <InterviewEvaluationForm
+              initialData={initialFormData}
+              onSubmit={handleSaveEdit}
+              onCancel={() => setOpenEditDialog(false)}
+              isSubmitting={updateMutation.isPending}
+              candidateId={candidate.id}
+            />
+          )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenEditDialog(false)}>Annuler</Button>
-          <Button
-            variant="contained"
-            onClick={handleSaveEdit}
-            disabled={updateMutation.isPending}
-          >
-            {updateMutation.isPending ? <CircularProgress size={24} /> : 'Enregistrer'}
-          </Button>
-        </DialogActions>
       </Dialog>
     </Box>
   );

@@ -14,7 +14,7 @@ const optionalDateString = z
 
 const languageSchema = z.object({
   language: z.string().min(1, 'Le nom de langue est requis'),
-  level: z.string().max(50).optional().nullable(),
+  level: z.string().min(1, 'Le niveau est requis'),
 });
 
 const experienceSchema = z.object({

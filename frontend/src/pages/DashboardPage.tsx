@@ -8,6 +8,7 @@ import {
   CircularProgress,
   Button,
   Chip,
+  Alert,
 } from '@mui/material';
 import {
   People as PeopleIcon,
@@ -18,32 +19,25 @@ import {
   PersonSearch as PersonSearchIcon,
   Psychology as AiIcon,
 } from '@mui/icons-material';
-import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import CandidatesMap from '@/components/map/CandidatesMap';
 import ProspectsMapClustered from '@/components/map/ProspectsMapClustered';
-import { prospectService } from '@/services/prospect.service';
-import { candidateService } from '@/services/candidate.service';
+import { useProspectStats } from '@/hooks/useProspectStats';
+import { useCandidateStats } from '@/hooks/useCandidateStats';
 
 const DashboardPage = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
 
-  // Fetch prospect stats
-  const { data: prospectStatsData, isLoading: loadingProspects } = useQuery({
-    queryKey: ['prospects', 'stats'],
-    queryFn: () => prospectService.getProspectsStats(),
-  });
+  // Fetch stats using custom hooks
+  const { stats: prospectStats, isLoading: loadingProspects, error: prospectError, refetch: refetchProspects } = useProspectStats();
+  const { stats: candidateStats, isLoading: loadingCandidates, error: candidateError, refetch: refetchCandidates } = useCandidateStats();
 
-  // Fetch candidate stats
-  const { data: candidateStatsData, isLoading: loadingCandidates } = useQuery({
-    queryKey: ['candidates', 'stats'],
-    queryFn: () => candidateService.getCandidatesStats(),
-  });
-
-  const prospectStats = prospectStatsData?.data;
-  const candidateStats = candidateStatsData?.data;
+  const handleRefresh = () => {
+    refetchProspects();
+    refetchCandidates();
+  };
 
   const stats = [
     {
@@ -85,6 +79,15 @@ const DashboardPage = () => {
       <Typography variant="body1" color="text.secondary" paragraph>
         Tableau de bord - Vue d'ensemble de vos candidats et activités
       </Typography>
+
+      {(prospectError || candidateError) && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Erreur de chargement: {prospectError?.message || candidateError?.message}
+          <Button size="small" onClick={handleRefresh} sx={{ ml: 2 }}>
+            Réessayer
+          </Button>
+        </Alert>
+      )}
 
       <Grid container spacing={3} sx={{ mt: 2 }}>
         {stats.map((stat, index) => (
@@ -183,8 +186,6 @@ const DashboardPage = () => {
           </Card>
         </Grid>
       </Grid>
-
-
 
       <Grid container spacing={3} sx={{ mt: 2 }}>
         <Grid item xs={12} md={6}>

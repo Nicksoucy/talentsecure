@@ -85,3 +85,8 @@ out/
 .turbo
 .eslintcache
 get-token.sh
+
+# Backups and Logs
+backend/backups/
+*_log.txt
+*.txt

@@ -42,6 +42,52 @@ export type CandidateStatus =
   | 'INACTIF'
   | 'ABSENT';
 
+export interface Availability {
+  id: string;
+  candidateId: string;
+  type: string; // 'JOUR', 'SOIR', 'NUIT', 'WEEKEND'
+  isAvailable: boolean;
+}
+
+export interface Language {
+  id: string;
+  candidateId: string;
+  language: string;
+  level: string; // 'DEBUTANT', 'INTERMEDIAIRE', 'AVANCE', 'BILINGUE', 'LANGUE_MATERNELLE'
+}
+
+export interface Experience {
+  id: string;
+  candidateId: string;
+  companyName: string;
+  position: string;
+  startDate?: string;
+  endDate?: string;
+  isCurrent: boolean;
+  durationMonths?: number;
+  description?: string;
+  responsibilities?: string;
+}
+
+export interface Certification {
+  id: string;
+  candidateId: string;
+  name: string;
+  issuingOrg?: string;
+  issueDate?: string;
+  expiryDate?: string;
+  certificateUrl?: string;
+}
+
+export interface SituationTest {
+  id: string;
+  candidateId: string;
+  question: string;
+  answer: string;
+  rating?: number;
+  evaluatorNotes?: string;
+}
+
 export interface Candidate {
   id: string;
 
@@ -72,7 +118,7 @@ export interface Candidate {
   strengths?: string;
   weaknesses?: string;
 
-  // Interview details (JSON)
+  // Interview details (JSON) - Deprecated in favor of relations but kept for backward compat
   interviewDetails?: any;
 
   // Availability
@@ -116,6 +162,13 @@ export interface Candidate {
   // Metadata
   createdAt: string;
   updatedAt: string;
+
+  // Relations
+  availabilities?: Availability[];
+  languages?: Language[];
+  experiences?: Experience[];
+  certifications?: Certification[];
+  situationTests?: SituationTest[];
 }
 
 // Catalogue types

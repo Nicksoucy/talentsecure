@@ -17,8 +17,28 @@ afterAll(async () => {
 // Helper to clean up database between tests
 export async function cleanDatabase() {
   // Delete in correct order to respect foreign key constraints
+  // First delete all child tables that reference other tables
+  await prisma.catalogueItem.deleteMany();
+  await prisma.catalogueSelection.deleteMany();
+  await prisma.cataloguePayment.deleteMany();
+  await prisma.placement.deleteMany();
+  await prisma.availability.deleteMany();
+  await prisma.language.deleteMany();
+  await prisma.experience.deleteMany();
+  await prisma.certification.deleteMany();
+  await prisma.situationTest.deleteMany();
+  await prisma.candidateSkill.deleteMany();
+  await prisma.prospectSkill.deleteMany();
+  await prisma.wishlistItem.deleteMany();
+  await prisma.clientWishlist.deleteMany();
+  await prisma.clientPurchase.deleteMany();
+
+  // Then delete parent tables
   await prisma.candidate.deleteMany();
-  await prisma.client.deleteMany();
+  await prisma.prospectCandidate.deleteMany();
   await prisma.catalogue.deleteMany();
+  await prisma.client.deleteMany();
+  await prisma.skill.deleteMany();
+  await prisma.auditLog.deleteMany();
   await prisma.user.deleteMany();
 }

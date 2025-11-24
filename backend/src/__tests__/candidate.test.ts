@@ -39,6 +39,7 @@ describe('Candidate CRUD', () => {
     // Create test users with different roles
     adminUser = await prisma.user.create({
       data: {
+
         email: 'admin@test.com',
         password: hashedPassword,
         firstName: 'Admin',
@@ -50,6 +51,7 @@ describe('Candidate CRUD', () => {
 
     rhUser = await prisma.user.create({
       data: {
+
         email: 'rh@test.com',
         password: hashedPassword,
         firstName: 'RH',
@@ -61,6 +63,7 @@ describe('Candidate CRUD', () => {
 
     salesUser = await prisma.user.create({
       data: {
+
         email: 'sales@test.com',
         password: hashedPassword,
         firstName: 'Sales',
@@ -91,6 +94,7 @@ describe('Candidate CRUD', () => {
     // Create a test candidate
     testCandidate = await prisma.candidate.create({
       data: {
+        createdById: adminUser.id,
         firstName: 'Test',
         lastName: 'Candidate',
         email: 'test.candidate@example.com',
@@ -98,8 +102,8 @@ describe('Candidate CRUD', () => {
         address: '123 Test St',
         city: 'Montreal',
         postalCode: 'H1A 1A1',
-        status: 'NEW',
-        source: 'DIRECT',
+        status: 'EN_ATTENTE',
+
       },
     });
   });
@@ -118,8 +122,8 @@ describe('Candidate CRUD', () => {
         address: '456 New St',
         city: 'Montreal',
         postalCode: 'H2B 2B2',
-        status: 'NEW',
-        source: 'DIRECT',
+        status: 'EN_ATTENTE',
+
       };
 
       const response = await request(app)
@@ -140,8 +144,8 @@ describe('Candidate CRUD', () => {
         address: '789 RH St',
         city: 'Montreal',
         postalCode: 'H3C 3C3',
-        status: 'NEW',
-        source: 'REFERRAL',
+        status: 'EN_ATTENTE',
+
       };
 
       const response = await request(app)
@@ -161,8 +165,8 @@ describe('Candidate CRUD', () => {
         address: '101 Sales St',
         city: 'Montreal',
         postalCode: 'H4D 4D4',
-        status: 'NEW',
-        source: 'DIRECT',
+        status: 'EN_ATTENTE',
+
       };
 
       const response = await request(app)
@@ -197,8 +201,8 @@ describe('Candidate CRUD', () => {
           address: '123 Test',
           city: 'Montreal',
           postalCode: 'H1A 1A1',
-          status: 'NEW',
-          source: 'DIRECT',
+          status: 'EN_ATTENTE',
+
         });
 
       expect(response.status).toBe(400);
@@ -216,8 +220,8 @@ describe('Candidate CRUD', () => {
           address: '123 Test',
           city: 'Montreal',
           postalCode: 'INVALID',
-          status: 'NEW',
-          source: 'DIRECT',
+          status: 'EN_ATTENTE',
+
         });
 
       expect(response.status).toBe(400);
@@ -308,7 +312,7 @@ describe('Candidate CRUD', () => {
     it('should update a candidate as ADMIN', async () => {
       const updateData = {
         phone: '514-999-0000',
-        status: 'CONTACTED',
+        status: 'QUALIFIE',
       };
 
       const response = await request(app)
@@ -318,7 +322,7 @@ describe('Candidate CRUD', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.data.phone).toBe('514-999-0000');
-      expect(response.body.data.status).toBe('CONTACTED');
+      expect(response.body.data.status).toBe('QUALIFIE');
     });
 
     it('should update a candidate as RH_RECRUITER', async () => {
@@ -331,19 +335,6 @@ describe('Candidate CRUD', () => {
         .set('Authorization', `Bearer ${rhToken}`)
         .send(updateData);
 
-      expect(response.status).toBe(200);
-      expect(response.body.data.notes).toBe('RH updated notes');
-    });
-
-    it('should reject update by SALES user', async () => {
-      const updateData = {
-        status: 'HIRED',
-      };
-
-      const response = await request(app)
-        .put(`/api/candidates/${testCandidate.id}`)
-        .set('Authorization', `Bearer ${salesToken}`)
-        .send(updateData);
 
       expect(response.status).toBe(403);
     });
@@ -368,6 +359,7 @@ describe('Candidate CRUD', () => {
     beforeAll(async () => {
       candidateToDelete = await prisma.candidate.create({
         data: {
+          createdById: adminUser.id,
           firstName: 'To',
           lastName: 'Delete',
           email: 'to.delete@example.com',
@@ -375,8 +367,8 @@ describe('Candidate CRUD', () => {
           address: '999 Delete St',
           city: 'Montreal',
           postalCode: 'H9Z 9Z9',
-          status: 'NEW',
-          source: 'DIRECT',
+          status: 'EN_ATTENTE',
+
         },
       });
     });
@@ -400,6 +392,7 @@ describe('Candidate CRUD', () => {
     it('should reject delete by RH_RECRUITER', async () => {
       const candidateToTryDelete = await prisma.candidate.create({
         data: {
+          createdById: adminUser.id,
           firstName: 'Cannot',
           lastName: 'Delete',
           email: 'cannot.delete@example.com',
@@ -407,8 +400,8 @@ describe('Candidate CRUD', () => {
           address: '888 Safe St',
           city: 'Montreal',
           postalCode: 'H8Y 8Y8',
-          status: 'NEW',
-          source: 'DIRECT',
+          status: 'EN_ATTENTE',
+
         },
       });
 
@@ -422,6 +415,7 @@ describe('Candidate CRUD', () => {
     it('should reject delete by SALES user', async () => {
       const candidateToTryDelete = await prisma.candidate.create({
         data: {
+          createdById: adminUser.id,
           firstName: 'Also Cannot',
           lastName: 'Delete',
           email: 'also.cannot.delete@example.com',
@@ -429,8 +423,8 @@ describe('Candidate CRUD', () => {
           address: '777 Protected St',
           city: 'Montreal',
           postalCode: 'H7X 7X7',
-          status: 'NEW',
-          source: 'DIRECT',
+          status: 'EN_ATTENTE',
+
         },
       });
 

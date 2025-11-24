@@ -5,6 +5,7 @@ import { getCache, setCache, deleteCache, invalidateCacheByPrefix } from '../con
 import { buildCacheKey } from '../utils/cache';
 import { getStatusFromRating } from '../utils/candidate.utils';
 import { Parser } from 'json2csv';
+import { candidateService } from '../services/candidate.service';
 
 const CANDIDATE_LIST_CACHE_PREFIX = 'candidates:list';
 const CANDIDATE_STATS_CACHE_KEY = 'candidates:stats';
@@ -48,7 +49,6 @@ export const getCandidates = async (
       sortOrder = 'desc',
     } = req.query;
 
-    const skip = (Number(page) - 1) * Number(limit);
     const cacheKey = buildCacheKey(CANDIDATE_LIST_CACHE_PREFIX, req.query);
     const cachedResponse = await getCache<{ data: any; pagination: any }>(cacheKey);
 
@@ -56,206 +56,33 @@ export const getCandidates = async (
       return res.json(cachedResponse);
     }
 
-    // Build filter conditions with proper AND/OR logic
-    const where: any = {
-      isDeleted: false,
-      isActive: true,
+    const filters = {
+      search: search as string,
+      status: status as string,
+      minRating: minRating ? Number(minRating) : undefined,
+      city: city as string,
+      hasBSP: hasBSP !== undefined ? hasBSP === 'true' : undefined,
+      hasVehicle: hasVehicle !== undefined ? hasVehicle === 'true' : undefined,
+      hasVideo: hasVideo !== undefined ? hasVideo === 'true' : undefined,
+      hasDriverLicense: hasDriverLicense !== undefined ? hasDriverLicense === 'true' : undefined,
+      hasCV: hasCV !== undefined ? hasCV === 'true' : undefined,
+      canWorkUrgent: canWorkUrgent !== undefined ? canWorkUrgent === 'true' : undefined,
+      maxTravelKm: maxTravelKm ? Number(maxTravelKm) : undefined,
+      bspStatus: bspStatus as string,
+      interviewDateStart: interviewDateStart as string,
+      interviewDateEnd: interviewDateEnd as string,
+      includeArchived: includeArchived === 'true',
+      certification: certification as string,
     };
 
-    // By default, exclude archived candidates unless explicitly requested
-    if (includeArchived !== 'true') {
-      where.isArchived = false;
-    }
-
-    // Collect OR conditions to combine them properly
-    const orConditions: any[] = [];
-
-    // Search filter
-    if (search) {
-      orConditions.push({
-        OR: [
-          { firstName: { contains: search as string, mode: 'insensitive' } },
-          { lastName: { contains: search as string, mode: 'insensitive' } },
-          { email: { contains: search as string, mode: 'insensitive' } },
-          { phone: { contains: search as string, mode: 'insensitive' } },
-        ],
-      });
-    }
-
-    // CV filter (was overwriting search OR - BUG FIXED)
-    if (hasCV !== undefined) {
-      if (hasCV === 'true') {
-        orConditions.push({
-          OR: [
-            { cvUrl: { not: null } },
-            { cvStoragePath: { not: null } },
-          ],
-        });
-      } else {
-        where.cvUrl = null;
-        where.cvStoragePath = null;
-      }
-    }
-
-    // Apply OR conditions using AND to combine them
-    if (orConditions.length > 0) {
-      where.AND = orConditions;
-    }
-
-    if (status) {
-      where.status = status;
-    }
-
-    if (minRating) {
-      where.globalRating = { gte: Number(minRating) };
-    }
-
-    if (city) {
-      where.city = { contains: city as string, mode: 'insensitive' };
-    }
-
-    if (hasBSP !== undefined) {
-      where.hasBSP = hasBSP === 'true';
-    }
-
-    if (hasVehicle !== undefined) {
-      where.hasVehicle = hasVehicle === 'true';
-    }
-
-    // Filter by video presence
-    if (hasVideo !== undefined) {
-      if (hasVideo === 'true') {
-        where.videoUrl = { not: null };
-      } else {
-        where.videoUrl = null;
-      }
-    }
-
-    // Filter by driver license
-    if (hasDriverLicense !== undefined) {
-      where.hasDriverLicense = hasDriverLicense === 'true';
-    }
-
-    // Filter by urgent work capability
-    if (canWorkUrgent !== undefined) {
-      where.canWorkUrgent = canWorkUrgent === 'true';
-    }
-
-    // Filter by travel distance
-    if (maxTravelKm) {
-      where.canTravelKm = { gte: Number(maxTravelKm) };
-    }
-
-    // Filter by BSP status
-    if (bspStatus) {
-      where.bspStatus = bspStatus;
-    }
-
-    // Filter by interview date range
-    if (interviewDateStart || interviewDateEnd) {
-      where.interviewDate = {};
-      if (interviewDateStart) {
-        where.interviewDate.gte = new Date(interviewDateStart as string);
-      }
-      if (interviewDateEnd) {
-        where.interviewDate.lte = new Date(interviewDateEnd as string);
-      }
-    }
-
-    // Filter by certification
-    if (certification) {
-      where.certifications = {
-        some: {
-          name: {
-            contains: certification as string,
-            mode: 'insensitive',
-          },
-        },
-      };
-    }
-
-    // Build orderBy with special handling for globalRating to place NULL values last
-    let orderByClause: any;
-    if (sortBy === 'globalRating') {
-      // For globalRating, we want NULL values to be treated as 0 (lowest)
-      // So they should always appear last when sorting DESC, and first when sorting ASC
-      orderByClause = [
-        { globalRating: { sort: sortOrder, nulls: 'last' } }
-      ];
-    } else {
-      orderByClause = { [sortBy as string]: sortOrder };
-    }
-
-    // Get candidates with optimized select (only fields needed for list view)
-    const [total, candidates] = await prisma.$transaction([
-      prisma.candidate.count({ where }),
-      prisma.candidate.findMany({
-        where,
-        skip,
-        take: Number(limit),
-        orderBy: orderByClause,
-        select: {
-          // Basic info (needed for list)
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          phone: true,
-          city: true,
-          province: true,
-
-          // Status & ratings (for display and filtering)
-          status: true,
-          globalRating: true,
-          interviewDate: true,
-
-          // Quick checks (for icons/badges)
-          hasBSP: true,
-          hasVehicle: true,
-          hasDriverLicense: true,
-          cvUrl: true,
-          videoUrl: true,
-
-          // Metadata (for display logic)
-          isActive: true,
-          isArchived: true,
-          createdAt: true,
-
-          // HR notes preview (truncated in UI anyway)
-          hrNotes: true,
-
-          // Relations (lightweight, needed for list)
-          availabilities: {
-            select: {
-              type: true,
-              isAvailable: true,
-            },
-          },
-          languages: {
-            select: {
-              language: true,
-              level: true,
-            },
-          },
-          certifications: {
-            select: {
-              name: true,
-              expiryDate: true,
-            },
-          },
-        },
-      }),
-    ])
-
-    const responsePayload = {
-      data: candidates,
-      pagination: {
-        total,
-        page: Number(page),
-        limit: Number(limit),
-        totalPages: Math.ceil(total / Number(limit)),
-      },
+    const pagination = {
+      page: Number(page),
+      limit: Number(limit),
+      sortBy: sortBy as string,
+      sortOrder: sortOrder as 'asc' | 'desc',
     };
+
+    const responsePayload = await candidateService.findAll(filters, pagination);
 
     await setCache(cacheKey, responsePayload, 120);
 
@@ -501,9 +328,44 @@ export const updateCandidate = async (
       candidateData.interviewDate = new Date(candidateData.interviewDate);
     }
 
+    // Prepare update data with nested relations handling
+    const prismaUpdateData: any = { ...candidateData };
+
+    // Handle relations: Delete old ones and create new ones if provided
+    if (availabilities) {
+      prismaUpdateData.availabilities = {
+        deleteMany: {},
+        create: availabilities,
+      };
+    }
+    if (languages) {
+      prismaUpdateData.languages = {
+        deleteMany: {},
+        create: languages,
+      };
+    }
+    if (experiences) {
+      prismaUpdateData.experiences = {
+        deleteMany: {},
+        create: experiences,
+      };
+    }
+    if (certifications) {
+      prismaUpdateData.certifications = {
+        deleteMany: {},
+        create: certifications,
+      };
+    }
+    if (situationTests) {
+      prismaUpdateData.situationTests = {
+        deleteMany: {},
+        create: situationTests,
+      };
+    }
+
     const candidate = await prisma.candidate.update({
       where: { id },
-      data: candidateData,
+      data: prismaUpdateData,
       include: {
         availabilities: true,
         languages: true,

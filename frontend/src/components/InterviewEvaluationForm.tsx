@@ -46,7 +46,7 @@ const steps = [
   '📄 Notes RH',
 ];
 
-interface InterviewFormData {
+export interface InterviewFormData {
   // Personal Info
   firstName: string;
   lastName: string;

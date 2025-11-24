@@ -49,8 +49,9 @@ import { lazy } from 'react';
 const InterviewEvaluationForm = lazy(() => import('@/components/InterviewEvaluationForm'));
 const CandidatesMap = lazy(() => import('@/components/map/CandidatesMap'));
 import CandidateFiltersBar from './components/CandidateFiltersBar';
-import CandidateTableRow from './components/CandidateTableRow';
 import CandidateBulkActions from './components/CandidateBulkActions';
+import CandidatesTable from './components/CandidatesTable';
+import CreateCatalogueDialog from './components/CreateCatalogueDialog';
 import { candidateFormSchema } from '@/validation/candidate';
 import { HelpDialog } from '@/components/HelpDialog';
 
@@ -173,17 +174,6 @@ export default function CandidatesListPage() {
   // Selection and catalogue creation states
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
   const [openCatalogueDialog, setOpenCatalogueDialog] = useState(false);
-  const [catalogueForm, setCatalogueForm] = useState({
-    title: '',
-    customMessage: '',
-    includeSummary: true,
-    includeDetails: true,
-    includeVideo: true,
-    includeExperience: true,
-    includeSituation: true,
-    includeCV: true,
-  });
-  const [selectedClient, setSelectedClient] = useState<any>(null);
 
   // Debounce search input (300ms delay to avoid spamming API)
   useEffect(() => {
@@ -241,7 +231,13 @@ export default function CandidatesListPage() {
       // Build params with current filters
       const exportParams = {
         search: debouncedSearch || undefined,
-        ...filters,
+        status: filters.status || undefined,
+        minRating: filters.minRating ? Number(filters.minRating) : undefined,
+        city: filters.city || undefined,
+        hasVideo: filters.hasVideo === '' ? undefined : filters.hasVideo === 'true',
+        interviewDateStart: filters.interviewDateStart || undefined,
+        interviewDateEnd: filters.interviewDateEnd || undefined,
+        certification: filters.certification || undefined,
         includeArchived,
         sortBy,
         sortOrder,
@@ -365,8 +361,21 @@ export default function CandidatesListPage() {
       setPage(1); // Retour a la premiere page
     },
     onError: (error: any) => {
-      enqueueSnackbar(error.response?.data?.error || 'Impossible d\'ajouter ce candidat. Verifiez les champs requis.', {
+      console.error('Erreur creation candidat:', error);
+      const serverError = error.response?.data?.error;
+      const validationError = error.response?.data?.message;
+      const details = error.response?.data?.details;
+
+      let errorMessage = serverError || validationError || 'Impossible d\'ajouter ce candidat.';
+
+      if (Array.isArray(details) && details.length > 0) {
+        const detailMessages = details.map((d: any) => `${d.field}: ${d.message}`).join(', ');
+        errorMessage += ` (${detailMessages})`;
+      }
+
+      enqueueSnackbar(errorMessage, {
         variant: 'error',
+        autoHideDuration: 10000,
       });
     },
   });
@@ -405,7 +414,6 @@ export default function CandidatesListPage() {
     },
   });
 
-
   // Archive candidate mutation
   const archiveMutation = useMutation({
     mutationFn: ({ id }: { id: string; label?: string }) => candidateService.archiveCandidate(id),
@@ -421,7 +429,6 @@ export default function CandidatesListPage() {
       });
     },
   });
-
 
   // Unarchive candidate mutation
   const unarchiveMutation = useMutation({
@@ -461,22 +468,11 @@ export default function CandidatesListPage() {
     mutationFn: catalogueService.createCatalogue,
     onSuccess: (_response, variables) => {
       queryClient.invalidateQueries({ queryKey: ['catalogues'] });
-      enqueueSnackbar(`Catalogue "${variables?.title || 'Sans titre'}" cree pour ${selectedClient?.companyName || selectedClient?.name}`, {
+      enqueueSnackbar(`Catalogue "${variables?.title || 'Sans titre'}" créé avec succès`, {
         variant: 'success',
       });
       setOpenCatalogueDialog(false);
       setSelectedCandidates(new Set());
-      setSelectedClient(null);
-      setCatalogueForm({
-        title: '',
-        customMessage: '',
-        includeSummary: true,
-        includeDetails: true,
-        includeVideo: true,
-        includeExperience: true,
-        includeSituation: true,
-        includeCV: true,
-      });
     },
     onError: (error: any, variables) => {
       const label = variables?.title || 'Sans titre';
@@ -498,6 +494,13 @@ export default function CandidatesListPage() {
     }
 
     const safeValues = validationResult.data;
+
+    // Construct availabilities array from boolean flags
+    const availabilities = [];
+    if (formData.availableDay) availabilities.push({ type: 'JOUR', isAvailable: true });
+    if (formData.availableEvening) availabilities.push({ type: 'SOIR', isAvailable: true });
+    if (formData.availableNight) availabilities.push({ type: 'NUIT', isAvailable: true });
+    if (formData.availableWeekend) availabilities.push({ type: 'FIN_DE_SEMAINE', isAvailable: true });
 
     const candidateData = {
       // Personal info
@@ -540,6 +543,8 @@ export default function CandidatesListPage() {
       languages: safeValues.languages,
       experiences: safeValues.experiences,
       certifications: safeValues.certifications,
+      availabilities: availabilities.length > 0 ? availabilities : undefined,
+      canWorkUrgent: formData.canWorkUrgent, // Add urgency flag
 
       situationTests: [
         safeValues.situationTest1 && { question: 'Conflit avec un collegue', answer: safeValues.situationTest1 },
@@ -682,20 +687,15 @@ export default function CandidatesListPage() {
     setSelectedCandidates(new Set());
   };
 
-  const handleCreateCatalogue = () => {
-    if (!catalogueForm.title || !selectedClient) {
-      enqueueSnackbar('Veuillez remplir le titre et sélectionner un client', { variant: 'warning' });
-      return;
-    }
-
+  const handleCreateCatalogue = (clientId: string, formData: any) => {
     if (selectedCandidates.size === 0) {
       enqueueSnackbar('Veuillez sélectionner au moins un candidat', { variant: 'warning' });
       return;
     }
 
     const payload = {
-      ...catalogueForm,
-      clientId: selectedClient.id,
+      ...formData,
+      clientId,
       candidateIds: Array.from(selectedCandidates),
     };
 
@@ -743,14 +743,15 @@ export default function CandidatesListPage() {
   return (
     <Box>
       {/* Bulk Actions Bar */}
-      <CandidateBulkActions
+      < CandidateBulkActions
         selectedCount={selectedCandidates.size}
-        onCreateCatalogue={() => setOpenCatalogueDialog(true)}
+        onCreateCatalogue={() => setOpenCatalogueDialog(true)
+        }
         onClearSelection={handleDeselectAll}
         onRevertToProspect={user?.role === 'ADMIN' ? handleRevertBatch : undefined}
       />
 
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+      < Box display="flex" justifyContent="space-between" alignItems="center" mb={3} >
         <Typography variant="h4" fontWeight="bold">
           Candidats ({data?.pagination.total || 0})
         </Typography>
@@ -797,19 +798,19 @@ export default function CandidatesListPage() {
             </span>
           </Tooltip>
         </Box>
-      </Box>
+      </Box >
 
       {/* Map */}
-      <Collapse in={showMap}>
+      < Collapse in={showMap}>
         <Box sx={{ mb: 3 }}>
           <Suspense fallback={renderLazyFallback(200)}>
             <CandidatesMap onCityClick={handleCityClick} />
           </Suspense>
         </Box>
-      </Collapse>
+      </Collapse >
 
       {/* Search and Filters */}
-      <CandidateFiltersBar
+      < CandidateFiltersBar
         search={search}
         onSearchChange={(value) => {
           setSearch(value);
@@ -834,117 +835,28 @@ export default function CandidatesListPage() {
 
       <Card>
         <CardContent>
-          {candidates.length === 0 ? (
-            <Box textAlign="center" py={4}>
-              <Typography variant="h6" color="text.secondary" gutterBottom>
-                Aucun candidat trouvé
-              </Typography>
-              <Typography variant="body2" color="text.secondary" mb={2}>
-                Commencez par ajouter votre premier candidat !
-              </Typography>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => setOpenAddDialog(true)}
-              >
-                Ajouter un candidat
-              </Button>
-            </Box>
-          ) : (
-            <TableContainer component={Paper} elevation={0}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        indeterminate={selectedCandidates.size > 0 && selectedCandidates.size < candidates.length}
-                        checked={candidates.length > 0 && selectedCandidates.size === candidates.length}
-                        onChange={handleSelectAll}
-                      />
-                    </TableCell>
-                    <TableCell
-                      sx={{ cursor: 'pointer', userSelect: 'none' }}
-                      onClick={() => handleSort('firstName')}
-                    >
-                      <Box display="flex" alignItems="center" gap={0.5}>
-                        <strong>Nom</strong>
-                        {sortBy === 'firstName' && (
-                          sortOrder === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell><strong>Téléphone</strong></TableCell>
-                    <TableCell><strong>Ville</strong></TableCell>
-                    <TableCell
-                      sx={{ cursor: 'pointer', userSelect: 'none' }}
-                      onClick={() => handleSort('interviewDate')}
-                    >
-                      <Box display="flex" alignItems="center" gap={0.5}>
-                        <strong>Date d'entrevue</strong>
-                        {sortBy === 'interviewDate' && (
-                          sortOrder === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell><strong>Statut</strong></TableCell>
-                    <TableCell
-                      sx={{ cursor: 'pointer', userSelect: 'none' }}
-                      onClick={() => handleSort('globalRating')}
-                    >
-                      <Box display="flex" alignItems="center" gap={0.5}>
-                        <strong>Note</strong>
-                        {sortBy === 'globalRating' && (
-                          sortOrder === 'asc' ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />
-                        )}
-                      </Box>
-                    </TableCell>
-                    <TableCell><strong>Avis RH</strong></TableCell>
-                    <TableCell align="center"><strong>CV</strong></TableCell>
-                    <TableCell><strong>BSP</strong></TableCell>
-                    <TableCell align="right"><strong>Actions</strong></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {candidates.map((candidate: any) => {
-                    const label = `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || candidate.email || `ID ${candidate.id}`;
-                    return (
-                      <CandidateTableRow
-                        key={candidate.id}
-                        candidate={candidate}
-                        isSelected={selectedCandidates.has(candidate.id)}
-                        onSelect={() => handleSelectCandidate(candidate.id)}
-                        onView={() => navigate(`/candidates/${candidate.id}`)}
-                        onEdit={() => handleEditCandidate(candidate.id)}
-                        onArchive={() => archiveMutation.mutate({ id: candidate.id, label })}
-                        onUnarchive={() => unarchiveMutation.mutate({ id: candidate.id, label })}
-                        onDelete={() => deleteMutation.mutate({ id: candidate.id, label })}
-                        onRevertToProspect={() => revertToProspectMutation.mutate({ id: candidate.id, label })}
-                        onExtractSkills={() => handleExtractSkills(candidate)}
-                        userRole={user?.role}
-                      />
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-
-          {/* Pagination */}
-          {candidates.length > 0 && data?.pagination && (
-            <Box display="flex" justifyContent="center" alignItems="center" mt={3} gap={2}>
-              <Typography variant="body2" color="text.secondary">
-                Page {data.pagination.page} sur {data.pagination.totalPages} ({data.pagination.total} candidats au total)
-              </Typography>
-              <Pagination
-                count={data.pagination.totalPages}
-                page={page}
-                onChange={(_, newPage) => setPage(newPage)}
-                color="primary"
-                showFirstButton
-                showLastButton
-              />
-            </Box>
-          )}
+          <CandidatesTable
+            candidates={candidates}
+            isLoading={isLoading}
+            pagination={data?.pagination}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            onSort={handleSort}
+            selectedCandidates={selectedCandidates}
+            onSelectCandidate={handleSelectCandidate}
+            onSelectAll={handleSelectAll}
+            onView={(candidateId) => navigate(`/candidates/${candidateId}`)}
+            onEdit={handleEditCandidate}
+            onArchive={(id, label) => archiveMutation.mutate({ id, label })}
+            onUnarchive={(id, label) => unarchiveMutation.mutate({ id, label })}
+            onDelete={(id, label) => deleteMutation.mutate({ id, label })}
+            onRevertToProspect={(id, label) => revertToProspectMutation.mutate({ id, label })}
+            onExtractSkills={handleExtractSkills}
+            page={page}
+            onPageChange={setPage}
+            userRole={user?.role}
+            onAddCandidate={() => setOpenAddDialog(true)}
+          />
         </CardContent>
       </Card>
 
@@ -989,154 +901,14 @@ export default function CandidatesListPage() {
       </Dialog>
 
       {/* Catalogue Creation Dialog */}
-      <Dialog
+      <CreateCatalogueDialog
         open={openCatalogueDialog}
         onClose={() => setOpenCatalogueDialog(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          <Box display="flex" alignItems="center" justifyContent="space-between">
-            <Typography variant="h6">
-              Créer un catalogue avec {selectedCandidates.size} candidat{selectedCandidates.size !== 1 ? 's' : ''}
-            </Typography>
-            <HelpDialog
-              title="Guide catalogue"
-              subtitle="Conseils avant partage client"
-              sections={CATALOGUE_HELP_SECTIONS}
-              triggerLabel="Astuces catalogue"
-            />
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Titre du catalogue"
-                required
-                value={catalogueForm.title}
-                onChange={(e) => setCatalogueForm({ ...catalogueForm, title: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <Autocomplete
-                value={selectedClient}
-                onChange={(_, newValue) => setSelectedClient(newValue)}
-                options={clientsData?.data || []}
-                getOptionLabel={(option) =>
-                  option.companyName
-                    ? `${option.companyName} - ${option.name}`
-                    : option.name
-                }
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Sélectionner un client"
-                    required
-                  />
-                )}
-                isOptionEqualToValue={(option, value) => option.id === value?.id}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Message personnalisé (optionnel)"
-                multiline
-                rows={3}
-                value={catalogueForm.customMessage}
-                onChange={(e) => setCatalogueForm({ ...catalogueForm, customMessage: e.target.value })}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <Typography variant="subtitle2" gutterBottom>
-                Options d'inclusion
-              </Typography>
-              <Grid container spacing={1}>
-                <Grid item xs={6}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={catalogueForm.includeSummary}
-                        onChange={(e) => setCatalogueForm({ ...catalogueForm, includeSummary: e.target.checked })}
-                      />
-                    }
-                    label="Résumé"
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={catalogueForm.includeDetails}
-                        onChange={(e) => setCatalogueForm({ ...catalogueForm, includeDetails: e.target.checked })}
-                      />
-                    }
-                    label="Détails"
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={catalogueForm.includeVideo}
-                        onChange={(e) => setCatalogueForm({ ...catalogueForm, includeVideo: e.target.checked })}
-                      />
-                    }
-                    label="Vidéo"
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={catalogueForm.includeExperience}
-                        onChange={(e) => setCatalogueForm({ ...catalogueForm, includeExperience: e.target.checked })}
-                      />
-                    }
-                    label="Expérience"
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={catalogueForm.includeSituation}
-                        onChange={(e) => setCatalogueForm({ ...catalogueForm, includeSituation: e.target.checked })}
-                      />
-                    }
-                    label="Situation"
-                  />
-                </Grid>
-                <Grid item xs={6}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={catalogueForm.includeCV}
-                        onChange={(e) => setCatalogueForm({ ...catalogueForm, includeCV: e.target.checked })}
-                      />
-                    }
-                    label="CV"
-                  />
-                </Grid>
-              </Grid>
-            </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenCatalogueDialog(false)}>
-            Annuler
-          </Button>
-          <Button
-            onClick={handleCreateCatalogue}
-            variant="contained"
-            disabled={createCatalogueMutation.isPending}
-          >
-            {createCatalogueMutation.isPending ? 'Création...' : 'Créer le catalogue'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+        selectedCandidatesCount={selectedCandidates.size}
+        clients={clientsData?.data || []}
+        onSubmit={handleCreateCatalogue}
+        isSubmitting={createCatalogueMutation.isPending}
+      />
+    </Box >
   );
 }
