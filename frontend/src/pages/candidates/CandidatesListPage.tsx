@@ -156,6 +156,9 @@ export default function CandidatesListPage() {
     interviewDateEnd: '',
     certification: '',
   });
+  // Debounced filters to prevent API spam on text inputs (like City)
+  const [debouncedFilters, setDebouncedFilters] = useState(filters);
+
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
@@ -184,6 +187,15 @@ export default function CandidatesListPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  // Debounce filters (300ms delay)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedFilters(filters);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [filters]);
+
   // Fetch clients
   const { data: clientsData } = useQuery({
     queryKey: ['clients', 'active'],
@@ -192,24 +204,24 @@ export default function CandidatesListPage() {
 
   // Fetch candidates with debounced search and keepPreviousData to prevent UI flashing
   const { data, isLoading, error } = useQuery({
-    queryKey: ['candidates', page, pageSize, debouncedSearch, filters, sortBy, sortOrder, includeArchived],
+    queryKey: ['candidates', page, pageSize, debouncedSearch, debouncedFilters, sortBy, sortOrder, includeArchived],
     queryFn: () =>
       candidateService.getCandidates({
         page,
         limit: pageSize,
         search: debouncedSearch || undefined,
-        status: filters.status || undefined,
-        minRating: filters.minRating ? Number(filters.minRating) : undefined,
-        city: filters.city || undefined,
-        hasVideo: filters.hasVideo === '' ? undefined : filters.hasVideo === 'true',
-        interviewDateStart: filters.interviewDateStart || undefined,
-        interviewDateEnd: filters.interviewDateEnd || undefined,
-        includeArchived: includeArchived || undefined,
-        certification: filters.certification || undefined,
+        status: debouncedFilters.status || undefined,
+        minRating: debouncedFilters.minRating ? Number(debouncedFilters.minRating) : undefined,
+        city: debouncedFilters.city || undefined,
+        hasVideo: debouncedFilters.hasVideo === '' ? undefined : debouncedFilters.hasVideo === 'true',
+        interviewDateStart: debouncedFilters.interviewDateStart || undefined,
+        interviewDateEnd: debouncedFilters.interviewDateEnd || undefined,
+        certification: debouncedFilters.certification || undefined,
+        includeArchived,
         sortBy,
         sortOrder,
       }),
-    placeholderData: keepPreviousData, // Keep previous results while fetching new data
+    placeholderData: keepPreviousData,
   });
 
   // Handle sort change
