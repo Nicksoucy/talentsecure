@@ -265,6 +265,9 @@ model Candidate {
   @@index([isDeleted, isActive, isArchived]) // Main filtering combination
   @@index([city, status]) // City + status filtering
   @@index([status, globalRating]) // Status + rating filtering
+  @@index([firstName])
+  @@index([lastName])
+  @@index([email])
   @@map("candidates")
 }
 
