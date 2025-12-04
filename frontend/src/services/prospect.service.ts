@@ -6,6 +6,7 @@ interface GetProspectsParams {
   city?: string;
   isContacted?: boolean;
   isConverted?: boolean;
+  includeProcessed?: boolean; // NOUVEAU : filtrage dynamique
   submissionDateStart?: string;
   submissionDateEnd?: string;
   page?: number;
@@ -129,6 +130,42 @@ export const prospectService = {
     data: Array<{ city: string; count: number }>
   }> {
     const response = await api.get('/api/prospects/stats/by-city');
+    return response.data;
+  },
+
+  /**
+   * Get prospects extraction statistics (processed vs unprocessed)
+   */
+  async getProspectsExtractionStats(): Promise<{
+    total: number;
+    withSkills: number;
+    withoutSkills: number;
+  }> {
+    const response = await api.get('/api/prospects/stats/extraction');
+    return response.data;
+  },
+
+  /**
+   * Get extraction history for a specific prospect
+   */
+  async getProspectExtractionHistory(prospectId: string): Promise<{
+    prospect: { id: string; name: string };
+    currentSkillsCount: number;
+    logs: Array<{
+      id: string;
+      date: string;
+      method: string;
+      model: string | null;
+      skillsFound: number;
+      processingTimeMs: number | null;
+      promptTokens: number | null;
+      completionTokens: number | null;
+      totalCost: number | null;
+      success: boolean;
+      errorMessage: string | null;
+    }>;
+  }> {
+    const response = await api.get(`/api/prospects/${prospectId}/extraction-history`);
     return response.data;
   },
 };

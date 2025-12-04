@@ -31,11 +31,12 @@ export const skillsService = {
   extractSkills: async (
     candidateId: string,
     model: 'gpt-3.5-turbo' | 'gpt-4' = 'gpt-3.5-turbo',
-    accessToken: string
+    accessToken: string,
+    mode: 'merge' | 'replace' = 'merge' // Added mode
   ): Promise<ExtractionResult> => {
     const response = await axios.post(
       `${API_URL}/api/skills/extract/${candidateId}`,
-      { model },
+      { model, mode },
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -156,6 +157,18 @@ export const skillsService = {
     });
 
     return response;
+  },
+
+  /**
+   * Get prospect skills distribution stats
+   */
+  getProspectSkillsDistribution: async (accessToken: string) => {
+    const response = await axios.get(`${API_URL}/api/skills/prospect-stats`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+    return response.data;
   }
 };
 

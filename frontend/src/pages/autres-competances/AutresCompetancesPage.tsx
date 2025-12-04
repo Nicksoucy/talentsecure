@@ -26,6 +26,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -47,6 +48,10 @@ import { useAuthStore } from '@/store/authStore';
 import ProspectsTable from './components/ProspectsTable';
 import ExtractionResultsDialog from './components/ExtractionResultsDialog';
 import BatchResultsDialog from './components/BatchResultsDialog';
+import ExtractionHistoryDialog from './components/ExtractionHistoryDialog'; // NOUVEAU
+import ReExtractionConfirmDialog from './components/ReExtractionConfirmDialog'; //NOUVEAU P2.2
+import BatchExtractionConfirmDialog from './components/BatchExtractionConfirmDialog'; // NOUVEAU P2.3
+import SkillsDistributionCharts from './components/SkillsDistributionCharts'; // NOUVEAU P3.2
 import { useSkillsAggregation } from '@/hooks/useSkillsAggregation';
 
 const LEVEL_COLORS = {
@@ -106,6 +111,10 @@ const AutresCompetancesPage = () => {
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [showProcessed, setShowProcessed] = useState(false); // NOUVEAU : toggle pour afficher/masquer traités
+  const [historyDialog, setHistoryDialog] = useState<{ open: boolean; prospectId: string; prospectName: string }>({ open: false, prospectId: '', prospectName: '' }); // NOUVEAU historique
+  const [reExtractionDialog, setReExtractionDialog] = useState<{ open: boolean; prospectId: string; prospectName: string; skillsCount: number }>({ open: false, prospectId: '', prospectName: '', skillsCount: 0 }); // NOUVEAU P2.2
+  const [batchConfirmDialog, setBatchConfirmDialog] = useState<{ open: boolean; candidateIds: string[]; cost: number; time: number; skipped: number }>({ open: false, candidateIds: [], cost: 0, time: 0, skipped: 0 }); // NOUVEAU P2.3
 
 
 
@@ -127,8 +136,19 @@ const AutresCompetancesPage = () => {
 
   // Fetch prospects (potential candidates) for extraction
   const { data: prospectsData, isLoading, refetch } = useQuery({
-    queryKey: ['prospects', 'for-extraction'],
-    queryFn: () => prospectService.getProspects({ isConverted: false, limit: 1000 }),
+    queryKey: ['prospects', 'for-extraction', showProcessed], // MODIFIÉ: ajout showProcessed
+    queryFn: () => prospectService.getProspects({
+      isConverted: false,
+      includeProcessed: showProcessed, // NOUVEAU: filtrage dynamique
+      limit: 1000
+    }),
+  });
+
+  // NOUVEAU: Fetch extraction statistics
+  const { data: extractionStats } = useQuery({
+    queryKey: ['prospects', 'extraction-stats'],
+    queryFn: () => prospectService.getProspectsExtractionStats(),
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   const prospects = prospectsData?.data || [];
@@ -146,8 +166,10 @@ const AutresCompetancesPage = () => {
 
   // Extract skills mutation
   const extractMutation = useMutation({
-    mutationFn: (candidateId: string) => skillsService.extractSkills(candidateId, 'gpt-3.5-turbo', accessToken!),
-    onSuccess: (data, candidateId) => {
+    mutationFn: ({ candidateId, mode }: { candidateId: string, mode?: 'merge' | 'replace' }) =>
+      skillsService.extractSkills(candidateId, 'gpt-3.5-turbo', accessToken!, mode),
+    onSuccess: (data, variables) => {
+      const { candidateId } = variables;
       if (data.success) {
         setExtractedSkills(data.skillsFound);
         setShowResultsDialog(true);
@@ -215,9 +237,30 @@ const AutresCompetancesPage = () => {
       enqueueSnackbar('Ce candidat n\'a pas de CV uploadé', { variant: 'warning' });
       return;
     }
+
+    // Check if prospect has existing skills
+    const prospect = prospects.find((p: any) => p.id === candidateId);
+    if (prospect?._count?.skills && prospect._count.skills > 0) {
+      setReExtractionDialog({
+        open: true,
+        prospectId: candidateId,
+        prospectName: candidateName,
+        skillsCount: prospect._count.skills
+      });
+      return;
+    }
+
     setExtractingCandidateId(candidateId);
     setCurrentCandidateName(candidateName);
-    extractMutation.mutate(candidateId);
+    extractMutation.mutate({ candidateId });
+  };
+
+  const handleConfirmReExtraction = (mode: 'merge' | 'replace') => {
+    const { prospectId, prospectName } = reExtractionDialog;
+    setExtractingCandidateId(prospectId);
+    setCurrentCandidateName(prospectName);
+    extractMutation.mutate({ candidateId: prospectId, mode });
+    setReExtractionDialog(prev => ({ ...prev, open: false }));
   };
 
   const handleSaveSkills = () => {
@@ -251,6 +294,9 @@ const AutresCompetancesPage = () => {
 
 
   const handleBatchExtract = () => {
+    let candidatesToProcess: any[] = [];
+    let skippedCount = 0;
+
     // Si des candidats sont sélectionnés manuellement, on utilise ceux-là
     if (selectedCandidateIds.length > 0) {
       const selectedProspects = prospects.filter((p: any) => selectedCandidateIds.includes(p.id));
@@ -261,53 +307,53 @@ const AutresCompetancesPage = () => {
         return;
       }
 
-      const count = prospectsWithCv.length;
-      const estimatedCost = (count * 0.10).toFixed(2);
-      const estimatedTime = Math.ceil(count * 2 / 60);
+      // Filter out already processed if not explicitly requested (though batch usually skips them)
+      // For now, let's assume batch extraction skips already processed ones unless we add a "force" option
+      // But the backend batch endpoint handles skipping if overwrite is false.
+      // Let's count how many might be skipped
+      const alreadyProcessed = prospectsWithCv.filter((p: any) => p._count?.skills && p._count.skills > 0);
+      skippedCount = alreadyProcessed.length;
 
-      const confirmed = window.confirm(
-        `⚠️ EXTRACTION MANUELLE\n\n` +
-        `Vous avez sélectionné ${count} candidat(s) avec CV.\n` +
-        `Coût estimé: ~$${estimatedCost} USD\n` +
-        `Temps estimé: ~${estimatedTime} minutes\n\n` +
-        `Voulez-vous lancer l'extraction pour ces candidats spécifiques?`
-      );
-
-      if (confirmed) {
-        batchExtractMutation.mutate(prospectsWithCv.map((p: any) => p.id));
-        setSelectedCandidateIds([]); // Reset selection after launch
+      candidatesToProcess = prospectsWithCv;
+    } else {
+      // Sinon, comportement par défaut (batch automatique)
+      const prospectsWithCv = prospects.filter((p: any) => p.cvUrl || p.cvStoragePath);
+      if (prospectsWithCv.length === 0) {
+        enqueueSnackbar('Aucun candidat avec CV disponible', { variant: 'warning' });
+        return;
       }
-      return;
+
+      // Limiter le nombre de CVs selon batchLimit (0 = tous)
+      const limitedProspects = batchLimit > 0
+        ? prospectsWithCv.slice(0, batchLimit)
+        : prospectsWithCv;
+
+      const alreadyProcessed = limitedProspects.filter((p: any) => p._count?.skills && p._count.skills > 0);
+      skippedCount = alreadyProcessed.length;
+
+      candidatesToProcess = limitedProspects;
     }
 
-    // Sinon, comportement par défaut (batch automatique)
-    const prospectsWithCv = prospects.filter((p: any) => p.cvUrl || p.cvStoragePath);
-    if (prospectsWithCv.length === 0) {
-      enqueueSnackbar('Aucun candidat avec CV disponible', { variant: 'warning' });
-      return;
-    }
+    const count = candidatesToProcess.length;
+    // Estimate cost: $0.05 per CV (conservative average)
+    const estimatedCost = count * 0.05;
+    // Estimate time: ~2 seconds per CV
+    const estimatedTime = Math.ceil(count * 2 / 60);
 
-    // Limiter le nombre de CVs selon batchLimit (0 = tous)
-    const limitedProspects = batchLimit > 0
-      ? prospectsWithCv.slice(0, batchLimit)
-      : prospectsWithCv;
+    setBatchConfirmDialog({
+      open: true,
+      candidateIds: candidatesToProcess.map((p: any) => p.id),
+      cost: estimatedCost,
+      time: estimatedTime,
+      skipped: skippedCount
+    });
+  };
 
-    const count = limitedProspects.length;
-    const estimatedCost = (count * 0.10).toFixed(2);
-    const estimatedTime = Math.ceil(count * 2 / 60); // ~2 sec per extraction
-
-    const confirmed = window.confirm(
-      `⚠️ ATTENTION - Extraction en masse (Automatique)\n\n` +
-      `Candidats à traiter: ${count}${batchLimit > 0 && prospectsWithCv.length > batchLimit ? ` sur ${prospectsWithCv.length}` : ''}\n` +
-      `Coût estimé: ~$${estimatedCost} USD\n` +
-      `Temps estimé: ~${estimatedTime} minutes\n\n` +
-      `⚠️ Les candidats déjà traités seront ignorés.\n\n` +
-      `Voulez-vous continuer?`
-    );
-
-    if (confirmed) {
-      batchExtractMutation.mutate(limitedProspects.map((p: any) => p.id));
-    }
+  const handleConfirmBatchExtraction = () => {
+    const { candidateIds } = batchConfirmDialog;
+    batchExtractMutation.mutate(candidateIds);
+    setBatchConfirmDialog(prev => ({ ...prev, open: false }));
+    setSelectedCandidateIds([]); // Reset selection
   };
 
 
@@ -401,6 +447,68 @@ const AutresCompetancesPage = () => {
         </Box>
       </Box>
 
+      {/* NOUVEAU : Stats Card + Toggle */}
+      <Card sx={{ mb: 3, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
+        <CardContent>
+          <Grid container spacing={3} alignItems="center">
+            <Grid item xs={12} md={6}>
+              <Stack direction="row" spacing={2}>
+                <Chip
+                  label={`${extractionStats?.withoutSkills || 0} Non traités`}
+                  sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', fontWeight: 'bold' }}
+                />
+                <Chip
+                  label={`${extractionStats?.withSkills || 0} Traités`}
+                  sx={{ bgcolor: 'rgba(255,255,255,0.9)', color: '#667eea', fontWeight: 'bold' }}
+                />
+                <Chip
+                  label={`${extractionStats?.total || 0} Total`}
+                  variant="outlined"
+                  sx={{ borderColor: 'rgba(255,255,255,0.5)', color: 'white' }}
+                />
+              </Stack>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Box display="flex" justifyContent="flex-end" alignItems="center" gap={2}>
+                <Typography variant="body2">
+                  {showProcessed ? 'Affichage de tous les prospects' : 'Masquer les prospects déjà traités'}
+                </Typography>
+                <Box component="label" sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={showProcessed}
+                    onChange={(e) => setShowProcessed(e.target.checked)}
+                    style={{ display: 'none' }}
+                  />
+                  <Box
+                    sx={{
+                      position: 'relative',
+                      width: 50,
+                      height: 24,
+                      bgcolor: showProcessed ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)',
+                      borderRadius: '24px',
+                      transition: 'background-color 0.3s',
+                      '&::before': {
+                        content: '""',
+                        position: 'absolute',
+                        height: 18,
+                        width: 18,
+                        left: 3,
+                        bottom: 3,
+                        bgcolor: showProcessed ? '#667eea' : 'white',
+                        borderRadius: '50%',
+                        transition: 'transform 0.3s',
+                        transform: showProcessed ? 'translateX(26px)' : 'translateX(0)',
+                      },
+                    }}
+                  />
+                </Box>
+              </Box>
+            </Grid>
+          </Grid>
+        </CardContent>
+      </Card>
+
       <Tabs
         value={mainTab}
         onChange={(_, v) => setMainTab(v)}
@@ -429,6 +537,7 @@ const AutresCompetancesPage = () => {
                     onSelectAll={handleSelectAll}
                     onView={handleViewProspect}
                     onExtract={handleExtractSkills}
+                    onViewHistory={(id, name) => setHistoryDialog({ open: true, prospectId: id, prospectName: name })}
                     page={page}
                     rowsPerPage={rowsPerPage}
                     onPageChange={handleChangePage}
@@ -461,6 +570,34 @@ const AutresCompetancesPage = () => {
           setExtractingCandidateId(candidateId);
           setShowResultsDialog(true);
         }}
+      />
+
+      {/* Extraction History Dialog */}
+      <ExtractionHistoryDialog
+        open={historyDialog.open}
+        onClose={() => setHistoryDialog({ open: false, prospectId: '', prospectName: '' })}
+        prospectId={historyDialog.prospectId}
+        prospectName={historyDialog.prospectName}
+      />
+
+      {/* Re-Extraction Confirmation Dialog */}
+      <ReExtractionConfirmDialog
+        open={reExtractionDialog.open}
+        onClose={() => setReExtractionDialog(prev => ({ ...prev, open: false }))}
+        onConfirm={handleConfirmReExtraction}
+        prospectName={reExtractionDialog.prospectName}
+        existingSkillsCount={reExtractionDialog.skillsCount}
+      />
+
+      {/* Batch Extraction Confirmation Dialog */}
+      <BatchExtractionConfirmDialog
+        open={batchConfirmDialog.open}
+        onClose={() => setBatchConfirmDialog(prev => ({ ...prev, open: false }))}
+        onConfirm={handleConfirmBatchExtraction}
+        candidateCount={batchConfirmDialog.candidateIds.length}
+        estimatedCost={batchConfirmDialog.cost}
+        estimatedTimeMinutes={batchConfirmDialog.time}
+        skippedCount={batchConfirmDialog.skipped}
       />
 
       {/* Search Tab */}

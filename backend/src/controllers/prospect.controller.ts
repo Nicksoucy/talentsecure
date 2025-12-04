@@ -72,6 +72,12 @@ export const getProspects = async (
       where.isConverted = isConverted === 'true';
     }
 
+    // NOUVEAU : Filtrage dynamique pour masquer/afficher prospects déjà traités
+    const includeProcessed = req.query.includeProcessed;
+    if (includeProcessed === 'false') {
+      where.skills = { none: {} }; // Exclure prospects avec skills extraites
+    }
+
     // Filter by submission date range
     if (submissionDateStart || submissionDateEnd) {
       where.submissionDate = {};
@@ -90,6 +96,11 @@ export const getProspects = async (
         skip,
         take: Number(limit),
         orderBy: { [sortBy as string]: sortOrder },
+        include: {
+          _count: {
+            select: { skills: true }, // Compter skills pour chaque prospect
+          },
+        },
       }),
     ]);
 
@@ -779,6 +790,106 @@ export const getProspectsStats = async (
     await setCache(PROSPECT_STATS_CACHE_KEY, payload, 300);
 
     res.json(payload);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get prospects statistics for Autre Compétence (processed vs unprocessed)
+ */
+export const getProspectsExtractionStats = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const cacheKey = 'prospects:extraction-stats';
+    const cachedStats = await getCache<{ total: number; withSkills: number; withoutSkills: number }>(cacheKey);
+
+    if (cachedStats) {
+      return res.json(cachedStats);
+    }
+
+    const [total, withSkills] = await prisma.$transaction([
+      prisma.prospectCandidate.count({
+        where: { isDeleted: false, isConverted: false }
+      }),
+      prisma.prospectCandidate.count({
+        where: {
+          isDeleted: false,
+          isConverted: false,
+          skills: { some: {} } // Au moins 1 skill extraite
+        }
+      })
+    ]);
+
+    const payload = {
+      total,
+      withSkills,
+      withoutSkills: total - withSkills
+    };
+
+    await setCache(cacheKey, payload, 120); // Cache 2 minutes
+
+    res.json(payload);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get extraction history for a specific prospect
+ */
+export const getProspectExtractionHistory = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+
+    // Verify prospect exists
+    const prospect = await prisma.prospectCandidate.findUnique({
+      where: { id },
+      select: { id: true, firstName: true, lastName: true, isDeleted: true },
+    });
+
+    if (!prospect || prospect.isDeleted) {
+      return res.status(404).json({ error: 'Prospect non trouvé' });
+    }
+
+    // Get extraction logs
+    const logs = await prisma.cvExtractionLog.findMany({
+      where: { candidateId: id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Get current skills count
+    const currentSkillsCount = await prisma.prospectSkill.count({
+      where: { prospectId: id },
+    });
+
+    res.json({
+      prospect: {
+        id: prospect.id,
+        name: `${prospect.firstName} ${prospect.lastName}`,
+      },
+      currentSkillsCount,
+      logs: logs.map(log => ({
+        id: log.id,
+        date: log.createdAt,
+        method: log.extractionMethod,
+        model: log.aiModel,
+        skillsFound: log.skillsFound,
+        processingTimeMs: log.processingTimeMs,
+        promptTokens: log.promptTokens,
+        completionTokens: log.completionTokens,
+        totalCost: log.totalCost,
+        success: log.success,
+        errorMessage: log.errorMessage,
+      })),
+    });
   } catch (error) {
     next(error);
   }

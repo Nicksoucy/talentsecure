@@ -274,6 +274,54 @@ export const getSkillsStats = async (req: Request, res: Response, next: NextFunc
   }
 };
 
+/**
+ * Get prospect skills distribution statistics
+ * GET /api/skills/prospect-stats
+ */
+export const getProspectSkillsDistribution = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // 1. Top 10 extracted skills
+    const topSkills = await prisma.prospectSkill.groupBy({
+      by: ['skillId'],
+      _count: true,
+      orderBy: { _count: { skillId: 'desc' } },
+      take: 10,
+    });
+
+    const topSkillsWithNames = await Promise.all(
+      topSkills.map(async (ts) => {
+        const skill = await prisma.skill.findUnique({
+          where: { id: ts.skillId },
+          select: { name: true, category: true },
+        });
+        return {
+          name: skill?.name || 'Unknown',
+          category: skill?.category || 'OTHER',
+          count: ts._count,
+        };
+      })
+    );
+
+    // 2. Distribution by Level
+    const levelDistribution = await prisma.prospectSkill.groupBy({
+      by: ['level'],
+      _count: true,
+    });
+
+    const levels = levelDistribution.map(ld => ({
+      level: ld.level,
+      count: ld._count
+    }));
+
+    res.json({
+      topSkills: topSkillsWithNames,
+      levelDistribution: levels,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // ============================================
 // CANDIDATE SKILLS MANAGEMENT
 // ============================================
@@ -550,7 +598,7 @@ export const searchCandidatesBySkills = async (
 /**
  * Extract skills from a candidate's CV
  * POST /api/skills/extract/:candidateId
- * Body: { overwrite? }
+ * Body: { overwrite?, mode? }
  */
 export const extractSkillsFromCandidate = async (
   req: Request,
@@ -559,7 +607,7 @@ export const extractSkillsFromCandidate = async (
 ) => {
   try {
     const { candidateId } = req.params;
-    const { overwrite = false, model } = req.body;
+    const { overwrite = false, model, mode = 'merge' } = req.body;
 
     // Check if candidate exists (try both tables)
     let candidate = await prisma.candidate.findUnique({
@@ -573,54 +621,66 @@ export const extractSkillsFromCandidate = async (
         where: { id: candidateId },
       });
 
-      if (!prospect) {
-        return res.status(404).json({ error: 'Candidat ou prospect non trouvÃ©' });
+      if (prospect) {
+        isProspect = true;
+        candidate = {
+          ...prospect,
+        } as any;
+      } else {
+        return res.status(404).json({ error: 'Candidat non trouvé' });
       }
-      isProspect = true;
     }
 
-    // Get candidate/prospect text
+    // If mode is 'replace', delete existing skills first
+    if (mode === 'replace') {
+      if (isProspect) {
+        await prisma.prospectSkill.deleteMany({
+          where: { prospectId: candidateId },
+        });
+      } else {
+        await prisma.candidateSkill.deleteMany({
+          where: { candidateId },
+        });
+      }
+    }
+
+    // Get candidate text
     const cvText = await cvExtractionService.getCandidateText(candidateId, isProspect);
 
     if (!cvText || cvText.length < 50) {
       return res.status(400).json({
         error: 'CV insuffisant',
-        message: "Le CV doit contenir au moins 50 caractÃ¨res pour l'extraction",
+        message: "Le CV doit contenir au moins 50 caractères pour l'extraction",
       });
     }
 
-    // Extract skills - use AI if model is provided, otherwise use regex
-    let extraction;
-    if (model) {
-      // AI extraction (OpenAI)
-      extraction = await aiExtractionService.extractWithOpenAI(candidateId, cvText, model);
-    } else {
-      // Regex extraction
-      extraction = await cvExtractionService.extractSkillsFromText(candidateId, cvText);
-    }
+    // Extract skills using AI
+    const extraction = await aiExtractionService.extractWithOpenAI(
+      candidateId,
+      cvText,
+      model || 'gpt-3.5-turbo'
+    );
 
     if (!extraction.success) {
       return res.status(500).json({
-        error: 'Erreur lors de l\'extraction',
+        error: "Erreur lors de l'extraction",
         message: extraction.errorMessage,
       });
     }
 
     // Save extracted skills
-    let saveResult = null;
+    let saveResult;
     if (isProspect) {
-      // Save to prospect skills (NO conversion to candidate)
       saveResult = await cvExtractionService.saveProspectSkills(
         candidateId,
         extraction.skillsFound,
-        overwrite
+        overwrite || mode === 'merge'
       );
     } else {
-      // Save to candidate skills
       saveResult = await cvExtractionService.saveExtractedSkills(
         candidateId,
         extraction.skillsFound,
-        overwrite
+        overwrite || mode === 'merge'
       );
     }
 

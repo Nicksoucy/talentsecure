@@ -12,6 +12,8 @@ import {
   getCitiesSuggestions,
   getProspectsSuggestions,
   getProspectsStats,
+  getProspectsExtractionStats,
+  getProspectExtractionHistory,
 } from '../controllers/prospect.controller';
 import { authenticateJWT, authorizeRoles } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
@@ -26,6 +28,7 @@ const prospectQueryFilters = z.object({
   city: z.string().max(100).optional(),
   isContacted: z.string().optional(),
   isConverted: z.string().optional(),
+  includeProcessed: z.string().optional(), // NOUVEAU : filtrage dynamique
   submissionDateStart: z.string().optional(),
   submissionDateEnd: z.string().optional(),
   page: z.string().optional(),
@@ -59,6 +62,13 @@ router.get('/stats/summary', getProspectsStats);
  * @access  Private (All authenticated users)
  */
 router.get('/stats/by-city', getProspectsByCity);
+
+/**
+ * @route   GET /api/prospects/stats/extraction
+ * @desc    Get extraction statistics (processed vs unprocessed prospects)
+ * @access  Private (All authenticated users)
+ */
+router.get('/stats/extraction', getProspectsExtractionStats);
 
 /**
  * @route   GET /api/prospects/suggestions/cities
@@ -108,6 +118,13 @@ router.post(
   validate({ params: uuidParam }),
   convertToCandidate
 );
+
+/**
+ * @route   GET /api/prospects/:id/extraction-history
+ * @desc    Get extraction history for a specific prospect
+ * @access  Private (All authenticated users)
+ */
+router.get('/:id/extraction-history', validate({ params: uuidParam }), getProspectExtractionHistory);
 
 /**
  * @route   GET /api/prospects/:id

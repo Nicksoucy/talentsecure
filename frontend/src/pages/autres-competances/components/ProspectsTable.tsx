@@ -19,6 +19,7 @@ import {
     Visibility as VisibilityIcon,
     CloudUpload as UploadIcon,
     AutoAwesome as AutoAwesomeIcon,
+    History as HistoryIcon,
 } from '@mui/icons-material';
 
 interface Prospect {
@@ -31,6 +32,7 @@ interface Prospect {
     cvStoragePath?: string;
     createdAt: string;
     contacted: boolean;
+    _count?: { skills: number }; // NOUVEAU : compteur de compétences
 }
 
 interface ProspectsTableProps {
@@ -40,6 +42,7 @@ interface ProspectsTableProps {
     onSelectAll: (checked: boolean) => void;
     onView: (id: string) => void;
     onExtract: (id: string, name: string, hasCv: boolean) => void;
+    onViewHistory: (id: string, name: string) => void; // NOUVEAU
     page: number;
     rowsPerPage: number;
     onPageChange: (event: unknown, newPage: number) => void;
@@ -54,6 +57,7 @@ const ProspectsTable: React.FC<ProspectsTableProps> = ({
     onSelectAll,
     onView,
     onExtract,
+    onViewHistory, // NOUVEAU
     page,
     rowsPerPage,
     onPageChange,
@@ -135,10 +139,22 @@ const ProspectsTable: React.FC<ProspectsTableProps> = ({
                                                 <VisibilityIcon fontSize="small" />
                                             </IconButton>
                                         </Tooltip>
-                                        <Tooltip title="Extraire les compétences">
+                                        <Tooltip title="Historique d'extraction">
                                             <IconButton
                                                 size="small"
-                                                color="primary"
+                                                color="secondary"
+                                                onClick={() => onViewHistory(
+                                                    prospect.id,
+                                                    `${prospect.firstName} ${prospect.lastName}`
+                                                )}
+                                            >
+                                                <HistoryIcon fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                        <Tooltip title={prospect._count?.skills ? `Ré-extraire (${prospect._count.skills} compétences)` : "Extraire les compétences"}>
+                                            <IconButton
+                                                size="small"
+                                                color={prospect._count?.skills ? "warning" : "primary"}
                                                 onClick={() =>
                                                     onExtract(
                                                         prospect.id,
@@ -148,7 +164,16 @@ const ProspectsTable: React.FC<ProspectsTableProps> = ({
                                                 }
                                                 disabled={!prospect.cvUrl && !prospect.cvStoragePath}
                                             >
-                                                <AutoAwesomeIcon fontSize="small" />
+                                                {prospect._count?.skills ? (
+                                                    <Box display="flex" alignItems="center" gap={0.5}>
+                                                        <AutoAwesomeIcon fontSize="small" />
+                                                        <Typography variant="caption" fontWeight="bold">
+                                                            {prospect._count.skills}
+                                                        </Typography>
+                                                    </Box>
+                                                ) : (
+                                                    <AutoAwesomeIcon fontSize="small" />
+                                                )}
                                             </IconButton>
                                         </Tooltip>
                                     </Box>

@@ -21,6 +21,7 @@ import {
   extractSkillsHybrid,
   getAIExtractionStats,
   searchExtractedSkills,
+  getProspectSkillsDistribution,
 } from '../controllers/skills.controller';
 
 const router = Router();
@@ -101,6 +102,7 @@ const searchCandidatesSchema = {
 // ============================================
 
 // Get skills stats (must be before /:id route)
+router.get('/prospect-stats', authenticateJWT, getProspectSkillsDistribution);
 router.get('/stats', authenticateJWT, getSkillsStats);
 
 // Search extracted skills
