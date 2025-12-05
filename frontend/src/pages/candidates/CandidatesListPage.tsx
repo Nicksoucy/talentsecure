@@ -52,6 +52,8 @@ import CandidateFiltersBar from './components/CandidateFiltersBar';
 import CandidateBulkActions from './components/CandidateBulkActions';
 import CandidatesTable from './components/CandidatesTable';
 import CreateCatalogueDialog from './components/CreateCatalogueDialog';
+import AdvancedFiltersPanel, { AdvancedFiltersState } from './components/AdvancedFiltersPanel';
+import QuickFilters from './components/QuickFilters';
 import { candidateFormSchema } from '@/validation/candidate';
 import { HelpDialog } from '@/components/HelpDialog';
 
@@ -159,6 +161,25 @@ export default function CandidatesListPage() {
   // Debounced filters to prevent API spam on text inputs (like City)
   const [debouncedFilters, setDebouncedFilters] = useState(filters);
 
+  // Advanced Filters State
+  const [isAdvancedSearch, setIsAdvancedSearch] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState<AdvancedFiltersState>({
+    cities: [],
+    certifications: [],
+    availability: {
+      available24_7: false,
+      availableDays: false,
+      availableNights: false,
+      availableWeekends: false,
+      availableImmediately: false,
+    },
+    hasVehicle: null,
+    hasDriverLicense: null,
+    minRating: 0,
+    languages: [],
+    skills: [],
+  });
+
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
@@ -202,25 +223,106 @@ export default function CandidatesListPage() {
     queryFn: () => clientService.getClients({ isActive: true, limit: 1000 }),
   });
 
+  // Handle advanced filter change
+  const handleAdvancedFilterChange = (newFilters: AdvancedFiltersState) => {
+    setAdvancedFilters(newFilters);
+  };
+
+  // Apply advanced filters
+  const handleApplyAdvancedFilters = () => {
+    setIsAdvancedSearch(true);
+    setPage(1);
+    // Force refetch is handled by useQuery dependency on isAdvancedSearch and advancedFilters
+  };
+
+  // Reset all filters
+  const handleResetFilters = () => {
+    setIsAdvancedSearch(false);
+    setSearch('');
+    setCityInput('');
+    setFilters({
+      status: '',
+      minRating: '',
+      city: '',
+      hasVideo: '',
+      interviewDateStart: '',
+      interviewDateEnd: '',
+      certification: '',
+    });
+    setAdvancedFilters({
+      cities: [],
+      certifications: [],
+      availability: {
+        available24_7: false,
+        availableDays: false,
+        availableNights: false,
+        availableWeekends: false,
+        availableImmediately: false,
+      },
+      hasVehicle: null,
+      hasDriverLicense: null,
+      minRating: 0,
+      languages: [],
+      skills: [],
+    });
+    setPage(1);
+  };
+
+  // Apply quick preset
+  const handleApplyPreset = (preset: Partial<AdvancedFiltersState>) => {
+    setAdvancedFilters(prev => ({
+      ...prev,
+      ...preset,
+      availability: {
+        ...prev.availability,
+        ...(preset.availability || {})
+      }
+    }));
+    setIsAdvancedSearch(true);
+    setPage(1);
+  };
+
   // Fetch candidates with debounced search and keepPreviousData to prevent UI flashing
   const { data, isLoading, error } = useQuery({
-    queryKey: ['candidates', page, pageSize, debouncedSearch, debouncedFilters, sortBy, sortOrder, includeArchived],
-    queryFn: () =>
-      candidateService.getCandidates({
-        page,
-        limit: pageSize,
-        search: debouncedSearch || undefined,
-        status: debouncedFilters.status || undefined,
-        minRating: debouncedFilters.minRating ? Number(debouncedFilters.minRating) : undefined,
-        city: debouncedFilters.city || undefined,
-        hasVideo: debouncedFilters.hasVideo === '' ? undefined : debouncedFilters.hasVideo === 'true',
-        interviewDateStart: debouncedFilters.interviewDateStart || undefined,
-        interviewDateEnd: debouncedFilters.interviewDateEnd || undefined,
-        certification: debouncedFilters.certification || undefined,
-        includeArchived,
-        sortBy,
-        sortOrder,
-      }),
+    queryKey: ['candidates', page, pageSize, debouncedSearch, debouncedFilters, sortBy, sortOrder, includeArchived, isAdvancedSearch, advancedFilters],
+    queryFn: () => {
+      if (isAdvancedSearch) {
+        // Map boolean availability to string array
+        const availability: string[] = [];
+        if (advancedFilters.availability.available24_7) availability.push('24/7');
+        if (advancedFilters.availability.availableDays) availability.push('days');
+        if (advancedFilters.availability.availableNights) availability.push('nights');
+        if (advancedFilters.availability.availableWeekends) availability.push('weekends');
+
+        return candidateService.advancedSearch({
+          page,
+          limit: pageSize,
+          cities: advancedFilters.cities,
+          certifications: advancedFilters.certifications,
+          availability,
+          minRating: advancedFilters.minRating > 0 ? advancedFilters.minRating : undefined,
+          hasVehicle: advancedFilters.hasVehicle === null ? undefined : advancedFilters.hasVehicle,
+          languages: advancedFilters.languages,
+          skills: advancedFilters.skills,
+        });
+      } else {
+        return candidateService.getCandidates({
+          page,
+          limit: pageSize,
+          search: debouncedSearch || undefined,
+          status: debouncedFilters.status || undefined,
+          minRating: debouncedFilters.minRating ? Number(debouncedFilters.minRating) : undefined,
+          city: debouncedFilters.city || undefined,
+          hasVideo: debouncedFilters.hasVideo === '' ? undefined : debouncedFilters.hasVideo === 'true',
+          interviewDateStart: debouncedFilters.interviewDateStart || undefined,
+          interviewDateEnd: debouncedFilters.interviewDateEnd || undefined,
+          certification: debouncedFilters.certification || undefined,
+          includeArchived,
+          sortBy,
+          sortOrder,
+        });
+      }
+    },
     placeholderData: keepPreviousData,
   });
 
@@ -497,7 +599,14 @@ export default function CandidatesListPage() {
 
 
   const handleSaveCandidate = (formData: any) => {
-    const validationResult = candidateFormSchema.safeParse(formData);
+    // Pre-process form data to handle dependencies
+    const processedData = {
+      ...formData,
+      bspStatus: formData.hasBSP ? formData.bspStatus : 'NONE',
+      postalCode: formData.postalCode || null,
+    };
+
+    const validationResult = candidateFormSchema.safeParse(processedData);
 
     if (!validationResult.success) {
       const firstIssue = validationResult.error.issues[0];
@@ -813,28 +922,44 @@ export default function CandidatesListPage() {
       </Box >
 
       {/* Map */}
-      < Collapse in={showMap}>
+      <Collapse in={showMap}>
         <Box sx={{ mb: 3 }}>
           <Suspense fallback={renderLazyFallback(200)}>
             <CandidatesMap onCityClick={handleCityClick} />
           </Suspense>
         </Box>
-      </Collapse >
+      </Collapse>
 
-      {/* Search and Filters */}
-      < CandidateFiltersBar
+      {/* Quick Filters & Advanced Mode Toggle */}
+      <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2} flexWrap="wrap" gap={2}>
+        <QuickFilters onApplyPreset={handleApplyPreset} />
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={isAdvancedSearch}
+              onChange={(e) => {
+                setIsAdvancedSearch(e.target.checked);
+                if (e.target.checked) setShowFilters(true);
+              }}
+              color="primary"
+            />
+          }
+          label={
+            <Typography variant="body2" fontWeight="bold" color={isAdvancedSearch ? 'primary' : 'text.secondary'}>
+              Recherche Avancée
+            </Typography>
+          }
+        />
+      </Box>
+
+      {/* Filters Bar */}
+      <CandidateFiltersBar
         search={search}
-        onSearchChange={(value) => {
-          setSearch(value);
-          setPage(1);
-        }}
+        onSearchChange={setSearch}
         filters={filters}
         onFilterChange={handleFilterChange}
         includeArchived={includeArchived}
-        onIncludeArchivedChange={(value) => {
-          setIncludeArchived(value);
-          setPage(1);
-        }}
+        onIncludeArchivedChange={setIncludeArchived}
         showFilters={showFilters}
         onToggleFilters={() => setShowFilters(!showFilters)}
         candidateSuggestions={candidateSuggestions}
@@ -843,6 +968,16 @@ export default function CandidatesListPage() {
         citySuggestions={citySuggestions}
         cityInput={cityInput}
         onCityInputChange={setCityInput}
+        advancedFiltersComponent={isAdvancedSearch ? (
+          <AdvancedFiltersPanel
+            filters={advancedFilters}
+            onFilterChange={handleAdvancedFilterChange}
+            onReset={handleResetFilters}
+            onSearch={handleApplyAdvancedFilters}
+            citySuggestions={citySuggestions}
+            onCityInputChange={fetchCitySuggestions}
+          />
+        ) : undefined}
       />
 
       <Card>

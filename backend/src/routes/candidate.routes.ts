@@ -16,6 +16,7 @@ import {
   deleteCandidateVideo,
   getCandidatesStats,
   exportCandidatesCSV,
+  advancedSearch,
 } from '../controllers/candidate.controller';
 import {
   uploadCandidateCV,
@@ -55,6 +56,20 @@ const candidateQueryFilters = z.object({
   sortBy: z.string().optional(),
   sortOrder: z.enum(['asc', 'desc']).optional(),
 }).strict();
+
+// Advanced search validation schema (Phase 1)
+const advancedSearchSchema = z.object({
+  cities: z.array(z.string()).optional().default([]),
+  certifications: z.array(z.string()).optional().default([]),
+  availability: z.array(z.string()).optional().default([]),
+  minExperience: z.number().min(0).optional(),
+  minRating: z.number().min(0).max(10).optional(),
+  hasVehicle: z.boolean().optional(),
+  languages: z.array(z.string()).optional().default([]),
+  skills: z.array(z.string()).optional().default([]),
+  page: z.number().min(1).optional().default(1),
+  limit: z.number().min(1).max(100).optional().default(20),
+});
 
 const router = Router();
 
@@ -102,6 +117,13 @@ router.get('/suggestions/names', getCandidatesSuggestions);
  * @access  Private (All authenticated users)
  */
 router.get('/export/csv', validate({ query: candidateQueryFilters }), exportCandidatesCSV);
+
+/**
+ * @route   POST /api/candidates/advanced-search
+ * @desc    Advanced search with multiple filters (Phase 1)
+ * @access  Private (All authenticated users)
+ */
+router.post('/advanced-search', validate({ body: advancedSearchSchema }), advancedSearch);
 
 /**
  * @route   POST /api/candidates

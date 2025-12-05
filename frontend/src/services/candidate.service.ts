@@ -202,4 +202,25 @@ export const candidateService = {
     const response = await api.post(`/api/extraction/candidates/${id}/extract`, { model });
     return response.data;
   },
+
+  /**
+   * Advanced search with multiple filters
+   */
+  async advancedSearch(data: AdvancedSearchParams): Promise<CandidatesResponse> {
+    const response = await api.post('/api/candidates/advanced-search', data);
+    return response.data;
+  },
 };
+
+export interface AdvancedSearchParams {
+  cities?: string[];
+  certifications?: string[];
+  availability?: string[];
+  minExperience?: number;
+  minRating?: number;
+  hasVehicle?: boolean;
+  languages?: string[];
+  skills?: string[];
+  page?: number;
+  limit?: number;
+}

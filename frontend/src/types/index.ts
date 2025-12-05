@@ -124,12 +124,31 @@ export interface Candidate {
   // Availability
   hasVehicle: boolean;
   canTravelKm?: number;
+  vehicleType?: string;
+
+  // Schedule Availability
+  available24_7?: boolean;
+  availableDays?: boolean;
+  availableNights?: boolean;
+  availableWeekends?: boolean;
+  availableImmediately?: boolean;
+
+  // Work Preferences
+  preferredShiftType?: string;
+  willingToRelocate?: boolean;
+  maxCommuteMins?: number;
 
   // Licenses and certifications
   hasBSP: boolean;
   bspNumber?: string;
   bspExpiryDate?: string;
   bspStatus?: string;
+
+  // Additional Certifications
+  hasRCR?: boolean;
+  rcrExpiryDate?: string;
+  hasSSIAP?: boolean;
+  ssiapExpiryDate?: string;
 
   hasDriverLicense?: boolean;
   driverLicenseNumber?: string;

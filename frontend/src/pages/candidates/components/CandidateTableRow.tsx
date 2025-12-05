@@ -10,6 +10,7 @@ import {
 } from '@mui/icons-material';
 import { Candidate } from '@/types';
 import CandidateActionsMenu from './CandidateActionsMenu';
+import CandidateBadges from '@/components/candidates/CandidateBadges';
 
 const STATUS_COLORS: Record<string, 'success' | 'info' | 'warning' | 'error' | 'default'> = {
   ELITE: 'error',
@@ -118,6 +119,23 @@ export default function CandidateTableRow({
 
       <TableCell>
         {candidate.globalRating ? `${candidate.globalRating}/10` : '-'}
+      </TableCell>
+
+      <TableCell>
+        <CandidateBadges
+          hasBSP={candidate.hasBSP}
+          hasRCR={candidate.hasRCR}
+          hasSSIAP={candidate.hasSSIAP}
+          available24_7={candidate.available24_7}
+          availableDays={candidate.availableDays}
+          availableNights={candidate.availableNights}
+          availableWeekends={candidate.availableWeekends}
+          hasVehicle={candidate.hasVehicle}
+          languages={candidate.languages}
+          globalRating={candidate.globalRating}
+          size="small"
+          maxBadges={3}
+        />
       </TableCell>
 
       <TableCell sx={{ maxWidth: 300 }}>

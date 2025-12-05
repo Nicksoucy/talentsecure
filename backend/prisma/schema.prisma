@@ -208,6 +208,25 @@ model Candidate {
   driverLicenseNumber String?
   driverLicenseClass  String?
 
+  // Disponibilité horaire (NOUVEAU - Phase 1)
+  vehicleType          String? // Type de véhicule
+  available24_7        Boolean @default(false) // Disponible 24/7
+  availableDays        Boolean @default(false) // Disponible jour (6h-18h)
+  availableNights      Boolean @default(false) // Disponible nuit (18h-6h)
+  availableWeekends    Boolean @default(false) // Disponible fin de semaine
+  availableImmediately Boolean @default(true) // Disponible immédiatement
+
+  // Préférences de travail (NOUVEAU - Phase 1)
+  preferredShiftType String? // "full-time", "part-time", "both"
+  willingToRelocate  Boolean @default(false) // Prêt à déménager
+  maxCommuteMins     Int? // Temps de trajet maximum (minutes)
+
+  // Certifications supplémentaires (NOUVEAU - Phase 1)
+  hasRCR          Boolean   @default(false) // RCR/DEA
+  rcrExpiryDate   DateTime?
+  hasSSIAP        Boolean   @default(false) // SSIAP (France)
+  ssiapExpiryDate DateTime?
+
   // Urgence 24h
   urgency24hScore Int?    @default(0) // Score de 0 Ã  10
   canWorkUrgent   Boolean @default(false)
@@ -268,6 +287,11 @@ model Candidate {
   @@index([firstName])
   @@index([lastName])
   @@index([email])
+  // New indexes for Phase 1 - Advanced Search
+  @@index([available24_7])
+  @@index([hasRCR])
+  @@index([city, hasBSP, available24_7]) // Common search combination
+  @@index([globalRating, available24_7]) // Rating + availability
   @@map("candidates")
 }
 

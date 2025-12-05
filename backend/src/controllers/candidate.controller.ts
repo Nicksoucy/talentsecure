@@ -1187,3 +1187,137 @@ export const exportCandidatesCSV = async (
     next(error);
   }
 };
+
+/**
+ * Advanced search with multiple filters (Phase 1)
+ * POST /api/candidates/advanced-search
+ */
+export const advancedSearch = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const {
+      cities = [],
+      certifications = [],
+      availability = [],
+      minExperience,
+      minRating,
+      hasVehicle,
+      languages = [],
+      skills = [],
+      page = 1,
+      limit = 20,
+    } = req.body;
+
+    // Build dynamic where clause
+    const where: any = {
+      isDeleted: false,
+      isActive: true,
+    };
+
+    // Filter by cities
+    if (cities.length > 0) {
+      where.city = { in: cities };
+    }
+
+    // Filter by certifications
+    if (certifications.includes('BSP')) {
+      where.hasBSP = true;
+    }
+    if (certifications.includes('RCR')) {
+      where.hasRCR = true;
+    }
+    if (certifications.includes('SSIAP')) {
+      where.hasSSIAP = true;
+    }
+    if (certifications.includes('Permis')) {
+      where.hasDriverLicense = true;
+    }
+
+    // Filter by availability
+    if (availability.includes('24/7')) {
+      where.available24_7 = true;
+    }
+    if (availability.includes('days')) {
+      where.availableDays = true;
+    }
+    if (availability.includes('nights')) {
+      where.availableNights = true;
+    }
+    if (availability.includes('weekends')) {
+      where.availableWeekends = true;
+    }
+
+    // Filter by rating
+    if (minRating) {
+      where.globalRating = { gte: Number(minRating) };
+    }
+
+    // Filter by vehicle
+    if (hasVehicle !== undefined) {
+      where.hasVehicle = hasVehicle;
+    }
+
+    // Filter by languages (if provided)
+    if (languages.length > 0) {
+      where.languages = {
+        some: {
+          language: { in: languages },
+        },
+      };
+    }
+
+    // Filter by skills (if provided)
+    if (skills.length > 0) {
+      where.skills = {
+        some: {
+          skill: {
+            name: { in: skills, mode: 'insensitive' },
+          },
+        },
+      };
+    }
+
+    // Calculate pagination
+    const skip = (Number(page) - 1) * Number(limit);
+    const take = Number(limit);
+
+    // Execute query
+    const [candidates, total] = await Promise.all([
+      prisma.candidate.findMany({
+        where,
+        skip,
+        take,
+        include: {
+          languages: true,
+          certifications: true,
+          skills: {
+            include: {
+              skill: true,
+            },
+          },
+        },
+        orderBy: {
+          globalRating: 'desc',
+        },
+      }),
+      prisma.candidate.count({ where }),
+    ]);
+
+    res.json({
+      success: true,
+      data: candidates,
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        totalPages: Math.ceil(total / Number(limit)),
+      },
+    });
+  } catch (error) {
+    console.error('Error in advanced search:', error);
+    next(error);
+  }
+};

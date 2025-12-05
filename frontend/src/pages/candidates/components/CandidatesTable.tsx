@@ -143,6 +143,7 @@ export default function CandidatesTable({
                                     )}
                                 </Box>
                             </TableCell>
+                            <TableCell><strong>Badges</strong></TableCell>
                             <TableCell><strong>Avis RH</strong></TableCell>
                             <TableCell align="center"><strong>CV</strong></TableCell>
                             <TableCell><strong>BSP</strong></TableCell>
