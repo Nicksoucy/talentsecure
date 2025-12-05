@@ -50,6 +50,7 @@ import { candidateFormSchema } from '../../validation/candidate';
 import QuickOverview from '@/components/candidates/QuickOverview';
 import CandidateBadges from '@/components/candidates/CandidateBadges';
 import CandidateTabs, { CustomTabPanel } from './components/CandidateTabs';
+import SimilarCandidates from './components/SimilarCandidates';
 
 const STATUS_COLORS: Record<string, 'success' | 'info' | 'warning' | 'error' | 'default'> = {
   ELITE: 'error',
@@ -492,6 +493,9 @@ const CandidateDetailPage = () => {
                   )}
                 </CardContent>
               </Card>
+
+              {/* Similar Candidates (AI) */}
+              {id && <SimilarCandidates currentCandidateId={id} />}
             </Grid>
           </Grid>
         </CustomTabPanel>

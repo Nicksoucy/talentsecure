@@ -45,6 +45,17 @@ interface CachedExtractionSummary {
   expiresAt: number;
 }
 
+export interface NaturalLanguageSearchQuery {
+  cities: string[];
+  certifications: string[];
+  availability: string[];
+  minExperience?: number;
+  minRating?: number;
+  hasVehicle?: boolean;
+  languages: string[];
+  skills: string[];
+}
+
 export class AIExtractionService {
   private openaiApiKey: string;
   private anthropicApiKey: string;
@@ -150,6 +161,73 @@ export class AIExtractionService {
       const cvHash = error?.cvHash || this.computeCvHash(cvText);
       const errorMessage = error?.error?.message || error?.message || 'Erreur lors de l\'extraction Claude';
       return this.createErrorSummary(candidateId, 'CLAUDE', model, errorMessage, elapsed, cvHash);
+    }
+  }
+
+  /**
+   * Parse natural language search query using OpenAI
+   */
+  async parseSearchQuery(
+    query: string,
+    model: 'gpt-4' | 'gpt-4-turbo' | 'gpt-3.5-turbo' = 'gpt-3.5-turbo'
+  ): Promise<NaturalLanguageSearchQuery> {
+    if (!this.openaiApiKey) {
+      throw new Error('OPENAI_API_KEY non configuree');
+    }
+
+    const systemPrompt = `Tu es un assistant expert en recrutement. Ton rôle est de convertir une recherche en langage naturel en filtres structurés pour une base de données de candidats.
+
+Voici les filtres disponibles :
+- cities: Liste des villes (ex: "Montréal", "Laval", "Québec")
+- certifications: Liste des certifications (ex: "BSP", "RCR", "Permis de conduire", "SSIAP")
+- availability: Liste des disponibilités (ex: "24/7", "days", "nights", "weekends")
+- minExperience: Nombre d'années d'expérience minimum (ex: 2)
+- minRating: Note minimale sur 10 (ex: 7)
+- hasVehicle: Booléen si un véhicule est requis
+- languages: Liste des langues requises (ex: "Français", "Anglais")
+- skills: Liste des compétences spécifiques (ex: "Patrouille", "Contrôle d'accès")
+
+Règles d'interprétation :
+- "24/7" ou "tout le temps" -> availability: ["24/7"]
+- "jour" -> availability: ["days"]
+- "nuit" -> availability: ["nights"]
+- "fin de semaine" -> availability: ["weekends"]
+- "bilingue" -> languages: ["Français", "Anglais"]
+- "avec auto", "voiture", "permis" -> hasVehicle: true (si contexte véhicule), certifications: ["Permis de conduire"] (si contexte permis)
+- "expert", "senior" -> minExperience: 5
+- "junior", "débutant" -> minExperience: 0
+- "bon candidat", "fiable" -> minRating: 7
+- "top candidat", "excellent" -> minRating: 9
+
+Réponds UNIQUEMENT avec un objet JSON valide respectant cette structure.`;
+
+    try {
+      const response = await this.withRetries(() =>
+        axios.post(
+          'https://api.openai.com/v1/chat/completions',
+          {
+            model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: query },
+            ],
+            temperature: 0.1,
+            response_format: { type: 'json_object' },
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${this.openaiApiKey}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        )
+      );
+
+      const content = response.data.choices[0].message.content;
+      return JSON.parse(content) as NaturalLanguageSearchQuery;
+    } catch (error: any) {
+      console.error('Error parsing search query:', error);
+      throw new Error('Erreur lors de l\'analyse de la recherche');
     }
   }
 

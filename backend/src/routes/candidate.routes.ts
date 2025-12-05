@@ -17,6 +17,8 @@ import {
   getCandidatesStats,
   exportCandidatesCSV,
   advancedSearch,
+  parseNaturalLanguageSearch,
+  getSimilarCandidates,
 } from '../controllers/candidate.controller';
 import {
   uploadCandidateCV,
@@ -126,6 +128,13 @@ router.get('/export/csv', validate({ query: candidateQueryFilters }), exportCand
 router.post('/advanced-search', validate({ body: advancedSearchSchema }), advancedSearch);
 
 /**
+ * @route   POST /api/candidates/ai-search
+ * @desc    Parse natural language search query
+ * @access  Private (All authenticated users)
+ */
+router.post('/ai-search', parseNaturalLanguageSearch);
+
+/**
  * @route   POST /api/candidates
  * @desc    Create new candidate
  * @access  Private (ADMIN, RH_RECRUITER)
@@ -210,6 +219,13 @@ router.delete(
  * @access  Private (All authenticated users)
  */
 router.get('/:id', validate({ params: candidateIdSchema }), getCandidateById);
+
+/**
+ * @route   GET /api/candidates/:id/similar
+ * @desc    Get similar candidates
+ * @access  Private (All authenticated users)
+ */
+router.get('/:id/similar', validate({ params: candidateIdSchema }), getSimilarCandidates);
 
 /**
  * @route   PUT /api/candidates/:id

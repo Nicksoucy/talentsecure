@@ -1,3 +1,4 @@
+
 import { Suspense, useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
@@ -39,7 +40,7 @@ import {
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { useNavigate } from 'react-router-dom';
-import { candidateService } from '@/services/candidate.service';
+
 import { adminService } from '@/services/admin.service';
 import { TableSkeleton } from '@/components/skeletons';
 import { catalogueService } from '@/services/catalogue.service';
@@ -54,8 +55,11 @@ import CandidatesTable from './components/CandidatesTable';
 import CreateCatalogueDialog from './components/CreateCatalogueDialog';
 import AdvancedFiltersPanel, { AdvancedFiltersState } from './components/AdvancedFiltersPanel';
 import QuickFilters from './components/QuickFilters';
+import SmartSearchBar from './components/SmartSearchBar';
+import { candidateService, AdvancedSearchParams } from '@/services/candidate.service';
 import { candidateFormSchema } from '@/validation/candidate';
 import { HelpDialog } from '@/components/HelpDialog';
+import CandidateComparatorDialog from './components/CandidateComparatorDialog';
 
 const CANDIDATES_HELP_SECTIONS = [
   {
@@ -138,7 +142,10 @@ export default function CandidatesListPage() {
       <CircularProgress />
     </Box>
   );
+  // Dialog states
   const [openAddDialog, setOpenAddDialog] = useState(false);
+  const [openCatalogueDialog, setOpenCatalogueDialog] = useState(false);
+  const [openComparatorDialog, setOpenComparatorDialog] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState<any>(null);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
@@ -197,7 +204,6 @@ export default function CandidatesListPage() {
 
   // Selection and catalogue creation states
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
-  const [openCatalogueDialog, setOpenCatalogueDialog] = useState(false);
 
   // Debounce search input (300ms delay to avoid spamming API)
   useEffect(() => {
@@ -866,9 +872,9 @@ export default function CandidatesListPage() {
       {/* Bulk Actions Bar */}
       < CandidateBulkActions
         selectedCount={selectedCandidates.size}
-        onCreateCatalogue={() => setOpenCatalogueDialog(true)
-        }
+        onCreateCatalogue={() => setOpenCatalogueDialog(true)}
         onClearSelection={handleDeselectAll}
+        onCompare={() => setOpenComparatorDialog(true)}
         onRevertToProspect={user?.role === 'ADMIN' ? handleRevertBatch : undefined}
       />
 
@@ -955,7 +961,10 @@ export default function CandidatesListPage() {
       {/* Filters Bar */}
       <CandidateFiltersBar
         search={search}
-        onSearchChange={setSearch}
+        onSearchChange={(val) => {
+          setSearch(val);
+          if (val) setIsAdvancedSearch(false);
+        }}
         filters={filters}
         onFilterChange={handleFilterChange}
         includeArchived={includeArchived}
@@ -967,7 +976,7 @@ export default function CandidatesListPage() {
         onFetchCandidateSuggestions={fetchCandidateSuggestions}
         citySuggestions={citySuggestions}
         cityInput={cityInput}
-        onCityInputChange={setCityInput}
+        onCityInputChange={fetchCitySuggestions}
         advancedFiltersComponent={isAdvancedSearch ? (
           <AdvancedFiltersPanel
             filters={advancedFilters}
@@ -1055,6 +1064,13 @@ export default function CandidatesListPage() {
         clients={clientsData?.data || []}
         onSubmit={handleCreateCatalogue}
         isSubmitting={createCatalogueMutation.isPending}
+      />
+
+      {/* Candidate Comparator Dialog */}
+      <CandidateComparatorDialog
+        open={openComparatorDialog}
+        onClose={() => setOpenComparatorDialog(false)}
+        candidates={candidates.filter((c: any) => selectedCandidates.has(c.id))}
       />
     </Box >
   );

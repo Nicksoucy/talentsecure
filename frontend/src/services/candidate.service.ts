@@ -210,6 +210,22 @@ export const candidateService = {
     const response = await api.post('/api/candidates/advanced-search', data);
     return response.data;
   },
+
+  /**
+   * Parse natural language search query
+   */
+  async parseNaturalLanguageQuery(query: string): Promise<{ success: boolean; data: AdvancedSearchParams }> {
+    const response = await api.post('/api/candidates/ai-search', { query });
+    return response.data;
+  },
+
+  /**
+   * Get similar candidates
+   */
+  async getSimilarCandidates(id: string, limit: number = 3): Promise<{ success: boolean; data: Candidate[] }> {
+    const response = await api.get(`/api/candidates/${id}/similar`, { params: { limit } });
+    return response.data;
+  },
 };
 
 export interface AdvancedSearchParams {

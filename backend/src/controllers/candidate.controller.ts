@@ -6,6 +6,7 @@ import { buildCacheKey } from '../utils/cache';
 import { getStatusFromRating } from '../utils/candidate.utils';
 import { Parser } from 'json2csv';
 import { candidateService } from '../services/candidate.service';
+import { aiExtractionService } from '../services/ai-extraction.service';
 
 const CANDIDATE_LIST_CACHE_PREFIX = 'candidates:list';
 const CANDIDATE_STATS_CACHE_KEY = 'candidates:stats';
@@ -15,6 +16,34 @@ const invalidateCandidateCaches = async () => {
     invalidateCacheByPrefix(CANDIDATE_LIST_CACHE_PREFIX),
     deleteCache(CANDIDATE_STATS_CACHE_KEY),
   ]);
+};
+
+
+
+/**
+ * Parse natural language search query
+ */
+export const parseNaturalLanguageSearch = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { query } = req.body;
+
+    if (!query) {
+      return res.status(400).json({ error: 'Query string is required' });
+    }
+
+    const filters = await aiExtractionService.parseSearchQuery(query);
+
+    res.json({
+      success: true,
+      data: filters,
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 /**
@@ -726,6 +755,29 @@ export const uploadCandidateVideo = async (
     });
   } catch (error: any) {
     logger.error('Error uploading video', { error });
+    next(error);
+  }
+};
+
+/**
+ * Get similar candidates
+ */
+export const getSimilarCandidates = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+    const limit = req.query.limit ? Number(req.query.limit) : 3;
+
+    const candidates = await candidateService.findSimilarCandidates(id, limit);
+
+    res.json({
+      success: true,
+      data: candidates,
+    });
+  } catch (error) {
     next(error);
   }
 };

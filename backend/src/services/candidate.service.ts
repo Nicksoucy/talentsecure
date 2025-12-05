@@ -232,6 +232,72 @@ export class CandidateService {
                 totalPages: Math.ceil(total / limit),
             },
         };
+
+
+    }
+
+    async findSimilarCandidates(candidateId: string, limit: number = 3) {
+        const candidate = await prisma.candidate.findUnique({
+            where: { id: candidateId },
+            include: { certifications: true }
+        });
+
+        if (!candidate) throw new Error('Candidate not found');
+
+        // Find candidates in same city
+        // We start with a broad search and rank them in memory
+        const candidates = await prisma.candidate.findMany({
+            where: {
+                id: { not: candidateId },
+                isDeleted: false,
+                isActive: true,
+                city: candidate.city || undefined, // Match city if exists
+            },
+            include: {
+                certifications: true,
+                availabilities: true,
+                languages: true,
+            },
+            take: 20 // Fetch a pool of candidates to rank
+        });
+
+        // Scoring logic
+        const scored = candidates.map(c => {
+            let score = 0;
+
+            // City match (already filtered mostly, but verify)
+            if (c.city && candidate.city && c.city === candidate.city) score += 5;
+
+            // Certifications match
+            const sourceCertNames = candidate.certifications.map(cert => cert.name.toLowerCase());
+            const targetCertNames = c.certifications.map(cert => cert.name.toLowerCase());
+            const commonCerts = targetCertNames.filter(name => sourceCertNames.includes(name));
+            score += commonCerts.length * 3;
+
+            // BSP Match (Critical)
+            if (candidate.hasBSP && c.hasBSP) score += 5;
+
+            // Rating proximity
+            if (c.globalRating && candidate.globalRating) {
+                const diff = Math.abs(c.globalRating - candidate.globalRating);
+                if (diff <= 1) score += 3;
+                else if (diff <= 2) score += 1;
+            }
+
+            // Experience proximity (if available, assuming experienceRating is a proxy or we parse it)
+            // For now, let's use experienceRating
+            if (c.experienceRating && candidate.experienceRating) {
+                const diff = Math.abs(c.experienceRating - candidate.experienceRating);
+                if (diff <= 1) score += 2;
+            }
+
+            return { ...c, similarityScore: score };
+        });
+
+        // Sort by score desc
+        return scored
+            .sort((a, b) => b.similarityScore - a.similarityScore)
+            .slice(0, limit);
     }
 }
 

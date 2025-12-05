@@ -14,6 +14,7 @@ interface CandidateBulkActionsProps {
   onCreateCatalogue: () => void;
   onClearSelection: () => void;
   onRevertToProspect?: () => void;
+  onCompare: () => void;
 }
 
 export default function CandidateBulkActions({
@@ -21,6 +22,7 @@ export default function CandidateBulkActions({
   onCreateCatalogue,
   onClearSelection,
   onRevertToProspect,
+  onCompare,
 }: CandidateBulkActionsProps) {
   if (selectedCount === 0) {
     return null;
@@ -53,6 +55,25 @@ export default function CandidateBulkActions({
           fontWeight: 'bold',
         }}
       />
+
+      <Button
+        variant="contained"
+        disabled={selectedCount < 2 || selectedCount > 3}
+        sx={{
+          backgroundColor: 'white',
+          color: 'primary.main',
+          '&:hover': {
+            backgroundColor: 'grey.100',
+          },
+          '&.Mui-disabled': {
+            backgroundColor: 'rgba(255, 255, 255, 0.3)',
+            color: 'rgba(255, 255, 255, 0.7)',
+          }
+        }}
+        onClick={onCompare}
+      >
+        Comparer ({selectedCount})
+      </Button>
 
       <Button
         variant="contained"
