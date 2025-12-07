@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Box,
   TextField,
@@ -123,6 +123,15 @@ const ClientLoginPage = () => {
           </form>
 
           <Box sx={{ mt: 3, textAlign: 'center' }}>
+            <Typography variant="body2" color="text.secondary">
+              Pas encore de compte ?{' '}
+              <Link to="/client/register" style={{ color: '#1976d2', textDecoration: 'none' }}>
+                S'inscrire
+              </Link>
+            </Typography>
+          </Box>
+
+          <Box sx={{ mt: 2, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">
               TalentSecure - Portail Client
             </Typography>

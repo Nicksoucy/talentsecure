@@ -1,5 +1,6 @@
 import { Suspense, useState, lazy } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -37,6 +38,7 @@ import {
   Restore as RestoreIcon,
   Search as SearchIcon,
   Business as BusinessIcon,
+  Visibility as VisibilityIcon
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { clientService, Client } from '@/services/client.service';
@@ -46,6 +48,7 @@ import { clientFormSchema } from '@/validation/client';
 export default function ClientsPage() {
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [openDialog, setOpenDialog] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [page, setPage] = useState(1);
@@ -330,6 +333,14 @@ export default function ClientsPage() {
                       <TableCell align="right">
                         <IconButton
                           size="small"
+                          color="primary"
+                          onClick={() => navigate(`/clients/${client.id}`)}
+                          title="Voir détails"
+                        >
+                          <VisibilityIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
                           color="secondary"
                           onClick={() => handleOpenEdit(client)}
                           title="Modifier"
@@ -507,8 +518,3 @@ export default function ClientsPage() {
     </Box>
   );
 }
-
-
-
-
-

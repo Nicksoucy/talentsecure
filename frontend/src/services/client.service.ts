@@ -87,4 +87,18 @@ export const clientService = {
     const response = await api.post(`/api/clients/${id}/reactivate`);
     return response.data;
   },
+
+  /**
+   * Register new client (public)
+   */
+  register: async (data: {
+    name: string;
+    email: string;
+    password: string;
+    companyName?: string;
+    phone?: string;
+  }): Promise<{ data: Client; message: string }> => {
+    const response = await api.post('/api/clients/register', data);
+    return response.data;
+  },
 };

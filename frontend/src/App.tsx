@@ -13,6 +13,9 @@ const CandidatesListPage = lazy(() => import('./pages/candidates/CandidatesListP
 const CandidateDetailPage = lazy(() => import('./pages/candidates/CandidateDetailPage'));
 const CataloguesPage = lazy(() => import('./pages/catalogues/CataloguesPage'));
 const ClientsPage = lazy(() => import('./pages/clients/ClientsPage'));
+const ClientDetailPage = lazy(() => import('./pages/clients/ClientDetailPage'));
+
+
 const ProspectsPage = lazy(() => import('./pages/prospects/ProspectsPage'));
 const ProspectDetailPage = lazy(() => import('./pages/prospects/ProspectDetailPage'));
 const ProspectConvertPage = lazy(() => import('./pages/prospects/ProspectConvertPage'));
@@ -21,7 +24,9 @@ const WishlistsPage = lazy(() => import('./pages/wishlists/WishlistsPage'));
 const ExportPage = lazy(() => import('./pages/exports/ExportPage'));
 const CatalogueViewPage = lazy(() => import('./pages/public/CatalogueViewPage'));
 const ClientLoginPage = lazy(() => import('./pages/client/ClientLoginPage'));
+const ClientRegisterPage = lazy(() => import('./pages/client/ClientRegisterPage'));
 const ClientDashboardPage = lazy(() => import('./pages/client/ClientDashboardPage'));
+const TalentMarketplacePage = lazy(() => import('./pages/client/TalentMarketplacePage'));
 const ClientCatalogueDetailPage = lazy(() => import('./pages/client/ClientCatalogueDetailPage'));
 
 function App() {
@@ -56,12 +61,19 @@ function App() {
 
           {/* Client auth routes */}
           <Route path="/client/login" element={<ClientLoginPage />} />
+          <Route path="/client/register" element={<ClientRegisterPage />} />
 
           {/* Client protected routes */}
           <Route
             path="/client/dashboard"
             element={
               isClientAuthenticated ? <ClientDashboardPage /> : <Navigate to="/client/login" replace />
+            }
+          />
+          <Route
+            path="/client/talents"
+            element={
+              isClientAuthenticated ? <TalentMarketplacePage /> : <Navigate to="/client/login" replace />
             }
           />
           <Route
@@ -86,6 +98,7 @@ function App() {
             <Route path="/prospects/:id/convert" element={<ProspectConvertPage />} />
             <Route path="/catalogues" element={<CataloguesPage />} />
             <Route path="/clients" element={<ClientsPage />} />
+            <Route path="/clients/:id" element={<ClientDetailPage />} />
             <Route path="/autres-competances" element={<AutresCompetancesPage />} />
             <Route path="/wishlists" element={<WishlistsPage />} />
             <Route path="/exports" element={<ExportPage />} />
