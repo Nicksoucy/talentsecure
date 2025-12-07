@@ -46,6 +46,7 @@ import CartDrawer from '@/components/client/Cart/CartDrawer';
 import CitySelectDialog from '@/components/client/Cart/CitySelectDialog';
 import ClientHelpDialog from '@/components/client/ClientHelpDialog';
 import NotificationCenter from '@/components/client/NotificationCenter';
+import CityTalentsModal from '@/components/client/CityTalentsModal';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -80,6 +81,8 @@ const ClientDashboardPage = () => {
   const [currentTab, setCurrentTab] = useState(0);
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
+  const [talentsModalOpen, setTalentsModalOpen] = useState(false);
+  const [selectedCityForTalents, setSelectedCityForTalents] = useState<{ city: string; province?: string; mode?: 'evaluated' | 'cvonly' } | null>(null);
 
   useEffect(() => {
     loadCatalogues();
@@ -112,9 +115,10 @@ const ClientDashboardPage = () => {
     navigate(`/client/catalogue/${catalogueId}`);
   };
 
-  const handleCityClick = (city: string) => {
-    setSelectedCity({ city, province: 'QC' });
-    setCityDialogOpen(true);
+  const handleCityClick = (city: string, count: number, mode: 'evaluated' | 'cvonly') => {
+    // Open talents modal to show available candidates
+    setSelectedCityForTalents({ city, province: 'QC', mode });
+    setTalentsModalOpen(true);
   };
 
   const handleCloseCityDialog = () => {
@@ -367,6 +371,15 @@ const ClientDashboardPage = () => {
       <ClientHelpDialog
         open={helpDialogOpen}
         onClose={() => setHelpDialogOpen(false)}
+      />
+
+      {/* City Talents Modal */}
+      <CityTalentsModal
+        open={talentsModalOpen}
+        onClose={() => setTalentsModalOpen(false)}
+        city={selectedCityForTalents?.city || ''}
+        province={selectedCityForTalents?.province}
+        mode={selectedCityForTalents?.mode || 'evaluated'}
       />
 
       <CartDrawer />

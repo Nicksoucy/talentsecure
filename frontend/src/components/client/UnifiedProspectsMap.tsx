@@ -39,7 +39,7 @@ interface CityStats {
 }
 
 interface UnifiedProspectsMapProps {
-    onCityClick?: (city: string, count: number) => void;
+    onCityClick?: (city: string, count: number, mode: 'evaluated' | 'cvonly') => void;
 }
 
 type MapMode = 'evaluated' | 'cvonly';
@@ -255,7 +255,7 @@ const UnifiedProspectsMap: React.FC<UnifiedProspectsMapProps> = ({ onCityClick }
                                 eventHandlers={{
                                     click: () => {
                                         if (onCityClick) {
-                                            onCityClick(stat.city, stat.count);
+                                            onCityClick(stat.city, stat.count, mapMode);
                                         }
                                     },
                                 }}
