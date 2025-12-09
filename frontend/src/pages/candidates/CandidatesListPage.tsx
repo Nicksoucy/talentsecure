@@ -608,7 +608,7 @@ export default function CandidatesListPage() {
     // Pre-process form data to handle dependencies
     const processedData = {
       ...formData,
-      bspStatus: formData.hasBSP ? formData.bspStatus : 'NONE',
+      bspStatus: formData.hasBSP && formData.bspStatus ? formData.bspStatus : null,
       postalCode: formData.postalCode || null,
     };
 
@@ -624,10 +624,10 @@ export default function CandidatesListPage() {
 
     // Construct availabilities array from boolean flags
     const availabilities = [];
-    if (formData.availableDay) availabilities.push({ type: 'JOUR', isAvailable: true });
-    if (formData.availableEvening) availabilities.push({ type: 'SOIR', isAvailable: true });
-    if (formData.availableNight) availabilities.push({ type: 'NUIT', isAvailable: true });
-    if (formData.availableWeekend) availabilities.push({ type: 'FIN_DE_SEMAINE', isAvailable: true });
+    if (formData.availableDay) availabilities.push({ type: 'JOUR' });
+    if (formData.availableEvening) availabilities.push({ type: 'SOIR' });
+    if (formData.availableNight) availabilities.push({ type: 'NUIT' });
+    if (formData.availableWeekend) availabilities.push({ type: 'FIN_DE_SEMAINE' });
 
     const candidateData = {
       // Personal info
@@ -651,7 +651,7 @@ export default function CandidatesListPage() {
       hasBSP: safeValues.hasBSP,
       bspNumber: safeValues.bspNumber,
       bspExpiryDate: safeValues.bspExpiryDate,
-      bspStatus: safeValues.bspStatus,
+      bspStatus: safeValues.bspStatus || null,
 
       // Ratings
       professionalismRating: safeValues.professionalismRating,
@@ -751,7 +751,7 @@ export default function CandidatesListPage() {
       hasBSP: candidate.hasBSP || false,
       bspNumber: candidate.bspNumber || '',
       bspExpiryDate: candidate.bspExpiryDate ? new Date(candidate.bspExpiryDate).toISOString().split('T')[0] : '',
-      bspStatus: candidate.bspStatus || '',
+      bspStatus: candidate.bspStatus || 'NONE',
 
       // Availability (we don't have these in the database yet, so default to false)
       availableDay: false,

@@ -47,7 +47,11 @@ export const candidateFormSchema = z.object({
   hasBSP: z.boolean().optional().nullable(),
   bspNumber: z.string().max(50).optional().nullable(),
   bspExpiryDate: optionalDateString,
-  bspStatus: z.string().max(50).optional().nullable(),
+  bspStatus: z.enum(['VALID', 'EXPIRED', 'PENDING', 'NONE'])
+    .or(z.literal(''))
+    .transform(val => val === '' ? null : val)
+    .optional()
+    .nullable(),
   professionalismRating: z.number().min(0).max(10).optional().nullable(),
   communicationRating: z.number().min(0).max(10).optional().nullable(),
   appearanceRating: z.number().min(0).max(10).optional().nullable(),

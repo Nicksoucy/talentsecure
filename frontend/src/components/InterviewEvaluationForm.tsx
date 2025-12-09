@@ -149,7 +149,7 @@ export default function InterviewEvaluationForm({
       hasBSP: false,
       bspNumber: '',
       bspExpiryDate: '',
-      bspStatus: '',
+      bspStatus: 'NONE',
       certifications: [],
       availableDay: false,
       availableEvening: false,

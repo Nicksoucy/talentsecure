@@ -345,3 +345,66 @@ export const reactivateClient = async (
     next(error);
   }
 };
+
+/**
+ * Register new client (public endpoint)
+ */
+export const registerClient = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { name, email, password, companyName, phone } = req.body;
+
+    // Validate required fields
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        error: 'Nom, email et mot de passe sont requis'
+      });
+    }
+
+    // Check if client already exists
+    const existingClient = await prisma.client.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
+    if (existingClient) {
+      return res.status(400).json({
+        error: 'Un compte avec cet email existe déjà'
+      });
+    }
+
+    // Hash password
+    const { hashPassword } = await import('../utils/password');
+    const hashedPassword = await hashPassword(password);
+
+    // Create client
+    const client = await prisma.client.create({
+      data: {
+        name,
+        email: email.toLowerCase(),
+        password: hashedPassword,
+        companyName: companyName || null,
+        phone: phone || null,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        companyName: true,
+        createdAt: true,
+      },
+    });
+
+    await invalidateClientCaches();
+
+    res.status(201).json({
+      message: 'Compte créé avec succès. Vous pouvez maintenant vous connecter.',
+      data: client,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -7,6 +7,7 @@ import {
   updateClient,
   deleteClient,
   reactivateClient,
+  registerClient,
 } from '../controllers/client.controller';
 import { authenticateJWT, authorizeRoles } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
@@ -18,7 +19,14 @@ const uuidParam = z.object({
 
 const router = express.Router();
 
-// All routes require authentication
+/**
+ * @route   POST /api/clients/register
+ * @desc    Public client registration
+ * @access  Public
+ */
+router.post('/register', registerClient);
+
+// All other routes require authentication
 router.use(authenticateJWT);
 
 /**
@@ -81,5 +89,11 @@ router.post(
   validate({ params: uuidParam }),
   reactivateClient
 );
+
+import contactRoutes from './contact.routes';
+import interactionRoutes from './interaction.routes';
+
+router.use('/:clientId/contacts', contactRoutes);
+router.use('/:clientId/interactions', interactionRoutes);
 
 export default router;

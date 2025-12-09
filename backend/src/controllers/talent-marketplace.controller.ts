@@ -17,7 +17,57 @@ export const searchTalentsByCity = async (
             return res.status(400).json({ error: 'Ville requise' });
         }
 
-        const isEvaluated = mode === 'evaluated';
+        // Specific logic for CV Only mode (Prospects)
+        if (mode === 'cvonly') {
+            const prospects = await prisma.prospectCandidate.findMany({
+                where: {
+                    city: { contains: city as string, mode: 'insensitive' },
+                    isDeleted: false,
+                    isConverted: false,
+                },
+                select: {
+                    id: true,
+                    firstName: true,
+                    city: true,
+                    province: true,
+                },
+                take: 50,
+            });
+
+            // Map prospects to match the expected interface with default values
+            // Prospects don't have all the details like ratings or specific availabilities yet
+            const mappedProspects = prospects.map(p => ({
+                id: p.id,
+                firstName: p.firstName,
+                city: p.city,
+                province: p.province,
+                globalRating: 0,
+                status: 'CV_ONLY',
+                available24_7: false,
+                availableDays: false,
+                availableNights: false,
+                availableWeekends: false,
+                availableImmediately: false,
+                hasBSP: false,
+                bspExpiryDate: null,
+                hasDriverLicense: false,
+                hasVehicle: false,
+                vehicleType: null,
+                hasRCR: false,
+                experiences: [],
+                languages: [],
+                skills: []
+            }));
+
+            return res.json({
+                data: mappedProspects,
+                total: mappedProspects.length,
+                city: city as string,
+            });
+        }
+
+        // Default logic for Evaluated Candidates
+        const isEvaluated = mode === 'evaluated' || !mode;
 
         // Build filter
         const where: any = {

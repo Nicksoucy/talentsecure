@@ -50,7 +50,6 @@ import { candidateFormSchema } from '../../validation/candidate';
 import QuickOverview from '@/components/candidates/QuickOverview';
 import CandidateBadges from '@/components/candidates/CandidateBadges';
 import CandidateTabs, { CustomTabPanel } from './components/CandidateTabs';
-import SimilarCandidates from './components/SimilarCandidates';
 
 const STATUS_COLORS: Record<string, 'success' | 'info' | 'warning' | 'error' | 'default'> = {
   ELITE: 'error',
@@ -161,7 +160,7 @@ const CandidateDetailPage = () => {
         hasBSP: candidate.hasBSP || false,
         bspNumber: candidate.bspNumber || '',
         bspExpiryDate: candidate.bspExpiryDate ? new Date(candidate.bspExpiryDate).toISOString().split('T')[0] : '',
-        bspStatus: candidate.bspStatus || '',
+        bspStatus: candidate.bspStatus || 'NONE',
 
         availableDay,
         availableEvening,
@@ -214,10 +213,10 @@ const CandidateDetailPage = () => {
 
     // Construct availabilities array from boolean flags
     const availabilities = [];
-    if (formData.availableDay) availabilities.push({ type: 'JOUR', isAvailable: true });
-    if (formData.availableEvening) availabilities.push({ type: 'SOIR', isAvailable: true });
-    if (formData.availableNight) availabilities.push({ type: 'NUIT', isAvailable: true });
-    if (formData.availableWeekend) availabilities.push({ type: 'FIN_DE_SEMAINE', isAvailable: true });
+    if (formData.availableDay) availabilities.push({ type: 'JOUR' });
+    if (formData.availableEvening) availabilities.push({ type: 'SOIR' });
+    if (formData.availableNight) availabilities.push({ type: 'NUIT' });
+    if (formData.availableWeekend) availabilities.push({ type: 'FIN_DE_SEMAINE' });
 
     const candidateData = {
       // Personal info
@@ -241,7 +240,7 @@ const CandidateDetailPage = () => {
       hasBSP: safeValues.hasBSP,
       bspNumber: safeValues.bspNumber,
       bspExpiryDate: safeValues.bspExpiryDate,
-      bspStatus: safeValues.bspStatus,
+      bspStatus: safeValues.bspStatus || null,
 
       // Ratings
       professionalismRating: safeValues.professionalismRating,
@@ -494,8 +493,35 @@ const CandidateDetailPage = () => {
                 </CardContent>
               </Card>
 
-              {/* Similar Candidates (AI) */}
-              {id && <SimilarCandidates currentCandidateId={id} />}
+              {/* CV Management */}
+              <Box sx={{ mb: 3 }}>
+                <CVUpload
+                  candidateId={candidate.id}
+                  currentCV={{
+                    cvUrl: candidate.cvUrl,
+                    cvStoragePath: candidate.cvStoragePath,
+                  }}
+                />
+              </Box>
+
+              {/* Video Management */}
+              <Box>
+                {candidate.videoStoragePath && (
+                  <Box sx={{ mb: 2 }}>
+                    <VideoPlayer
+                      candidateId={candidate.id}
+                      candidateName={`${candidate.firstName} ${candidate.lastName}`}
+                    />
+                  </Box>
+                )}
+
+                <VideoUpload
+                  candidateId={candidate.id}
+                  currentVideoPath={candidate.videoStoragePath}
+                  onUploadSuccess={refetchCandidate}
+                  onDeleteSuccess={refetchCandidate}
+                />
+              </Box>
             </Grid>
           </Grid>
         </CustomTabPanel>

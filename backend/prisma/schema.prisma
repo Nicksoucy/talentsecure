@@ -155,6 +155,7 @@ model User {
   selectionsResponded CatalogueSelection[] @relation("SelectionResponder")
   paymentsProcessed   CataloguePayment[]   @relation("PaymentProcessor")
   auditLogs           AuditLog[]
+  clientInteractions  Interaction[]
 
   @@index([email])
   @@index([role])
@@ -403,10 +404,58 @@ model Client {
   cataloguePayments   CataloguePayment[]
   wishlists           ClientWishlist[]
   purchases           ClientPurchase[]
+  contacts            Contact[]
+  interactions        Interaction[]
 
   @@index([email])
   @@index([companyName])
   @@map("clients")
+}
+
+model Contact {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  firstName String
+  lastName  String
+  role      String?  // e.g. "DRH", "Directeur", "Comptable"
+  email     String?
+  phone     String?
+  isPrimary Boolean  @default(false)
+  
+  // Metadata
+  isActive  Boolean  @default(true)
+  notes     String?  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([email])
+  @@map("client_contacts")
+}
+
+model Interaction {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  type      String   // "EMAIL", "CALL", "MEETING", "NOTE"
+  direction String   // "INBOUND", "OUTBOUND"
+  subject   String?
+  content   String?  @db.Text
+  
+  createdBy String   // User ID
+  user      User     @relation(fields: [createdBy], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("client_interactions")
 }
 
 model Catalogue {

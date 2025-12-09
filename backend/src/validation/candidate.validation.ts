@@ -6,9 +6,9 @@ const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date au format YYYY-
 const dateTimeString = z.string().datetime('Date invalide (format ISO 8601 requis)');
 
 const availabilitySchema = z.object({
-  dayOfWeek: z.string().max(15),
-  startTime: z.string().max(10).optional().nullable(),
-  endTime: z.string().max(10).optional().nullable(),
+  type: z.enum(['JOUR', 'SOIR', 'NUIT', 'FIN_DE_SEMAINE', 'JOUR_SEMAINE', 'NUIT_SEMAINE']),
+  isAvailable: z.boolean().default(true),
+  notes: z.string().optional().nullable(),
 });
 
 const languageSchema = z.object({
@@ -31,8 +31,8 @@ const certificationSchema = z.object({
 });
 
 const situationTestSchema = z.object({
-  scenario: z.string().max(255),
-  response: z.string().max(5000),
+  question: z.string().max(255),
+  answer: z.string().max(5000),
 });
 
 const baseCandidateSchema = z.object({

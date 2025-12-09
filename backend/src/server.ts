@@ -30,6 +30,7 @@ import wishlistRoutes from './routes/wishlist.routes';
 import exportRoutes from './routes/export.routes';
 import skillsRoutes from './routes/skills.routes';
 import extractionRoutes from './routes/extraction.routes';
+import marketplaceRoutes from './routes/talent-marketplace.routes';
 
 const app: Application = express();
 const PORT = parseInt(process.env.PORT || '8080', 10);
@@ -115,6 +116,7 @@ app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/exports', exportRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/extraction', extractionRoutes);
+app.use('/api/marketplace', marketplaceRoutes);
 // app.use('/api/users', userRoutes);
 
 // 404 handler

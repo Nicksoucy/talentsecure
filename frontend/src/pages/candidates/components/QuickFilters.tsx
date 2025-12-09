@@ -38,12 +38,11 @@ export default function QuickFilters({ onApplyPreset }: QuickFiltersProps) {
             }
         },
         {
-            label: "Véhiculé avec BSP",
+            label: "Véhiculé",
             icon: <CarIcon fontSize="small" />,
             color: "info" as const,
             filter: {
-                hasVehicle: true,
-                certifications: ['BSP']
+                hasVehicle: true
             }
         },
         {
