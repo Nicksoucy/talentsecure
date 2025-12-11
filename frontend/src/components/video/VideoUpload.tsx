@@ -21,6 +21,8 @@ interface VideoUploadProps {
   onDeleteSuccess?: () => void;
 }
 
+import { candidateService } from '../../services/candidate.service';
+
 const VideoUpload: React.FC<VideoUploadProps> = ({
   candidateId,
   currentVideoPath,
@@ -68,37 +70,43 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     setProgress(0);
 
     try {
-      const formData = new FormData();
-      formData.append('video', selectedFile);
-
-      // Simulate progress (since we can't track actual upload progress easily with axios)
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return prev;
-          }
-          return prev + 10;
-        });
-      }, 500);
-
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/candidates/${candidateId}/video`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-        },
-        body: formData,
-      });
-
-      clearInterval(progressInterval);
-      setProgress(100);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Erreur lors de l'upload");
+      // 1. Try to initiate direct upload
+      let directUploadData;
+      try {
+        const initResponse = await candidateService.initiateVideoUpload(
+          candidateId,
+          selectedFile.name,
+          selectedFile.type
+        );
+        directUploadData = initResponse.data;
+      } catch (err: any) {
+        // If direct upload is not supported or failed, fallback to legacy upload
+        console.warn('Direct upload init failed, falling back to multipart:', err);
+        if (err.response?.data?.error === 'DIRECT_UPLOAD_NOT_SUPPORTED') {
+          throw new Error("L'upload direct n'est pas supporté. Veuillez contacter l'administrateur.");
+        }
+        // If it's another error, we might want to try legacy or just fail.
+        // For now, let's try legacy if it looks like a 404/500 on that endpoint, 
+        // but since I just added the endpoint, if it fails it's likely real error.
+        throw err;
       }
 
-      const data = await response.json();
+      // 2. Upload directly to storage (R2/GCS)
+      if (directUploadData?.signedUrl) {
+        await candidateService.uploadFileToUrl(
+          directUploadData.signedUrl,
+          selectedFile,
+          selectedFile.type,
+          (percentPromise) => setProgress(percentPromise)
+        );
+
+        // 3. Complete upload
+        await candidateService.completeVideoUpload(candidateId, directUploadData.key);
+      } else {
+        // Fallback logic if needed, but for now we expect signedUrl
+        throw new Error("Configuration d'upload invalide");
+      }
+
       setSuccess(`Vidéo uploadée avec succès!`);
       setSelectedFile(null);
 
@@ -127,18 +135,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     setError(null);
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/candidates/${candidateId}/video`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Erreur lors de la suppression");
-      }
+      await candidateService.deleteVideo(candidateId);
 
       setSuccess('Vidéo supprimée avec succès!');
 

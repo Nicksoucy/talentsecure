@@ -73,6 +73,53 @@ export async function getSignedUrl(
 }
 
 /**
+ * Get a signed URL for uploading a file (PUT)
+ */
+export async function getUploadSignedUrl(
+  bucketName: string,
+  fileName: string,
+  contentType: string,
+  expiresIn: number = 3600
+): Promise<{ signedUrl: string; key: string }> {
+  // For local development, we can't really do signed URLs easily without a real GCS bucket.
+  // We'll rely on the existing multipart flow for local dev if not using GCS.
+  // But since we want to unify, maybe we just return keys and handle local differently?
+  // If useGCS is false, we should probably throw or handle it upstream.
+  // However, video.service will handle the switch.
+
+  if (!useGCS || !storage) {
+    throw new Error('Direct upload not supported for local storage');
+  }
+
+  try {
+    const bucket = storage.bucket(bucketName);
+    // Unique filename logic should be handled by caller or here?
+    // Let's assume caller gives us the final destination path or we construct it.
+    // To match R2 behavior, we'll construct a unique path here if just a filename is given.
+
+    // Actually, let's keep it simple: caller provides unique filename if needed, 
+    // but here we just sign whatever is passed.
+    // Wait, R2 service generates the key. Let's consistency.
+    const timestamp = Date.now();
+    const key = `videos/${timestamp}_${fileName}`;
+
+    const file = bucket.file(key);
+
+    const [url] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'write',
+      expires: Date.now() + expiresIn * 1000,
+      contentType: contentType,
+    });
+
+    return { signedUrl: url, key };
+  } catch (error) {
+    console.error('Error generating upload signed URL:', error);
+    throw new Error('Failed to generate upload signed URL');
+  }
+}
+
+/**
  * Upload a file to Google Cloud Storage or local storage
  */
 export async function uploadFile(

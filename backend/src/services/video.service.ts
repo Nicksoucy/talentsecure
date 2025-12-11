@@ -2,7 +2,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { uploadFile, deleteFile, GCS_VIDEO_BUCKET, LOCAL_VIDEO_PATH, useGCS } from '../config/storage';
+import { uploadFile, deleteFile, GCS_VIDEO_BUCKET, LOCAL_VIDEO_PATH, useGCS, getUploadSignedUrl as getGCSUploadSignedUrl } from '../config/storage';
 import {
   uploadVideoToDrive,
   deleteVideoFromDrive,
@@ -13,6 +13,7 @@ import {
   uploadVideoToR2,
   deleteVideoFromR2,
   getSignedVideoUrl,
+  getUploadSignedVideoUrl,
   getPublicUrl,
   useR2,
 } from './r2.service';
@@ -191,4 +192,34 @@ export async function getR2SignedUrl(videoKey: string, expiresIn: number = 3600)
 export function getVideoSizeInMB(filePath: string): number {
   const stats = fs.statSync(filePath);
   return stats.size / (1024 * 1024);
+}
+
+/**
+ * Get signed URL for direct video upload
+ * Used for large files to bypass backend/proxy limits
+ */
+export async function getUploadSignedUrl(
+  fileName: string,
+  contentType: string
+): Promise<{ signedUrl: string; key: string, provider: 'r2' | 'gcs' | 'drive' | 'local' }> {
+
+  if (useR2) {
+    // R2 Direct Upload
+    const { signedUrl, key } = await getUploadSignedVideoUrl(fileName, contentType);
+    return { signedUrl, key, provider: 'r2' };
+
+  } else if (useGCS) {
+    // GCS Direct Upload
+    const { signedUrl, key } = await getGCSUploadSignedUrl(GCS_VIDEO_BUCKET, fileName, contentType);
+    return { signedUrl, key, provider: 'gcs' };
+
+  } else if (useGoogleDrive) {
+    // Google Drive doesn't support simple Signed URLs for PUT. 
+    // We would need to implement resumable upload flow or stick to multipart.
+    throw new Error('Direct upload not supported for Google Drive');
+
+  } else {
+    // Local storage
+    throw new Error('Direct upload not supported for Local Storage');
+  }
 }

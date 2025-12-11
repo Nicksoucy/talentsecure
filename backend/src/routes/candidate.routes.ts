@@ -11,14 +11,16 @@ import {
   getCandidatesByCity,
   getCitiesSuggestions,
   getCandidatesSuggestions,
+  initiateVideoUpload,
+  completeVideoUpload,
   uploadCandidateVideo,
   getCandidateVideoUrl,
   deleteCandidateVideo,
-  getCandidatesStats,
   exportCandidatesCSV,
   advancedSearch,
   parseNaturalLanguageSearch,
   getSimilarCandidates,
+  getCandidatesStats,
 } from '../controllers/candidate.controller';
 import {
   uploadCandidateCV,
@@ -77,6 +79,32 @@ const router = Router();
 
 // All candidate routes require authentication
 router.use(authenticateJWT);
+
+// --- Direct Video Upload Routes (Start) ---
+/**
+ * @route   POST /api/candidates/:id/video/initiate-upload
+ * @desc    Get signed URL for direct video upload
+ * @access  Private (ADMIN, RH_RECRUITER)
+ */
+router.post(
+  '/:id/video/initiate-upload',
+  authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  validate({ params: candidateIdSchema }),
+  initiateVideoUpload
+);
+
+/**
+ * @route   POST /api/candidates/:id/video/complete-upload
+ * @desc    Confirm successful upload and update candidate
+ * @access  Private (ADMIN, RH_RECRUITER)
+ */
+router.post(
+  '/:id/video/complete-upload',
+  authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  validate({ params: candidateIdSchema }),
+  completeVideoUpload
+);
+// --- Direct Video Upload Routes (End) ---
 
 /**
  * @route   GET /api/candidates

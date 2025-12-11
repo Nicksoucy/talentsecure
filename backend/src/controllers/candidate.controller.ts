@@ -798,11 +798,70 @@ export const getCandidateVideoUrl = async (
       where: { id },
       select: {
         id: true,
+        videoStoragePath: true,
         firstName: true,
         lastName: true,
-        videoStoragePath: true,
-        videoUploadedAt: true,
       },
+    });
+
+    if (!candidate || !candidate.videoStoragePath) {
+      return res.status(404).json({
+        success: false,
+        error: 'Vidéo non trouvée',
+      });
+    }
+
+    // Import video service
+    const { getVideoUrl, getR2SignedUrl, useR2 } = require('../services/video.service');
+
+    if (useR2) {
+      // Generate signed URL
+      const signedUrl = await getR2SignedUrl(candidate.videoStoragePath, 3600);
+      return res.json({
+        success: true,
+        data: {
+          videoUrl: signedUrl,
+          expiresIn: 3600,
+        },
+      });
+    } else {
+      // Local or other
+      const videoUrl = getVideoUrl(candidate.videoStoragePath);
+      return res.json({
+        success: true,
+        data: {
+          videoUrl,
+        },
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Initiate Direct Video Upload
+ * Returns a signed URL for the client to upload directly to R2/GCS
+ */
+export const initiateVideoUpload = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+    const { filename, contentType } = req.body;
+
+    if (!filename || !contentType) {
+      return res.status(400).json({
+        success: false,
+        error: 'Filename and content type are required'
+      });
+    }
+
+    // Check if candidate exists
+    const candidate = await prisma.candidate.findUnique({
+      where: { id },
     });
 
     if (!candidate) {
@@ -812,49 +871,107 @@ export const getCandidateVideoUrl = async (
       });
     }
 
-    if (!candidate.videoStoragePath) {
-      return res.status(404).json({
+    // Import video service
+    const { getUploadSignedUrl } = require('../services/video.service');
+
+    try {
+      const { signedUrl, key, provider } = await getUploadSignedUrl(filename, contentType);
+
+      res.json({
+        success: true,
+        data: {
+          signedUrl,
+          key,
+          provider,
+          expiresIn: 3600,
+        },
+      });
+    } catch (err: any) {
+      // If direct upload is not supported (e.g. Local/Drive), return specific error
+      if (err.message.includes('not supported')) {
+        return res.status(400).json({
+          success: false,
+          error: 'DIRECT_UPLOAD_NOT_SUPPORTED',
+          message: err.message
+        });
+      }
+      throw err;
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Complete Direct Video Upload
+ * Notification from client that upload is finished. Updates DB.
+ */
+export const completeVideoUpload = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+    const { key } = req.body;
+
+    if (!key) {
+      return res.status(400).json({
         success: false,
-        error: 'Aucune vidéo trouvée pour ce candidat',
+        error: 'Storage key is required'
       });
     }
 
-    // Get video URL (handles R2, Google Drive, GCS, or local)
-    const { getVideoUrl, getR2SignedUrl } = require('../services/video.service');
-    const { useR2 } = require('../services/r2.service');
-    const { useGoogleDrive } = require('../services/googleDrive.service');
+    // Check if candidate exists
+    const candidate = await prisma.candidate.findUnique({
+      where: { id },
+    });
 
-    let videoUrl: string;
-
-    if (useR2) {
-      // For R2, check if we have a custom domain (public URL) or need signed URL
-      const publicUrl = getVideoUrl(candidate.videoStoragePath);
-
-      // If publicUrl doesn't start with http, it's just the key - generate signed URL
-      if (!publicUrl.startsWith('http')) {
-        videoUrl = await getR2SignedUrl(candidate.videoStoragePath, 3600);
-      } else {
-        videoUrl = publicUrl;
-      }
-    } else if (useGoogleDrive) {
-      // For Google Drive, directly use the embed URL
-      videoUrl = getVideoUrl(candidate.videoStoragePath);
-    } else {
-      // For GCS/local, generate signed URL
-      const { getSignedUrl, GCS_VIDEO_BUCKET } = require('../config/storage');
-      videoUrl = await getSignedUrl(GCS_VIDEO_BUCKET, candidate.videoStoragePath, 3600);
+    if (!candidate) {
+      return res.status(404).json({
+        success: false,
+        error: 'Candidat non trouvé',
+      });
     }
+
+    // Import video service
+    const { deleteVideo, getVideoUrl } = require('../services/video.service');
+
+    // Delete old video if exists
+    if (candidate.videoStoragePath) {
+      try {
+        await deleteVideo(candidate.videoStoragePath);
+      } catch (error) {
+        logger.error('Error deleting old video', { error });
+      }
+    }
+
+    // Get public/embed URL from the key (we assume upload was successful)
+    const videoUrl = getVideoUrl(key);
+
+    // Update candidate
+    const updatedCandidate = await prisma.candidate.update({
+      where: { id },
+      data: {
+        videoStoragePath: key,
+        videoUrl: videoUrl,
+        videoUploadedAt: new Date(),
+      },
+    });
+
+    await invalidateCandidateCaches();
 
     res.json({
       success: true,
+      message: 'Vidéo confirmée avec succès',
       data: {
-        videoUrl,
-        videoUploadedAt: candidate.videoUploadedAt,
-        candidateName: `${candidate.firstName} ${candidate.lastName}`,
+        id: updatedCandidate.id,
+        videoStoragePath: updatedCandidate.videoStoragePath,
+        videoUrl: updatedCandidate.videoUrl,
       },
     });
+
   } catch (error) {
-    logger.error('Error getting video URL', { error });
     next(error);
   }
 };

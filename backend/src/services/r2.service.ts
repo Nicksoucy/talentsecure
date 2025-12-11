@@ -37,6 +37,7 @@ function getR2Client(): S3Client {
   return new S3Client({
     region: 'auto', // R2 uses 'auto' region
     endpoint: endpoint,
+    forcePathStyle: true, // Crucial for proxy compatibility (keeps bucket in path)
     credentials: {
       accessKeyId: R2_ACCESS_KEY_ID,
       secretAccessKey: R2_SECRET_ACCESS_KEY,
@@ -173,6 +174,45 @@ export async function getSignedVideoUrl(key: string, expiresIn: number = 3600): 
   } catch (error: any) {
     console.error('Error generating signed URL:', error.message);
     throw new Error(`Failed to generate signed URL: ${error.message}`);
+  }
+}
+
+/**
+ * Generate a signed URL for uploading a video (PUT)
+ *
+ * @param fileName - The filename
+ * @param contentType - The MIME type
+ * @param expiresIn - Expiration time in seconds (default: 3600)
+ * @returns Object with signedUrl and key
+ */
+export async function getUploadSignedVideoUrl(
+  fileName: string,
+  contentType: string,
+  expiresIn: number = 3600
+): Promise<{ signedUrl: string; key: string }> {
+  try {
+    const client = getR2Client();
+
+    // Generate a unique key
+    const timestamp = Date.now();
+    const key = `videos/candidates/${timestamp}_${fileName}`;
+
+    const command = new PutObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: key,
+      ContentType: contentType,
+      // Default headers for video streaming optimization
+      CacheControl: 'public, max-age=31536000',
+    });
+
+    const signedUrl = await getSignedUrl(client, command, {
+      expiresIn: expiresIn,
+    });
+
+    return { signedUrl, key };
+  } catch (error: any) {
+    console.error('Error generating upload signed URL:', error.message);
+    throw new Error(`Failed to generate upload signed URL: ${error.message}`);
   }
 }
 
