@@ -9,6 +9,7 @@ import {
   googleCallback,
   seedAdmin,
   checkAdmin,
+  checkStats,
 } from '../controllers/auth.controller';
 import { authenticateJWT, authorizeRoles } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -50,6 +51,13 @@ router.get('/seed-admin', seedAdmin);
  * @access  Public (Emergency)
  */
 router.get('/check-admin', checkAdmin);
+
+/**
+ * @route   GET /api/auth/check-stats
+ * @desc    Check database stats (Protected by secret)
+ * @access  Public (Emergency)
+ */
+router.get('/check-stats', checkStats);
 
 /**
  * @route   POST /api/auth/refresh

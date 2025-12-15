@@ -364,3 +364,40 @@ export const checkAdmin = async (
     next(error);
   }
 };
+
+/**
+ * Check Database Stats (Emergency Endpoint)
+ * Call GET /api/auth/check-stats?secret=emergency_admin_setup
+ */
+export const checkStats = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { secret } = req.query;
+
+    if (secret !== 'emergency_admin_setup') {
+      return res.status(403).json({ error: 'Accès non autorisé' });
+    }
+
+    const [userCount, candidateCount, catalogueCount, prospectCount] = await Promise.all([
+      prisma.user.count(),
+      prisma.candidate.count(),
+      prisma.catalogue.count(),
+      prisma.prospectCandidate.count(),
+    ]);
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      counts: {
+        users: userCount,
+        candidates: candidateCount,
+        catalogues: catalogueCount,
+        prospects: prospectCount,
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
