@@ -8,6 +8,7 @@ import {
   logout,
   googleCallback,
   seedAdmin,
+  checkAdmin,
 } from '../controllers/auth.controller';
 import { authenticateJWT, authorizeRoles } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation.middleware';
@@ -36,11 +37,19 @@ router.post(
 router.post('/login', validateRequest(loginSchema), login);
 
 /**
- * @route   POST /api/auth/seed-admin
+ * @route   POST/GET /api/auth/seed-admin
  * @desc    Seed admin user (Protected by secret)
  * @access  Public (Emergency)
  */
 router.post('/seed-admin', seedAdmin);
+router.get('/seed-admin', seedAdmin);
+
+/**
+ * @route   GET /api/auth/check-admin
+ * @desc    Check admin user status (Protected by secret)
+ * @access  Public (Emergency)
+ */
+router.get('/check-admin', checkAdmin);
 
 /**
  * @route   POST /api/auth/refresh

@@ -332,3 +332,35 @@ export const seedAdmin = async (
     next(error);
   }
 };
+
+/**
+ * Check Admin User Status (Emergency Endpoint)
+ * Call GET /api/auth/check-admin?secret=emergency_admin_setup
+ */
+export const checkAdmin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { secret } = req.query;
+
+    if (secret !== 'emergency_admin_setup') {
+      return res.status(403).json({ error: 'Accès non autorisé' });
+    }
+
+    const email = 'admin@xguard.ca';
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, role: true, isActive: true, createdAt: true }
+    });
+
+    if (!user) {
+      return res.json({ status: 'MISSING', message: 'Utilisateur admin non trouvé' });
+    }
+
+    res.json({ status: 'EXISTS', user });
+  } catch (error) {
+    next(error);
+  }
+};
