@@ -4,6 +4,7 @@ import { prisma, cleanDatabase } from './setup';
 import candidateRoutes from '../routes/candidate.routes';
 import { hashPassword } from '../utils/password';
 import { generateAccessToken } from '../utils/jwt';
+import '../config/passport'; // Register passport strategies
 
 // Create a test app
 function createTestApp(): Express {
@@ -14,7 +15,10 @@ function createTestApp(): Express {
   // Error handler
   app.use((err: any, req: any, res: any, next: any) => {
     console.error('Test error:', err);
-    res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+    res.status(err.statusCode || err.status || 500).json({
+      error: err.message || 'Internal server error',
+      details: err.details
+    });
   });
 
   return app;
@@ -225,6 +229,56 @@ describe('Candidate CRUD', () => {
         });
 
       expect(response.status).toBe(400);
+    });
+
+    it('should accept and format messy postal code', async () => {
+      const candidateData = {
+        firstName: 'Messy',
+        lastName: 'Postal',
+        email: 'messy.postal@example.com',
+        phone: '514-111-2222',
+        address: '123 Test',
+        city: 'Montreal',
+        postalCode: ' h3z  2y7 ', // Messy input
+        status: 'EN_ATTENTE',
+      };
+
+      const response = await request(app)
+        .post('/api/candidates')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send(candidateData);
+
+      expect(response.status).toBe(201);
+      expect(response.body.data.postalCode).toBe('H3Z 2Y7');
+    });
+
+    it('should create candidate with experience dates', async () => {
+      const candidateData = {
+        firstName: 'Experience',
+        lastName: 'Test',
+        email: 'exp.test@example.com',
+        phone: '514-222-3333',
+        city: 'Montreal',
+        experiences: [
+          {
+            companyName: 'Test Corp',
+            position: 'Developer',
+            startDate: '2022-01-01',
+            endDate: '2022-12-31',
+            description: 'Coding'
+          }
+        ]
+      };
+
+      const response = await request(app)
+        .post('/api/candidates')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send(candidateData);
+
+      expect(response.status).toBe(201);
+      const createdExp = response.body.data.experiences[0];
+      expect(new Date(createdExp.startDate).toISOString()).toContain('2022-01-01');
+      expect(new Date(createdExp.endDate).toISOString()).toContain('2022-12-31');
     });
   });
 

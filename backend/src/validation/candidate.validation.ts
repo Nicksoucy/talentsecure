@@ -2,8 +2,13 @@ import { z } from 'zod';
 
 const phoneRegex = /^[\d\s+()-]+$/;
 const postalCodeRegex = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/;
-const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date au format YYYY-MM-DD requise');
-const dateTimeString = z.string().datetime('Date invalide (format ISO 8601 requis)');
+const dateString = z.string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date au format YYYY-MM-DD requise')
+  .transform((str) => new Date(str));
+
+const dateTimeString = z.string()
+  .datetime('Date invalide (format ISO 8601 requis)')
+  .transform((str) => new Date(str));
 
 const availabilitySchema = z.object({
   type: z.enum(['JOUR', 'SOIR', 'NUIT', 'FIN_DE_SEMAINE', 'JOUR_SEMAINE', 'NUIT_SEMAINE']),
@@ -43,10 +48,17 @@ const baseCandidateSchema = z.object({
   address: z.string().max(200).optional().nullable(),
   city: z.string().max(100).optional().nullable(),
   province: z.string().max(100).optional().nullable(),
-  postalCode: z.string().regex(postalCodeRegex, 'Code postal canadien invalide').optional().nullable(),
+  postalCode: z.string()
+    .transform(val => val?.trim().replace(/\s+/g, ' ').toUpperCase())
+    .pipe(z.string().regex(postalCodeRegex, 'Code postal canadien invalide'))
+    .optional()
+    .nullable(),
   latitude: z.number().min(-90).max(90).optional().nullable(),
   longitude: z.number().min(-180).max(180).optional().nullable(),
-  status: z.enum(['AVAILABLE', 'PLACED', 'UNAVAILABLE', 'IN_PROCESS']).optional().nullable(),
+  status: z.enum([
+    'AVAILABLE', 'PLACED', 'UNAVAILABLE', 'IN_PROCESS', 'EN_ATTENTE',
+    'QUALIFIE', 'ELITE', 'EXCELLENT', 'TRES_BON', 'BON', 'A_REVOIR', 'INACTIF', 'NEW'
+  ]).optional().nullable(),
   globalRating: z.number().min(0).max(10).optional().nullable(),
   professionalismRating: z.number().min(0).max(10).optional().nullable(),
   communicationRating: z.number().min(0).max(10).optional().nullable(),
@@ -92,7 +104,10 @@ export const candidateIdSchema = z.object({
 
 export const candidateFiltersSchema = z.object({
   search: z.string().max(100).optional(),
-  status: z.enum(['AVAILABLE', 'PLACED', 'UNAVAILABLE', 'IN_PROCESS']).optional(),
+  status: z.enum([
+    'AVAILABLE', 'PLACED', 'UNAVAILABLE', 'IN_PROCESS', 'EN_ATTENTE',
+    'QUALIFIE', 'ELITE', 'EXCELLENT', 'TRES_BON', 'BON', 'A_REVOIR', 'INACTIF', 'NEW'
+  ]).optional(),
   minRating: z.coerce.number().min(0).max(10).optional(),
   city: z.string().max(100).optional(),
   hasBSP: z.enum(['true', 'false']).transform((val) => val === 'true').optional(),
