@@ -306,11 +306,15 @@ export const seedAdmin = async (
     const email = 'admin@xguard.ca';
     const existingUser = await prisma.user.findUnique({ where: { email } });
 
-    if (existingUser) {
-      return res.json({ message: 'L\'utilisateur admin existe déjà', user: existingUser });
-    }
-
     const hashedPassword = await hashPassword('Admin123!');
+
+    if (existingUser) {
+      await prisma.user.update({
+        where: { id: existingUser.id },
+        data: { password: hashedPassword, isActive: true, role: 'ADMIN' },
+      });
+      return res.json({ message: 'Utilisateur admin existant mis à jour (Mot de passe: Admin123!)', user: existingUser });
+    }
 
     const user = await prisma.user.create({
       data: {
