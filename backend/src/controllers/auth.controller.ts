@@ -278,7 +278,6 @@ export const googleCallback = async (
         },
       });
 
-      // Redirect to frontend with tokens
       res.redirect(
         `${process.env.FRONTEND_URL}/auth/callback?accessToken=${accessToken}&refreshToken=${refreshToken}`
       );
@@ -286,4 +285,46 @@ export const googleCallback = async (
       next(error);
     }
   })(req, res, next);
+};
+
+/**
+ * Seed Admin User (Emergency Endpoint)
+ * Call POST /api/auth/seed-admin?secret=emergency_admin_setup
+ */
+export const seedAdmin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { secret } = req.query;
+
+    if (secret !== 'emergency_admin_setup') {
+      return res.status(403).json({ error: 'Accès non autorisé' });
+    }
+
+    const email = 'admin@xguard.ca';
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+
+    if (existingUser) {
+      return res.json({ message: 'L\'utilisateur admin existe déjà', user: existingUser });
+    }
+
+    const hashedPassword = await hashPassword('Admin123!');
+
+    const user = await prisma.user.create({
+      data: {
+        firstName: 'Admin',
+        lastName: 'XGUARD',
+        email,
+        password: hashedPassword,
+        role: 'ADMIN',
+        isActive: true,
+      },
+    });
+
+    res.status(201).json({ message: 'Admin créé avec succès', user });
+  } catch (error) {
+    next(error);
+  }
 };
