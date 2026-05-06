@@ -30,13 +30,19 @@ const TalentMarketplacePage = lazy(() => import('./pages/client/TalentMarketplac
 const ClientCatalogueDetailPage = lazy(() => import('./pages/client/ClientCatalogueDetailPage'));
 
 function App() {
-  const { isAuthenticated, initializeFromStorage } = useAuthStore();
+  const { isAuthenticated, user, initializeFromStorage } = useAuthStore();
   const { isAuthenticated: isClientAuthenticated, initializeFromStorage: initializeClientFromStorage } = useClientAuthStore();
 
   useEffect(() => {
     initializeFromStorage();
     initializeClientFromStorage();
   }, [initializeFromStorage, initializeClientFromStorage]);
+
+  // Defense in depth: even if a client token somehow ended up in the admin
+  // store (token swap, manual localStorage tampering, etc.), block access
+  // to the admin panel unless the role is one of the staff roles.
+  const ADMIN_ROLES = ['ADMIN', 'RH_RECRUITER', 'SALES'];
+  const canAccessAdminPanel = isAuthenticated && !!user?.role && ADMIN_ROLES.includes(user.role);
 
   const LoadingScreen = () => (
     <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="60vh" gap={2}>
@@ -86,7 +92,7 @@ function App() {
           {/* Protected routes */}
           <Route
             element={
-              isAuthenticated ? <MainLayout /> : <Navigate to="/login" replace />
+              canAccessAdminPanel ? <MainLayout /> : <Navigate to="/login" replace />
             }
           >
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
