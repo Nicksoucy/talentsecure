@@ -9,6 +9,16 @@ const invalidateClientCache = async (clientId: string) => {
     await deleteCache(`${CLIENT_DETAIL_CACHE_PREFIX}:${clientId}`);
 };
 
+// Block CLIENT users from accessing data of clients they don't own.
+// Returns true if the request must be rejected.
+const denyCrossClientAccess = (req: Request, res: Response, clientId: string): boolean => {
+    if (req.user?.role === 'CLIENT' && req.user.id !== clientId) {
+        res.status(403).json({ error: 'Accès refusé - ressource d\'un autre client' });
+        return true;
+    }
+    return false;
+};
+
 /**
  * Get all contacts for a specific client
  */
@@ -19,6 +29,8 @@ export const getClientContacts = async (
 ) => {
     try {
         const { clientId } = req.params;
+
+        if (denyCrossClientAccess(req, res, clientId)) return;
 
         const contacts = await prisma.contact.findMany({
             where: {
@@ -168,6 +180,17 @@ export const deleteContact = async (
     try {
         const { id, clientId } = req.params;
         const userId = req.user!.id;
+
+        // Make sure the target contact actually belongs to clientId — prevents
+        // crafting a request with a mismatched (clientId, id) pair to delete
+        // a contact owned by another client.
+        const existingContact = await prisma.contact.findFirst({
+            where: { id, clientId }
+        });
+
+        if (!existingContact) {
+            return res.status(404).json({ error: 'Contact non trouvé' });
+        }
 
         const contact = await prisma.contact.update({
             where: { id },
