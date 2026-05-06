@@ -15,11 +15,7 @@ import {
   getProspectsExtractionStats,
   getProspectExtractionHistory,
 } from '../controllers/prospect.controller';
-import {
-  analyzeProspect,
-  analyzeBatch,
-  getProspectAnalysis,
-} from '../controllers/prospect-scoring.controller';
+import { getProspectAnalysis } from '../controllers/prospect-scoring.controller';
 import { authenticateJWT, authorizeRoles } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
 
@@ -125,32 +121,10 @@ router.post(
 );
 
 /**
- * @route   POST /api/prospects/analyze-batch
- * @desc    AI-score every un-analyzed prospect (or a specific list / re-score with force=true).
- *          Body: { prospectIds?: string[], limit?: number, force?: boolean, model?: string }
- * @access  Private (ADMIN, RH_RECRUITER)
- */
-router.post(
-  '/analyze-batch',
-  authorizeRoles('ADMIN', 'RH_RECRUITER'),
-  analyzeBatch
-);
-
-/**
- * @route   POST /api/prospects/:id/analyze
- * @desc    AI-score a single prospect's CV. Body: { force?: boolean, model?: string }
- * @access  Private (ADMIN, RH_RECRUITER)
- */
-router.post(
-  '/:id/analyze',
-  authorizeRoles('ADMIN', 'RH_RECRUITER'),
-  validate({ params: uuidParam }),
-  analyzeProspect
-);
-
-/**
  * @route   GET /api/prospects/:id/analysis
- * @desc    Read the persisted AI analysis for a prospect
+ * @desc    Read the persisted AI analysis for a prospect.
+ *          Analyses are written by the /analyze-prospects Claude Code
+ *          slash command (no API key, no server-side AI calls).
  * @access  Private (All authenticated users)
  */
 router.get(
