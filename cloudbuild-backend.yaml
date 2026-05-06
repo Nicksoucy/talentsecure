@@ -1,5 +1,31 @@
 steps:
-  # Build the container image
+  # Install dependencies (cached node_modules used by both test + image steps later)
+  - name: 'node:20-alpine'
+    entrypoint: 'npm'
+    args: ['ci', '--prefer-offline', '--no-audit', '--no-fund']
+    dir: 'backend'
+    id: 'npm-ci'
+
+  # Generate Prisma client so tests that transitively import @prisma/client can resolve it
+  - name: 'node:20-alpine'
+    entrypoint: 'npx'
+    args: ['prisma', 'generate']
+    dir: 'backend'
+    id: 'prisma-generate'
+    waitFor: ['npm-ci']
+
+  # Run unit tests that don't require a live Postgres (env validator, rate-limit,
+  # token util, skill normalization, ai-extraction). DB-dependent tests are
+  # skipped for now — wiring them in CI requires a postgres service container,
+  # tracked for Sprint 5+.
+  - name: 'node:20-alpine'
+    entrypoint: 'npm'
+    args: ['run', 'test:ci']
+    dir: 'backend'
+    id: 'unit-tests'
+    waitFor: ['prisma-generate']
+
+  # Build the container image — only after tests have passed
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
@@ -10,6 +36,7 @@ steps:
       - 'backend/Dockerfile'
       - './backend'
     id: 'build-image'
+    waitFor: ['unit-tests']
 
   # Push the container image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
