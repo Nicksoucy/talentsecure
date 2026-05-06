@@ -163,10 +163,50 @@ export default function CityTalentsModal({ open, onClose, city, province = 'QC',
         }
     };
 
-    const handleManualSelection = () => {
-        // TODO: Integrate with wishlist/cart for individual selection
-        alert(`${selectedTalents.size} candidat(s) sélectionné(s) manuellement`);
-        handleClose();
+    const handleManualSelection = async () => {
+        if (selectedTalents.size === 0) {
+            enqueueSnackbar('Veuillez sélectionner au moins un candidat', { variant: 'warning' });
+            return;
+        }
+
+        // Map selected ids to display names so the admin knows which candidates
+        // the client picked. The marketplace preview hides last names for privacy
+        // until purchase, so we send firstName + the candidate id (which the
+        // admin can resolve in the back-office). We reuse the existing aggregate
+        // WishlistItem schema (no migration) and stash this info in the `notes`
+        // field alongside any existing notes.
+        const selectedSummaries = talents
+            .filter((t) => selectedTalents.has(t.id))
+            .map((t) => `${t.firstName} (${t.id.slice(0, 8)})`);
+
+        const manualNotes = selectedSummaries.length > 0
+            ? `Sélection manuelle: ${selectedSummaries.join(', ')}`
+            : 'Sélection manuelle';
+        const combinedNotes = notes.trim()
+            ? `${manualNotes}\n${notes.trim()}`
+            : manualNotes;
+
+        setSubmitting(true);
+        try {
+            await addItem(accessToken!, {
+                city,
+                province,
+                type: mode === 'evaluated' ? 'EVALUATED' : 'CV_ONLY',
+                quantity: selectedTalents.size,
+                notes: combinedNotes,
+            });
+
+            enqueueSnackbar(
+                `${selectedTalents.size} candidat(s) ajouté(s) au panier`,
+                { variant: 'success' },
+            );
+            handleClose();
+        } catch (error: any) {
+            const errorMsg = error.response?.data?.message || error.response?.data?.error || 'Erreur lors de l\'ajout au panier';
+            enqueueSnackbar(errorMsg, { variant: 'error' });
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const handleClose = () => {
@@ -500,14 +540,16 @@ export default function CityTalentsModal({ open, onClose, city, province = 'QC',
                             <Button
                                 variant="contained"
                                 startIcon={
-                                    <Badge badgeContent={selectedTalents.size} color="error">
-                                        <CartIcon />
-                                    </Badge>
+                                    submitting ? <CircularProgress size={20} color="inherit" /> : (
+                                        <Badge badgeContent={selectedTalents.size} color="error">
+                                            <CartIcon />
+                                        </Badge>
+                                    )
                                 }
                                 onClick={handleManualSelection}
-                                disabled={selectedTalents.size === 0}
+                                disabled={submitting || selectedTalents.size === 0}
                             >
-                                Ajouter au panier ({selectedTalents.size})
+                                {submitting ? 'Ajout...' : `Ajouter au panier (${selectedTalents.size})`}
                             </Button>
                         )}
                     </Box>
