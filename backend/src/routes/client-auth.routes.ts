@@ -12,6 +12,7 @@ import {
 } from '../controllers/client-auth.controller';
 import { authenticateJWT } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
+import { loginLimiter, refreshLimiter } from '../middleware/rate-limit.middleware';
 
 // Validation schemas
 const loginSchema = z.object({
@@ -36,6 +37,7 @@ const router = Router();
  */
 router.post(
   '/login',
+  loginLimiter,
   validate({ body: loginSchema }),
   clientLogin
 );
@@ -47,6 +49,7 @@ router.post(
  */
 router.post(
   '/refresh',
+  refreshLimiter,
   validate({ body: refreshTokenSchema }),
   clientRefreshToken
 );
