@@ -7,12 +7,10 @@ import {
   getProfile,
   logout,
   googleCallback,
-  seedAdmin,
-  checkAdmin,
-  checkStats,
 } from '../controllers/auth.controller';
 import { authenticateJWT, authorizeRoles } from '../middleware/auth';
 import { validateRequest } from '../middleware/validation.middleware';
+import { loginLimiter, refreshLimiter } from '../middleware/rate-limit.middleware';
 import { registerSchema, loginSchema } from '../validation/auth.validation';
 
 const router = Router();
@@ -35,36 +33,14 @@ router.post(
  * @desc    Login with email/password
  * @access  Public
  */
-router.post('/login', validateRequest(loginSchema), login);
-
-/**
- * @route   POST/GET /api/auth/seed-admin
- * @desc    Seed admin user (Protected by secret)
- * @access  Public (Emergency)
- */
-router.post('/seed-admin', seedAdmin);
-router.get('/seed-admin', seedAdmin);
-
-/**
- * @route   GET /api/auth/check-admin
- * @desc    Check admin user status (Protected by secret)
- * @access  Public (Emergency)
- */
-router.get('/check-admin', checkAdmin);
-
-/**
- * @route   GET /api/auth/check-stats
- * @desc    Check database stats (Protected by secret)
- * @access  Public (Emergency)
- */
-router.get('/check-stats', checkStats);
+router.post('/login', loginLimiter, validateRequest(loginSchema), login);
 
 /**
  * @route   POST /api/auth/refresh
  * @desc    Refresh access token
  * @access  Public
  */
-router.post('/refresh', refreshToken);
+router.post('/refresh', refreshLimiter, refreshToken);
 
 /**
  * @route   GET /api/auth/profile
