@@ -1,5 +1,6 @@
 ﻿import { Component, ReactNode } from 'react';
 import { Box, Button, Typography } from '@mui/material';
+import { Sentry, sentryEnabled } from '@/config/sentry';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -23,6 +24,12 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   componentDidCatch(error: Error, errorInfo: any) {
     // eslint-disable-next-line no-console
     console.error('Erreur UI capturee', error, errorInfo);
+    if (sentryEnabled) {
+      Sentry.withScope((scope) => {
+        scope.setExtra('componentStack', errorInfo?.componentStack);
+        Sentry.captureException(error);
+      });
+    }
   }
 
   handleReload = () => {

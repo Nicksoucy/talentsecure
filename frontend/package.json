@@ -21,6 +21,7 @@
     "@mui/icons-material": "^5.15.3",
     "@mui/lab": "^5.0.0-alpha.173",
     "@mui/material": "^5.15.3",
+    "@sentry/react": "^8.55.2",
     "@tanstack/react-query": "^5.17.9",
     "@types/leaflet": "^1.9.21",
     "axios": "^1.6.5",

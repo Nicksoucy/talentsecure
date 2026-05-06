@@ -27,6 +27,7 @@
     "@aws-sdk/s3-request-presigner": "^3.932.0",
     "@google-cloud/storage": "^7.17.3",
     "@prisma/client": "^5.7.0",
+    "@sentry/node": "^8.55.2",
     "@types/json2csv": "^5.0.7",
     "@types/uuid": "^9.0.8",
     "axios": "^1.13.2",
@@ -50,14 +51,14 @@
     "pdf-parse": "^2.4.5",
     "pdfkit": "^0.14.0",
     "redis": "^4.6.12",
+    "sharp": "^0.33.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3",
     "uuid": "^9.0.1",
     "winston": "^3.11.0",
     "xlsx": "^0.18.5",
-    "zod": "^3.25.76",
     "xss": "^1.0.15",
-    "sharp": "^0.33.2",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.3.3"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

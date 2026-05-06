@@ -1,3 +1,7 @@
+// Initialize Sentry first (no-op if VITE_SENTRY_DSN unset) so any error during
+// chunk load or render is captured.
+import './config/sentry';
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
