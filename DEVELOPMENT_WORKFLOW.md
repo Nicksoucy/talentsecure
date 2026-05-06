@@ -205,16 +205,20 @@ git push origin main
 
 ### Option B: Déploiement manuel
 
-Si vous voulez tester sans push sur main:
+Si Cloud Build est en panne et que tu dois forcer un déploiement, lance le build via gcloud :
 
 ```bash
-cd backend
+# Submit un build à partir du yaml de prod
+gcloud builds submit \
+  --config=cloudbuild-backend.yaml \
+  --region=northamerica-northeast1 \
+  .
 
-# Construire et pousser manuellement
-powershell -ExecutionPolicy Bypass -File ./build-and-push.ps1
-
-# Ou avec gcloud:
-gcloud builds submit --config=cloudbuild.yaml
+# Ou pour le frontend
+gcloud builds submit \
+  --config=cloudbuild-frontend.yaml \
+  --region=northamerica-northeast1 \
+  .
 ```
 
 ### Vérifier le déploiement
