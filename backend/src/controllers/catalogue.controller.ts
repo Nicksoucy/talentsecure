@@ -7,6 +7,7 @@ import { useR2, getSignedFileUrl } from '../services/r2.service';
 import { prisma } from '../config/database';
 import { getCache, setCache, deleteCache, invalidateCacheByPrefix } from '../config/cache';
 import { buildCacheKey } from '../utils/cache';
+import logger from '../config/logger';
 
 const CATALOGUE_LIST_CACHE_PREFIX = 'catalogues:list';
 const CATALOGUE_DETAIL_CACHE_PREFIX = 'catalogues:detail';
@@ -518,7 +519,12 @@ export const generateCataloguePDF = async (
               cvPaths.push(tempCvPath);
               tempCvPaths.push(tempCvPath);
             } catch (error) {
-              console.error(`Error downloading CV from R2 for candidate ${candidate.firstName} ${candidate.lastName}:`, error);
+              logger.error('Catalogue: failed to download CV from R2', {
+                candidateId: candidate.id,
+                firstName: candidate.firstName,
+                lastName: candidate.lastName,
+                error: error instanceof Error ? error.message : String(error),
+              });
             }
           } else {
             // CV is local
@@ -586,7 +592,9 @@ export const generateCataloguePDF = async (
       try {
         fs.unlinkSync(tempPdfPath);
       } catch (e) {
-        console.error('Error deleting temp file:', e);
+        logger.error('Catalogue: failed to delete temp file', {
+          error: e instanceof Error ? e.message : String(e),
+        });
       }
     }
     // Clean up temp CV files on error
@@ -595,7 +603,9 @@ export const generateCataloguePDF = async (
         try {
           fs.unlinkSync(tempCvPath);
         } catch (e) {
-          console.error('Error deleting temp CV file:', e);
+          logger.error('Catalogue: failed to delete temp CV file', {
+            error: e instanceof Error ? e.message : String(e),
+          });
         }
       }
     }
@@ -730,13 +740,16 @@ export const getCatalogueByToken = async (
     // Filter sensitive data based on payment status
     const isContentRestricted = catalogue.requiresPayment && !catalogue.isPaid;
 
-    // If content is restricted, hide sensitive information
+    // If content is restricted, hide sensitive information.
+    // We intentionally null-out fields the Prisma schema types as non-null
+    // (phone, email, etc.) — this is a response-shape filter, not a DB mutation,
+    // so we cast through unknown to keep the masked shape and let the JSON
+    // serializer drop them as null.
     if (isContentRestricted) {
       catalogue.items = catalogue.items.map((item) => ({
         ...item,
         candidate: {
           ...item.candidate,
-          // Hide sensitive fields
           phone: null,
           email: null,
           address: null,
@@ -752,7 +765,7 @@ export const getCatalogueByToken = async (
           experiences: [],
           certifications: [],
         },
-      }));
+      })) as unknown as typeof catalogue.items;
     }
 
     res.json({
