@@ -1,13 +1,14 @@
-﻿import express, { Application, Request, Response, NextFunction } from 'express';
+﻿// CRITICAL: env validation must run before any other app import.
+// It loads dotenv and throws if JWT_SECRET / JWT_REFRESH_SECRET / DATABASE_URL
+// are missing or use insecure defaults — preventing boot with a known secret.
+import './config/env';
+
+import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
-
-// Load environment variables
-dotenv.config();
 
 // Import passport configuration
 import passport from './config/passport';

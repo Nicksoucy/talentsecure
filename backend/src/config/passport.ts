@@ -57,7 +57,8 @@ passport.use(
   new JwtStrategy(
     {
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      secretOrKey: process.env.JWT_SECRET || 'your-secret-key',
+      // env.ts has already validated JWT_SECRET is set and not a default value
+      secretOrKey: process.env.JWT_SECRET as string,
     },
     async (payload, done) => {
       try {
