@@ -44,7 +44,8 @@ gcs-credentials.json
 *.json.key
 
 # Prisma
-prisma/migrations/
+# Migrations ARE tracked (versioned schema history). Only environment-specific
+# overrides are ignored.
 .env.test
 
 # Temporary files
