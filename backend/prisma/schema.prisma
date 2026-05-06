@@ -625,6 +625,7 @@ model ProspectCandidate {
   // Relations
   purchases ClientPurchase[]
   skills    ProspectSkill[] // Skills extracted from CV
+  analysis  ProspectAnalysis? // AI scoring analysis (1:1, optional)
 
   @@index([email])
   @@index([phone])
@@ -634,6 +635,46 @@ model ProspectCandidate {
   @@index([submissionDate])
   @@index([createdAt])
   @@map("prospect_candidates")
+}
+
+// AI scoring analysis for a prospect CV. 1:1 with ProspectCandidate.
+// Re-running the analysis updates the existing row (upsert by prospectId).
+model ProspectAnalysis {
+  id         String            @id @default(uuid())
+  prospectId String            @unique
+  prospect   ProspectCandidate @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  // Verdict
+  score          Int // 0-100
+  tier           String // gold | silver | bronze | reject
+  recommendation String // INTERVIEW_PRIORITY | INTERVIEW | REVIEW | REJECT
+  summary        String @db.Text
+
+  // Detailed analysis
+  strengths        String[] // Postgres native array
+  redFlags         String[]
+  workEnvironments Json     @default("[]") // [{ type, label, yearsApprox, employer }, ...]
+
+  reasoning String @db.Text
+
+  // Versioning — lets us re-score when the rubric or model evolves
+  rubricVersion String  // e.g. "v1"
+  model         String  // e.g. "claude-haiku-4-5-20251001"
+  cvHash        String? // sha256 of the CV text used; null if no CV text was available
+
+  // Cost tracking
+  promptTokens     Int     @default(0)
+  completionTokens Int     @default(0)
+  totalCost        Decimal @default(0) @db.Decimal(10, 6)
+  processingTimeMs Int     @default(0)
+
+  analyzedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([tier, score])
+  @@index([recommendation])
+  @@index([analyzedAt])
+  @@map("prospect_analyses")
 }
 
 // Nouveau modÃ¨le pour tracker les sÃ©lections/demandes des clients
