@@ -25,13 +25,37 @@ function isSameOrigin(url: string): boolean {
 
 type Kind = 'pdf' | 'docx' | 'doc' | 'unsupported';
 
-function pickKind(contentType: string, url: string): Kind {
+// Detect by Content-Type first (cheap), then URL extension, then fall back to
+// magic bytes — the only reliable signal when the upstream CDN serves a
+// generic application/octet-stream and the URL is opaque (e.g. GHL files
+// stored as /files/<uuid> with no extension and a token query).
+//
+// Magic bytes:
+//   PDF  : 25 50 44 46                 ("%PDF")
+//   DOCX : 50 4B 03 04                 (ZIP local file header — DOCX is a zip)
+//   DOC  : D0 CF 11 E0 A1 B1 1A E1     (OLE compound document, legacy Word)
+function pickKind(contentType: string, url: string, head: Uint8Array): Kind {
     const ct = contentType.toLowerCase();
     const lowerUrl = url.split('?')[0].toLowerCase();
 
     if (ct.includes('pdf') || lowerUrl.endsWith('.pdf')) return 'pdf';
     if (ct.includes('wordprocessingml') || lowerUrl.endsWith('.docx')) return 'docx';
     if (ct.includes('msword') || lowerUrl.endsWith('.doc')) return 'doc';
+
+    if (head.length >= 4) {
+        if (head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46) {
+            return 'pdf';
+        }
+        if (head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04) {
+            // ZIP-based — assume DOCX. docx-preview will throw if it's actually
+            // xlsx / pptx / odt and we'll surface that as "Aperçu indisponible".
+            return 'docx';
+        }
+        if (head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0) {
+            return 'doc';
+        }
+    }
+
     return 'unsupported';
 }
 
@@ -68,7 +92,14 @@ export default function CVPreview({ url, fileName }: CVPreviewProps) {
                 }
                 if (cancelled) return;
 
-                const detected = pickKind(blob.type || '', url);
+                // Read the first 8 bytes for magic-byte detection. blob.slice
+                // is cheap; arrayBuffer() reads only the slice, not the whole
+                // file again.
+                const headBuf = await blob.slice(0, 8).arrayBuffer();
+                if (cancelled) return;
+                const head = new Uint8Array(headBuf);
+
+                const detected = pickKind(blob.type || '', url, head);
                 setKind(detected);
 
                 if (detected === 'pdf') {
