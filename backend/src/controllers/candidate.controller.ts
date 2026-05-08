@@ -814,26 +814,43 @@ export const getCandidateVideoUrl = async (
     // Import video service
     const { getVideoUrl, getR2SignedUrl, useR2 } = require('../services/video.service');
 
-    if (useR2) {
-      // Generate signed URL
-      const signedUrl = await getR2SignedUrl(candidate.videoStoragePath, 3600);
-      return res.json({
-        success: true,
-        data: {
-          videoUrl: signedUrl,
-          expiresIn: 3600,
-        },
-      });
+    // The stored path looks like "videos/candidates/<timestamp>_<filename>",
+    // which is the R2 key shape created by uploadVideoToR2. Whatever the
+    // current USE_R2 env flag says, that key is *only* meaningful as an R2
+    // object — there is no local file on the Cloud Run instance. So if the
+    // path matches that shape we always sign an R2 URL, regardless of flag.
+    // This is what prevented videos from playing: the controller fell into
+    // the `else` branch and returned the raw key, which the browser resolved
+    // against the frontend origin and got back the SPA's index.html.
+    const looksLikeR2Key =
+      candidate.videoStoragePath.startsWith('videos/') ||
+      candidate.videoStoragePath.includes('/candidates/');
+
+    let videoUrl: string;
+    if (useR2 || looksLikeR2Key) {
+      videoUrl = await getR2SignedUrl(candidate.videoStoragePath, 3600);
     } else {
-      // Local or other
-      const videoUrl = getVideoUrl(candidate.videoStoragePath);
-      return res.json({
-        success: true,
-        data: {
-          videoUrl,
-        },
+      videoUrl = getVideoUrl(candidate.videoStoragePath);
+    }
+
+    // Defensive guard: a relative URL means we have no working absolute
+    // location for this video. Fail loud instead of letting the browser
+    // resolve it against the frontend domain (which serves the SPA HTML
+    // and produces a silently broken <video> player).
+    if (!/^https?:\/\//i.test(videoUrl)) {
+      return res.status(500).json({
+        success: false,
+        error: `Configuration vidéo invalide (chemin ${candidate.videoStoragePath})`,
       });
     }
+
+    return res.json({
+      success: true,
+      data: {
+        videoUrl,
+        expiresIn: 3600,
+      },
+    });
   } catch (error) {
     next(error);
   }
