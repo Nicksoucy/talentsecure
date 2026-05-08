@@ -7,33 +7,38 @@ import { URL } from 'url';
 // file as bytes via fetch(), which is blocked by CORS on cross-origin
 // responses (GHL doesn't send Access-Control-Allow-Origin).
 //
-// SSRF guard: only the small set of hosts we actually use to store CVs is
-// allowed. Anything else is rejected — without this, an authenticated admin
-// could turn this into a generic outbound proxy (fine in itself, but it
-// becomes a useful pivot if the JWT ever leaks).
-const ALLOWED_HOSTS = new Set([
-    // GoHighLevel
+// Allowlist of known CV/file hosting providers. We allow whole domains rather
+// than specific hostnames because CDNs use rotating subdomains (S3 region
+// endpoints, GCS bucket subdomains, R2 account subdomains, etc.). Anything
+// outside this set is rejected to keep this from becoming a generic outbound
+// proxy if an admin JWT ever leaks.
+const ALLOWED_DOMAIN_SUFFIXES = [
+    // GoHighLevel API + CDNs
+    '.gohighlevel.com',
+    '.leadconnectorhq.com',
+    // AWS S3 (any region: us-east-1.amazonaws.com, us-east-2.amazonaws.com, etc.)
+    '.amazonaws.com',
+    // Google Cloud Storage + Firebase Storage
+    '.googleapis.com',
+    // Cloudflare R2 (one subdomain per account)
+    '.r2.cloudflarestorage.com',
+    // CDNs sometimes used in front of these
+    '.cloudfront.net',
+    '.b-cdn.net',
+    '.azureedge.net',
+];
+
+const ALLOWED_EXACT_HOSTS = new Set([
     'storage.googleapis.com',
-    'api.leadconnectorhq.com',
-    'app.leadconnectorhq.com',
-    'media.gohighlevel.com',
-    // GHL underlying S3 buckets (common patterns)
-    'msgsndr.s3.amazonaws.com',
-    'msgsndr.s3.us-east-2.amazonaws.com',
-    'highlevel-backend.s3.amazonaws.com',
-    'highlevel-backend-prod.s3.amazonaws.com',
-    // Firebase / Google
-    'firebase-storage.googleapis.com',
     'firebasestorage.googleapis.com',
-    // Cloudflare R2 (used in production for own uploads — see cv.service.ts)
-    'r2.cloudflarestorage.com',
+    'media.gohighlevel.com',
+    'app.gohighlevel.com',
 ]);
 
 function isAllowedHost(hostname: string): boolean {
-    if (ALLOWED_HOSTS.has(hostname)) return true;
-    // Allow any *.r2.cloudflarestorage.com subdomain (each R2 bucket gets its own).
-    if (hostname.endsWith('.r2.cloudflarestorage.com')) return true;
-    return false;
+    const h = hostname.toLowerCase();
+    if (ALLOWED_EXACT_HOSTS.has(h)) return true;
+    return ALLOWED_DOMAIN_SUFFIXES.some((suffix) => h.endsWith(suffix));
 }
 
 export const proxyCv = (req: Request, res: Response) => {
