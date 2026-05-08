@@ -38,10 +38,10 @@ function pickKind(contentType: string, url: string, head: Uint8Array): Kind {
     const ct = contentType.toLowerCase();
     const lowerUrl = url.split('?')[0].toLowerCase();
 
-    if (ct.includes('pdf') || lowerUrl.endsWith('.pdf')) return 'pdf';
-    if (ct.includes('wordprocessingml') || lowerUrl.endsWith('.docx')) return 'docx';
-    if (ct.includes('msword') || lowerUrl.endsWith('.doc')) return 'doc';
-
+    // Magic bytes win over content-type and URL extension. CDNs lie about MIME
+    // (octet-stream, sometimes text/html) and URLs lie about extension (GHL
+    // serves files at /files/<uuid> with no extension), but the file's first
+    // bytes are ground truth.
     if (head.length >= 4) {
         if (head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46) {
             return 'pdf';
@@ -55,6 +55,11 @@ function pickKind(contentType: string, url: string, head: Uint8Array): Kind {
             return 'doc';
         }
     }
+
+    // Magic bytes didn't match — fall back to MIME and URL hints.
+    if (ct.includes('pdf') || lowerUrl.endsWith('.pdf')) return 'pdf';
+    if (ct.includes('wordprocessingml') || lowerUrl.endsWith('.docx')) return 'docx';
+    if (ct.includes('msword') || lowerUrl.endsWith('.doc')) return 'doc';
 
     return 'unsupported';
 }
@@ -101,6 +106,19 @@ export default function CVPreview({ url, fileName }: CVPreviewProps) {
 
                 const detected = pickKind(blob.type || '', url, head);
                 setKind(detected);
+
+                if (detected === 'unsupported') {
+                    // Debug aid: log what the file actually looks like so we
+                    // can extend pickKind when a new format shows up in prod.
+                    const headHex = Array.from(head)
+                        .map((b) => b.toString(16).padStart(2, '0'))
+                        .join(' ');
+                    // eslint-disable-next-line no-console
+                    console.warn(
+                        `[CVPreview] format non reconnu — content-type=${blob.type || '(vide)'}, ` +
+                        `url=${url}, magic=${headHex}, taille=${blob.size}o`,
+                    );
+                }
 
                 if (detected === 'pdf') {
                     // Re-type the blob to application/pdf before handing it
