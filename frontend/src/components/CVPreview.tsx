@@ -103,7 +103,16 @@ export default function CVPreview({ url, fileName }: CVPreviewProps) {
                 setKind(detected);
 
                 if (detected === 'pdf') {
-                    createdBlobUrl = URL.createObjectURL(blob);
+                    // Re-type the blob to application/pdf before handing it
+                    // to URL.createObjectURL — otherwise an iframe pointed at
+                    // a blob: URL whose type is application/octet-stream (the
+                    // GHL CDN's default) downloads the file instead of
+                    // rendering it inline. Blob.slice(0, size, type) is a
+                    // view, not a copy — no bytes get duplicated.
+                    const pdfBlob = blob.type === 'application/pdf'
+                        ? blob
+                        : blob.slice(0, blob.size, 'application/pdf');
+                    createdBlobUrl = URL.createObjectURL(pdfBlob);
                     if (cancelled) {
                         URL.revokeObjectURL(createdBlobUrl);
                         return;
