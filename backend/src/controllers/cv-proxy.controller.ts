@@ -104,8 +104,48 @@ function fetchWithRedirects(
             return;
         }
 
-        const ct = upRes.headers['content-type'];
-        if (ct) res.setHeader('Content-Type', ct);
+        const ct = (upRes.headers['content-type'] || '').toLowerCase();
+
+        // GoHighLevel's /documents/download endpoint returns a "soft redirect":
+        // status 200 + Content-Type text/plain + body "Temporary Redirect.
+        // Redirecting to https://storage.googleapis.com/...". Not a real HTTP
+        // 302, so the redirect block above doesn't fire. Detect it by content
+        // type, buffer the small body, extract the URL, and follow it.
+        if (ct.startsWith('text/plain')) {
+            const chunks: Buffer[] = [];
+            let total = 0;
+            const MAX_SOFT_REDIRECT_BODY = 8 * 1024;
+            upRes.on('data', (chunk: Buffer) => {
+                total += chunk.length;
+                if (total > MAX_SOFT_REDIRECT_BODY) {
+                    upstream.destroy(new Error('Soft-redirect body trop gros'));
+                    return;
+                }
+                chunks.push(chunk);
+            });
+            upRes.on('end', () => {
+                if (res.headersSent) return;
+                const body = Buffer.concat(chunks).toString('utf-8');
+                const m = body.match(/https?:\/\/\S+/);
+                if (m && redirectsLeft > 0) {
+                    const next = m[0].replace(/[)\].,;]+$/, '');
+                    logger.info(`[cv-proxy] soft-redirect détecté → ${next}`);
+                    fetchWithRedirects(next, res, redirectsLeft - 1);
+                    return;
+                }
+                logger.warn(
+                    `[cv-proxy] body text/plain sans URL exploitable (${total}o): ${body.slice(0, 200)}`,
+                );
+                res.status(502).json({
+                    error: 'Réponse inattendue du fournisseur',
+                });
+            });
+            return;
+        }
+
+        if (upRes.headers['content-type']) {
+            res.setHeader('Content-Type', upRes.headers['content-type']!);
+        }
         const cl = upRes.headers['content-length'];
         if (cl) res.setHeader('Content-Length', cl);
         // Short cache so repeated previews of the same CV in a session don't
