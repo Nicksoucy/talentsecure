@@ -102,7 +102,25 @@ export default function CVPreview({ url, fileName }: CVPreviewProps) {
                 setStatus('ready');
             } catch (err: any) {
                 if (cancelled) return;
-                const upstreamErr = err?.response?.data?.error;
+                // axios with responseType:'arraybuffer' returns the error body
+                // as an ArrayBuffer too, so err.response.data is bytes — not a
+                // parsed object. Decode it to text and try to pull the JSON
+                // `error` field out so the user sees the actual reason from the
+                // proxy (e.g. "Host non autorisé: foo.com") instead of just
+                // "Request failed with status code 403".
+                let upstreamErr: string | undefined;
+                const data = err?.response?.data;
+                if (data instanceof ArrayBuffer) {
+                    try {
+                        const text = new TextDecoder().decode(data);
+                        upstreamErr = JSON.parse(text)?.error;
+                    } catch {
+                        // not JSON — leave upstreamErr undefined
+                    }
+                } else if (typeof data === 'object' && data?.error) {
+                    upstreamErr = data.error;
+                }
+
                 const msg = upstreamErr
                     ? `Proxy: ${upstreamErr}`
                     : err?.message?.includes('Failed to fetch')
