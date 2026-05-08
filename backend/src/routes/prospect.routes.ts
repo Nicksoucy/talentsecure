@@ -16,6 +16,7 @@ import {
   getProspectExtractionHistory,
 } from '../controllers/prospect.controller';
 import { getProspectAnalysis } from '../controllers/prospect-scoring.controller';
+import { proxyCv } from '../controllers/cv-proxy.controller';
 import { authenticateJWT, authorizeRoles } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
 
@@ -84,6 +85,15 @@ router.get('/suggestions/cities', getCitiesSuggestions);
  * @access  Private (All authenticated users)
  */
 router.get('/suggestions/names', getProspectsSuggestions);
+
+/**
+ * @route   GET /api/prospects/cv-proxy
+ * @desc    Same-origin proxy for CV downloads (works around CORS on the GHL
+ *          CDN so the frontend's docx-preview can fetch the bytes inline).
+ *          Query: ?url=<encoded-cv-url>. Whitelisted hosts only.
+ * @access  Private (All authenticated users)
+ */
+router.get('/cv-proxy', proxyCv);
 
 /**
  * @route   POST /api/prospects

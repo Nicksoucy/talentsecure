@@ -1,9 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { Box, CircularProgress, Alert, Typography } from '@mui/material';
+import api from '@/services/api';
 
 interface CVPreviewProps {
     url: string;
     fileName?: string;
+}
+
+// docx-preview's fetch() can't read the GHL CDN bytes directly because of CORS,
+// so we route the download through our backend proxy at /api/prospects/cv-proxy.
+// The axios interceptor on `api` attaches the JWT, the backend allowlist on
+// proxyCv checks the upstream host, and we get back the raw file bytes on the
+// same origin — no CORS issue, no public open proxy.
+function isSameOrigin(url: string): boolean {
+    try {
+        return new URL(url, window.location.href).origin === window.location.origin;
+    } catch {
+        return false;
+    }
 }
 
 type FileKind = 'pdf' | 'docx' | 'doc' | 'unknown';
@@ -34,9 +48,23 @@ export default function CVPreview({ url, fileName }: CVPreviewProps) {
 
         (async () => {
             try {
-                const res = await fetch(url);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const blob = await res.blob();
+                let blob: Blob;
+                if (isSameOrigin(url)) {
+                    // Local upload (R2 signed URL on our own bucket, dev /uploads/, etc.)
+                    const res = await fetch(url);
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    blob = await res.blob();
+                } else {
+                    // External CDN (GHL etc.) — go through the same-origin backend
+                    // proxy so the response carries no CORS restriction.
+                    const res = await api.get('/api/prospects/cv-proxy', {
+                        params: { url },
+                        responseType: 'arraybuffer',
+                    });
+                    const ct = (res.headers['content-type'] as string | undefined)
+                        || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                    blob = new Blob([res.data], { type: ct });
+                }
                 if (cancelled) return;
 
                 // Wait one frame so the ref is mounted before docx-preview writes into it.
@@ -53,12 +81,12 @@ export default function CVPreview({ url, fileName }: CVPreviewProps) {
                 if (!cancelled) setStatus('ready');
             } catch (err: any) {
                 if (cancelled) return;
-                // Most likely cause when the URL is from a third-party CDN (GoHighLevel
-                // webhooks, etc.): the browser blocks the fetch under CORS. Surface a
-                // friendly message and let the parent dialog's download button take over.
-                const msg = err?.message?.includes('Failed to fetch')
-                    ? 'Aperçu bloqué par la politique CORS du fournisseur du fichier.'
-                    : err?.message || 'Erreur de chargement';
+                const upstreamErr = err?.response?.data?.error;
+                const msg = upstreamErr
+                    ? `Proxy: ${upstreamErr}`
+                    : err?.message?.includes('Failed to fetch')
+                        ? 'Aperçu bloqué par la politique CORS du fournisseur du fichier.'
+                        : err?.message || 'Erreur de chargement';
                 setErrorMsg(msg);
                 setStatus('error');
             }
