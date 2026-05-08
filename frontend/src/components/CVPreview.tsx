@@ -7,11 +7,14 @@ interface CVPreviewProps {
     fileName?: string;
 }
 
-// docx-preview's fetch() can't read the GHL CDN bytes directly because of CORS,
-// so we route the download through our backend proxy at /api/prospects/cv-proxy.
-// The axios interceptor on `api` attaches the JWT, the backend allowlist on
-// proxyCv checks the upstream host, and we get back the raw file bytes on the
-// same origin — no CORS issue, no public open proxy.
+// We always fetch the file first and route based on the response Content-Type,
+// not the URL extension. URLs like /api/candidates/:id/cv/download have no
+// extension, so the old extension-only detection failed for the candidate
+// detail page; sniffing the actual MIME works for both shapes (extensionless
+// backend endpoints and direct .docx/.pdf URLs from GHL etc.).
+//
+// docx-preview's fetch() can't read cross-origin bytes (CORS), so we route
+// every external URL through the same-origin /api/prospects/cv-proxy backend.
 function isSameOrigin(url: string): boolean {
     try {
         return new URL(url, window.location.href).origin === window.location.origin;
@@ -20,72 +23,90 @@ function isSameOrigin(url: string): boolean {
     }
 }
 
-type FileKind = 'pdf' | 'docx' | 'doc' | 'unknown';
+type Kind = 'pdf' | 'docx' | 'doc' | 'unsupported';
 
-function detectKind(url: string): FileKind {
-    const path = url.split('?')[0].toLowerCase();
-    if (path.endsWith('.pdf')) return 'pdf';
-    if (path.endsWith('.docx')) return 'docx';
-    if (path.endsWith('.doc')) return 'doc';
-    return 'unknown';
+function pickKind(contentType: string, url: string): Kind {
+    const ct = contentType.toLowerCase();
+    const lowerUrl = url.split('?')[0].toLowerCase();
+
+    if (ct.includes('pdf') || lowerUrl.endsWith('.pdf')) return 'pdf';
+    if (ct.includes('wordprocessingml') || lowerUrl.endsWith('.docx')) return 'docx';
+    if (ct.includes('msword') || lowerUrl.endsWith('.doc')) return 'doc';
+    return 'unsupported';
 }
 
 export default function CVPreview({ url, fileName }: CVPreviewProps) {
-    const containerRef = useRef<HTMLDivElement>(null);
+    const docxContainerRef = useRef<HTMLDivElement>(null);
     const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
     const [errorMsg, setErrorMsg] = useState<string>('');
-    const kind = detectKind(url);
+    const [kind, setKind] = useState<Kind | null>(null);
+    const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
 
     useEffect(() => {
-        if (kind === 'pdf' || kind === 'doc') {
-            setStatus('ready');
-            return;
-        }
-
         let cancelled = false;
+        let createdBlobUrl: string | null = null;
+
         setStatus('loading');
         setErrorMsg('');
+        setKind(null);
+        setPdfBlobUrl(null);
 
         (async () => {
             try {
                 let blob: Blob;
                 if (isSameOrigin(url)) {
-                    // Local upload (R2 signed URL on our own bucket, dev /uploads/, etc.)
-                    const res = await fetch(url);
+                    const res = await fetch(url, { credentials: 'include' });
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     blob = await res.blob();
                 } else {
-                    // External CDN (GHL etc.) — go through the same-origin backend
-                    // proxy so the response carries no CORS restriction.
                     const res = await api.get('/api/prospects/cv-proxy', {
                         params: { url },
                         responseType: 'arraybuffer',
                     });
-                    const ct = (res.headers['content-type'] as string | undefined)
-                        || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                    const ct = (res.headers['content-type'] as string | undefined) || 'application/octet-stream';
                     blob = new Blob([res.data], { type: ct });
                 }
                 if (cancelled) return;
 
-                // Wait one frame so the ref is mounted before docx-preview writes into it.
-                await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
-                if (cancelled || !containerRef.current) return;
+                const detected = pickKind(blob.type || '', url);
+                setKind(detected);
 
-                const { renderAsync } = await import('docx-preview');
-                containerRef.current.innerHTML = '';
-                await renderAsync(blob, containerRef.current, undefined, {
-                    inWrapper: true,
-                    ignoreWidth: false,
-                    ignoreHeight: false,
-                });
-                if (!cancelled) setStatus('ready');
+                if (detected === 'pdf') {
+                    createdBlobUrl = URL.createObjectURL(blob);
+                    if (cancelled) {
+                        URL.revokeObjectURL(createdBlobUrl);
+                        return;
+                    }
+                    setPdfBlobUrl(createdBlobUrl);
+                    setStatus('ready');
+                    return;
+                }
+
+                if (detected === 'docx') {
+                    // Wait one frame so the ref is mounted before docx-preview writes into it.
+                    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+                    if (cancelled || !docxContainerRef.current) return;
+
+                    const { renderAsync } = await import('docx-preview');
+                    docxContainerRef.current.innerHTML = '';
+                    await renderAsync(blob, docxContainerRef.current, undefined, {
+                        inWrapper: true,
+                        ignoreWidth: false,
+                        ignoreHeight: false,
+                    });
+                    if (!cancelled) setStatus('ready');
+                    return;
+                }
+
+                // Legacy .doc or unknown — show the friendly fallback below.
+                setStatus('ready');
             } catch (err: any) {
                 if (cancelled) return;
                 const upstreamErr = err?.response?.data?.error;
                 const msg = upstreamErr
                     ? `Proxy: ${upstreamErr}`
                     : err?.message?.includes('Failed to fetch')
-                        ? 'Aperçu bloqué par la politique CORS du fournisseur du fichier.'
+                        ? 'Aperçu bloqué (CORS ou réseau).'
                         : err?.message || 'Erreur de chargement';
                 setErrorMsg(msg);
                 setStatus('error');
@@ -94,13 +115,25 @@ export default function CVPreview({ url, fileName }: CVPreviewProps) {
 
         return () => {
             cancelled = true;
+            if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl);
         };
-    }, [url, kind]);
+    }, [url]);
 
-    if (kind === 'pdf') {
+    if (status === 'error') {
+        return (
+            <Box sx={{ p: 3 }}>
+                <Alert severity="warning">
+                    Aperçu indisponible : {errorMsg}<br />
+                    Utilisez le bouton <strong>Télécharger</strong> pour consulter le fichier.
+                </Alert>
+            </Box>
+        );
+    }
+
+    if (kind === 'pdf' && pdfBlobUrl) {
         return (
             <iframe
-                src={url}
+                src={pdfBlobUrl}
                 style={{ width: '100%', height: '100%', border: 'none' }}
                 title={fileName || 'CV'}
             />
@@ -112,22 +145,32 @@ export default function CVPreview({ url, fileName }: CVPreviewProps) {
             <Box sx={{ p: 3 }}>
                 <Alert severity="info">
                     Le format <strong>.doc</strong> (Word 97-2003) n'est pas supporté en aperçu.
-                    Utilisez le bouton <strong>Télécharger</strong> pour le consulter.
+                    Utilisez le bouton <strong>Télécharger</strong> pour consulter le fichier.
                 </Alert>
             </Box>
         );
     }
 
+    if (kind === 'unsupported' && status === 'ready') {
+        return (
+            <Box sx={{ p: 3 }}>
+                <Alert severity="info">
+                    Format non reconnu. Utilisez <strong>Télécharger</strong>.
+                </Alert>
+            </Box>
+        );
+    }
+
+    // docx render path: container always mounted so the ref is valid for renderAsync.
     return (
         <Box sx={{ position: 'relative', height: '100%' }}>
             <Box
-                ref={containerRef}
+                ref={docxContainerRef}
                 sx={{
                     height: '100%',
                     overflow: 'auto',
                     bgcolor: 'grey.100',
                     p: 2,
-                    display: status === 'error' ? 'none' : 'block',
                     '& .docx-wrapper': {
                         background: 'transparent',
                         padding: 0,
@@ -157,14 +200,6 @@ export default function CVPreview({ url, fileName }: CVPreviewProps) {
                     <Typography variant="body2" color="text.secondary">
                         Chargement de l'aperçu…
                     </Typography>
-                </Box>
-            )}
-            {status === 'error' && (
-                <Box sx={{ p: 3 }}>
-                    <Alert severity="warning">
-                        Aperçu indisponible : {errorMsg}<br />
-                        Utilisez le bouton <strong>Télécharger</strong> ci-dessous pour consulter le fichier.
-                    </Alert>
                 </Box>
             )}
         </Box>

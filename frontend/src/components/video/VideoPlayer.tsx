@@ -131,7 +131,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           backgroundColor: '#000',
         }}
       >
+        {/* No hardcoded type="video/mp4" — uploads accept .mp4/.webm/.mov etc.,
+            and a wrong mime hint silently makes the browser skip the source.
+            Pointing src directly at the <video> lets it sniff the response
+            Content-Type and pick the right decoder. */}
         <video
+          src={videoUrl}
           controls
           style={{
             width: '100%',
@@ -140,7 +145,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           }}
           preload="metadata"
         >
-          <source src={videoUrl} type="video/mp4" />
           Votre navigateur ne supporte pas la lecture de vidéos.
         </video>
       </Box>

@@ -8,16 +8,24 @@ import {
   IconButton,
   CircularProgress,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Tooltip,
 } from '@mui/material';
 import {
   CloudUpload as UploadIcon,
   Description as FileIcon,
   Download as DownloadIcon,
   Delete as DeleteIcon,
+  Visibility as PreviewIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 import { uploadService } from '@/services/upload.service';
+import CVPreview from './CVPreview';
 
 interface CVUploadProps {
   candidateId: string;
@@ -29,6 +37,7 @@ interface CVUploadProps {
 
 export default function CVUpload({ candidateId, currentCV }: CVUploadProps) {
   const [dragActive, setDragActive] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { enqueueSnackbar } = useSnackbar();
   const queryClient = useQueryClient();
@@ -155,19 +164,28 @@ export default function CVUpload({ candidateId, currentCV }: CVUploadProps) {
                 CV disponible
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                Cliquez sur télécharger pour voir le CV
+                Cliquez sur l'œil pour voir le CV directement
               </Typography>
             </Box>
-            <IconButton color="primary" onClick={handleDownload} disabled={isLoading}>
-              <DownloadIcon />
-            </IconButton>
-            <IconButton color="error" onClick={handleDelete} disabled={isLoading}>
-              {deleteMutation.isPending ? (
-                <CircularProgress size={24} />
-              ) : (
-                <DeleteIcon />
-              )}
-            </IconButton>
+            <Tooltip title="Aperçu">
+              <IconButton color="primary" onClick={() => setPreviewOpen(true)} disabled={isLoading}>
+                <PreviewIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Télécharger">
+              <IconButton onClick={handleDownload} disabled={isLoading}>
+                <DownloadIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Supprimer">
+              <IconButton color="error" onClick={handleDelete} disabled={isLoading}>
+                {deleteMutation.isPending ? (
+                  <CircularProgress size={24} />
+                ) : (
+                  <DeleteIcon />
+                )}
+              </IconButton>
+            </Tooltip>
           </Box>
         ) : (
           <Box
@@ -223,6 +241,42 @@ export default function CVUpload({ candidateId, currentCV }: CVUploadProps) {
           </Alert>
         )}
       </CardContent>
+
+      <Dialog
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{ sx: { height: '90vh' } }}
+      >
+        <DialogTitle>
+          <Box display="flex" alignItems="center" justifyContent="space-between">
+            <Box display="flex" alignItems="center" gap={1}>
+              <FileIcon />
+              <Typography variant="h6">Aperçu du CV</Typography>
+            </Box>
+            <IconButton size="small" onClick={() => setPreviewOpen(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0, height: '80vh' }}>
+          {previewOpen && (
+            <CVPreview
+              url={uploadService.getCVDownloadUrl(candidateId)}
+              fileName="CV"
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button startIcon={<DownloadIcon />} onClick={handleDownload} variant="outlined">
+            Télécharger
+          </Button>
+          <Button onClick={() => setPreviewOpen(false)} variant="contained">
+            Fermer
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 }
