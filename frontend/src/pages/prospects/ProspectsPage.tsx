@@ -50,6 +50,7 @@ import {
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { TableSkeleton } from '@/components/skeletons';
+import CVPreview from '@/components/CVPreview';
 import { useNavigate } from 'react-router-dom';
 import { prospectService } from '@/services/prospect.service';
 import { ProspectCandidate } from '@/types';
@@ -788,14 +789,9 @@ export default function ProspectsPage() {
         </DialogTitle>
         <DialogContent sx={{ p: 0, height: '80vh' }}>
           {cvPreviewDialog.cvUrl && (
-            <iframe
-              src={cvPreviewDialog.cvUrl}
-              style={{
-                width: '100%',
-                height: '100%',
-                border: 'none',
-              }}
-              title={`CV - ${cvPreviewDialog.prospectName}`}
+            <CVPreview
+              url={cvPreviewDialog.cvUrl}
+              fileName={`CV - ${cvPreviewDialog.prospectName}`}
             />
           )}
         </DialogContent>

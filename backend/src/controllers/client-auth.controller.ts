@@ -264,6 +264,8 @@ export const getClientCatalogueById = async (
     const isContentRestricted = catalogue.requiresPayment && !catalogue.isPaid;
 
     if (isContentRestricted) {
+      // Response-shape filter: intentionally nullify non-null Prisma fields.
+      // Cast through unknown to satisfy strict mode without a DB mutation.
       catalogue.items = catalogue.items.map(item => ({
         ...item,
         candidate: {
@@ -276,7 +278,7 @@ export const getClientCatalogueById = async (
           strengths: null,
           weaknesses: null,
         },
-      }));
+      })) as unknown as typeof catalogue.items;
     }
 
     res.json({

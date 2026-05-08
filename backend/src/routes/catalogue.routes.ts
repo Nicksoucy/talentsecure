@@ -12,6 +12,7 @@ import {
 } from '../controllers/catalogue.controller';
 import { authenticateJWT, authorizeRoles } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
+import { publicShareLimiter } from '../middleware/rate-limit.middleware';
 
 // Validation schemas
 const uuidParam = z.object({
@@ -20,7 +21,16 @@ const uuidParam = z.object({
 
 const router = Router();
 
-// All catalogue routes require authentication
+/**
+ * @route   GET /api/catalogues/view/:token
+ * @desc    View catalogue by share token (PUBLIC, no auth)
+ * @access  Public — gated only by token unguessability + expiration + rate limit.
+ *          Must be declared BEFORE router.use(authenticateJWT) below, otherwise
+ *          the auth middleware rejects unauthenticated viewers.
+ */
+router.get('/view/:token', publicShareLimiter, getCatalogueByToken);
+
+// All other catalogue routes require authentication
 router.use(authenticateJWT);
 
 /**
@@ -90,12 +100,5 @@ router.post(
   validate({ params: uuidParam }),
   generateShareLink
 );
-
-/**
- * @route   GET /api/catalogues/view/:token
- * @desc    View catalogue by share token (PUBLIC)
- * @access  Public
- */
-router.get('/view/:token', getCatalogueByToken);
 
 export default router;

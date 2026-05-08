@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
+import logger from '../config/logger';
 
 /**
  * ADMIN ONLY: Re-convertir les candidats auto-convertis en prospects
@@ -20,7 +21,7 @@ export const revertAutoConvertedCandidates = async (
       });
     }
 
-    console.log('🔍 Recherche des candidats auto-convertis...');
+    logger.info('Admin: searching for auto-converted candidates');
 
     // Trouver tous les candidats avec "Auto-Converti" dans hrNotes
     const autoConvertedCandidates = await prisma.candidate.findMany({
@@ -33,12 +34,16 @@ export const revertAutoConvertedCandidates = async (
       },
     });
 
-    console.log(`✅ Trouvé ${autoConvertedCandidates.length} candidat(s) auto-converti(s)`);
+    logger.info('Admin: auto-converted candidates found', { count: autoConvertedCandidates.length });
 
     const results = [];
 
     for (const candidate of autoConvertedCandidates) {
-      console.log(`\n📝 Traitement: ${candidate.firstName} ${candidate.lastName}`);
+      logger.info('Admin: reverting candidate', {
+        candidateId: candidate.id,
+        firstName: candidate.firstName,
+        lastName: candidate.lastName,
+      });
 
       try {
         // 1. Vérifier si un prospect avec cet ID existe déjà
@@ -176,7 +181,11 @@ export const revertSingleCandidateToProspect = async (
       });
     }
 
-    console.log(`📝 Re-conversion du candidat: ${candidate.firstName} ${candidate.lastName}`);
+    logger.info('Admin: reverting single candidate', {
+      candidateId: candidate.id,
+      firstName: candidate.firstName,
+      lastName: candidate.lastName,
+    });
 
     // Vérifier si un prospect existe déjà
     const existingProspect = await prisma.prospectCandidate.findFirst({
@@ -327,7 +336,7 @@ export const revertBatchCandidatesToProspects = async (
       });
     }
 
-    console.log(`🔍 Re-conversion batch de ${ids.length} candidats...`);
+    logger.info('Admin: reverting batch of candidates', { count: ids.length });
 
     const results = [];
     let successCount = 0;
@@ -408,7 +417,10 @@ export const revertBatchCandidatesToProspects = async (
         successCount++;
 
       } catch (error: any) {
-        console.error(`Erreur pour candidat ${id}:`, error);
+        logger.error('Admin: failed to revert candidate', {
+          candidateId: id,
+          error: error instanceof Error ? error.message : String(error),
+        });
         results.push({ id, status: 'error', message: error.message });
         errorCount++;
       }

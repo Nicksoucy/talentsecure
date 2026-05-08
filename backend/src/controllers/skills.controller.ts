@@ -960,7 +960,7 @@ export const getAIExtractionStats = async (req: Request, res: Response, next: Ne
     );
     const totalSkillsExtracted = logs.reduce((sum, l) => sum + l.skillsFound, 0);
     const avgProcessingTime =
-      logs.reduce((sum, l) => sum + l.processingTimeMs, 0) / (logs.length || 1);
+      logs.reduce((sum, l) => sum + (l.processingTimeMs ?? 0), 0) / (logs.length || 1);
 
     // Group by method
     const byMethod = logs.reduce((acc, log) => {

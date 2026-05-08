@@ -15,6 +15,8 @@ import {
   getProspectsExtractionStats,
   getProspectExtractionHistory,
 } from '../controllers/prospect.controller';
+import { getProspectAnalysis } from '../controllers/prospect-scoring.controller';
+import { proxyCv } from '../controllers/cv-proxy.controller';
 import { authenticateJWT, authorizeRoles } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
 
@@ -85,6 +87,15 @@ router.get('/suggestions/cities', getCitiesSuggestions);
 router.get('/suggestions/names', getProspectsSuggestions);
 
 /**
+ * @route   GET /api/prospects/cv-proxy
+ * @desc    Same-origin proxy for CV downloads (works around CORS on the GHL
+ *          CDN so the frontend's docx-preview can fetch the bytes inline).
+ *          Query: ?url=<encoded-cv-url>. Whitelisted hosts only.
+ * @access  Private (All authenticated users)
+ */
+router.get('/cv-proxy', proxyCv);
+
+/**
  * @route   POST /api/prospects
  * @desc    Create new prospect candidate
  * @access  Private (ADMIN, RH_RECRUITER)
@@ -117,6 +128,19 @@ router.post(
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
   validate({ params: uuidParam }),
   convertToCandidate
+);
+
+/**
+ * @route   GET /api/prospects/:id/analysis
+ * @desc    Read the persisted AI analysis for a prospect.
+ *          Analyses are written by the /analyze-prospects Claude Code
+ *          slash command (no API key, no server-side AI calls).
+ * @access  Private (All authenticated users)
+ */
+router.get(
+  '/:id/analysis',
+  validate({ params: uuidParam }),
+  getProspectAnalysis
 );
 
 /**

@@ -1,13 +1,18 @@
-﻿import express, { Application, Request, Response, NextFunction } from 'express';
+﻿// CRITICAL: env validation must run before any other app import.
+// It loads dotenv and throws if JWT_SECRET / JWT_REFRESH_SECRET / DATABASE_URL
+// are missing or use insecure defaults — preventing boot with a known secret.
+import './config/env';
+
+// Initialize Sentry early (no-op if SENTRY_DSN unset) so boot-time errors
+// are captured before they crash the process.
+import { Sentry, sentryEnabled } from './config/sentry';
+
+import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
-
-// Load environment variables
-dotenv.config();
 
 // Import passport configuration
 import passport from './config/passport';
@@ -93,15 +98,13 @@ app.use('/uploads/videos', express.static(path.join(__dirname, '../uploads/video
   },
 }));
 
-// Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
-  res.status(200).json({
-    status: 'OK',
-    message: 'TalentSecure API en ligne',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
-  });
-});
+// Health check endpoints.
+// /health and /health/live: liveness — fast, no dependency checks (Cloud Run probes).
+// /health/ready: readiness — verifies DB, Redis, R2; returns 503 if degraded.
+import { livenessHandler, readinessHandler } from './controllers/health.controller';
+app.get('/health', livenessHandler);
+app.get('/health/live', livenessHandler);
+app.get('/health/ready', readinessHandler);
 
 // API routes
 app.use('/api/auth', authRoutes);
@@ -129,6 +132,10 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   ]));
 });
 
+// Sentry request handler must be registered AFTER routes (Sentry v8 pattern).
+// We capture only 5xx via the global handler below so noisy 4xx doesn't
+// drown alerts.
+
 // Global error handler
 app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
   const apiError = ApiError.fromUnknown(err);
@@ -142,6 +149,16 @@ app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     statusCode: apiError.statusCode,
     stack: err instanceof Error ? err.stack : undefined,
   });
+
+  // Forward 5xx (and unknown 0/undefined) to Sentry; skip 4xx noise.
+  if (sentryEnabled && apiError.statusCode >= 500) {
+    Sentry.withScope((scope) => {
+      scope.setTag('requestId', requestId);
+      scope.setExtra('path', req.path);
+      scope.setExtra('method', req.method);
+      Sentry.captureException(err);
+    });
+  }
 
   errorResponse(res, apiError, requestId);
 });

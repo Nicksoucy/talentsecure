@@ -31,6 +31,30 @@ clientApi.interceptors.request.use(
     }
 );
 
+// Single in-flight refresh promise so concurrent 401s share one network call.
+let refreshPromise: Promise<string> | null = null;
+
+const refreshAccessToken = async (): Promise<string> => {
+    const refreshToken = localStorage.getItem('clientRefreshToken');
+    if (!refreshToken) throw new Error('No refresh token');
+
+    const response = await axios.post(`${API_URL}/api/client-auth/refresh`, { refreshToken });
+    const { accessToken, refreshToken: newRefreshToken } = response.data;
+
+    localStorage.setItem('clientAccessToken', accessToken);
+    if (newRefreshToken) {
+        localStorage.setItem('clientRefreshToken', newRefreshToken);
+    }
+    return accessToken;
+};
+
+const handleRefreshFailure = () => {
+    localStorage.removeItem('clientAccessToken');
+    localStorage.removeItem('clientRefreshToken');
+    localStorage.removeItem('client');
+    window.location.href = '/client/login';
+};
+
 // Response interceptor - Handle errors
 clientApi.interceptors.response.use(
     (response) => response,
@@ -44,33 +68,18 @@ clientApi.interceptors.response.use(
             originalRequest._retry = true;
 
             try {
-                const refreshToken = localStorage.getItem('clientRefreshToken');
-                if (refreshToken) {
-                    // Call refresh endpoint for client
-                    const response = await axios.post(`${API_URL}/api/client-auth/refresh`, {
-                        refreshToken,
-                    });
+                const pending = refreshPromise ??
+                    (refreshPromise = refreshAccessToken().finally(() => {
+                        refreshPromise = null;
+                    }));
+                const accessToken = await pending;
 
-                    const { accessToken, refreshToken: newRefreshToken } = response.data;
-
-                    // Update storage
-                    localStorage.setItem('clientAccessToken', accessToken);
-                    if (newRefreshToken) {
-                        localStorage.setItem('clientRefreshToken', newRefreshToken);
-                    }
-
-                    // Retry original request
-                    if (originalRequest.headers) {
-                        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-                    }
-                    return clientApi(originalRequest);
+                if (originalRequest.headers) {
+                    originalRequest.headers.Authorization = `Bearer ${accessToken}`;
                 }
+                return clientApi(originalRequest);
             } catch (refreshError) {
-                // Refresh failed, logout user
-                localStorage.removeItem('clientAccessToken');
-                localStorage.removeItem('clientRefreshToken');
-                localStorage.removeItem('client');
-                window.location.href = '/client/login';
+                handleRefreshFailure();
                 return Promise.reject(refreshError);
             }
         }
