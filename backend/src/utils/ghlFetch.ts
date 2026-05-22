@@ -90,6 +90,34 @@ export function downloadGhlFile(url: string, redirectsLeft = MAX_REDIRECTS): Pro
 }
 
 /**
+ * Vérifie que le contenu téléchargé est RÉELLEMENT une vidéo (et pas un
+ * fichier renommé), via les magic bytes des conteneurs vidéo courants :
+ *   - MP4 / MOV / M4V (ISO BMFF) : "ftyp" / atomes "moov"/"mdat"/"free"/"skip" à l'offset 4
+ *   - WebM / Matroska : 1A 45 DF A3
+ *   - AVI : "RIFF" ... "AVI "
+ *   - MPEG-PS : 00 00 01 BA
+ */
+export function isLikelyVideo(buffer: Buffer): boolean {
+  if (buffer.length < 12) return false;
+  const ascii = (start: number, len: number) => buffer.toString('ascii', start, start + len);
+
+  // MP4 / MOV : box type à l'offset 4
+  const box = ascii(4, 4);
+  if (['ftyp', 'moov', 'mdat', 'free', 'skip', 'wide'].includes(box)) return true;
+
+  // WebM / Matroska (EBML)
+  if (buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3) return true;
+
+  // AVI : RIFF....AVI
+  if (ascii(0, 4) === 'RIFF' && ascii(8, 4) === 'AVI ') return true;
+
+  // MPEG program stream
+  if (buffer[0] === 0x00 && buffer[1] === 0x00 && buffer[2] === 0x01 && buffer[3] === 0xba) return true;
+
+  return false;
+}
+
+/**
  * Déduit une extension de fichier fiable : magic bytes d'abord, puis
  * Content-Disposition, puis Content-Type.
  */

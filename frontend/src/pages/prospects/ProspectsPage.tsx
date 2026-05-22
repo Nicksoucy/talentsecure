@@ -49,6 +49,7 @@ import {
   FileDownload as FileDownloadIcon,
   VideoLibrary as VideoIcon,
   Sync as SyncIcon,
+  Star as StarIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { TableSkeleton } from '@/components/skeletons';
@@ -667,7 +668,16 @@ export default function ProspectsPage() {
                         />
                       </TableCell>
                       <TableCell>
-                        {prospect.firstName} {prospect.lastName}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          {prospect.videoStoragePath && (
+                            <StarIcon
+                              fontSize="small"
+                              sx={{ color: 'warning.main' }}
+                              titleAccess="Prioritaire — a envoyé une vidéo"
+                            />
+                          )}
+                          {prospect.firstName} {prospect.lastName}
+                        </Box>
                       </TableCell>
                       <TableCell>{prospect.email || 'N/A'}</TableCell>
                       <TableCell>{prospect.phone}</TableCell>

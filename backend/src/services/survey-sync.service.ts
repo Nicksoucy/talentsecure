@@ -1,5 +1,5 @@
 import { prisma } from '../config/database';
-import { downloadGhlFile, detectExtension } from '../utils/ghlFetch';
+import { downloadGhlFile, detectExtension, isLikelyVideo } from '../utils/ghlFetch';
 import { uploadBufferToR2 } from '../services/r2.service';
 import { findMatchingEmployee, findMatchingCandidate } from '../utils/candidateMatch';
 import logger from '../config/logger';
@@ -169,12 +169,16 @@ export async function syncOneSubmission(sub: any): Promise<{ status: string; det
   if (videoRef && !(existing?.videoStoragePath)) {
     try {
       const file = await downloadGhlFile(videoRef.url);
-      if (file.buffer.length > 100) {
+      // On s'assure que c'est RÉELLEMENT une vidéo (magic bytes), pas un
+      // fichier renommé : sinon on ne la compte pas comme vidéo de présentation.
+      if (file.buffer.length > 100 && isLikelyVideo(file.buffer)) {
         const ext = detectExtension(file, videoRef.originalName);
         const key = `videos/prospects/${submissionId}_${sanitize(firstName + '_' + lastName)}${ext}`;
         await uploadBufferToR2(file.buffer, key, file.contentType);
         videoStoragePath = key;
         videoUploadedAt = new Date();
+      } else {
+        logger.warn(`[survey-sync] fichier vidéo non valide (ignoré) pour ${name}`);
       }
     } catch (e: any) {
       logger.warn(`[survey-sync] vidéo échec ${name}: ${e.message}`);

@@ -90,13 +90,20 @@ export const getProspects = async (
       }
     }
 
+    // PRIORITÉ : les prospects qui ont envoyé une vidéo de présentation
+    // remontent en haut (candidats plus sérieux), puis tri normal.
+    const orderBy: any[] = [
+      { videoStoragePath: { sort: 'desc', nulls: 'last' } },
+      { [sortBy as string]: sortOrder },
+    ];
+
     const [total, prospects] = await prisma.$transaction([
       prisma.prospectCandidate.count({ where }),
       prisma.prospectCandidate.findMany({
         where,
         skip,
         take: Number(limit),
-        orderBy: { [sortBy as string]: sortOrder },
+        orderBy,
         include: {
           _count: {
             select: { skills: true }, // Compter skills pour chaque prospect
