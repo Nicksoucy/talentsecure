@@ -15,9 +15,14 @@ import {
   ArrowBack as ArrowBackIcon,
   ContactMail as ContactIcon,
   Transform as TransformIcon,
+  Description as DescriptionIcon,
+  VideoLibrary as VideoIcon,
+  QuestionAnswer as AnswerIcon,
 } from '@mui/icons-material';
 import { prospectService } from '@/services/prospect.service';
 import { DetailPageSkeleton } from '@/components/skeletons';
+import CVPreview from '@/components/CVPreview';
+import ProspectVideoPlayer from '@/components/video/ProspectVideoPlayer';
 
 export default function ProspectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -199,25 +204,72 @@ export default function ProspectDetailPage() {
                   </Typography>
                   <Typography variant="body1">{formatDate(prospect.convertedAt)}</Typography>
                 </Grid>
-                {prospect.cvUrl && (
-                  <Grid item xs={12}>
-                    <Typography variant="body2" color="textSecondary" gutterBottom>
-                      CV
-                    </Typography>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      href={prospect.cvUrl}
-                      target="_blank"
-                    >
-                      Télécharger CV
-                    </Button>
-                  </Grid>
-                )}
               </Grid>
             </CardContent>
           </Card>
         </Grid>
+
+        {/* CV (aperçu inline) */}
+        {(prospect.cvUrl || prospect.cvStoragePath) && (
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <DescriptionIcon color="primary" />
+                  <Typography variant="h6">Curriculum Vitae</Typography>
+                </Box>
+                <Divider sx={{ mb: 2 }} />
+                <ProspectCvPreview prospectId={prospect.id} />
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+
+        {/* Vidéo de présentation */}
+        {prospect.videoStoragePath && (
+          <Grid item xs={12} md={6}>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <VideoIcon color="primary" />
+                  <Typography variant="h6">Vidéo de présentation</Typography>
+                </Box>
+                <Divider sx={{ mb: 2 }} />
+                <ProspectVideoPlayer prospectId={prospect.id} />
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
+
+        {/* Réponses du formulaire */}
+        {prospect.surveyAnswers && Object.keys(prospect.surveyAnswers).length > 0 && (
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <AnswerIcon color="primary" />
+                  <Typography variant="h6">Réponses du formulaire</Typography>
+                </Box>
+                <Divider sx={{ mb: 2 }} />
+                <Grid container spacing={2}>
+                  {Object.entries(prospect.surveyAnswers).map(([k, v]) => {
+                    const display =
+                      v && typeof v === 'object'
+                        ? (v as any).name || JSON.stringify(v)
+                        : String(v ?? '');
+                    if (!display.trim()) return null;
+                    return (
+                      <Grid item xs={12} sm={6} md={4} key={k}>
+                        <Typography variant="body2" color="textSecondary">{k}</Typography>
+                        <Typography variant="body1" sx={{ wordBreak: 'break-word' }}>{display}</Typography>
+                      </Grid>
+                    );
+                  })}
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
 
         {/* Notes */}
         {prospect.notes && (
@@ -236,6 +288,21 @@ export default function ProspectDetailPage() {
           </Grid>
         )}
       </Grid>
+    </Box>
+  );
+}
+
+/** Aperçu inline du CV : récupère l'URL signée (R2) ou GHL puis affiche CVPreview. */
+function ProspectCvPreview({ prospectId }: { prospectId: string }) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['prospect-cv-url', prospectId],
+    queryFn: () => prospectService.getCvUrl(prospectId),
+  });
+  if (isLoading) return <Typography variant="body2" color="textSecondary">Chargement du CV…</Typography>;
+  if (error || !data?.data?.url) return <Alert severity="info">CV indisponible.</Alert>;
+  return (
+    <Box sx={{ height: '60vh' }}>
+      <CVPreview url={data.data.url} fileName="CV" />
     </Box>
   );
 }

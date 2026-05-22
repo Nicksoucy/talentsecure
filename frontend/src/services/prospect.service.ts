@@ -106,6 +106,30 @@ export const prospectService = {
   },
 
   /**
+   * URL signée du CV (R2) ou URL GHL d'origine
+   */
+  async getCvUrl(id: string): Promise<{ success: boolean; data: { url: string; expiresIn?: number } }> {
+    const response = await api.get(`/api/prospects/${id}/cv-url`);
+    return response.data;
+  },
+
+  /**
+   * URL signée de la vidéo de présentation (R2)
+   */
+  async getVideoUrl(id: string): Promise<{ success: boolean; data: { videoUrl: string; videoUploadedAt?: string; expiresIn?: number } }> {
+    const response = await api.get(`/api/prospects/${id}/video-url`);
+    return response.data;
+  },
+
+  /**
+   * Lance la synchronisation du survey vidéo GHL
+   */
+  async syncSurvey(): Promise<{ message: string; data: { scanned: number; created: number; updated: number; linkedExisting: number; skippedNoContact: number; errors: number } }> {
+    const response = await api.post('/api/prospects/sync-survey', {});
+    return response.data;
+  },
+
+  /**
    * Get prospects statistics
    */
   async getProspectsStats(): Promise<{

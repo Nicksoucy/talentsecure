@@ -216,6 +216,49 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
 };
 
 /**
+ * Webhook pour le survey vidéo GHL.
+ * Le payload GHL ne contient pas les fichiers de façon fiable → on retrouve
+ * la soumission via l'API GHL (par email/téléphone du contact) puis on la
+ * synchronise (télécharge CV + vidéo dans R2, capte les réponses, upsert).
+ */
+export const handleSurveyWebhook = async (req: Request, res: Response) => {
+  try {
+    const webhookSecret = req.headers['x-webhook-secret'];
+    if (webhookSecret !== process.env.GOHIGHLEVEL_WEBHOOK_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const body = req.body || {};
+    const contact = body.contact || {};
+    const email = (body.email || body.form_data?.email || contact.email || '').trim() || null;
+    const phone = (body.phone || body.form_data?.phone || contact.phone || '').trim() || null;
+
+    if (!email && !phone) {
+      return res.status(400).json({ error: 'email ou téléphone requis' });
+    }
+
+    const { findSubmissionByContact, syncOneSubmission } = require('../services/survey-sync.service');
+    const submission = await findSubmissionByContact(email, phone);
+    if (!submission) {
+      // La soumission n'est peut-être pas encore disponible côté API.
+      return res.status(202).json({
+        message: 'Soumission introuvable pour le moment (sera rattrapée par la synchro planifiée).',
+        email, phone,
+      });
+    }
+
+    const result = await syncOneSubmission(submission);
+    return res.status(200).json({ message: 'Survey synchronisé', result });
+  } catch (error) {
+    console.error('❌ Erreur webhook survey:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+};
+
+/**
  * Test endpoint pour vérifier que le webhook fonctionne
  */
 export const testWebhook = async (req: Request, res: Response) => {

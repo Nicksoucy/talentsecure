@@ -14,6 +14,9 @@ import {
   getProspectsStats,
   getProspectsExtractionStats,
   getProspectExtractionHistory,
+  syncSurveyProspects,
+  getProspectCvUrl,
+  getProspectVideoUrl,
 } from '../controllers/prospect.controller';
 import { getProspectAnalysis } from '../controllers/prospect-scoring.controller';
 import { proxyCv } from '../controllers/cv-proxy.controller';
@@ -94,6 +97,27 @@ router.get('/suggestions/names', getProspectsSuggestions);
  * @access  Private (All authenticated users)
  */
 router.get('/cv-proxy', proxyCv);
+
+/**
+ * @route   POST /api/prospects/sync-survey
+ * @desc    Synchronise le survey vidéo GHL (CV + vidéo + réponses → R2)
+ * @access  Private (ADMIN, RH_RECRUITER)
+ */
+router.post('/sync-survey', authorizeRoles('ADMIN', 'RH_RECRUITER'), syncSurveyProspects);
+
+/**
+ * @route   GET /api/prospects/:id/cv-url
+ * @desc    URL signée du CV (R2) ou URL GHL d'origine
+ * @access  Private (All authenticated users)
+ */
+router.get('/:id/cv-url', validate({ params: uuidParam }), getProspectCvUrl);
+
+/**
+ * @route   GET /api/prospects/:id/video-url
+ * @desc    URL signée de la vidéo de présentation (R2)
+ * @access  Private (All authenticated users)
+ */
+router.get('/:id/video-url', validate({ params: uuidParam }), getProspectVideoUrl);
 
 /**
  * @route   POST /api/prospects

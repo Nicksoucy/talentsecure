@@ -47,10 +47,13 @@ import {
   Download as DownloadIcon,
   Close as CloseIcon,
   FileDownload as FileDownloadIcon,
+  VideoLibrary as VideoIcon,
+  Sync as SyncIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { TableSkeleton } from '@/components/skeletons';
 import CVPreview from '@/components/CVPreview';
+import ProspectVideoPlayer from '@/components/video/ProspectVideoPlayer';
 import { useNavigate } from 'react-router-dom';
 import { prospectService } from '@/services/prospect.service';
 import { ProspectCandidate } from '@/types';
@@ -94,6 +97,29 @@ export default function ProspectsPage() {
     open: false,
     cvUrl: null,
     prospectName: '',
+  });
+
+  // Video Preview dialog
+  const [videoPreviewDialog, setVideoPreviewDialog] = useState<{ open: boolean; prospectId: string | null; prospectName: string }>({
+    open: false,
+    prospectId: null,
+    prospectName: '',
+  });
+
+  // Synchronisation du survey vidéo
+  const syncSurveyMutation = useMutation({
+    mutationFn: () => prospectService.syncSurvey(),
+    onSuccess: (res) => {
+      const d = res.data;
+      enqueueSnackbar(
+        `Survey synchronisé : ${d.created} créés, ${d.updated} mis à jour, ${d.linkedExisting} déjà empl/cand, ${d.errors} erreurs`,
+        { variant: d.errors ? 'warning' : 'success', autoHideDuration: 8000 }
+      );
+      queryClient.invalidateQueries({ queryKey: ['prospects'] });
+    },
+    onError: (e: any) => {
+      enqueueSnackbar(e.response?.data?.error || 'Erreur lors de la synchronisation', { variant: 'error' });
+    },
   });
 
   // Reset selection when changing pages (unless "select all pages" is active)
@@ -400,6 +426,15 @@ export default function ProspectsPage() {
           >
             {showMap ? 'Masquer carte' : 'Afficher carte'}
           </Button>
+          <Button
+            variant="contained"
+            color="info"
+            startIcon={<SyncIcon />}
+            onClick={() => syncSurveyMutation.mutate()}
+            disabled={syncSurveyMutation.isPending}
+          >
+            {syncSurveyMutation.isPending ? 'Synchronisation…' : 'Synchroniser le survey'}
+          </Button>
         </Box>
       </Box>
 
@@ -604,6 +639,7 @@ export default function ProspectsPage() {
                   <TableCell>Téléphone</TableCell>
                   <TableCell>Ville</TableCell>
                   <TableCell>CV</TableCell>
+                  <TableCell>Vidéo</TableCell>
                   <TableCell>Date soumission</TableCell>
                   <TableCell>Contacté</TableCell>
                   <TableCell>Converti</TableCell>
@@ -613,7 +649,7 @@ export default function ProspectsPage() {
               <TableBody>
                 {prospects.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} align="center">
+                    <TableCell colSpan={11} align="center">
                       Aucun prospect trouvé
                     </TableCell>
                   </TableRow>
@@ -646,6 +682,24 @@ export default function ProspectsPage() {
                             onClick={() => setCvPreviewDialog({
                               open: true,
                               cvUrl: prospect.cvUrl,
+                              prospectName: `${prospect.firstName} ${prospect.lastName}`,
+                            })}
+                            sx={{ cursor: 'pointer' }}
+                          />
+                        ) : (
+                          <Chip icon={<CancelIcon />} label="Non" color="default" size="small" />
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {prospect.videoStoragePath ? (
+                          <Chip
+                            icon={<VideoIcon />}
+                            label="Voir"
+                            color="info"
+                            size="small"
+                            onClick={() => setVideoPreviewDialog({
+                              open: true,
+                              prospectId: prospect.id,
                               prospectName: `${prospect.firstName} ${prospect.lastName}`,
                             })}
                             sx={{ cursor: 'pointer' }}
@@ -805,6 +859,42 @@ export default function ProspectsPage() {
           </Button>
           <Button
             onClick={() => setCvPreviewDialog({ open: false, cvUrl: null, prospectName: '' })}
+            variant="contained"
+          >
+            Fermer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Video Preview Dialog */}
+      <Dialog
+        open={videoPreviewDialog.open}
+        onClose={() => setVideoPreviewDialog({ open: false, prospectId: null, prospectName: '' })}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <VideoIcon />
+              <Typography variant="h6">Vidéo - {videoPreviewDialog.prospectName}</Typography>
+            </Box>
+            <IconButton
+              onClick={() => setVideoPreviewDialog({ open: false, prospectId: null, prospectName: '' })}
+              size="small"
+            >
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ p: 2 }}>
+          {videoPreviewDialog.prospectId && (
+            <ProspectVideoPlayer prospectId={videoPreviewDialog.prospectId} height="60vh" />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setVideoPreviewDialog({ open: false, prospectId: null, prospectName: '' })}
             variant="contained"
           >
             Fermer

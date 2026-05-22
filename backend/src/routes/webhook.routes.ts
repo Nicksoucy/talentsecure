@@ -1,5 +1,5 @@
 import express from 'express';
-import { handleGoHighLevelWebhook, testWebhook } from '../controllers/webhook.controller';
+import { handleGoHighLevelWebhook, handleSurveyWebhook, testWebhook } from '../controllers/webhook.controller';
 
 const router = express.Router();
 
@@ -8,6 +8,13 @@ const router = express.Router();
  * Reçoit les soumissions du formulaire GoHighLevel
  */
 router.post('/gohighlevel/prospect', handleGoHighLevelWebhook);
+
+/**
+ * POST /api/webhooks/gohighlevel/survey-prospect
+ * Reçoit la notification de soumission du survey vidéo, puis tire la
+ * soumission (CV + vidéo + réponses) via l'API GHL.
+ */
+router.post('/gohighlevel/survey-prospect', handleSurveyWebhook);
 
 /**
  * GET /api/webhooks/test

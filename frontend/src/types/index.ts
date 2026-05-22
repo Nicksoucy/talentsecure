@@ -229,6 +229,12 @@ export interface ProspectCandidate {
   fullAddress?: string;
   cvUrl?: string;
   cvStoragePath?: string;
+  videoUrl?: string;
+  videoStoragePath?: string;
+  videoUploadedAt?: string;
+  ghlSubmissionId?: string;
+  surveyAnswers?: Record<string, any>;
+  source?: string;
   timezone?: string;
   submissionDate?: string;
   isContacted: boolean;

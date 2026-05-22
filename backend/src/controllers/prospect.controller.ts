@@ -933,3 +933,70 @@ export const getProspectExtractionHistory = async (
     next(error);
   }
 };
+
+/**
+ * Lance la synchronisation du survey vidéo GHL (bouton manuel / backfill).
+ * POST /api/prospects/sync-survey  body: { limit?: number }
+ */
+export const syncSurveyProspects = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { syncSurvey } = require('../services/survey-sync.service');
+    const limit = req.body?.limit ? Number(req.body.limit) : undefined;
+    const summary = await syncSurvey(limit);
+    await invalidateProspectCaches();
+    res.json({ message: 'Synchronisation terminée', data: summary });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * URL signée du CV d'un prospect (R2 si stocké, sinon URL GHL d'origine).
+ * GET /api/prospects/:id/cv-url
+ */
+export const getProspectCvUrl = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const prospect = await prisma.prospectCandidate.findUnique({
+      where: { id },
+      select: { cvStoragePath: true, cvUrl: true },
+    });
+    if (!prospect) return res.status(404).json({ error: 'Prospect non trouvé' });
+
+    if (prospect.cvStoragePath) {
+      const { getSignedFileUrl } = require('../services/r2.service');
+      const url = await getSignedFileUrl(prospect.cvStoragePath, 3600);
+      return res.json({ success: true, data: { url, expiresIn: 3600 } });
+    }
+    if (prospect.cvUrl) {
+      return res.json({ success: true, data: { url: prospect.cvUrl } });
+    }
+    return res.status(404).json({ error: 'Aucun CV' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * URL signée de la vidéo de présentation d'un prospect (R2).
+ * GET /api/prospects/:id/video-url
+ */
+export const getProspectVideoUrl = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const prospect = await prisma.prospectCandidate.findUnique({
+      where: { id },
+      select: { videoStoragePath: true, videoUrl: true, videoUploadedAt: true },
+    });
+    if (!prospect) return res.status(404).json({ error: 'Prospect non trouvé' });
+
+    if (prospect.videoStoragePath) {
+      const { getSignedFileUrl } = require('../services/r2.service');
+      const url = await getSignedFileUrl(prospect.videoStoragePath, 3600);
+      return res.json({ success: true, data: { videoUrl: url, videoUploadedAt: prospect.videoUploadedAt, expiresIn: 3600 } });
+    }
+    return res.status(404).json({ error: 'Aucune vidéo' });
+  } catch (error) {
+    next(error);
+  }
+};

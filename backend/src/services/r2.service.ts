@@ -312,6 +312,40 @@ export async function uploadFileToR2(
 }
 
 /**
+ * Upload d'un Buffer (en mémoire) vers R2 — pour les fichiers téléchargés
+ * depuis GHL sans passer par le disque.
+ *
+ * @param buffer - Contenu du fichier
+ * @param key - Clé R2 (ex: "videos/prospects/<id>_<nom>.mp4")
+ * @param contentType - MIME type
+ * @returns La clé R2 et l'URL publique
+ */
+export async function uploadBufferToR2(
+  buffer: Buffer,
+  key: string,
+  contentType: string = 'application/octet-stream'
+): Promise<{ key: string; url: string }> {
+  try {
+    const client = getR2Client();
+    await client.send(
+      new PutObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+        // inline pour permettre la lecture vidéo/PDF dans le navigateur
+        ContentDisposition: 'inline',
+        CacheControl: 'public, max-age=31536000',
+      })
+    );
+    return { key, url: getPublicUrl(key) };
+  } catch (error: any) {
+    console.error('Error uploading buffer to R2:', error.message);
+    throw new Error(`Failed to upload buffer to R2: ${error.message}`);
+  }
+}
+
+/**
  * Generic file deletion from R2
  *
  * @param key - The R2 object key

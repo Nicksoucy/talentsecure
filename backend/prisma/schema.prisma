@@ -603,6 +603,16 @@ model ProspectCandidate {
   cvUrl         String? // URL du CV Ã  tÃ©lÃ©charger
   cvStoragePath String? // Chemin local aprÃ¨s tÃ©lÃ©chargement
 
+  // Video de presentation (survey video)
+  videoUrl         String? // URL source GHL de la video (trace)
+  videoStoragePath String? // Cle R2 de la video
+  videoUploadedAt  DateTime?
+
+  // Survey GHL
+  ghlSubmissionId String? @unique // ID soumission GHL (idempotence + lien)
+  surveyAnswers   Json? // Reponses du survey (BSP, dispo, adresse...)
+  source          String? // 'survey-video' | 'form-cv' | 'webhook'
+
   // Metadata
   timezone       String?
   submissionDate DateTime? // Date de soumission du formulaire
@@ -634,6 +644,7 @@ model ProspectCandidate {
   @@index([isConverted])
   @@index([submissionDate])
   @@index([createdAt])
+  @@index([ghlSubmissionId])
   @@map("prospect_candidates")
 }
 
