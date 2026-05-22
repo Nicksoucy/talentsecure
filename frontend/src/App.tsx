@@ -16,6 +16,7 @@ const ClientsPage = lazy(() => import('./pages/clients/ClientsPage'));
 const ClientDetailPage = lazy(() => import('./pages/clients/ClientDetailPage'));
 
 
+const EmployeesPage = lazy(() => import('./pages/employees/EmployeesPage'));
 const ProspectsPage = lazy(() => import('./pages/prospects/ProspectsPage'));
 const ProspectDetailPage = lazy(() => import('./pages/prospects/ProspectDetailPage'));
 const ProspectConvertPage = lazy(() => import('./pages/prospects/ProspectConvertPage'));
@@ -99,6 +100,7 @@ function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/candidates" element={<CandidatesListPage />} />
             <Route path="/candidates/:id" element={<CandidateDetailPage />} />
+            <Route path="/employees" element={<EmployeesPage />} />
             <Route path="/prospects" element={<ProspectsPage />} />
             <Route path="/prospects/:id" element={<ProspectDetailPage />} />
             <Route path="/prospects/:id/convert" element={<ProspectConvertPage />} />

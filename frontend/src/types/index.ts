@@ -243,6 +243,37 @@ export interface ProspectCandidate {
   updatedAt: string;
 }
 
+export interface Employee {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone: string;
+  address?: string;
+  city?: string;
+  province?: string;
+  postalCode?: string;
+  status: 'ACTIF' | 'INACTIF';
+  hireDate?: string;
+  employeeNumber?: string;
+  position?: string;
+  assignment?: string;
+  hasBSP: boolean;
+  bspNumber?: string;
+  bspExpiryDate?: string;
+  hasVehicle: boolean;
+  cvUrl?: string;
+  cvStoragePath?: string;
+  videoUrl?: string;
+  videoStoragePath?: string;
+  notes?: string;
+  convertedFromCandidateId?: string;
+  isDeleted: boolean;
+  deletedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // API Response types
 export interface ApiResponse<T> {
   data?: T;

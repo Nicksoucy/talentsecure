@@ -29,6 +29,7 @@ import {
   WorkOutline as WorkIcon,
   ShoppingCart as ShoppingCartIcon,
   Download as DownloadIcon,
+  Badge as BadgeIcon,
 } from '@mui/icons-material';
 import { useAuthStore } from '@/store/authStore';
 import { authService } from '@/services/auth.service';
@@ -68,6 +69,7 @@ const MainLayout = () => {
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
     { text: 'Candidats', icon: <PeopleIcon />, path: '/candidates' },
+    { text: 'Employés', icon: <BadgeIcon />, path: '/employees' },
     { text: 'Candidats Potentiels', icon: <PersonSearchIcon />, path: '/prospects' },
     { text: 'Catalogues', icon: <DescriptionIcon />, path: '/catalogues' },
     { text: 'Clients', icon: <BusinessIcon />, path: '/clients' },

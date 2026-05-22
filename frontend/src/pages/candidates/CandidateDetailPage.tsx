@@ -37,9 +37,11 @@ import {
   Star as StarIcon,
   VideoLibrary as VideoIcon,
   Description as DescriptionIcon,
+  Badge as BadgeIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { candidateService } from '@/services/candidate.service';
+import { employeeService } from '@/services/employee.service';
 import CVUpload from '@/components/CVUpload';
 import VideoUpload from '@/components/video/VideoUpload';
 import VideoPlayer from '@/components/video/VideoPlayer';
@@ -80,6 +82,8 @@ const CandidateDetailPage = () => {
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [initialFormData, setInitialFormData] = useState<InterviewFormData | null>(null);
   const [tabValue, setTabValue] = useState(0);
+  const [promoteDialog, setPromoteDialog] = useState(false);
+  const [promoteForm, setPromoteForm] = useState({ hireDate: '', position: '', assignment: '', employeeNumber: '' });
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -123,6 +127,26 @@ const CandidateDetailPage = () => {
         variant: 'error',
         autoHideDuration: 10000,
       });
+    },
+  });
+
+  // Promotion en employé
+  const promoteMutation = useMutation({
+    mutationFn: () => employeeService.promoteCandidate(id!, {
+      hireDate: promoteForm.hireDate || undefined,
+      position: promoteForm.position || undefined,
+      assignment: promoteForm.assignment || undefined,
+      employeeNumber: promoteForm.employeeNumber || undefined,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      enqueueSnackbar('Candidat promu en employé !', { variant: 'success' });
+      setPromoteDialog(false);
+      navigate('/employees');
+    },
+    onError: (error: any) => {
+      enqueueSnackbar(error.response?.data?.error || 'Erreur lors de la promotion', { variant: 'error' });
     },
   });
 
@@ -326,10 +350,61 @@ const CandidateDetailPage = () => {
             </Box>
           </Box>
         </Box>
-        <Button variant="contained" startIcon={<EditIcon />} onClick={handleOpenEdit}>
-          Modifier
-        </Button>
+        <Box display="flex" gap={1}>
+          <Button
+            variant="outlined"
+            color="success"
+            startIcon={<BadgeIcon />}
+            onClick={() => setPromoteDialog(true)}
+          >
+            Promouvoir en employé
+          </Button>
+          <Button variant="contained" startIcon={<EditIcon />} onClick={handleOpenEdit}>
+            Modifier
+          </Button>
+        </Box>
       </Box>
+
+      {/* Dialog promotion en employé */}
+      <Dialog open={promoteDialog} onClose={() => setPromoteDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Promouvoir en employé</DialogTitle>
+        <DialogContent>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            {candidate?.firstName} {candidate?.lastName} sera déplacé vers <strong>Employés</strong> et
+            retiré de Candidats (et Candidats Potentiels). Son CV, sa vidéo et ses infos sont conservés.
+          </Alert>
+          <TextField
+            fullWidth label="Date d'embauche" type="date" InputLabelProps={{ shrink: true }}
+            value={promoteForm.hireDate}
+            onChange={(e) => setPromoteForm({ ...promoteForm, hireDate: e.target.value })}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            fullWidth label="Poste (optionnel)" value={promoteForm.position}
+            onChange={(e) => setPromoteForm({ ...promoteForm, position: e.target.value })}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            fullWidth label="Mandat / site (optionnel)" value={promoteForm.assignment}
+            onChange={(e) => setPromoteForm({ ...promoteForm, assignment: e.target.value })}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            fullWidth label="Matricule (optionnel)" value={promoteForm.employeeNumber}
+            onChange={(e) => setPromoteForm({ ...promoteForm, employeeNumber: e.target.value })}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPromoteDialog(false)}>Annuler</Button>
+          <Button
+            variant="contained" color="success"
+            onClick={() => promoteMutation.mutate()}
+            disabled={promoteMutation.isPending}
+          >
+            {promoteMutation.isPending ? 'En cours…' : 'Confirmer'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Quick Overview Section */}
       <Box mb={3}>
