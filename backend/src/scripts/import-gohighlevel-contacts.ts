@@ -5,6 +5,7 @@ import * as path from 'path';
 import { promisify } from 'util';
 import { pipeline } from 'stream';
 import dotenv from 'dotenv';
+import { findMatchingCandidate } from '../utils/candidateMatch';
 
 dotenv.config();
 
@@ -237,6 +238,14 @@ async function importContact(contact: GoHighLevelContact): Promise<'created' | '
 
     if (existing) {
       console.log(`  ⚠️ Doublon détecté: ${firstName} ${lastName} (${email || phone})`);
+      return 'duplicate';
+    }
+
+    // LE CANDIDAT GAGNE TOUJOURS : ne pas (re)créer un prospect pour quelqu'un
+    // qui est déjà un Candidat.
+    const matchingCandidate = await findMatchingCandidate(prisma, email, phone);
+    if (matchingCandidate) {
+      console.log(`  ⏭️ Déjà CANDIDAT, ignoré: ${firstName} ${lastName}`);
       return 'duplicate';
     }
 

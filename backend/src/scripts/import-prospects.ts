@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { parse } from 'csv-parse/sync';
+import { findMatchingCandidate } from '../utils/candidateMatch';
 
 const prisma = new PrismaClient();
 
@@ -147,6 +148,15 @@ async function importProspects() {
 
       if (existing) {
         console.log(`⏭️  Déjà dans la base: ${firstName} ${lastName}`);
+        skipped++;
+        continue;
+      }
+
+      // LE CANDIDAT GAGNE TOUJOURS : ne jamais (re)créer un prospect pour
+      // quelqu'un qui est déjà un Candidat.
+      const matchingCandidate = await findMatchingCandidate(prisma, email, cleanPhone(phone));
+      if (matchingCandidate) {
+        console.log(`⏭️  Déjà CANDIDAT, ignoré: ${firstName} ${lastName}`);
         skipped++;
         continue;
       }
