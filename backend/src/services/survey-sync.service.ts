@@ -73,7 +73,22 @@ function findCvFile(others: any): GhlFileRef | null {
   return files.find((f) => f.mimetype.startsWith('image/')) || null;
 }
 
-/** Réponses lisibles : on retire les champs techniques ET les champs-fichiers. */
+// Libellés lisibles des champs (codes GHL → questions). Les codes des
+// questions custom proviennent du widget public du survey.
+const FIELD_LABELS: Record<string, string> = {
+  jNjbYKRbLQQaeePB1YOS: 'Véhicule',
+  full_name: 'Nom complet',
+  email: 'Courriel',
+  phone: 'Téléphone',
+  city: 'Ville',
+  state: 'Province',
+  country: 'Pays',
+  postal_code: 'Code postal',
+  address: 'Adresse',
+  group_address: 'Adresse complète',
+};
+
+/** Réponses lisibles : libellés clairs, sans les champs techniques ni fichiers. */
 function extractAnswers(others: any): Record<string, any> {
   const TECH = new Set([
     'eventData', 'sessionId', 'sessionFingerprint', 'formId', 'location_id',
@@ -83,7 +98,10 @@ function extractAnswers(others: any): Record<string, any> {
   const out: Record<string, any> = {};
   for (const [k, v] of Object.entries(others || {})) {
     if (TECH.has(k) || fileFields.has(k)) continue;
-    out[k] = v;
+    const label = FIELD_LABELS[k] || k;
+    let value: any = v;
+    if (v && typeof v === 'object' && !Array.isArray(v)) value = (v as any).name ?? v;
+    out[label] = value;
   }
   return out;
 }
