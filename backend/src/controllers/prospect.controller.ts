@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { getCache, setCache, deleteCache, invalidateCacheByPrefix } from '../config/cache';
 import { buildCacheKey } from '../utils/cache';
+import { findMatchingCandidate } from '../utils/candidateMatch';
 
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
 const PROSPECT_STATS_CACHE_KEY = 'prospects:stats';
@@ -215,6 +216,34 @@ export const createProspect = async (
     let prospect;
     let message;
     let statusCode;
+
+    // LE CANDIDAT GAGNE TOUJOURS : si cette personne est déjà un Candidat,
+    // la fiche prospect est créée/mise à jour en état "converti + lié", donc
+    // elle n'apparaît jamais dans Candidats Potentiels (qui filtre isConverted=false).
+    const matchingCandidate = await findMatchingCandidate(prisma, email, phone);
+    if (matchingCandidate) {
+      const linkedData = {
+        ...prospectData,
+        isConverted: true,
+        convertedAt: existingProspect?.convertedAt ?? new Date(),
+        convertedToId: matchingCandidate.id,
+      };
+      if (existingProspect) {
+        prospect = await prisma.prospectCandidate.update({
+          where: { id: existingProspect.id },
+          data: linkedData,
+        });
+      } else {
+        prospect = await prisma.prospectCandidate.create({ data: linkedData });
+      }
+      await invalidateProspectCaches();
+      return res.status(200).json({
+        message:
+          'Cette personne est déjà un Candidat. Fiche liée au candidat existant et masquée des Candidats Potentiels.',
+        data: prospect,
+        candidateId: matchingCandidate.id,
+      });
+    }
 
     // Si existe ET non converti → mettre à jour
     if (existingProspect && !existingProspect.isConverted) {

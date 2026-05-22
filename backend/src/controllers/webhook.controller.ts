@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { findMatchingCandidate } from '../utils/candidateMatch';
 
 const prisma = new PrismaClient();
 
@@ -109,6 +110,33 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
         isDeleted: false,
       }
     });
+
+    // LE CANDIDAT GAGNE TOUJOURS : si cette personne est déjà un Candidat,
+    // on ne l'ajoute pas aux Candidats Potentiels. Si une fiche prospect
+    // existe déjà, on la lie au candidat (converti) pour qu'elle disparaisse
+    // de la liste.
+    const matchingCandidate = await findMatchingCandidate(prisma, email, phone);
+    if (matchingCandidate) {
+      if (existingProspect && !existingProspect.isConverted) {
+        await prisma.prospectCandidate.update({
+          where: { id: existingProspect.id },
+          data: {
+            isConverted: true,
+            convertedAt: new Date(),
+            convertedToId: matchingCandidate.id,
+          },
+        });
+      }
+      console.log('ℹ️ Déjà Candidat — non ajouté aux Candidats Potentiels:', {
+        candidateId: matchingCandidate.id,
+        email,
+        phone,
+      });
+      return res.status(200).json({
+        message: 'Cette personne est déjà un Candidat. Non ajoutée aux Candidats Potentiels.',
+        candidateId: matchingCandidate.id,
+      });
+    }
 
     if (existingProspect) {
       console.log('⚠️ Prospect déjà existant:', {
