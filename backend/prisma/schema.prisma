@@ -993,3 +993,69 @@ model CvExtractionLog {
   @@map("cv_extraction_logs")
 }
 
+// ===========================================================================
+// EMPLOYÉS
+// Troisième étage du cycle de vie : Candidat Potentiel -> Candidat -> Employé.
+// Un employé vit UNIQUEMENT ici : il ne doit jamais réapparaître dans
+// Candidats ni Candidats Potentiels (l'Employé gagne toujours).
+// ===========================================================================
+
+enum EmployeeStatus {
+  ACTIF
+  INACTIF
+}
+
+model Employee {
+  id String @id @default(uuid())
+
+  // Informations personnelles
+  firstName  String
+  lastName   String
+  email      String?
+  phone      String
+  address    String?
+  city       String?
+  province   String  @default("QC")
+  postalCode String?
+
+  // Emploi
+  status         EmployeeStatus @default(ACTIF)
+  hireDate       DateTime? // Date d'embauche
+  employeeNumber String? // Matricule (optionnel)
+  position       String? // Poste / titre
+  assignment     String? // Mandat / site (ex: Magellan Brossard)
+
+  // Certifications clés (reportées du candidat)
+  hasBSP        Boolean   @default(false)
+  bspNumber     String?
+  bspExpiryDate DateTime?
+  hasVehicle    Boolean   @default(false)
+
+  // CV / documents (conservés depuis la fiche candidat)
+  cvUrl            String?
+  cvStoragePath    String?
+  videoUrl         String?
+  videoStoragePath String?
+
+  notes String? @db.Text
+
+  // Lien vers la fiche candidat d'origine (traçabilité)
+  convertedFromCandidateId String?
+
+  // Metadata
+  isDeleted   Boolean   @default(false)
+  deletedAt   DateTime?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([email])
+  @@index([phone])
+  @@index([status])
+  @@index([isDeleted])
+  @@index([lastName])
+  @@index([city])
+  @@index([convertedFromCandidateId])
+  @@map("employees")
+}
+

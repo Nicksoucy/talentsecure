@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { parse } from 'csv-parse/sync';
-import { findMatchingCandidate } from '../utils/candidateMatch';
+import { findMatchingCandidate, findMatchingEmployee } from '../utils/candidateMatch';
 
 const prisma = new PrismaClient();
 
@@ -152,8 +152,14 @@ async function importProspects() {
         continue;
       }
 
-      // LE CANDIDAT GAGNE TOUJOURS : ne jamais (re)créer un prospect pour
-      // quelqu'un qui est déjà un Candidat.
+      // L'EMPLOYÉ / LE CANDIDAT GAGNENT : ne jamais (re)créer un prospect pour
+      // quelqu'un qui est déjà Employé ou Candidat.
+      const matchingEmployee = await findMatchingEmployee(prisma, email, cleanPhone(phone));
+      if (matchingEmployee) {
+        console.log(`⏭️  Déjà EMPLOYÉ, ignoré: ${firstName} ${lastName}`);
+        skipped++;
+        continue;
+      }
       const matchingCandidate = await findMatchingCandidate(prisma, email, cleanPhone(phone));
       if (matchingCandidate) {
         console.log(`⏭️  Déjà CANDIDAT, ignoré: ${firstName} ${lastName}`);

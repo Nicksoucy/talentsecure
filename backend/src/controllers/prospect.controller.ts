@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { getCache, setCache, deleteCache, invalidateCacheByPrefix } from '../config/cache';
 import { buildCacheKey } from '../utils/cache';
-import { findMatchingCandidate } from '../utils/candidateMatch';
+import { findMatchingCandidate, findMatchingEmployee } from '../utils/candidateMatch';
 
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
 const PROSPECT_STATS_CACHE_KEY = 'prospects:stats';
@@ -216,6 +216,16 @@ export const createProspect = async (
     let prospect;
     let message;
     let statusCode;
+
+    // L'EMPLOYÉ GAGNE SUR TOUT : si cette personne est déjà un Employé, on ne
+    // la (re)met pas dans Candidats Potentiels.
+    const matchingEmployee = await findMatchingEmployee(prisma, email, phone);
+    if (matchingEmployee) {
+      return res.status(200).json({
+        message: 'Cette personne est déjà un Employé. Non ajoutée aux Candidats Potentiels.',
+        employeeId: matchingEmployee.id,
+      });
+    }
 
     // LE CANDIDAT GAGNE TOUJOURS : si cette personne est déjà un Candidat,
     // la fiche prospect est créée/mise à jour en état "converti + lié", donc

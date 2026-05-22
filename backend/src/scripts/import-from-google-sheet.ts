@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { google } from 'googleapis';
 import dotenv from 'dotenv';
-import { findMatchingCandidate } from '../utils/candidateMatch';
+import { findMatchingCandidate, findMatchingEmployee } from '../utils/candidateMatch';
 
 dotenv.config();
 
@@ -138,8 +138,13 @@ async function importProspectFromRow(row: any[], rowIndex: number): Promise<'cre
       return 'duplicate';
     }
 
-    // LE CANDIDAT GAGNE TOUJOURS : ne pas (re)créer un prospect pour quelqu'un
-    // qui est déjà un Candidat.
+    // L'EMPLOYÉ / LE CANDIDAT GAGNENT : ne pas (re)créer un prospect pour
+    // quelqu'un qui est déjà Employé ou Candidat.
+    const matchingEmployee = await findMatchingEmployee(prisma, email, cleanPhone);
+    if (matchingEmployee) {
+      console.log(`  [${rowIndex}] ⏭️ Déjà EMPLOYÉ, ignoré: ${firstName} ${lastName}`);
+      return 'duplicate';
+    }
     const matchingCandidate = await findMatchingCandidate(prisma, email, cleanPhone);
     if (matchingCandidate) {
       console.log(`  [${rowIndex}] ⏭️ Déjà CANDIDAT, ignoré: ${firstName} ${lastName}`);

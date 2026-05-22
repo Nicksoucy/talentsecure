@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { findMatchingCandidate } from '../utils/candidateMatch';
+import { findMatchingCandidate, findMatchingEmployee } from '../utils/candidateMatch';
 
 const prisma = new PrismaClient();
 
@@ -110,6 +110,18 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
         isDeleted: false,
       }
     });
+
+    // L'EMPLOYÉ GAGNE SUR TOUT : déjà employé → non ajouté aux Candidats Potentiels.
+    const matchingEmployee = await findMatchingEmployee(prisma, email, phone);
+    if (matchingEmployee) {
+      console.log('ℹ️ Déjà Employé — non ajouté aux Candidats Potentiels:', {
+        employeeId: matchingEmployee.id, email, phone,
+      });
+      return res.status(200).json({
+        message: 'Cette personne est déjà un Employé. Non ajoutée aux Candidats Potentiels.',
+        employeeId: matchingEmployee.id,
+      });
+    }
 
     // LE CANDIDAT GAGNE TOUJOURS : si cette personne est déjà un Candidat,
     // on ne l'ajoute pas aux Candidats Potentiels. Si une fiche prospect

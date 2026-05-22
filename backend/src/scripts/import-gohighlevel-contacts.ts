@@ -5,7 +5,7 @@ import * as path from 'path';
 import { promisify } from 'util';
 import { pipeline } from 'stream';
 import dotenv from 'dotenv';
-import { findMatchingCandidate } from '../utils/candidateMatch';
+import { findMatchingCandidate, findMatchingEmployee } from '../utils/candidateMatch';
 
 dotenv.config();
 
@@ -241,8 +241,13 @@ async function importContact(contact: GoHighLevelContact): Promise<'created' | '
       return 'duplicate';
     }
 
-    // LE CANDIDAT GAGNE TOUJOURS : ne pas (re)créer un prospect pour quelqu'un
-    // qui est déjà un Candidat.
+    // L'EMPLOYÉ / LE CANDIDAT GAGNENT : ne pas (re)créer un prospect pour
+    // quelqu'un qui est déjà Employé ou Candidat.
+    const matchingEmployee = await findMatchingEmployee(prisma, email, phone);
+    if (matchingEmployee) {
+      console.log(`  ⏭️ Déjà EMPLOYÉ, ignoré: ${firstName} ${lastName}`);
+      return 'duplicate';
+    }
     const matchingCandidate = await findMatchingCandidate(prisma, email, phone);
     if (matchingCandidate) {
       console.log(`  ⏭️ Déjà CANDIDAT, ignoré: ${firstName} ${lastName}`);
