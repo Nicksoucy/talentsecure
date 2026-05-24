@@ -69,20 +69,16 @@ export const searchTalentsByCity = async (
         // Default logic for Evaluated Candidates
         const isEvaluated = mode === 'evaluated' || !mode;
 
-        // Build filter
+        // Build filter — tous les candidats actifs (mêmes critères que la
+        // section Candidats : actif, non archivé, non supprimé). Pas de filtre
+        // de statut : on montre les 232 candidats actifs.
         const where: any = {
             city: { contains: city as string, mode: 'insensitive' },
             isActive: true,
             isDeleted: false,
             isArchived: false,
         };
-
-        // Only for evaluated candidates (Candidate table)
-        if (isEvaluated) {
-            where.status = {
-                in: ['QUALIFIE', 'BON', 'TRES_BON', 'EXCELLENT', 'ELITE'],
-            };
-        }
+        void isEvaluated;
 
         if (minRating) {
             where.globalRating = { gte: Number(minRating) };
@@ -209,9 +205,6 @@ export const getAvailableCities = async (
                 isActive: true,
                 isDeleted: false,
                 isArchived: false,
-                status: {
-                    in: ['QUALIFIE', 'BON', 'TRES_BON', 'EXCELLENT', 'ELITE'],
-                },
             },
             _count: {
                 id: true,
@@ -235,12 +228,12 @@ export const getAvailableCities = async (
     }
 };
 
-// Filtre commun : candidats visibles au marketplace (exclut employés promus, etc.)
+// Filtre commun : candidats visibles au marketplace (tous les actifs, comme la
+// section Candidats ; exclut employés promus via isDeleted).
 const MARKETPLACE_WHERE = {
     isActive: true,
     isDeleted: false,
     isArchived: false,
-    status: { in: ['QUALIFIE', 'BON', 'TRES_BON', 'EXCELLENT', 'ELITE'] as any },
 };
 
 /**

@@ -6,7 +6,6 @@ const MARKETPLACE_WHERE = {
   isActive: true,
   isDeleted: false,
   isArchived: false,
-  status: { in: ['QUALIFIE', 'BON', 'TRES_BON', 'EXCELLENT', 'ELITE'] as any },
 };
 
 /**
