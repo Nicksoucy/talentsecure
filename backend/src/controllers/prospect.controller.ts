@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { getCache, setCache, deleteCache, invalidateCacheByPrefix } from '../config/cache';
 import { buildCacheKey } from '../utils/cache';
-import { findMatchingCandidate, findMatchingEmployee } from '../utils/candidateMatch';
+import { findContactEverywhere } from '../utils/candidateMatch';
 
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
 const PROSPECT_STATS_CACHE_KEY = 'prospects:stats';
@@ -184,25 +184,6 @@ export const createProspect = async (
       notes,
     } = req.body;
 
-    // Vérifier si un prospect existe déjà avec le même email OU téléphone
-    const whereConditions = [];
-    if (email) {
-      whereConditions.push({ email: { equals: email, mode: 'insensitive' as const } });
-    }
-    if (phone) {
-      whereConditions.push({ phone });
-    }
-
-    let existingProspect = null;
-    if (whereConditions.length > 0) {
-      existingProspect = await prisma.prospectCandidate.findFirst({
-        where: {
-          isDeleted: false,
-          OR: whereConditions,
-        },
-      });
-    }
-
     const prospectData = {
       firstName,
       lastName,
@@ -218,72 +199,25 @@ export const createProspect = async (
       timezone,
       submissionDate: submissionDate ? new Date(submissionDate) : null,
       notes,
+      source: 'manual',
     };
 
-    let prospect;
-    let message;
-    let statusCode;
-
-    // L'EMPLOYÉ GAGNE SUR TOUT : si cette personne est déjà un Employé, on ne
-    // la (re)met pas dans Candidats Potentiels.
-    const matchingEmployee = await findMatchingEmployee(prisma, email, phone);
-    if (matchingEmployee) {
-      return res.status(200).json({
-        message: 'Cette personne est déjà un Employé. Non ajoutée aux Candidats Potentiels.',
-        employeeId: matchingEmployee.id,
+    // DÉTECTION DE DOUBLON : un contact ne doit vivre qu'à une seule place
+    // (Employé / Candidat / Prospect). Si trouvé → 409, le frontend proposera
+    // de déplacer le contact.
+    const conflict = await findContactEverywhere(prisma, email, phone);
+    if (conflict) {
+      return res.status(409).json({
+        error: `Ce contact existe déjà (${conflict.firstName} ${conflict.lastName}).`,
+        conflict,
       });
     }
 
-    // LE CANDIDAT GAGNE TOUJOURS : si cette personne est déjà un Candidat,
-    // la fiche prospect est créée/mise à jour en état "converti + lié", donc
-    // elle n'apparaît jamais dans Candidats Potentiels (qui filtre isConverted=false).
-    const matchingCandidate = await findMatchingCandidate(prisma, email, phone);
-    if (matchingCandidate) {
-      const linkedData = {
-        ...prospectData,
-        isConverted: true,
-        convertedAt: existingProspect?.convertedAt ?? new Date(),
-        convertedToId: matchingCandidate.id,
-      };
-      if (existingProspect) {
-        prospect = await prisma.prospectCandidate.update({
-          where: { id: existingProspect.id },
-          data: linkedData,
-        });
-      } else {
-        prospect = await prisma.prospectCandidate.create({ data: linkedData });
-      }
-      await invalidateProspectCaches();
-      return res.status(200).json({
-        message:
-          'Cette personne est déjà un Candidat. Fiche liée au candidat existant et masquée des Candidats Potentiels.',
-        data: prospect,
-        candidateId: matchingCandidate.id,
-      });
-    }
-
-    // Si existe ET non converti → mettre à jour
-    if (existingProspect && !existingProspect.isConverted) {
-      prospect = await prisma.prospectCandidate.update({
-        where: { id: existingProspect.id },
-        data: prospectData,
-      });
-      message = 'Candidat potentiel mis à jour avec les nouvelles informations';
-      statusCode = 200;
-    }
-    // Si existe ET converti OU n'existe pas → créer nouveau
-    else {
-      prospect = await prisma.prospectCandidate.create({
-        data: prospectData,
-      });
-      message = 'Candidat potentiel créé avec succès';
-      statusCode = 201;
-    }
-
+    const prospect = await prisma.prospectCandidate.create({ data: prospectData });
     await invalidateProspectCaches();
 
-    res.status(statusCode).json({
-      message,
+    res.status(201).json({
+      message: 'Candidat potentiel créé avec succès',
       data: prospect,
     });
   } catch (error) {

@@ -50,11 +50,14 @@ import {
   VideoLibrary as VideoIcon,
   Sync as SyncIcon,
   Star as StarIcon,
+  Add as AddIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { TableSkeleton } from '@/components/skeletons';
 import CVPreview from '@/components/CVPreview';
 import ProspectVideoPlayer from '@/components/video/ProspectVideoPlayer';
+import ContactConflictDialog from '@/components/ContactConflictDialog';
+import { ContactConflict } from '@/services/contact.service';
 import { useNavigate } from 'react-router-dom';
 import { prospectService } from '@/services/prospect.service';
 import { ProspectCandidate } from '@/types';
@@ -105,6 +108,29 @@ export default function ProspectsPage() {
     open: false,
     prospectId: null,
     prospectName: '',
+  });
+
+  // Ajout manuel d'un prospect
+  const [addProspectOpen, setAddProspectOpen] = useState(false);
+  const [prospectForm, setProspectForm] = useState({ firstName: '', lastName: '', email: '', phone: '', city: '', streetAddress: '' });
+  const [contactConflict, setContactConflict] = useState<ContactConflict | null>(null);
+
+  const createProspectMutation = useMutation({
+    mutationFn: () => prospectService.createProspect(prospectForm),
+    onSuccess: () => {
+      enqueueSnackbar('Prospect créé', { variant: 'success' });
+      setAddProspectOpen(false);
+      setProspectForm({ firstName: '', lastName: '', email: '', phone: '', city: '', streetAddress: '' });
+      queryClient.invalidateQueries({ queryKey: ['prospects'] });
+    },
+    onError: (error: any) => {
+      if (error.response?.status === 409 && error.response?.data?.conflict) {
+        setAddProspectOpen(false);
+        setContactConflict(error.response.data.conflict);
+        return;
+      }
+      enqueueSnackbar(error.response?.data?.error || 'Erreur lors de la création', { variant: 'error' });
+    },
   });
 
   // Synchronisation du survey vidéo
@@ -435,6 +461,13 @@ export default function ProspectsPage() {
             disabled={syncSurveyMutation.isPending}
           >
             {syncSurveyMutation.isPending ? 'Synchronisation…' : 'Synchroniser le survey'}
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setAddProspectOpen(true)}
+          >
+            Ajouter un prospect
           </Button>
         </Box>
       </Box>
@@ -911,6 +944,43 @@ export default function ProspectsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Ajouter un prospect */}
+      <Dialog open={addProspectOpen} onClose={() => setAddProspectOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Ajouter un candidat potentiel</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField label="Prénom" fullWidth value={prospectForm.firstName}
+              onChange={(e) => setProspectForm({ ...prospectForm, firstName: e.target.value })} />
+            <TextField label="Nom" fullWidth value={prospectForm.lastName}
+              onChange={(e) => setProspectForm({ ...prospectForm, lastName: e.target.value })} />
+          </Box>
+          <TextField label="Courriel" fullWidth value={prospectForm.email}
+            onChange={(e) => setProspectForm({ ...prospectForm, email: e.target.value })} />
+          <TextField label="Téléphone" fullWidth value={prospectForm.phone}
+            onChange={(e) => setProspectForm({ ...prospectForm, phone: e.target.value })} />
+          <TextField label="Ville" fullWidth value={prospectForm.city}
+            onChange={(e) => setProspectForm({ ...prospectForm, city: e.target.value })} />
+          <TextField label="Adresse" fullWidth value={prospectForm.streetAddress}
+            onChange={(e) => setProspectForm({ ...prospectForm, streetAddress: e.target.value })} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddProspectOpen(false)}>Annuler</Button>
+          <Button
+            variant="contained"
+            onClick={() => createProspectMutation.mutate()}
+            disabled={createProspectMutation.isPending || !prospectForm.firstName || !prospectForm.phone}
+          >
+            {createProspectMutation.isPending ? 'Création…' : 'Créer'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <ContactConflictDialog
+        conflict={contactConflict}
+        creatingIn="prospect"
+        onClose={() => setContactConflict(null)}
+      />
     </Box>
   );
 }

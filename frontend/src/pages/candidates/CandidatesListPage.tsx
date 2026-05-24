@@ -60,6 +60,8 @@ import { candidateService, AdvancedSearchParams } from '@/services/candidate.ser
 import { candidateFormSchema } from '@/validation/candidate';
 import { HelpDialog } from '@/components/HelpDialog';
 import CandidateComparatorDialog from './components/CandidateComparatorDialog';
+import ContactConflictDialog from '@/components/ContactConflictDialog';
+import { ContactConflict } from '@/services/contact.service';
 
 const CANDIDATES_HELP_SECTIONS = [
   {
@@ -144,6 +146,7 @@ export default function CandidatesListPage() {
   );
   // Dialog states
   const [openAddDialog, setOpenAddDialog] = useState(false);
+  const [contactConflict, setContactConflict] = useState<ContactConflict | null>(null);
   const [openCatalogueDialog, setOpenCatalogueDialog] = useState(false);
   const [openComparatorDialog, setOpenComparatorDialog] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState<any>(null);
@@ -481,6 +484,12 @@ export default function CandidatesListPage() {
       setPage(1); // Retour a la premiere page
     },
     onError: (error: any) => {
+      // Doublon détecté : le contact existe déjà ailleurs → dialogue de déplacement
+      if (error.response?.status === 409 && error.response?.data?.conflict) {
+        setOpenAddDialog(false);
+        setContactConflict(error.response.data.conflict);
+        return;
+      }
       console.error('Erreur creation candidat:', error);
       const serverError = error.response?.data?.error;
       const validationError = error.response?.data?.message;
@@ -1071,6 +1080,12 @@ export default function CandidatesListPage() {
         open={openComparatorDialog}
         onClose={() => setOpenComparatorDialog(false)}
         candidates={candidates.filter((c: any) => selectedCandidates.has(c.id))}
+      />
+
+      <ContactConflictDialog
+        conflict={contactConflict}
+        creatingIn="candidate"
+        onClose={() => setContactConflict(null)}
       />
     </Box >
   );

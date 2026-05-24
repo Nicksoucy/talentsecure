@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
+import { findContactEverywhere } from '../utils/candidateMatch';
 
 /**
  * Liste des employés (avec pagination, recherche, filtre statut).
@@ -88,18 +89,15 @@ export const createEmployee = async (req: Request, res: Response, next: NextFunc
   try {
     const { email, phone } = req.body;
 
-    // Éviter les doublons d'employés
-    const or: any[] = [];
-    if (email) or.push({ email: { equals: email, mode: 'insensitive' as const } });
-    if (phone) or.push({ phone });
-    if (or.length > 0) {
-      const existing = await prisma.employee.findFirst({ where: { isDeleted: false, OR: or } });
-      if (existing) {
-        return res.status(200).json({
-          message: 'Cet employé existe déjà.',
-          data: existing,
-        });
-      }
+    // DÉTECTION DE DOUBLON : un contact ne doit vivre qu'à une seule place
+    // (Employé / Candidat / Prospect). Si trouvé → 409, le frontend proposera
+    // de déplacer le contact.
+    const conflict = await findContactEverywhere(prisma, email, phone);
+    if (conflict) {
+      return res.status(409).json({
+        error: `Ce contact existe déjà (${conflict.firstName} ${conflict.lastName}).`,
+        conflict,
+      });
     }
 
     const employee = await prisma.employee.create({ data: buildEmployeeData(req.body) });

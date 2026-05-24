@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSnackbar } from 'notistack';
 import {
   Box,
   Card,
@@ -22,20 +23,56 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
-import { Search as SearchIcon, Badge as BadgeIcon } from '@mui/icons-material';
+import { Search as SearchIcon, Badge as BadgeIcon, Add as AddIcon } from '@mui/icons-material';
 import { employeeService } from '@/services/employee.service';
+import ContactConflictDialog from '@/components/ContactConflictDialog';
+import { ContactConflict } from '@/services/contact.service';
 
 function formatDate(d?: string) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('fr-CA');
 }
 
+const EMPTY_FORM = { firstName: '', lastName: '', email: '', phone: '', status: 'ACTIF', hireDate: '', position: '', assignment: '' };
+
 export default function EmployeesPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'' | 'ACTIF' | 'INACTIF'>('');
   const pageSize = 20;
+  const queryClient = useQueryClient();
+  const { enqueueSnackbar } = useSnackbar();
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [contactConflict, setContactConflict] = useState<ContactConflict | null>(null);
+
+  const createMutation = useMutation({
+    mutationFn: () => employeeService.createEmployee({
+      ...form,
+      hireDate: form.hireDate || undefined,
+    } as any),
+    onSuccess: () => {
+      enqueueSnackbar('Employé créé', { variant: 'success' });
+      setAddOpen(false);
+      setForm({ ...EMPTY_FORM });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+    onError: (error: any) => {
+      if (error.response?.status === 409 && error.response?.data?.conflict) {
+        setAddOpen(false);
+        setContactConflict(error.response.data.conflict);
+        return;
+      }
+      enqueueSnackbar(error.response?.data?.error || 'Erreur lors de la création', { variant: 'error' });
+    },
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['employees', page, search, status],
@@ -61,11 +98,16 @@ export default function EmployeesPage() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-        <BadgeIcon color="primary" />
-        <Typography variant="h4" fontWeight="bold">
-          Employés
-        </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <BadgeIcon color="primary" />
+          <Typography variant="h4" fontWeight="bold">
+            Employés
+          </Typography>
+        </Box>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
+          Ajouter un employé
+        </Button>
       </Box>
 
       {/* Stats */}
@@ -182,6 +224,53 @@ export default function EmployeesPage() {
           <Pagination count={totalPages} page={page} onChange={(_, p) => setPage(p)} color="primary" />
         </Box>
       )}
+
+      {/* Ajouter un employé */}
+      <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Ajouter un employé</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField label="Prénom" fullWidth value={form.firstName}
+              onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
+            <TextField label="Nom" fullWidth value={form.lastName}
+              onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
+          </Box>
+          <TextField label="Courriel" fullWidth value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <TextField label="Téléphone" fullWidth value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <FormControl fullWidth>
+              <InputLabel>Statut</InputLabel>
+              <Select label="Statut" value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                <MenuItem value="ACTIF">Actif</MenuItem>
+                <MenuItem value="INACTIF">Inactif</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField label="Date d'embauche" type="date" fullWidth InputLabelProps={{ shrink: true }}
+              value={form.hireDate} onChange={(e) => setForm({ ...form, hireDate: e.target.value })} />
+          </Box>
+          <TextField label="Poste" fullWidth value={form.position}
+            onChange={(e) => setForm({ ...form, position: e.target.value })} />
+          <TextField label="Mandat / site" fullWidth value={form.assignment}
+            onChange={(e) => setForm({ ...form, assignment: e.target.value })} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddOpen(false)}>Annuler</Button>
+          <Button variant="contained"
+            onClick={() => createMutation.mutate()}
+            disabled={createMutation.isPending || !form.firstName || !form.phone}>
+            {createMutation.isPending ? 'Création…' : 'Créer'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <ContactConflictDialog
+        conflict={contactConflict}
+        creatingIn="employee"
+        onClose={() => setContactConflict(null)}
+      />
     </Box>
   );
 }

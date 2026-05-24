@@ -4,6 +4,7 @@ import logger from '../config/logger';
 import { getCache, setCache, deleteCache, invalidateCacheByPrefix } from '../config/cache';
 import { buildCacheKey } from '../utils/cache';
 import { getStatusFromRating } from '../utils/candidate.utils';
+import { findContactEverywhere } from '../utils/candidateMatch';
 import { Parser } from 'json2csv';
 import { candidateService } from '../services/candidate.service';
 import { aiExtractionService } from '../services/ai-extraction.service';
@@ -222,6 +223,17 @@ export const createCandidate = async (
       certifications,
       situationTests,
     } = req.body;
+
+    // DÉTECTION DE DOUBLON : un contact ne doit vivre qu'à une seule place.
+    // Si email/téléphone correspond déjà ailleurs → 409 conflit (le frontend
+    // proposera de déplacer le contact).
+    const conflict = await findContactEverywhere(prisma, email, phone);
+    if (conflict) {
+      return res.status(409).json({
+        error: `Ce contact existe déjà (${conflict.firstName} ${conflict.lastName}).`,
+        conflict,
+      });
+    }
 
     // Calculate status automatically based on rating if not provided
     const finalGlobalRating = globalRating ? Number(globalRating) : null;
