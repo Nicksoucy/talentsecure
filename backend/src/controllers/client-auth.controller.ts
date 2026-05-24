@@ -260,26 +260,32 @@ export const getClientCatalogueById = async (
       },
     });
 
-    // Filter sensitive data if payment required
     const isContentRestricted = catalogue.requiresPayment && !catalogue.isPaid;
 
-    if (isContentRestricted) {
-      // Response-shape filter: intentionally nullify non-null Prisma fields.
-      // Cast through unknown to satisfy strict mode without a DB mutation.
-      catalogue.items = catalogue.items.map(item => ({
+    // CONFIDENTIALITÉ CLIENT : jamais de CV, d'adresse complète ni de notes RH
+    // internes. Masquage systématique + exclusion des candidats supprimés.
+    catalogue.items = (catalogue.items || [])
+      .filter(item => item.candidate && !(item.candidate as any).isDeleted)
+      .map(item => ({
         ...item,
         candidate: {
           ...item.candidate,
           phone: null,
           email: null,
+          address: null,
+          fullAddress: null,
+          postalCode: null,
           cvUrl: null,
-          videoUrl: null,
+          cvStoragePath: null,
           hrNotes: null,
           strengths: null,
           weaknesses: null,
+          interviewDetails: null,
+          ...(isContentRestricted
+            ? { videoUrl: null, videoStoragePath: null }
+            : {}),
         },
       })) as unknown as typeof catalogue.items;
-    }
 
     res.json({
       ...catalogue,

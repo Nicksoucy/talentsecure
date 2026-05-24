@@ -14,6 +14,8 @@ import {
     DirectionsCar as CarIcon,
     Security as SecurityIcon,
     Favorite as FavoriteIcon,
+    VideoLibrary as VideoIcon,
+    Verified as VerifiedIcon,
 } from '@mui/icons-material';
 import { TalentPreview } from '@/services/talent-marketplace.service';
 
@@ -21,9 +23,10 @@ interface TalentCardProps {
     talent: TalentPreview;
     selected: boolean;
     onToggleSelect: (id: string) => void;
+    onOpenDetail?: (id: string) => void;
 }
 
-export default function TalentCard({ talent, selected, onToggleSelect }: TalentCardProps) {
+export default function TalentCard({ talent, selected, onToggleSelect, onOpenDetail }: TalentCardProps) {
     return (
         <Card
             sx={{
@@ -105,6 +108,12 @@ export default function TalentCard({ talent, selected, onToggleSelect }: TalentC
                             variant="outlined"
                         />
                     )}
+                    {talent.hasVideo && (
+                        <Chip icon={<VideoIcon />} label="Vidéo" size="small" color="secondary" variant="outlined" />
+                    )}
+                    {talent.purchased && (
+                        <Chip icon={<VerifiedIcon />} label="Acheté" size="small" color="success" />
+                    )}
                 </Stack>
 
                 {/* Experience (limited) */}
@@ -153,12 +162,12 @@ export default function TalentCard({ talent, selected, onToggleSelect }: TalentC
                 </Box>
 
                 <Button
-                    variant={selected ? 'contained' : 'outlined'}
+                    variant="contained"
                     fullWidth
                     sx={{ mt: 2 }}
-                    onClick={() => onToggleSelect(talent.id)}
+                    onClick={() => onOpenDetail?.(talent.id)}
                 >
-                    {selected ? 'Retiré de la sélection' : 'Ajouter à ma sélection'}
+                    {talent.purchased ? 'Voir les coordonnées' : 'Voir le profil & acheter'}
                 </Button>
             </CardContent>
         </Card>

@@ -737,36 +737,35 @@ export const getCatalogueByToken = async (
       },
     });
 
-    // Filter sensitive data based on payment status
     const isContentRestricted = catalogue.requiresPayment && !catalogue.isPaid;
 
-    // If content is restricted, hide sensitive information.
-    // We intentionally null-out fields the Prisma schema types as non-null
-    // (phone, email, etc.) — this is a response-shape filter, not a DB mutation,
-    // so we cast through unknown to keep the masked shape and let the JSON
-    // serializer drop them as null.
-    if (isContentRestricted) {
-      catalogue.items = catalogue.items.map((item) => ({
+    // CONFIDENTIALITÉ CLIENT : on ne divulgue JAMAIS le CV ni l'adresse
+    // complète ni les notes RH internes à un client. On masque ces champs
+    // pour toutes les réponses (pas seulement quand le paiement est requis),
+    // et on exclut les candidats supprimés (ex. promus Employé).
+    catalogue.items = (catalogue.items || [])
+      .filter((item) => item.candidate && !(item.candidate as any).isDeleted)
+      .map((item) => ({
         ...item,
         candidate: {
           ...item.candidate,
           phone: null,
           email: null,
           address: null,
+          fullAddress: null,
           postalCode: null,
           cvUrl: null,
           cvStoragePath: null,
-          videoUrl: null,
-          videoStoragePath: null,
           hrNotes: null,
           strengths: null,
           weaknesses: null,
           interviewDetails: null,
-          experiences: [],
-          certifications: [],
+          // Si paiement requis non payé : on masque aussi le reste évaluatif
+          ...(isContentRestricted
+            ? { videoUrl: null, videoStoragePath: null, experiences: [], certifications: [] }
+            : {}),
         },
       })) as unknown as typeof catalogue.items;
-    }
 
     res.json({
       ...catalogue,

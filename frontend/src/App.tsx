@@ -28,6 +28,7 @@ const ClientLoginPage = lazy(() => import('./pages/client/ClientLoginPage'));
 const ClientRegisterPage = lazy(() => import('./pages/client/ClientRegisterPage'));
 const ClientDashboardPage = lazy(() => import('./pages/client/ClientDashboardPage'));
 const TalentMarketplacePage = lazy(() => import('./pages/client/TalentMarketplacePage'));
+const ClientPurchasesPage = lazy(() => import('./pages/client/ClientPurchasesPage'));
 const ClientCatalogueDetailPage = lazy(() => import('./pages/client/ClientCatalogueDetailPage'));
 
 function App() {
@@ -81,6 +82,12 @@ function App() {
             path="/client/talents"
             element={
               isClientAuthenticated ? <TalentMarketplacePage /> : <Navigate to="/client/login" replace />
+            }
+          />
+          <Route
+            path="/client/purchases"
+            element={
+              isClientAuthenticated ? <ClientPurchasesPage /> : <Navigate to="/client/login" replace />
             }
           />
           <Route

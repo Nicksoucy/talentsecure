@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
     Box,
@@ -22,13 +22,28 @@ import {
     ShoppingCart as CartIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
-import { talentMarketplaceService, TalentPreview } from '@/services/talent-marketplace.service';
+import { talentMarketplaceService } from '@/services/talent-marketplace.service';
 import TalentCard from './components/TalentCard';
+import TalentDetailDialog from './components/TalentDetailDialog';
 
 export default function TalentMarketplacePage() {
     const { enqueueSnackbar } = useSnackbar();
     const [selectedCity, setSelectedCity] = useState<string>('');
     const [selectedTalents, setSelectedTalents] = useState<Set<string>>(new Set());
+    const [detailId, setDetailId] = useState<string | null>(null);
+
+    // Retour de paiement Stripe (?purchase=success|cancel)
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const p = params.get('purchase');
+        if (p === 'success') {
+            enqueueSnackbar('Paiement réussi ! Le candidat est débloqué dans « Mes achats ».', { variant: 'success', autoHideDuration: 8000 });
+            window.history.replaceState({}, '', window.location.pathname);
+        } else if (p === 'cancel') {
+            enqueueSnackbar('Paiement annulé.', { variant: 'info' });
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+    }, [enqueueSnackbar]);
     const [filters, setFilters] = useState({
         minRating: 7,
         hasBSP: false,
@@ -206,12 +221,15 @@ export default function TalentMarketplacePage() {
                                     talent={talent}
                                     selected={selectedTalents.has(talent.id)}
                                     onToggleSelect={handleToggleSelect}
+                                    onOpenDetail={(id) => setDetailId(id)}
                                 />
                             </Grid>
                         ))}
                     </Grid>
                 </>
             )}
+
+            <TalentDetailDialog candidateId={detailId} onClose={() => setDetailId(null)} />
         </Container>
     );
 }

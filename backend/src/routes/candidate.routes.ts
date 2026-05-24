@@ -226,7 +226,7 @@ router.post(
  * @desc    Get video URL for candidate
  * @access  Private (All authenticated users)
  */
-router.get('/:id/video', validate({ params: candidateIdSchema }), getCandidateVideoUrl);
+router.get('/:id/video', authorizeRoles('ADMIN', 'RH_RECRUITER', 'SALES'), validate({ params: candidateIdSchema }), getCandidateVideoUrl);
 
 /**
  * @route   DELETE /api/candidates/:id/video

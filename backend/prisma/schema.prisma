@@ -192,6 +192,9 @@ model Candidate {
   strengths  String? @db.Text
   weaknesses String? @db.Text
 
+  // Note destinee au CLIENT (distincte des notes RH internes)
+  clientNote String? @db.Text
+
   // DÃ©tails complets d'entretien (JSON)
   interviewDetails Json? // Stocke toutes les infos de l'onglet candidat
 
