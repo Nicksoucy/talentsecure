@@ -89,6 +89,9 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
     const postalCode = bodyData.postal_code || formData.postal_code || contactData.postal_code || null;
     const country = bodyData.country || formData.country || contactData.country || 'CA';
     const cvUrl = bodyData.cv_url || formData.cv_url || contactData.svp_joindre_votre_cv || null;
+    const videoUrl =
+      bodyData.video_url || formData.video_url ||
+      contactData.video_de_presentation || contactData.video_presentation || null;
 
     // Valider les champs requis
     if (!firstName || !phone) {
@@ -181,6 +184,8 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
         country,
         fullAddress: streetAddress ? `${streetAddress}, ${normalizedCity || city || ''}, ${province}, ${country}` : null,
         cvUrl,
+        videoUrl: videoUrl || null,
+        source: 'form-cv',
         submissionDate: new Date(),
         isContacted: false,
         isConverted: false,
@@ -189,6 +194,31 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
           : 'Ajouté automatiquement via GoHighLevel',
       },
     });
+
+    // Si une vidéo de présentation est fournie, on la télécharge dans R2
+    // (best-effort : un échec vidéo ne doit pas faire échouer la création).
+    if (videoUrl) {
+      try {
+        const { downloadGhlFile, detectExtension, isLikelyVideo } = require('../utils/ghlFetch');
+        const { uploadBufferToR2 } = require('../services/r2.service');
+        const file = await downloadGhlFile(videoUrl);
+        if (file.buffer.length > 100 && isLikelyVideo(file.buffer)) {
+          const ext = detectExtension(file, '');
+          const safe = `${firstName}_${lastName}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50) || 'video';
+          const key = `videos/prospects/${prospect.id}_${safe}${ext}`;
+          await uploadBufferToR2(file.buffer, key, file.contentType);
+          await prisma.prospectCandidate.update({
+            where: { id: prospect.id },
+            data: { videoStoragePath: key, videoUploadedAt: new Date() },
+          });
+          console.log('🎥 Vidéo de présentation stockée dans R2:', key);
+        } else {
+          console.warn('⚠️ Fichier vidéo invalide (ignoré) pour', `${firstName} ${lastName}`);
+        }
+      } catch (e: any) {
+        console.error('⚠️ Échec téléchargement vidéo (prospect créé quand même):', e.message);
+      }
+    }
 
     console.log('✅ Prospect créé avec succès:', {
       id: prospect.id,
