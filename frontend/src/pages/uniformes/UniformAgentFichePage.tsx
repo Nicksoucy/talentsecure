@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Stack, Paper, Table, TableHead, TableRow, TableCell, TableBody, Chip, Button,
@@ -17,6 +17,7 @@ const statusLabel: Record<string, string> = {
 
 export default function UniformAgentFichePage() {
   const { employeeId } = useParams<{ employeeId: string }>();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
 
@@ -62,7 +63,16 @@ export default function UniformAgentFichePage() {
         <Chip label={`Pièces détenues : ${holdings.reduce((s, h) => s + h.quantity, 0)}`} />
         <Chip color={owed.owed > 0 ? 'error' : 'success'} label={`Montant dû : ${money(owed.owed)}`} />
         <Chip variant="outlined" label={`Facturé : ${money(owed.charged)} • Réglé : ${money(owed.settled)}`} />
-        <Button size="small" variant="outlined" onClick={() => setSettleDlg(true)}>Enregistrer un règlement</Button>
+      </Stack>
+
+      <Stack direction="row" spacing={2} mb={2} flexWrap="wrap">
+        <Button variant="contained" onClick={() => navigate(`/uniformes/remises/nouvelle?employeeId=${employeeId}`)}>
+          Remettre des uniformes
+        </Button>
+        <Button variant="outlined" onClick={() => navigate(`/uniformes/retours?employeeId=${employeeId}`)}>
+          Retourner des uniformes
+        </Button>
+        <Button size="small" variant="text" onClick={() => setSettleDlg(true)}>Enregistrer un règlement</Button>
       </Stack>
 
       <Paper sx={{ p: 2, mb: 2 }}>

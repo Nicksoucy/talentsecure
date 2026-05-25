@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   Box, Typography, Stack, Paper, TextField, MenuItem, Autocomplete, Button, Table, TableHead,
@@ -32,6 +32,13 @@ export default function UniformReturnsPage() {
   const [issuanceId, setIssuanceId] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
   const [returnId, setReturnId] = useState<string | null>(null);
+
+  // Pré-sélection de l'agent si on arrive depuis sa fiche (?employeeId=...)
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const id = searchParams.get('employeeId');
+    if (id) employeeService.getEmployeeById(id).then((r) => setEmployee(r.data)).catch(() => {});
+  }, [searchParams]);
 
   const employees = useQuery({
     queryKey: ['emp-search-ret', empSearch],

@@ -28,9 +28,13 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
-import { Search as SearchIcon, Badge as BadgeIcon, Add as AddIcon } from '@mui/icons-material';
+import { Search as SearchIcon, Badge as BadgeIcon, Add as AddIcon, Checkroom as CheckroomIcon } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import { employeeService } from '@/services/employee.service';
+import { useAuthStore } from '@/store/authStore';
 import ContactConflictDialog from '@/components/ContactConflictDialog';
 import { ContactConflict } from '@/services/contact.service';
 
@@ -48,6 +52,9 @@ export default function EmployeesPage() {
   const pageSize = 20;
   const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const isUniformStaff = user?.role === 'ADMIN' || user?.role === 'RH_RECRUITER';
 
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
@@ -180,18 +187,19 @@ export default function EmployeesPage() {
               <TableCell>Mandat</TableCell>
               <TableCell>Embauche</TableCell>
               <TableCell>Statut</TableCell>
+              {isUniformStaff && <TableCell align="right">Uniformes</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
+                <TableCell colSpan={isUniformStaff ? 9 : 8} align="center" sx={{ py: 6 }}>
                   <CircularProgress />
                 </TableCell>
               </TableRow>
             ) : employees.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
+                <TableCell colSpan={isUniformStaff ? 9 : 8} align="center" sx={{ py: 6 }}>
                   <Typography color="text.secondary">Aucun employé</Typography>
                 </TableCell>
               </TableRow>
@@ -212,6 +220,15 @@ export default function EmployeesPage() {
                       size="small"
                     />
                   </TableCell>
+                  {isUniformStaff && (
+                    <TableCell align="right">
+                      <Tooltip title="Fiche uniformes (voir / remettre / retourner)">
+                        <IconButton size="small" color="primary" onClick={() => navigate(`/uniformes/fiches/${e.id}`)}>
+                          <CheckroomIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))
             )}

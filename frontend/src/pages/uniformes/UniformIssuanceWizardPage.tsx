@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   Box, Typography, Stack, Paper, TextField, MenuItem, Autocomplete, Button, Table, TableHead,
@@ -48,6 +48,13 @@ export default function UniformIssuanceWizardPage() {
     queryFn: () => uniformService.listItems({ division }),
   });
   const items = itemsQ.data?.data || [];
+
+  // Pré-sélection de l'agent si on arrive depuis sa fiche (?employeeId=...)
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const id = searchParams.get('employeeId');
+    if (id) employeeService.getEmployeeById(id).then((r) => setEmployee(r.data)).catch(() => {});
+  }, [searchParams]);
 
   // Auto-sélection de la variante pour les pièces "taille unique" / équipement.
   useEffect(() => {
