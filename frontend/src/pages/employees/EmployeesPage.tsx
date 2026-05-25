@@ -30,6 +30,7 @@ import {
   DialogActions,
   IconButton,
   Tooltip,
+  Link,
 } from '@mui/material';
 import { Search as SearchIcon, Badge as BadgeIcon, Add as AddIcon, Checkroom as CheckroomIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -206,7 +207,21 @@ export default function EmployeesPage() {
             ) : (
               employees.map((e) => (
                 <TableRow key={e.id} hover>
-                  <TableCell>{e.firstName} {e.lastName}</TableCell>
+                  <TableCell>
+                    {isUniformStaff ? (
+                      <Link
+                        component="button"
+                        type="button"
+                        underline="hover"
+                        onClick={() => navigate(`/uniformes/fiches/${e.id}`)}
+                        sx={{ textAlign: 'left', fontWeight: 500, cursor: 'pointer' }}
+                      >
+                        {e.firstName} {e.lastName}
+                      </Link>
+                    ) : (
+                      `${e.firstName} ${e.lastName}`
+                    )}
+                  </TableCell>
                   <TableCell>{e.email || '—'}</TableCell>
                   <TableCell>{e.phone}</TableCell>
                   <TableCell>{e.city || '—'}</TableCell>
