@@ -30,6 +30,7 @@ export const getProspects = async (
       city,
       isContacted,
       isConverted,
+      hasVideo,
       submissionDateStart,
       submissionDateEnd,
       page = 1,
@@ -73,6 +74,13 @@ export const getProspects = async (
       where.isConverted = isConverted === 'true';
     }
 
+    // Filtre vidéo : avec / sans vidéo de présentation
+    if (hasVideo === 'true') {
+      where.videoStoragePath = { not: null };
+    } else if (hasVideo === 'false') {
+      where.videoStoragePath = null;
+    }
+
     // NOUVEAU : Filtrage dynamique pour masquer/afficher prospects déjà traités
     const includeProcessed = req.query.includeProcessed;
     if (includeProcessed === 'false') {
@@ -86,7 +94,9 @@ export const getProspects = async (
         where.submissionDate.gte = new Date(submissionDateStart as string);
       }
       if (submissionDateEnd) {
-        where.submissionDate.lte = new Date(submissionDateEnd as string);
+        const end = new Date(submissionDateEnd as string);
+        end.setHours(23, 59, 59, 999); // inclure toute la journée de fin
+        where.submissionDate.lte = end;
       }
     }
 

@@ -83,6 +83,9 @@ export default function ProspectsPage() {
     city: '',
     isContacted: '',
     isConverted: '',
+    hasVideo: '',
+    submissionDateStart: '',
+    submissionDateEnd: '',
   });
 
   // Selection state
@@ -167,6 +170,9 @@ export default function ProspectsPage() {
         city: filters.city || undefined,
         isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
         isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
+        hasVideo: filters.hasVideo === '' ? undefined : filters.hasVideo === 'true',
+        submissionDateStart: filters.submissionDateStart || undefined,
+        submissionDateEnd: filters.submissionDateEnd || undefined,
         sortBy: 'submissionDate',
         sortOrder: 'desc',
       }),
@@ -582,6 +588,40 @@ export default function ProspectsPage() {
                     <MenuItem value="true">Converti</MenuItem>
                   </Select>
                 </FormControl>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth>
+                  <InputLabel>Vidéo</InputLabel>
+                  <Select
+                    label="Vidéo"
+                    value={filters.hasVideo}
+                    onChange={(e) => { setFilters({ ...filters, hasVideo: e.target.value }); setPage(1); }}
+                  >
+                    <MenuItem value="">Tous</MenuItem>
+                    <MenuItem value="true">Avec vidéo</MenuItem>
+                    <MenuItem value="false">Sans vidéo</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Soumis à partir du"
+                  InputLabelProps={{ shrink: true }}
+                  value={filters.submissionDateStart}
+                  onChange={(e) => { setFilters({ ...filters, submissionDateStart: e.target.value }); setPage(1); }}
+                />
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Soumis jusqu'au"
+                  InputLabelProps={{ shrink: true }}
+                  value={filters.submissionDateEnd}
+                  onChange={(e) => { setFilters({ ...filters, submissionDateEnd: e.target.value }); setPage(1); }}
+                />
               </Grid>
             </Grid>
           )}

@@ -6,6 +6,7 @@ interface GetProspectsParams {
   city?: string;
   isContacted?: boolean;
   isConverted?: boolean;
+  hasVideo?: boolean;
   includeProcessed?: boolean; // NOUVEAU : filtrage dynamique
   submissionDateStart?: string;
   submissionDateEnd?: string;

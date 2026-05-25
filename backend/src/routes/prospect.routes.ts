@@ -33,6 +33,7 @@ const prospectQueryFilters = z.object({
   city: z.string().max(100).optional(),
   isContacted: z.string().optional(),
   isConverted: z.string().optional(),
+  hasVideo: z.string().optional(),
   includeProcessed: z.string().optional(), // NOUVEAU : filtrage dynamique
   submissionDateStart: z.string().optional(),
   submissionDateEnd: z.string().optional(),
