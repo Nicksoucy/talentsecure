@@ -100,12 +100,10 @@ export const getProspects = async (
       }
     }
 
-    // PRIORITÉ : les prospects qui ont envoyé une vidéo de présentation
-    // remontent en haut (candidats plus sérieux), puis tri normal.
-    const orderBy: any[] = [
-      { videoStoragePath: { sort: 'desc', nulls: 'last' } },
-      { [sortBy as string]: sortOrder },
-    ];
+    // Tri par date de soumission (plus récent au plus vieux par défaut).
+    // Les candidats avec vidéo restent identifiés par l'étoile ⭐, mais
+    // l'ordre de la liste suit la date d'entrée.
+    const orderBy: any = { [sortBy as string]: sortOrder };
 
     const [total, prospects] = await prisma.$transaction([
       prisma.prospectCandidate.count({ where }),
