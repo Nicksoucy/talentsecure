@@ -31,10 +31,6 @@ import {
   Download as DownloadIcon,
   Badge as BadgeIcon,
   Checkroom as CheckroomIcon,
-  Inventory2 as Inventory2Icon,
-  AssignmentInd as AssignmentIndIcon,
-  AssignmentReturn as AssignmentReturnIcon,
-  Assessment as AssessmentIcon,
 } from '@mui/icons-material';
 import { useAuthStore } from '@/store/authStore';
 import { authService } from '@/services/auth.service';
@@ -83,13 +79,7 @@ const MainLayout = () => {
     { text: 'Demandes Clients', icon: <ShoppingCartIcon />, path: '/wishlists' },
     { text: 'Autre Compétence', icon: <WorkIcon />, path: '/autres-competances' },
     ...(isUniformStaff
-      ? [
-          { text: 'Uniformes', icon: <CheckroomIcon />, path: '/uniformes' },
-          { text: 'Inventaire uniformes', icon: <Inventory2Icon />, path: '/uniformes/inventaire' },
-          { text: 'Remise uniforme', icon: <AssignmentIndIcon />, path: '/uniformes/remises/nouvelle' },
-          { text: 'Retour uniforme', icon: <AssignmentReturnIcon />, path: '/uniformes/retours' },
-          { text: 'Rapports uniformes', icon: <AssessmentIcon />, path: '/uniformes/rapports' },
-        ]
+      ? [{ text: 'Uniformes', icon: <CheckroomIcon />, path: '/uniformes' }]
       : []),
   ];
 

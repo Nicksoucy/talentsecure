@@ -54,7 +54,7 @@ export default function UniformReportsPage() {
           <TableBody>
             {(overdue.data?.data || []).map((r: any) => (
               <TableRow key={r.issuanceId}>
-                <TableCell><Link component={RouterLink} to={`/uniformes/fiches/${r.employeeId}`}>{r.employeeName}</Link></TableCell>
+                <TableCell><Link component={RouterLink} to={`/employees/${r.employeeId}`}>{r.employeeName}</Link></TableCell>
                 <TableCell>{r.division === 'SIGNALISATION' ? 'Signalisation' : 'Sécurité'}</TableCell>
                 <TableCell>{r.dueReturnAt ? new Date(r.dueReturnAt).toLocaleDateString('fr-CA') : '—'}</TableCell>
                 <TableCell align="right">{r.itemsCount}</TableCell>
@@ -79,7 +79,7 @@ export default function UniformReportsPage() {
             <TableBody>
               {(losses.data?.data.rows || []).map((r: any) => (
                 <TableRow key={r.employeeId}>
-                  <TableCell><Link component={RouterLink} to={`/uniformes/fiches/${r.employeeId}`}>{r.employeeName}</Link></TableCell>
+                  <TableCell><Link component={RouterLink} to={`/employees/${r.employeeId}`}>{r.employeeName}</Link></TableCell>
                   <TableCell align="right">{r.units}</TableCell>
                   <TableCell align="right">{money(r.cost)}</TableCell>
                 </TableRow>

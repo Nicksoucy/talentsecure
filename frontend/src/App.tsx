@@ -26,6 +26,7 @@ const WishlistsPage = lazy(() => import('./pages/wishlists/WishlistsPage'));
 const ExportPage = lazy(() => import('./pages/exports/ExportPage'));
 const CatalogueViewPage = lazy(() => import('./pages/public/CatalogueViewPage'));
 const UniformSignPage = lazy(() => import('./pages/public/UniformSignPage'));
+const UniformsHubPage = lazy(() => import('./pages/uniformes/UniformsHubPage'));
 const UniformsCataloguePage = lazy(() => import('./pages/uniformes/UniformsCataloguePage'));
 const UniformInventoryPage = lazy(() => import('./pages/uniformes/UniformInventoryPage'));
 const UniformIssuanceWizardPage = lazy(() => import('./pages/uniformes/UniformIssuanceWizardPage'));
@@ -127,12 +128,14 @@ function App() {
             <Route path="/autres-competances" element={<AutresCompetancesPage />} />
             <Route path="/wishlists" element={<WishlistsPage />} />
             <Route path="/exports" element={<ExportPage />} />
-            <Route path="/uniformes" element={<UniformsCataloguePage />} />
-            <Route path="/uniformes/inventaire" element={<UniformInventoryPage />} />
-            <Route path="/uniformes/remises/nouvelle" element={<UniformIssuanceWizardPage />} />
-            <Route path="/uniformes/retours" element={<UniformReturnsPage />} />
+            <Route path="/uniformes" element={<UniformsHubPage />}>
+              <Route index element={<UniformsCataloguePage />} />
+              <Route path="inventaire" element={<UniformInventoryPage />} />
+              <Route path="remises/nouvelle" element={<UniformIssuanceWizardPage />} />
+              <Route path="retours" element={<UniformReturnsPage />} />
+              <Route path="rapports" element={<UniformReportsPage />} />
+            </Route>
             <Route path="/uniformes/fiches/:employeeId" element={<UniformAgentFichePage />} />
-            <Route path="/uniformes/rapports" element={<UniformReportsPage />} />
           </Route>
 
           {/* 404 */}
