@@ -30,6 +30,11 @@ import {
   ShoppingCart as ShoppingCartIcon,
   Download as DownloadIcon,
   Badge as BadgeIcon,
+  Checkroom as CheckroomIcon,
+  Inventory2 as Inventory2Icon,
+  AssignmentInd as AssignmentIndIcon,
+  AssignmentReturn as AssignmentReturnIcon,
+  Assessment as AssessmentIcon,
 } from '@mui/icons-material';
 import { useAuthStore } from '@/store/authStore';
 import { authService } from '@/services/auth.service';
@@ -66,6 +71,8 @@ const MainLayout = () => {
     }
   };
 
+  const isUniformStaff = user?.role === 'ADMIN' || user?.role === 'RH_RECRUITER';
+
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
     { text: 'Candidats', icon: <PeopleIcon />, path: '/candidates' },
@@ -75,6 +82,15 @@ const MainLayout = () => {
     { text: 'Clients', icon: <BusinessIcon />, path: '/clients' },
     { text: 'Demandes Clients', icon: <ShoppingCartIcon />, path: '/wishlists' },
     { text: 'Autre Compétence', icon: <WorkIcon />, path: '/autres-competances' },
+    ...(isUniformStaff
+      ? [
+          { text: 'Uniformes', icon: <CheckroomIcon />, path: '/uniformes' },
+          { text: 'Inventaire uniformes', icon: <Inventory2Icon />, path: '/uniformes/inventaire' },
+          { text: 'Remise uniforme', icon: <AssignmentIndIcon />, path: '/uniformes/remises/nouvelle' },
+          { text: 'Retour uniforme', icon: <AssignmentReturnIcon />, path: '/uniformes/retours' },
+          { text: 'Rapports uniformes', icon: <AssessmentIcon />, path: '/uniformes/rapports' },
+        ]
+      : []),
   ];
 
   const drawer = (

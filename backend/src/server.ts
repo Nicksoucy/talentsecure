@@ -38,6 +38,7 @@ import exportRoutes from './routes/export.routes';
 import skillsRoutes from './routes/skills.routes';
 import extractionRoutes from './routes/extraction.routes';
 import marketplaceRoutes from './routes/talent-marketplace.routes';
+import uniformRoutes from './routes/uniform.routes';
 
 const app: Application = express();
 const PORT = parseInt(process.env.PORT || '8080', 10);
@@ -129,6 +130,7 @@ app.use('/api/exports', exportRoutes);
 app.use('/api/skills', skillsRoutes);
 app.use('/api/extraction', extractionRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
+app.use('/api/uniforms', uniformRoutes);
 // app.use('/api/users', userRoutes);
 
 // 404 handler

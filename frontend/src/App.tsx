@@ -24,6 +24,13 @@ const AutresCompetancesPage = lazy(() => import('./pages/autres-competances/Autr
 const WishlistsPage = lazy(() => import('./pages/wishlists/WishlistsPage'));
 const ExportPage = lazy(() => import('./pages/exports/ExportPage'));
 const CatalogueViewPage = lazy(() => import('./pages/public/CatalogueViewPage'));
+const UniformSignPage = lazy(() => import('./pages/public/UniformSignPage'));
+const UniformsCataloguePage = lazy(() => import('./pages/uniformes/UniformsCataloguePage'));
+const UniformInventoryPage = lazy(() => import('./pages/uniformes/UniformInventoryPage'));
+const UniformIssuanceWizardPage = lazy(() => import('./pages/uniformes/UniformIssuanceWizardPage'));
+const UniformReturnsPage = lazy(() => import('./pages/uniformes/UniformReturnsPage'));
+const UniformAgentFichePage = lazy(() => import('./pages/uniformes/UniformAgentFichePage'));
+const UniformReportsPage = lazy(() => import('./pages/uniformes/UniformReportsPage'));
 const ClientLoginPage = lazy(() => import('./pages/client/ClientLoginPage'));
 const ClientRegisterPage = lazy(() => import('./pages/client/ClientRegisterPage'));
 const ClientDashboardPage = lazy(() => import('./pages/client/ClientDashboardPage'));
@@ -61,6 +68,7 @@ function App() {
         <Routes>
           {/* Public routes */}
           <Route path="/catalogue/:token" element={<CatalogueViewPage />} />
+          <Route path="/uniformes/signer/:token" element={<UniformSignPage />} />
 
           {/* Admin auth routes */}
           <Route element={<AuthLayout />}>
@@ -117,6 +125,12 @@ function App() {
             <Route path="/autres-competances" element={<AutresCompetancesPage />} />
             <Route path="/wishlists" element={<WishlistsPage />} />
             <Route path="/exports" element={<ExportPage />} />
+            <Route path="/uniformes" element={<UniformsCataloguePage />} />
+            <Route path="/uniformes/inventaire" element={<UniformInventoryPage />} />
+            <Route path="/uniformes/remises/nouvelle" element={<UniformIssuanceWizardPage />} />
+            <Route path="/uniformes/retours" element={<UniformReturnsPage />} />
+            <Route path="/uniformes/fiches/:employeeId" element={<UniformAgentFichePage />} />
+            <Route path="/uniformes/rapports" element={<UniformReportsPage />} />
           </Route>
 
           {/* 404 */}

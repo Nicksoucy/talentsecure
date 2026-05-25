@@ -416,20 +416,20 @@ model Client {
 }
 
 model Contact {
-  id        String   @id @default(uuid())
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  
+  id       String @id @default(uuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
   firstName String
   lastName  String
-  role      String?  // e.g. "DRH", "Directeur", "Comptable"
+  role      String? // e.g. "DRH", "Directeur", "Comptable"
   email     String?
   phone     String?
-  isPrimary Boolean  @default(false)
-  
+  isPrimary Boolean @default(false)
+
   // Metadata
-  isActive  Boolean  @default(true)
-  notes     String?  @db.Text
+  isActive Boolean @default(true)
+  notes    String? @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -440,18 +440,18 @@ model Contact {
 }
 
 model Interaction {
-  id        String   @id @default(uuid())
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  
-  type      String   // "EMAIL", "CALL", "MEETING", "NOTE"
-  direction String   // "INBOUND", "OUTBOUND"
+  id       String @id @default(uuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  type      String // "EMAIL", "CALL", "MEETING", "NOTE"
+  direction String // "INBOUND", "OUTBOUND"
   subject   String?
-  content   String?  @db.Text
-  
-  createdBy String   // User ID
-  user      User     @relation(fields: [createdBy], references: [id])
-  
+  content   String? @db.Text
+
+  createdBy String // User ID
+  user      User   @relation(fields: [createdBy], references: [id])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -672,8 +672,8 @@ model ProspectAnalysis {
   reasoning String @db.Text
 
   // Versioning — lets us re-score when the rubric or model evolves
-  rubricVersion String  // e.g. "v1"
-  model         String  // e.g. "claude-haiku-4-5-20251001"
+  rubricVersion String // e.g. "v1"
+  model         String // e.g. "claude-haiku-4-5-20251001"
   cvHash        String? // sha256 of the CV text used; null if no CV text was available
 
   // Cost tracking
@@ -921,9 +921,9 @@ model CandidateSkill {
   confidence      Float? // Score de confiance de l'IA (0-1)
 
   // Validation humaine
-  isVerified   Boolean   @default(false)
-  verifiedBy   String? // ID de l'utilisateur qui a vÃ©rifiÃ©
-  verifiedAt   DateTime?
+  isVerified    Boolean   @default(false)
+  verifiedBy    String? // ID de l'utilisateur qui a vÃ©rifiÃ©
+  verifiedAt    DateTime?
   rejectionNote String?   @db.Text // Note si la compÃ©tence est rejetÃ©e
 
   createdAt DateTime @default(now())
@@ -956,9 +956,9 @@ model ProspectSkill {
   confidence      Float? // Score de confiance de l'IA (0-1)
 
   // Validation humaine
-  isVerified   Boolean   @default(false)
-  verifiedBy   String? // ID de l'utilisateur qui a vérifié
-  verifiedAt   DateTime?
+  isVerified    Boolean   @default(false)
+  verifiedBy    String? // ID de l'utilisateur qui a vérifié
+  verifiedAt    DateTime?
   rejectionNote String?   @db.Text // Note si la compétence est rejetée
 
   createdAt DateTime @default(now())
@@ -988,10 +988,10 @@ model CvExtractionLog {
   processingTimeMs Int? // Temps de traitement en ms
 
   // AI details (if applicable)
-  aiModel         String? // "gpt-4", "claude-3-opus", etc.
-  promptTokens    Int? // Tokens utilisÃ©s dans le prompt
+  aiModel          String? // "gpt-4", "claude-3-opus", etc.
+  promptTokens     Int? // Tokens utilisÃ©s dans le prompt
   completionTokens Int? // Tokens utilisÃ©s dans la rÃ©ponse
-  totalCost       Float? // CoÃ»t estimÃ© en USD
+  totalCost        Float? // CoÃ»t estimÃ© en USD
 
   // Results
   success      Boolean @default(true)
@@ -1073,3 +1073,255 @@ model Employee {
   @@map("employees")
 }
 
+// ===========================================================================
+// UNIFORMES — Prêt / retour d'uniformes & équipements aux agents.
+// Reproduit les 2 formulaires papier XGuard (Prêt / Retour d'uniforme).
+// Le lien aux employés se fait par employeeId (String) SANS relation/FK Prisma
+// — n'altère pas la table employees ; les jointures sont explicites dans les
+// controllers (même esprit que convertedFromCandidateId).
+// Le registre uniform_stock_movements est la source de vérité auditable du
+// stock ; UniformVariant.quantityOnHand est un cache muté UNIQUEMENT dans la
+// même transaction qu'un mouvement.
+// ===========================================================================
+
+enum UniformDivision {
+  SECURITE
+  SIGNALISATION
+}
+
+enum UniformPieceType {
+  UNIFORME
+  EQUIPEMENT
+}
+
+enum UniformMovementType {
+  IN // réappro / retour réutilisable
+  OUT // remise à un agent
+  ADJUST // correction d'inventaire (quantity signé)
+  LOST // perdu
+  DAMAGED // endommagé
+}
+
+enum UniformItemCondition {
+  GOOD
+  DAMAGED
+  LOST
+  NOT_RETURNED // non retourné à la fin d'emploi (clause dernière paie)
+}
+
+enum UniformIssuanceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_RETURNED
+  RETURNED
+  CLOSED_TERMINATION
+  CANCELLED
+}
+
+enum UniformSignatureStatus {
+  PENDING
+  SENT
+  SIGNED
+  SKIPPED
+}
+
+enum UniformSignatureMethod {
+  REMOTE_SMS
+  COUNTER
+}
+
+model UniformItem {
+  id                     String           @id @default(uuid())
+  division               UniformDivision
+  type                   UniformPieceType @default(UNIFORME)
+  name                   String
+  isOneSize              Boolean          @default(false) // "Taille unique"
+  defaultReplacementCost Decimal          @default(0) @db.Decimal(10, 2)
+  sortOrder              Int              @default(0)
+  isActive               Boolean          @default(true)
+  createdById            String?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  variants UniformVariant[]
+
+  @@unique([division, name])
+  @@index([division])
+  @@index([type])
+  @@index([isActive])
+  @@map("uniform_items")
+}
+
+model UniformVariant {
+  id               String   @id @default(uuid())
+  itemId           String
+  size             String   @default("Unique") // grandeur libre ; "Unique" si one-size/équipement
+  sku              String?
+  barcode          String   @unique // valeur Code128 générée par le système
+  replacementCost  Decimal  @default(0) @db.Decimal(10, 2)
+  quantityOnHand   Int      @default(0) // cache — voir registre des mouvements
+  reorderThreshold Int?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  item          UniformItem            @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  movements     UniformStockMovement[]
+  issuanceLines UniformIssuanceLine[]
+  returnLines   UniformReturnLine[]
+
+  @@unique([itemId, size])
+  @@index([itemId])
+  @@index([barcode])
+  @@index([isActive])
+  @@map("uniform_variants")
+}
+
+model UniformStockMovement {
+  id          String              @id @default(uuid())
+  variantId   String
+  type        UniformMovementType
+  quantity    Int // magnitude positive (ADJUST peut être signé)
+  reason      String?             @db.Text
+  issuanceId  String? // back-ref si généré par une remise
+  returnId    String? // back-ref si généré par un retour
+  createdById String?
+  createdAt   DateTime            @default(now())
+
+  variant UniformVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([variantId])
+  @@index([type])
+  @@index([issuanceId])
+  @@index([returnId])
+  @@index([createdAt])
+  @@map("uniform_stock_movements")
+}
+
+model UniformIssuance {
+  id            String                @id @default(uuid())
+  employeeId    String // lien lâche vers employees.id (pas de FK)
+  division      UniformDivision
+  status        UniformIssuanceStatus @default(DRAFT)
+  notes         String?               @db.Text
+  issuedAt      DateTime? // remise physique = décrément du stock
+  dueReturnAt   DateTime?
+  totalLoanCost Decimal               @default(0) @db.Decimal(10, 2) // "Coût total du prêt"
+
+  // Consentements du formulaire
+  payrollConsentAccepted       Boolean @default(false) // prélèvement dernière paie
+  uniformPolicyConsentAccepted Boolean @default(false) // respect du port (Sécurité)
+  fitAttested                  Boolean @default(false) // a essayé, taille adéquate
+
+  // Signatures
+  employeeSignatureStoragePath String?
+  employerSignatureStoragePath String?
+  signatureStatus              UniformSignatureStatus  @default(PENDING)
+  signatureMethod              UniformSignatureMethod?
+  signedAt                     DateTime?
+  signedByName                 String?
+
+  // Lien public de signature (SMS)
+  signToken          String?   @unique
+  signTokenExpiresAt DateTime?
+  smsSentAt          DateTime?
+  ghlMessageId       String?
+
+  formPdfStoragePath String? // PDF du formulaire archivé (R2)
+  createdById        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  lines   UniformIssuanceLine[]
+  returns UniformReturn[]
+
+  @@index([employeeId])
+  @@index([division])
+  @@index([status])
+  @@index([signToken])
+  @@index([dueReturnAt])
+  @@index([createdAt])
+  @@map("uniform_issuances")
+}
+
+model UniformIssuanceLine {
+  id               String  @id @default(uuid())
+  issuanceId       String
+  variantId        String? // null si ligne "Autre"
+  customItemName   String? // libellé libre pour "Autre"
+  quantity         Int
+  unitCostSnapshot Decimal @default(0) @db.Decimal(10, 2)
+
+  issuance UniformIssuance @relation(fields: [issuanceId], references: [id], onDelete: Cascade)
+  variant  UniformVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([issuanceId])
+  @@index([variantId])
+  @@map("uniform_issuance_lines")
+}
+
+model UniformReturn {
+  id         String                @id @default(uuid())
+  issuanceId String
+  employeeId String // dénormalisé pour la fiche
+  status     UniformIssuanceStatus @default(DRAFT)
+  notes      String?               @db.Text
+  returnedAt DateTime?
+
+  employeeSignatureStoragePath String?
+  employerSignatureStoragePath String?
+  signatureStatus              UniformSignatureStatus  @default(PENDING)
+  signatureMethod              UniformSignatureMethod?
+  signedAt                     DateTime?
+  signedByName                 String?
+
+  signToken          String?   @unique
+  signTokenExpiresAt DateTime?
+  smsSentAt          DateTime?
+  ghlMessageId       String?
+
+  formPdfStoragePath String?
+  createdById        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  issuance UniformIssuance     @relation(fields: [issuanceId], references: [id], onDelete: Cascade)
+  lines    UniformReturnLine[]
+
+  @@index([issuanceId])
+  @@index([employeeId])
+  @@index([signToken])
+  @@index([createdAt])
+  @@map("uniform_returns")
+}
+
+model UniformReturnLine {
+  id                  String               @id @default(uuid())
+  returnId            String
+  variantId           String?
+  customItemName      String?
+  quantity            Int
+  condition           UniformItemCondition @default(GOOD)
+  unitReplacementCost Decimal              @default(0) @db.Decimal(10, 2) // snapshot pour figer la dette
+
+  return  UniformReturn   @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  variant UniformVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([returnId])
+  @@index([variantId])
+  @@index([condition])
+  @@map("uniform_return_lines")
+}
+
+model UniformDebtSettlement {
+  id          String   @id @default(uuid())
+  employeeId  String
+  amount      Decimal  @db.Decimal(10, 2)
+  method      String? // "PAYÉ" | "RETENUE PAIE" | "RADIÉ"
+  notes       String?  @db.Text
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([employeeId])
+  @@map("uniform_debt_settlements")
+}
