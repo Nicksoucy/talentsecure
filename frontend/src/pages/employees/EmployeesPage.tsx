@@ -213,7 +213,7 @@ export default function EmployeesPage() {
                         component="button"
                         type="button"
                         underline="hover"
-                        onClick={() => navigate(`/uniformes/fiches/${e.id}`)}
+                        onClick={() => navigate(`/employees/${e.id}`)}
                         sx={{ textAlign: 'left', fontWeight: 500, cursor: 'pointer' }}
                       >
                         {e.firstName} {e.lastName}
@@ -237,8 +237,8 @@ export default function EmployeesPage() {
                   </TableCell>
                   {isUniformStaff && (
                     <TableCell align="right">
-                      <Tooltip title="Fiche uniformes (voir / remettre / retourner)">
-                        <IconButton size="small" color="primary" onClick={() => navigate(`/uniformes/fiches/${e.id}`)}>
+                      <Tooltip title="Ouvrir le profil (gestion uniformes)">
+                        <IconButton size="small" color="primary" onClick={() => navigate(`/employees/${e.id}`)}>
                           <CheckroomIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
