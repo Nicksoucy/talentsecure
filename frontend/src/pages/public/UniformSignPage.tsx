@@ -27,6 +27,7 @@ export default function UniformSignPage() {
   const [cPolicy, setCPolicy] = useState(false);
   const [cFit, setCFit] = useState(false);
   const [done, setDone] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   const payload = data?.data;
 
@@ -37,7 +38,7 @@ export default function UniformSignPage() {
         signedByName: name,
         consents: { payroll: cPayroll, policy: cPolicy, fit: cFit },
       }),
-    onSuccess: () => setDone(true),
+    onSuccess: (data) => { setPdfUrl(data?.pdfUrl ?? null); setDone(true); },
   });
 
   if (isLoading) {
@@ -56,7 +57,15 @@ export default function UniformSignPage() {
   if (done) {
     return (
       <Container maxWidth="sm" sx={{ mt: 6 }}>
-        <Alert severity="success">Merci ! Votre signature a été enregistrée.</Alert>
+        <Alert severity="success" sx={{ mb: 2 }}>Merci ! Votre signature a été enregistrée.</Alert>
+        {pdfUrl && (
+          <Button fullWidth variant="contained" component="a" href={pdfUrl} target="_blank" rel="noopener">
+            Télécharger mon formulaire (PDF)
+          </Button>
+        )}
+        <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+          Conservez une copie de votre formulaire signé.
+        </Typography>
       </Container>
     );
   }

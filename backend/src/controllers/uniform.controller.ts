@@ -4,7 +4,7 @@ import { ApiError } from '../utils/apiError';
 import { applyMovement, computeHoldings, computeAmountOwed } from '../services/uniform-stock.service';
 import { generateUniqueBarcode, renderLabelsPdf, LabelData } from '../services/uniform-barcode.service';
 import { generateIssuancePdf, generateReturnPdf } from '../services/uniform-pdf.service';
-import { uploadBufferToR2 } from '../services/r2.service';
+import { uploadBufferToR2, getSignedFileUrl } from '../services/r2.service';
 import { uploadSignaturePng } from '../utils/signature';
 import { isTokenExpired } from '../utils/token';
 import {
@@ -559,6 +559,8 @@ export const submitSign = async (req: Request, res: Response, next: NextFunction
       return res.status(410).json({ error: 'Ce lien a expiré' });
     }
 
+    let storedPdfKey: string | null = null;
+
     if (found.kind === 'pret') {
       const key = await uploadSignaturePng(signatureBase64, `signatures/issuances/${found.record.id}-employee.png`);
       await prisma.uniformIssuance.update({
@@ -577,8 +579,9 @@ export const submitSign = async (req: Request, res: Response, next: NextFunction
         },
       });
       const pdf = await generateIssuancePdf(found.record.id);
-      const { key: pdfKey } = await uploadBufferToR2(pdf, `forms/issuances/${found.record.id}.pdf`, 'application/pdf');
-      await prisma.uniformIssuance.update({ where: { id: found.record.id }, data: { formPdfStoragePath: pdfKey } });
+      const up = await uploadBufferToR2(pdf, `forms/issuances/${found.record.id}.pdf`, 'application/pdf');
+      storedPdfKey = up.key;
+      await prisma.uniformIssuance.update({ where: { id: found.record.id }, data: { formPdfStoragePath: up.key } });
     } else {
       const key = await uploadSignaturePng(signatureBase64, `signatures/returns/${found.record.id}-employee.png`);
       await prisma.uniformReturn.update({
@@ -594,11 +597,20 @@ export const submitSign = async (req: Request, res: Response, next: NextFunction
         },
       });
       const pdf = await generateReturnPdf(found.record.id);
-      const { key: pdfKey } = await uploadBufferToR2(pdf, `forms/returns/${found.record.id}.pdf`, 'application/pdf');
-      await prisma.uniformReturn.update({ where: { id: found.record.id }, data: { formPdfStoragePath: pdfKey } });
+      const up = await uploadBufferToR2(pdf, `forms/returns/${found.record.id}.pdf`, 'application/pdf');
+      storedPdfKey = up.key;
+      await prisma.uniformReturn.update({ where: { id: found.record.id }, data: { formPdfStoragePath: up.key } });
     }
 
-    res.json({ message: 'Signature enregistrée. Merci !' });
+    let pdfUrl: string | null = null;
+    if (storedPdfKey) {
+      try {
+        pdfUrl = await getSignedFileUrl(storedPdfKey, 3600);
+      } catch {
+        pdfUrl = null;
+      }
+    }
+    res.json({ message: 'Signature enregistrée. Merci !', pdfUrl });
   } catch (error) {
     next(error);
   }

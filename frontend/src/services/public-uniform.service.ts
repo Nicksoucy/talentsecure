@@ -15,6 +15,6 @@ export const publicUniformService = {
     data: { signatureBase64: string; signedByName: string; consents?: { payroll?: boolean; policy?: boolean; fit?: boolean } }
   ) {
     const r = await publicApi.post(`/api/uniforms/sign/${token}`, data);
-    return r.data as { message: string };
+    return r.data as { message: string; pdfUrl?: string | null };
   },
 };
