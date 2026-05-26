@@ -5,6 +5,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Tabs, Tab, Tooltip,
 } from '@mui/material';
 import TuneIcon from '@mui/icons-material/Tune';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 
@@ -36,9 +37,31 @@ export default function UniformInventoryPage() {
   const rows = stock.data?.data.rows || [];
   const totals = stock.data?.data.totals;
 
+  const handleExport = async () => {
+    try {
+      const blob = await uniformService.exportInventoryXlsx();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Inventaire_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      enqueueSnackbar('Excel téléchargé', { variant: 'success' });
+    } catch (e: any) {
+      enqueueSnackbar(e?.response?.data?.error || "Échec de l'export", { variant: 'error' });
+    }
+  };
+
   return (
     <Box>
-      <Typography variant="h5" mb={2}>Inventaire</Typography>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+        <Typography variant="h5">Inventaire</Typography>
+        <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={handleExport}>
+          Exporter Excel
+        </Button>
+      </Stack>
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
         <Tab label="Stock" />
         <Tab label="Mouvements" />

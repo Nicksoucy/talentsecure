@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import * as XLSX from 'xlsx';
 import { prisma } from '../config/database';
 import { ApiError } from '../utils/apiError';
 import { applyMovement, computeHoldings, computeAmountOwed } from '../services/uniform-stock.service';
@@ -457,6 +458,74 @@ export const reportLosses = async (_req: Request, res: Response, next: NextFunct
       employeeName: empMap.get(r.employeeId) || r.employeeId,
     }));
     res.json({ data: { rows, totals: { totalCost, totalUnits } } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Exporte l'inventaire complet en .xlsx (2 feuilles : Sécurité, Signalisation),
+ * format proche du fichier source XGuard : Pièce | QT | (taille | empl.) × 9.
+ */
+export const exportInventoryXlsx = async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
+    const variants = await prisma.uniformVariant.findMany({
+      where: { isActive: true },
+      include: { item: true },
+      orderBy: [{ item: { division: 'asc' } }, { item: { sortOrder: 'asc' } }, { item: { name: 'asc' } }, { size: 'asc' }],
+    });
+
+    type Row = { item: any; variants: any[] };
+    const grouped = { SECURITE: new Map<string, Row>(), SIGNALISATION: new Map<string, Row>() };
+    for (const v of variants) {
+      const map = grouped[v.item.division as 'SECURITE' | 'SIGNALISATION'];
+      const e = map.get(v.itemId) || { item: v.item, variants: [] };
+      e.variants.push(v);
+      map.set(v.itemId, e);
+    }
+
+    const buildSheet = (groups: Map<string, Row>) => {
+      const aoa: any[][] = [];
+      const header: any[] = ["Pièce d'uniforme", 'Type', 'QT'];
+      for (const s of SIZES) header.push(s, `Empl. ${s}`);
+      header.push('Coût unit.', 'Valeur totale');
+      aoa.push(header);
+
+      for (const { item, variants } of groups.values()) {
+        const totalQty = variants.reduce((s, v) => s + v.quantityOnHand, 0);
+        const totalVal = variants.reduce((s, v) => s + v.quantityOnHand * Number(v.replacementCost), 0);
+        const bySize = new Map(variants.map((v) => [v.size, v]));
+        const row: any[] = [item.name, item.type === 'EQUIPEMENT' ? 'Équipement' : 'Uniforme', totalQty];
+        if (item.isOneSize) {
+          const uniq = bySize.get('Unique');
+          row.push(uniq?.quantityOnHand ?? '', 'Taille unique');
+          for (let i = 1; i < SIZES.length; i++) row.push('', '');
+        } else {
+          for (const s of SIZES) {
+            const v = bySize.get(s);
+            row.push(v && v.quantityOnHand > 0 ? v.quantityOnHand : '', v?.emplacement ?? '');
+          }
+        }
+        row.push(Number(item.defaultReplacementCost), totalVal);
+        aoa.push(row);
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      // Largeurs de colonnes
+      ws['!cols'] = [{ wch: 38 }, { wch: 11 }, { wch: 6 }, ...Array(SIZES.length * 2).fill({ wch: 6 }), { wch: 11 }, { wch: 13 }];
+      return ws;
+    };
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, buildSheet(grouped.SECURITE), 'Inventaire sécurité');
+    XLSX.utils.book_append_sheet(wb, buildSheet(grouped.SIGNALISATION), 'Inventaire signalisation');
+
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const today = new Date().toISOString().split('T')[0];
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="Inventaire_${today}.xlsx"`);
+    res.send(buf);
   } catch (error) {
     next(error);
   }

@@ -187,4 +187,8 @@ export const uniformService = {
     const r = await api.get('/api/uniforms/stats/summary');
     return r.data as { data: any };
   },
+  async exportInventoryXlsx(): Promise<Blob> {
+    const r = await api.get('/api/uniforms/inventory/export', { responseType: 'blob' });
+    return r.data as Blob;
+  },
 };

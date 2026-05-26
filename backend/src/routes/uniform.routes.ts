@@ -29,6 +29,9 @@ router.get('/reports/losses', ctrl.reportLosses);
 // Inventaire — mouvements
 router.get('/movements', ctrl.listMovements);
 
+// Export Excel de l'inventaire complet
+router.get('/inventory/export', ctrl.exportInventoryXlsx);
+
 // Étiquettes
 router.post('/labels', ctrl.labelsSheet);
 
