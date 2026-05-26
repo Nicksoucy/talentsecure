@@ -111,7 +111,7 @@ export default function UniformReturnsPage() {
   });
   const counterSign = useMutation({
     mutationFn: () => uniformService.counterSignReturn(returnId!, { employeeSignatureBase64: empSig || undefined, employerSignatureBase64: emprSig || undefined, signedByName }),
-    onSuccess: () => { enqueueSnackbar('Signature enregistrée', { variant: 'success' }); navigate(`/uniformes/fiches/${employee.id}`); },
+    onSuccess: () => { enqueueSnackbar('Signature enregistrée', { variant: 'success' }); navigate(`/employees/${employee.id}`); },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
 
@@ -190,7 +190,7 @@ export default function UniformReturnsPage() {
           <Alert severity="success" sx={{ mb: 2 }}>Retour finalisé. Le stock en bon état a été réintégré ; pertes/dommages portés au montant dû.</Alert>
           <Stack direction="row" spacing={2} mb={2}>
             <Button variant="outlined" startIcon={<SendIcon />} onClick={() => sendSms.mutate()} disabled={sendSms.isPending}>Envoyer le lien par SMS</Button>
-            <Button variant="text" onClick={() => navigate(`/uniformes/fiches/${employee.id}`)}>Terminer plus tard</Button>
+            <Button variant="text" onClick={() => navigate(`/employees/${employee.id}`)}>Terminer plus tard</Button>
           </Stack>
           <Divider sx={{ my: 2 }}>ou signature au comptoir</Divider>
           <Stack spacing={2}>

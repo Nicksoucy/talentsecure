@@ -1,5 +1,41 @@
 # Changelog - TalentSecure
 
+## [2026-05-26] - Module de gestion des uniformes
+
+### Nouveau module complet
+- ✅ **Gestion des uniformes & équipements** pour les agents (divisions Sécurité / Signalisation), accessible aux rôles `ADMIN` + `RH_RECRUITER`.
+- **Catalogue** par grandeur avec code-barres Code128/QR + étiquettes imprimables (bwip-js).
+- **Inventaire** auditable via registre des mouvements (IN/OUT/ADJUST), réapprovisionnement, ajustement.
+- **Remise (prêt)** :
+  - Grille type formulaire XGuard (sections Uniforme / Équipement par division).
+  - **Signature de l'employeur obligatoire avant l'agent**.
+  - Agent signe par **SMS via GHL** (lien public tokenisé) ou au comptoir.
+  - PDF du formulaire généré et archivé ; **3 photos de référence** (port de l'uniforme) intégrées pour la division Sécurité.
+  - L'agent peut **télécharger son PDF** signé.
+- **Retour** : qté + état (Bon → réintègre le stock ; Endommagé / Perdu → montant dû).
+- **Profil employé** (`/employees/:id`) : infos de base + détentions actuelles, historique des transactions, montant dû, règlements, clôture fin d'emploi.
+- **Rapports** : niveaux de stock (alertes bas), retours en retard, pertes/dommages.
+
+### Architecture
+- 8 tables Prisma + 7 enums (`uniform_items`, `uniform_variants`, `uniform_stock_movements`, `uniform_issuances`/`_lines`, `uniform_returns`/`_lines`, `uniform_debt_settlements`).
+- Migration manuelle additive (`prisma db execute`) — n'altère pas les tables existantes.
+- Lien aux employés via `employeeId String` sans FK (n'altère pas la table `employees`).
+- Backend : routes sous `/api/uniforms` (ADMIN + RH) + signature publique sans auth, rate-limitée.
+- Frontend : **un seul onglet « Uniformes »** dans le menu, avec sous-onglets (Catalogue · Inventaire · Remise · Retour · Rapports) + accès depuis le profil employé.
+
+### Intégrations
+- **GHL** : envoi SMS via `POST /conversations/messages`. Correction : la résolution de contact utilise le param `number` (et non `phone`).
+- **Cloudflare R2** : stockage des signatures (PNG) et des PDF des formulaires.
+
+### Fichiers principaux ajoutés
+- Backend : `backend/src/{routes,controllers,services,scripts,constants,utils}/uniform*` (+ `signature.ts`, `sms.service.ts`, `uniform-photos.ts`).
+- Migration : `backend/prisma/migrations/20260525000000_add_uniform_management/migration.sql`.
+- Frontend : `frontend/src/pages/uniformes/*` (hub + composants), `frontend/src/pages/employees/EmployeeDetailPage.tsx`, `frontend/src/pages/public/UniformSignPage.tsx`.
+
+### Dépendances ajoutées
+- Backend : `bwip-js`.
+- Frontend : `react-signature-canvas`, `@zxing/browser`.
+
 ## [2025-01-21] - Corrections d'encodage Frontend
 
 ### Corrections majeures

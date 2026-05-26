@@ -31,7 +31,6 @@ const UniformsCataloguePage = lazy(() => import('./pages/uniformes/UniformsCatal
 const UniformInventoryPage = lazy(() => import('./pages/uniformes/UniformInventoryPage'));
 const UniformIssuanceWizardPage = lazy(() => import('./pages/uniformes/UniformIssuanceWizardPage'));
 const UniformReturnsPage = lazy(() => import('./pages/uniformes/UniformReturnsPage'));
-const UniformAgentFichePage = lazy(() => import('./pages/uniformes/UniformAgentFichePage'));
 const UniformReportsPage = lazy(() => import('./pages/uniformes/UniformReportsPage'));
 const ClientLoginPage = lazy(() => import('./pages/client/ClientLoginPage'));
 const ClientRegisterPage = lazy(() => import('./pages/client/ClientRegisterPage'));
@@ -135,7 +134,6 @@ function App() {
               <Route path="retours" element={<UniformReturnsPage />} />
               <Route path="rapports" element={<UniformReportsPage />} />
             </Route>
-            <Route path="/uniformes/fiches/:employeeId" element={<UniformAgentFichePage />} />
           </Route>
 
           {/* 404 */}

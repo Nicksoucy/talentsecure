@@ -18,8 +18,8 @@ const statusLabel: Record<string, string> = {
 
 /**
  * Panneau de gestion d'uniforme pour un agent (détentions, transactions,
- * montant dû, remise/retour, clôture). Réutilisé par la page profil employé et
- * la route /uniformes/fiches/:id.
+ * montant dû, remise/retour, clôture). Réutilisé par la page profil employé
+ * (/employees/:id).
  */
 export default function UniformFichePanel({ employeeId }: { employeeId: string }) {
   const navigate = useNavigate();
