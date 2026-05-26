@@ -70,6 +70,8 @@ export interface UniformIssuance {
   signatureMethod?: UniformSignatureMethod | null;
   signedAt?: string | null;
   smsSentAt?: string | null;
+  employeeSignatureStoragePath?: string | null;
+  employerSignatureStoragePath?: string | null;
   formPdfStoragePath?: string | null;
   itemsCount?: number;
   createdAt: string;

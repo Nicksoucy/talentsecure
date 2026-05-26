@@ -8,6 +8,7 @@ import {
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
+import SignaturePad from './SignaturePad';
 
 const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
 const statusLabel: Record<string, string> = {
@@ -41,6 +42,20 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
   const closeTerm = useMutation({
     mutationFn: (id: string) => uniformService.closeTermination(id),
     onSuccess: () => { enqueueSnackbar('Fin d’emploi clôturée', { variant: 'success' }); qc.invalidateQueries({ queryKey: ['uniform-fiche', employeeId] }); },
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
+  });
+
+  // Signature employeur a posteriori (cas où l'agent a signé via SMS)
+  const [signEmployerFor, setSignEmployerFor] = useState<string | null>(null);
+  const [employerSig, setEmployerSig] = useState<string | null>(null);
+  const closeEmployerDlg = () => { setSignEmployerFor(null); setEmployerSig(null); };
+  const signEmployer = useMutation({
+    mutationFn: () => uniformService.counterSignIssuance(signEmployerFor!, { employerSignatureBase64: employerSig! }),
+    onSuccess: () => {
+      enqueueSnackbar('Signature employeur enregistrée — PDF mis à jour', { variant: 'success' });
+      closeEmployerDlg();
+      qc.invalidateQueries({ queryKey: ['uniform-fiche', employeeId] });
+    },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
 
@@ -100,6 +115,9 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
                 <TableCell align="right">{money(i.totalLoanCost)}</TableCell>
                 <TableCell align="right">
                   <Button size="small" startIcon={<PictureAsPdfIcon />} onClick={() => openPdf('issuance', i.id)}>PDF</Button>
+                  {!i.employerSignatureStoragePath && i.status !== 'DRAFT' && i.status !== 'CANCELLED' && (
+                    <Button size="small" color="primary" onClick={() => setSignEmployerFor(i.id)}>Signer employeur</Button>
+                  )}
                   {['ISSUED', 'PARTIALLY_RETURNED'].includes(i.status) && (
                     <Button size="small" color="error" onClick={() => closeTerm.mutate(i.id)}>Clôturer fin d'emploi</Button>
                   )}
@@ -141,6 +159,17 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
           </Table>
         </Paper>
       )}
+
+      <Dialog open={!!signEmployerFor} onClose={closeEmployerDlg} maxWidth="sm" fullWidth>
+        <DialogTitle>Signature de l'employeur</DialogTitle>
+        <DialogContent>
+          <SignaturePad label="Signature" onChange={setEmployerSig} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeEmployerDlg}>Annuler</Button>
+          <Button variant="contained" disabled={!employerSig || signEmployer.isPending} onClick={() => signEmployer.mutate()}>Enregistrer</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={settleDlg} onClose={() => setSettleDlg(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Enregistrer un règlement</DialogTitle>
