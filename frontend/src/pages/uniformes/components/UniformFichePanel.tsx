@@ -7,9 +7,12 @@ import {
 } from '@mui/material';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import EditIcon from '@mui/icons-material/Edit';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import SignaturePad from './SignaturePad';
+import IssuanceLinesEditor from './IssuanceLinesEditor';
+import type { UniformIssuance } from '@/types/uniform';
 
 const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
 const statusLabel: Record<string, string> = {
@@ -66,6 +69,9 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
       window.open(r.data.url, '_blank');
     } catch { enqueueSnackbar('PDF indisponible', { variant: 'error' }); }
   };
+
+  // Édition des lignes d'une remise (DRAFT ou historique sans impact stock).
+  const [editLinesFor, setEditLinesFor] = useState<UniformIssuance | null>(null);
 
   // Téléversement du PDF original (utile pour les remises historiques).
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
@@ -149,6 +155,12 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
                       }}
                     />
                   </Button>
+                  {/* "Modifier les pièces" : DRAFT, ou ISSUED historique (papier, sans mouvement stock) */}
+                  {(i.status === 'DRAFT' || (i.status === 'ISSUED' && i.signatureMethod === 'COUNTER')) && (
+                    <Button size="small" startIcon={<EditIcon />} onClick={() => setEditLinesFor(i as UniformIssuance)}>
+                      Modifier les pièces
+                    </Button>
+                  )}
                   {!i.employerSignatureStoragePath && i.status !== 'DRAFT' && i.status !== 'CANCELLED' && (
                     <Button size="small" color="primary" onClick={() => setSignEmployerFor(i.id)}>Signer employeur</Button>
                   )}
@@ -192,6 +204,15 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
             </TableBody>
           </Table>
         </Paper>
+      )}
+
+      {editLinesFor && (
+        <IssuanceLinesEditor
+          open={!!editLinesFor}
+          onClose={() => setEditLinesFor(null)}
+          issuance={editLinesFor}
+          employeeId={employeeId}
+        />
       )}
 
       <Dialog open={!!signEmployerFor} onClose={closeEmployerDlg} maxWidth="sm" fullWidth>

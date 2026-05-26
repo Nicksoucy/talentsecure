@@ -142,7 +142,18 @@ export const updateIssuance = async (req: Request, res: Response, next: NextFunc
   try {
     const existing = await prisma.uniformIssuance.findUnique({ where: { id: req.params.id } });
     if (!existing) throw new ApiError(404, 'Remise introuvable');
-    if (existing.status !== 'DRAFT') throw new ApiError(400, 'Seules les remises en brouillon sont modifiables');
+
+    // DRAFT toujours modifiable. ISSUED historique (aucun mouvement de stock) : modifiable
+    // aussi — c'est le cas typique d'une remise papier dont on remplit les pièces a posteriori.
+    if (existing.status !== 'DRAFT') {
+      const movementCount = await prisma.uniformStockMovement.count({
+        where: { issuanceId: existing.id, type: 'OUT' },
+      });
+      const isHistorical = existing.signatureMethod === 'COUNTER' && movementCount === 0;
+      if (!isHistorical) {
+        throw new ApiError(400, 'Seules les remises en brouillon (ou historiques sans impact stock) sont modifiables');
+      }
+    }
 
     const { dueReturnAt, notes, lines } = req.body;
     const lineData = lines ? await buildLines(lines) : null;
@@ -153,6 +164,9 @@ export const updateIssuance = async (req: Request, res: Response, next: NextFunc
         await tx.uniformIssuanceLine.createMany({
           data: lineData.map((l) => ({ ...l, issuanceId: existing.id })),
         });
+        // Recalcule le coût total (snapshot)
+        const total = lineData.reduce((s, l) => s + l.quantity * l.unitCostSnapshot, 0);
+        await tx.uniformIssuance.update({ where: { id: existing.id }, data: { totalLoanCost: total } });
       }
       return tx.uniformIssuance.update({
         where: { id: existing.id },
