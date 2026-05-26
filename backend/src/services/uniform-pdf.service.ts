@@ -99,8 +99,10 @@ function table(doc: PDFKit.PDFDocument, lines: RenderLine[], withCondition: bool
     y += rowH;
   }
   doc.y = y + 6;
-  doc.font('Helvetica-Bold').fontSize(10).text(`Coût total : ${money(grand)}`, { align: 'right' });
+  doc.x = left;
+  doc.font('Helvetica-Bold').fontSize(10).text(`Coût total : ${money(grand)}`, { align: 'right', width });
   doc.moveDown(0.6);
+  doc.x = left;
   return grand;
 }
 
@@ -162,7 +164,8 @@ export async function generateIssuancePdf(issuanceId: string): Promise<Buffer> {
   table(doc, lines, false);
 
   doc.moveDown(0.4);
-  doc.font('Helvetica').fontSize(8).fillColor('#000000').text(UNIFORM_CONSENT_PAYROLL, { align: 'justify' });
+  doc.x = doc.page.margins.left;
+  doc.font('Helvetica').fontSize(9).fillColor('#000000').text(UNIFORM_CONSENT_PAYROLL, { align: 'justify' });
   if (issuance.division === 'SECURITE') {
     doc.moveDown(0.4);
     doc.font('Helvetica').text(UNIFORM_CONSENT_POLICY, { align: 'justify' });
