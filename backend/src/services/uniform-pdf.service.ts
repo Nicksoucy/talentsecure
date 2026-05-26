@@ -11,6 +11,7 @@ import {
   UNIFORM_CONSENT_POLICY,
   UNIFORM_FIT_ATTESTATION,
 } from '../constants/uniform';
+import { UNIFORM_POLICY_PHOTOS } from '../constants/uniform-photos';
 
 function pdfToBuffer(doc: PDFKit.PDFDocument): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -164,9 +165,29 @@ export async function generateIssuancePdf(issuanceId: string): Promise<Buffer> {
   doc.font('Helvetica').fontSize(8).fillColor('#000000').text(UNIFORM_CONSENT_PAYROLL, { align: 'justify' });
   if (issuance.division === 'SECURITE') {
     doc.moveDown(0.4);
-    doc.text(UNIFORM_CONSENT_POLICY, { align: 'justify' });
+    doc.font('Helvetica').text(UNIFORM_CONSENT_POLICY, { align: 'justify' });
     doc.moveDown(0.3);
     doc.font('Helvetica-Oblique').text(UNIFORM_FIT_ATTESTATION);
+
+    // Photos de référence du port de l'uniforme
+    doc.moveDown(0.4);
+    const left = doc.page.margins.left;
+    const gap = 14;
+    const pw = 95;
+    const ph = 210;
+    let py = doc.y;
+    if (py + ph > doc.page.height - doc.page.margins.bottom) {
+      doc.addPage();
+      py = doc.y;
+    }
+    UNIFORM_POLICY_PHOTOS.forEach((b64, idx) => {
+      try {
+        doc.image(Buffer.from(b64, 'base64'), left + idx * (pw + gap), py, { width: pw, height: ph });
+      } catch {
+        /* image ignorée si invalide */
+      }
+    });
+    doc.y = py + ph + 8;
   }
 
   await signatureBlock(doc, {
