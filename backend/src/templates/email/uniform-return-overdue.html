@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>⚠️ Uniforme non retourné — prélèvement requis</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #1a1a1a; max-width: 640px; margin: 0 auto; padding: 24px;">
+  <h2 style="color: #dc2626;">⚠️ Uniforme NON retourné — Action paie requise</h2>
+
+  <p>La date butoir de retour est <strong>dépassée depuis {{daysOverdue}} jour(s)</strong> sans
+  retour finalisé. Conformément au consentement signé par l'agent, le montant total du prêt doit
+  être prélevé sur sa <strong>dernière paie</strong>.</p>
+
+  <h3>Détails</h3>
+  <ul>
+    <li><strong>Agent</strong> : {{employeeName}}</li>
+    <li><strong>Date butoir</strong> : {{dueReturnAt}} (dépassée)</li>
+    <li><strong>Montant à prélever</strong> : <span style="color: #dc2626; font-size: 18px;"><strong>{{totalLoanCost}} $</strong></span></li>
+  </ul>
+
+  <h3>Pièces non retournées</h3>
+  <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+    <thead>
+      <tr style="background: #fee2e2;">
+        <th style="text-align: left; padding: 8px; border: 1px solid #fecaca;">Pièce</th>
+        <th style="text-align: left; padding: 8px; border: 1px solid #fecaca;">Taille</th>
+        <th style="text-align: right; padding: 8px; border: 1px solid #fecaca;">Qté</th>
+        <th style="text-align: right; padding: 8px; border: 1px solid #fecaca;">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each lines}}
+      <tr>
+        <td style="padding: 8px; border: 1px solid #fecaca;">{{itemName}}</td>
+        <td style="padding: 8px; border: 1px solid #fecaca;">{{size}}</td>
+        <td style="padding: 8px; border: 1px solid #fecaca; text-align: right;">{{quantity}}</td>
+        <td style="padding: 8px; border: 1px solid #fecaca; text-align: right;">{{lineTotal}} $</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+
+  <p style="margin-top: 24px;">
+    <strong>Confirmer le prélèvement et clôturer la dette</strong> via la fiche agent :
+  </p>
+  <p>
+    <a href="{{appUrl}}/employees/{{employeeId}}"
+       style="background: #dc2626; color: white; padding: 12px 20px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">
+      Confirmer le prélèvement
+    </a>
+  </p>
+
+  <hr style="margin: 32px 0; border: 0; border-top: 1px solid #e5e7eb;">
+  <p style="font-size: 12px; color: #6b7280;">
+    Cet email est envoyé à <strong>rh@xguard.ca</strong> ET <strong>paie@xguard.ca</strong>.
+    Veuillez confirmer entre vous la décision avant le prélèvement effectif.
+  </p>
+</body>
+</html>

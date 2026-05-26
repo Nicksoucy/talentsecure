@@ -33,6 +33,7 @@ import {
   Checkroom as CheckroomIcon,
 } from '@mui/icons-material';
 import { useAuthStore } from '@/store/authStore';
+import NotificationBell from './components/NotificationBell';
 import { authService } from '@/services/auth.service';
 
 const DRAWER_WIDTH = 240;
@@ -134,8 +135,9 @@ const MainLayout = () => {
               'TalentSecure'}
           </Typography>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Typography variant="body2">
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <NotificationBell />
+            <Typography variant="body2" sx={{ ml: 1 }}>
               {user?.firstName} {user?.lastName}
             </Typography>
             <IconButton onClick={handleMenuOpen} size="small">

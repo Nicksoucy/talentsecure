@@ -32,6 +32,7 @@ const UniformInventoryPage = lazy(() => import('./pages/uniformes/UniformInvento
 const UniformIssuanceWizardPage = lazy(() => import('./pages/uniformes/UniformIssuanceWizardPage'));
 const UniformReturnsPage = lazy(() => import('./pages/uniformes/UniformReturnsPage'));
 const UniformReportsPage = lazy(() => import('./pages/uniformes/UniformReportsPage'));
+const UniformWashBatchesPage = lazy(() => import('./pages/uniformes/UniformWashBatchesPage'));
 const ClientLoginPage = lazy(() => import('./pages/client/ClientLoginPage'));
 const ClientRegisterPage = lazy(() => import('./pages/client/ClientRegisterPage'));
 const ClientDashboardPage = lazy(() => import('./pages/client/ClientDashboardPage'));
@@ -132,6 +133,8 @@ function App() {
               <Route path="inventaire" element={<UniformInventoryPage />} />
               <Route path="remises/nouvelle" element={<UniformIssuanceWizardPage />} />
               <Route path="retours" element={<UniformReturnsPage />} />
+              <Route path="lavage" element={<UniformWashBatchesPage />} />
+              <Route path="lavage/:id" element={<UniformWashBatchesPage />} />
               <Route path="rapports" element={<UniformReportsPage />} />
             </Route>
           </Route>

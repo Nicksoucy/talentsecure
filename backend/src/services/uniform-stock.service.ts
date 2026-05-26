@@ -24,17 +24,30 @@ export interface MovementInput {
   createdById?: string | null;
 }
 
-/** Calcule le delta signé sur le stock selon le type de mouvement. */
+/** Calcule le delta signé sur le stock selon le type de mouvement.
+ *
+ * V2 — Cycle de lavage :
+ *   - WASH_IN : pièce sort du stock disponible vers un lot de lavage (delta -)
+ *   - WASH_OUT_GOOD : pièce revient du lot vers le stock (delta +)
+ *   - WASH_OUT_DAMAGED : pièce du lot vers la poubelle — déjà comptée comme sortie
+ *     via WASH_IN, donc delta=0 (audit pur)
+ *   - DISPOSAL : sortie définitive explicite (delta 0, audit)
+ */
 function signedDelta(type: UniformMovementType, quantity: number): number {
   switch (type) {
     case 'IN':
+    case 'WASH_OUT_GOOD':
       return Math.abs(quantity);
     case 'OUT':
     case 'LOST':
     case 'DAMAGED':
+    case 'WASH_IN':
       return -Math.abs(quantity);
     case 'ADJUST':
       return quantity; // signé tel quel
+    case 'WASH_OUT_DAMAGED':
+    case 'DISPOSAL':
+      return 0; // déjà sorti du stock (WASH_IN ou OUT précédent), événement audit
     default:
       return 0;
   }
@@ -165,4 +178,62 @@ export async function computeAmountOwed(employeeId: string): Promise<{
   const settled = Number(settlementsAgg._sum.amount ?? 0);
 
   return { charged, settled, owed: Math.max(0, charged - settled) };
+}
+
+/**
+ * V2 — Calcule, par variante, le nombre de pièces actuellement dans un cycle
+ * de lavage = Σ(WASH_IN absolu) − Σ(WASH_OUT_GOOD + WASH_OUT_DAMAGED absolus).
+ * Si `variantId` est fourni, ne retourne que cette clé ; sinon toutes.
+ */
+export async function computeInWashing(
+  variantId?: string,
+): Promise<Map<string, number>> {
+  const where: any = { type: { in: ['WASH_IN', 'WASH_OUT_GOOD', 'WASH_OUT_DAMAGED'] } };
+  if (variantId) where.variantId = variantId;
+
+  const grouped = await prisma.uniformStockMovement.groupBy({
+    by: ['variantId', 'type'],
+    where,
+    _sum: { quantity: true },
+  });
+
+  const map = new Map<string, number>();
+  for (const g of grouped) {
+    const sum = Math.abs(Number(g._sum.quantity ?? 0));
+    const cur = map.get(g.variantId) ?? 0;
+    if (g.type === 'WASH_IN') {
+      map.set(g.variantId, cur + sum);
+    } else {
+      // WASH_OUT_GOOD ou WASH_OUT_DAMAGED → sortie du lavage
+      map.set(g.variantId, cur - sum);
+    }
+  }
+  // Filtre les variants avec 0 (rien en lavage actuellement)
+  for (const [k, v] of map) if (v <= 0) map.delete(k);
+  return map;
+}
+
+/**
+ * V2 — Audit : compare le cache quantityOnHand avec Σ des mouvements.
+ * Retourne { cache, computedFromLedger, drift } pour détecter les divergences
+ * (devrait toujours être 0 si on n'a jamais bypassé applyMovement).
+ */
+export async function auditVariantStock(variantId: string): Promise<{
+  cache: number;
+  computedFromLedger: number;
+  drift: number;
+}> {
+  const variant = await prisma.uniformVariant.findUnique({ where: { id: variantId } });
+  if (!variant) throw new ApiError(404, 'Variante introuvable');
+
+  const agg = await prisma.uniformStockMovement.aggregate({
+    where: { variantId },
+    _sum: { quantity: true },
+  });
+  const computedFromLedger = Number(agg._sum.quantity ?? 0);
+  return {
+    cache: variant.quantityOnHand,
+    computedFromLedger,
+    drift: variant.quantityOnHand - computedFromLedger,
+  };
 }

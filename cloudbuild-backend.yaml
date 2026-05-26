@@ -59,6 +59,9 @@ steps:
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
+      # V2 — min-instances=1 nécessaire pour faire tourner node-cron (scheduler)
+      # in-process : sans cela Cloud Run scale-down détruit les jobs.
+      - '--min-instances=1'
     id: 'deploy-service'
 
 images:

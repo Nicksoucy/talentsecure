@@ -5,6 +5,7 @@ import { publicShareLimiter } from '../middleware/rate-limit.middleware';
 import * as ctrl from '../controllers/uniform.controller';
 import * as iss from '../controllers/uniform-issuance.controller';
 import * as ret from '../controllers/uniform-return.controller';
+import * as wash from '../controllers/uniform-wash-batch.controller';
 
 const router = Router();
 
@@ -90,6 +91,16 @@ router.post('/returns/:id/finalize', ret.finalizeReturn);
 router.post('/returns/:id/send-sms', ret.sendReturnSms);
 router.post('/returns/:id/counter-sign', ret.counterSignReturn);
 router.get('/returns/:id/pdf', ret.getReturnPdfUrl);
+
+// Lots de lavage (V2)
+router.get('/wash-batches', wash.list);
+router.post('/wash-batches', wash.create);
+router.get('/wash-batches/:id', wash.get);
+router.post('/wash-batches/:id/items', wash.addItems);
+router.post('/wash-batches/:id/send', wash.send);
+router.post('/wash-batches/:id/return', wash.ret);
+router.post('/wash-batches/:id/inspect', wash.inspect);
+router.post('/wash-batches/:id/cancel', wash.cancel);
 
 // Fiche agent & règlements
 router.get('/employees/:employeeId/holdings', ret.getHoldings);

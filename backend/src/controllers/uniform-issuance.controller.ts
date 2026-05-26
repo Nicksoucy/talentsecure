@@ -8,6 +8,9 @@ import { uploadSignaturePng } from '../utils/signature';
 import { sendSignatureSms } from '../services/sms.service';
 import { generateShareToken, getTokenExpiration } from '../utils/token';
 import { SIGN_TOKEN_DAYS } from '../constants/uniform';
+import { notify } from '../services/notification.service';
+import { subtractBusinessHours } from '../utils/business-days';
+import { computeAmountOwed } from '../services/uniform-stock.service';
 
 const userId = (req: Request): string | undefined => (req.user as any)?.id;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -253,6 +256,29 @@ export const finalizeIssuance = async (req: Request, res: Response, next: NextFu
       }
     }
 
+    // V2 — Planification du rappel DUE_SOON si date butoir définie.
+    if (!isHistorical && existing.dueReturnAt) {
+      const employee = await prisma.employee.findUnique({ where: { id: existing.employeeId } });
+      const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Agent';
+      const scheduledFor = subtractBusinessHours(existing.dueReturnAt, 24);
+      notify({
+        type: 'UNIFORM_RETURN_DUE_SOON',
+        channels: ['EMAIL', 'IN_APP'],
+        audience: 'RH',
+        scheduledFor,
+        dedupKey: `due-soon-${existing.id}`,
+        title: `Rappel : retour d'uniforme de ${employeeName} dans 24h ouvrables`,
+        message: `Date butoir : ${existing.dueReturnAt.toISOString().split('T')[0]} · Montant à risque : ${totalLoanCost.toFixed(2)} $`,
+        link: `/employees/${existing.employeeId}`,
+        payload: {
+          issuanceId: existing.id,
+          employeeId: existing.employeeId,
+          dueReturnAt: existing.dueReturnAt.toISOString(),
+          totalLoanCost,
+        },
+      }).catch((e) => console.error('notify failed:', e));
+    }
+
     res.json({
       message: isHistorical
         ? 'Remise historique enregistrée — stock NON modifié'
@@ -455,8 +481,40 @@ export const closeTermination = async (req: Request, res: Response, next: NextFu
         },
       });
       await tx.uniformIssuance.update({ where: { id: issuance.id }, data: { status: 'CLOSED_TERMINATION' } });
+      // Annule la notif DUE_SOON encore en attente
+      await tx.notification.updateMany({
+        where: { dedupKey: { startsWith: `due-soon-${issuance.id}::` }, status: 'PENDING' },
+        data: { status: 'FAILED', failedReason: 'Issuance clôturée (terminaison)' },
+      });
       return ret;
     });
+
+    // V2 — Notif RH + PAIE : fin d'emploi clôturée avec dette à prélever
+    try {
+      const owed = await computeAmountOwed(issuance.employeeId);
+      const employee = await prisma.employee.findUnique({ where: { id: issuance.employeeId } });
+      const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Agent';
+      notify({
+        type: 'UNIFORM_TERMINATION_CLOSED',
+        channels: ['EMAIL', 'IN_APP'],
+        audience: 'RH',
+        title: `Fin d'emploi clôturée — ${employeeName}`,
+        message: `Dette uniforme : ${owed.owed.toFixed(2)} $ à prélever sur la dernière paie`,
+        link: `/employees/${issuance.employeeId}`,
+        payload: { issuanceId: issuance.id, employeeId: issuance.employeeId, amountOwed: owed.owed },
+      }).catch(() => {});
+      notify({
+        type: 'UNIFORM_TERMINATION_CLOSED',
+        channels: ['EMAIL'],
+        audience: 'PAIE',
+        title: `Prélèvement uniforme — ${employeeName}`,
+        message: `Montant à prélever sur la dernière paie : ${owed.owed.toFixed(2)} $`,
+        link: `/employees/${issuance.employeeId}`,
+        payload: { issuanceId: issuance.id, employeeId: issuance.employeeId, amountOwed: owed.owed },
+      }).catch(() => {});
+    } catch (e) {
+      console.error('notify closeTermination failed:', e);
+    }
 
     res.json({ message: 'Fin d’emploi clôturée — montant dû calculé', data: created });
   } catch (error) {

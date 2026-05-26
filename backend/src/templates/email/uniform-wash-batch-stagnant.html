@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Lot de lavage stagnant</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #1a1a1a; max-width: 640px; margin: 0 auto; padding: 24px;">
+  <h2 style="color: #d97706;">🧺 Lot de lavage bloqué dans l'état "{{status}}"</h2>
+
+  <p>Le lot de lavage <strong>#{{batchShortId}}</strong> est bloqué dans l'état
+  <strong>{{statusLabel}}</strong> depuis <strong>{{daysSince}} jour(s)</strong>.</p>
+
+  <h3>Action requise</h3>
+  {{#if isSent}}
+  <p>Le lot a été envoyé au fournisseur mais n'a pas encore été marqué comme reçu. Vérifier
+  avec le fournisseur (<strong>{{vendor}}</strong>) où en est le lot.</p>
+  {{/if}}
+  {{#if isReturned}}
+  <p>Le lot est revenu du lavage mais n'a pas encore été inspecté. <strong>L'inspection est
+  nécessaire</strong> pour que les pièces ré-intègrent le stock disponible.</p>
+  {{/if}}
+
+  <h3>Détails du lot</h3>
+  <ul>
+    <li><strong>Statut</strong> : {{statusLabel}}</li>
+    <li><strong>Fournisseur</strong> : {{vendor}}</li>
+    <li><strong>Envoyé le</strong> : {{sentAt}}</li>
+    <li><strong>Revenu le</strong> : {{returnedAt}}</li>
+    <li><strong>Nombre de pièces</strong> : {{itemCount}}</li>
+  </ul>
+
+  <p style="margin-top: 24px;">
+    <a href="{{appUrl}}/uniformes/lavage/{{batchId}}"
+       style="background: #2563eb; color: white; padding: 10px 18px; text-decoration: none; border-radius: 6px; display: inline-block;">
+      Ouvrir le lot
+    </a>
+  </p>
+</body>
+</html>

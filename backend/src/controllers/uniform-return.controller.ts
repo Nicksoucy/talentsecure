@@ -9,6 +9,7 @@ import { uploadSignaturePng } from '../utils/signature';
 import { sendSignatureSms } from '../services/sms.service';
 import { generateShareToken, getTokenExpiration } from '../utils/token';
 import { SIGN_TOKEN_DAYS } from '../constants/uniform';
+import { notify } from '../services/notification.service';
 
 const userId = (req: Request): string | undefined => (req.user as any)?.id;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -114,9 +115,18 @@ async function refreshParentStatus(issuanceId: string) {
 }
 
 /**
- * Finalise un retour : les pièces en BON état réintègrent le stock (mouvement
- * IN) ; PERDU/ENDOMMAGÉ/NON-RETOURNÉ ne réintègrent pas (elles génèrent un
- * montant dû via les lignes). Génère le lien de signature + PDF.
+ * V2 — Finalise un retour avec triage par pièce :
+ *   - GOOD     → ajout à un wash batch (créé inline) + mouvement WASH_IN
+ *     (la pièce sort de quantityOnHand et entre dans un cycle de lavage —
+ *      ne revient au stock qu'après l'inspection post-lavage).
+ *   - DAMAGED  → mouvement DAMAGED (sortie définitive, poubelle directe) +
+ *     dette via unitReplacementCost.
+ *   - LOST/NOT_RETURNED → pas de mouvement (déjà sortie via OUT à la remise) +
+ *     dette via unitReplacementCost.
+ *
+ * Émet ensuite deux notifs hors transaction :
+ *   - UNIFORM_WASH_BATCH_CREATED si au moins une pièce GOOD
+ *   - UNIFORM_RETURN_DAMAGED si au moins une pièce DAMAGED/LOST/NOT_RETURNED
  */
 export const finalizeReturn = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -130,19 +140,57 @@ export const finalizeReturn = async (req: Request, res: Response, next: NextFunc
     const signToken = generateShareToken();
     const signTokenExpiresAt = getTokenExpiration(SIGN_TOKEN_DAYS);
 
+    let washBatchId: string | null = null;
+    let goodCount = 0;
+    let damagedCount = 0;
+    let lostCount = 0;
+
     const updated = await prisma.$transaction(async (tx) => {
       for (const line of ret.lines) {
         if (line.condition === 'GOOD' && line.variantId) {
+          // Crée le wash batch si pas encore créé pour ce retour
+          if (!washBatchId) {
+            const batch = await tx.uniformWashBatch.create({
+              data: {
+                status: 'CREATED',
+                notes: `Retour ${ret.id} — pièces à laver avant ré-intégration`,
+                createdById: userId(req),
+              },
+            });
+            washBatchId = batch.id;
+          }
+          // 1 UniformWashBatchItem par UNITÉ (qty=1) pour granularité d'inspection
+          const items: { batchId: string; variantId: string; quantity: number; returnLineId: string }[] = [];
+          for (let i = 0; i < line.quantity; i++) {
+            items.push({ batchId: washBatchId, variantId: line.variantId, quantity: 1, returnLineId: line.id });
+          }
+          await tx.uniformWashBatchItem.createMany({ data: items });
+          // Mouvement WASH_IN (delta - sur quantityOnHand)
           await applyMovement(tx, {
             variantId: line.variantId,
-            type: 'IN',
+            type: 'WASH_IN',
             quantity: line.quantity,
-            reason: `Retour ${ret.id}`,
+            reason: `Retour ${ret.id} → lot ${washBatchId}`,
             returnId: ret.id,
             createdById: userId(req),
           });
+          goodCount += line.quantity;
+        } else if (line.condition === 'DAMAGED' && line.variantId) {
+          // Poubelle directe — la pièce a été comptée comme OUT à la remise,
+          // donc on enregistre DAMAGED comme événement audit pur (delta -).
+          await applyMovement(tx, {
+            variantId: line.variantId,
+            type: 'DAMAGED',
+            quantity: line.quantity,
+            reason: `Retour ${ret.id} (poubelle directe)`,
+            returnId: ret.id,
+            createdById: userId(req),
+          });
+          damagedCount += line.quantity;
+        } else if (line.condition === 'LOST' || line.condition === 'NOT_RETURNED') {
+          // Pas de mouvement (déjà sortie à la remise). Dette via unitReplacementCost.
+          lostCount += line.quantity;
         }
-        // DAMAGED / LOST / NOT_RETURNED : pas de réintégration de stock.
       }
       return tx.uniformReturn.update({
         where: { id: ret.id },
@@ -161,7 +209,34 @@ export const finalizeReturn = async (req: Request, res: Response, next: NextFunc
       console.error('PDF retour échoué:', (e as Error).message);
     }
 
-    res.json({ message: 'Retour finalisé', data: updated });
+    // Notifs hors-transaction
+    if (washBatchId) {
+      notify({
+        type: 'UNIFORM_WASH_BATCH_CREATED',
+        channels: ['IN_APP'],
+        audience: 'ADMINS',
+        title: `Lot de lavage créé`,
+        message: `${goodCount} pièce(s) à laver depuis le retour de l'agent`,
+        link: `/uniformes/lavage/${washBatchId}`,
+        payload: { batchId: washBatchId, returnId: ret.id, goodCount },
+      }).catch((e) => console.error('notify failed:', e));
+    }
+    if (damagedCount > 0 || lostCount > 0) {
+      notify({
+        type: 'UNIFORM_RETURN_DAMAGED',
+        channels: ['IN_APP', 'EMAIL'],
+        audience: 'ADMINS',
+        title: `Retour avec pièces non récupérables`,
+        message: `${damagedCount} pièce(s) endommagée(s), ${lostCount} perdue(s) — dette à confirmer`,
+        link: `/employees/${ret.employeeId}`,
+        payload: { returnId: ret.id, employeeId: ret.employeeId, damagedCount, lostCount },
+      }).catch((e) => console.error('notify failed:', e));
+    }
+
+    res.json({
+      message: 'Retour finalisé',
+      data: { ...updated, washBatchId, goodCount, damagedCount, lostCount },
+    });
   } catch (error) {
     next(error);
   }

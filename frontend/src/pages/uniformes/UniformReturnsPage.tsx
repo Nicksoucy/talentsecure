@@ -2,26 +2,33 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
-  Box, Typography, Stack, Paper, TextField, MenuItem, Autocomplete, Button, Table, TableHead,
-  TableRow, TableCell, TableBody, Divider, Alert,
+  Box, Typography, Stack, Paper, TextField, MenuItem, Autocomplete, Button, Alert, Card,
+  CardContent, ToggleButtonGroup, ToggleButton, Divider, Chip, Grid,
 } from '@mui/material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
+import HelpIcon from '@mui/icons-material/Help';
 import SendIcon from '@mui/icons-material/Send';
+import LocalLaundryServiceIcon from '@mui/icons-material/LocalLaundryService';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import { employeeService } from '@/services/employee.service';
 import type { UniformItemCondition } from '@/types/uniform';
 import SignaturePad from './components/SignaturePad';
 
-const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
+// =============================================================================
+// UI carte-par-pièce : 1 carte = 1 pièce physique = 1 ligne de retour (qty=1).
+// =============================================================================
 
-interface Row {
+interface Piece {
+  /** Identifiant local pour la carte (variantId + index) */
+  key: string;
   variantId: string;
   name: string;
   size: string;
   unitCost: number;
-  remaining: number;
-  qty: number;
-  condition: UniformItemCondition;
+  condition: UniformItemCondition | null;
+  note?: string;
 }
 
 export default function UniformReturnsPage() {
@@ -30,10 +37,10 @@ export default function UniformReturnsPage() {
   const [employee, setEmployee] = useState<any>(null);
   const [empSearch, setEmpSearch] = useState('');
   const [issuanceId, setIssuanceId] = useState('');
-  const [rows, setRows] = useState<Row[]>([]);
+  const [pieces, setPieces] = useState<Piece[]>([]);
   const [returnId, setReturnId] = useState<string | null>(null);
+  const [washBatchId, setWashBatchId] = useState<string | null>(null);
 
-  // Pré-sélection de l'agent si on arrive depuis sa fiche (?employeeId=...)
   const [searchParams] = useSearchParams();
   useEffect(() => {
     const id = searchParams.get('employeeId');
@@ -52,9 +59,10 @@ export default function UniformReturnsPage() {
   });
   const activeIssuances = useMemo(
     () => (issuances.data?.data || []).filter((i) => ['ISSUED', 'PARTIALLY_RETURNED'].includes(i.status)),
-    [issuances.data]
+    [issuances.data],
   );
 
+  // Charge l'émission et génère N cartes par variante (1 par pièce détenue).
   const loadIssuance = async (id: string) => {
     setIssuanceId(id);
     const { data } = await uniformService.getIssuance(id);
@@ -65,38 +73,69 @@ export default function UniformReturnsPage() {
         if (rl.variantId) returnedMap.set(rl.variantId, (returnedMap.get(rl.variantId) || 0) + rl.quantity);
       });
     });
-    const built: Row[] = (data.lines || [])
-      .filter((l) => l.variantId)
-      .map((l) => {
-        const remaining = l.quantity - (returnedMap.get(l.variantId!) || 0);
-        return {
-          variantId: l.variantId!,
+    const newPieces: Piece[] = [];
+    (data.lines || []).forEach((l) => {
+      if (!l.variantId) return;
+      const remaining = l.quantity - (returnedMap.get(l.variantId) || 0);
+      for (let i = 0; i < remaining; i++) {
+        newPieces.push({
+          key: `${l.variantId}-${i}`,
+          variantId: l.variantId,
           name: l.variant?.item?.name || 'Pièce',
           size: l.variant?.size || '—',
           unitCost: Number(l.unitCostSnapshot),
-          remaining,
-          qty: remaining > 0 ? remaining : 0,
-          condition: 'GOOD' as UniformItemCondition,
-        };
-      })
-      .filter((r) => r.remaining > 0);
-    setRows(built);
+          condition: null,
+        });
+      }
+    });
+    setPieces(newPieces);
   };
+
+  const setCondition = (key: string, condition: UniformItemCondition | null) => {
+    setPieces((prev) => prev.map((p) => (p.key === key ? { ...p, condition } : p)));
+  };
+  const setNote = (key: string, note: string) => {
+    setPieces((prev) => prev.map((p) => (p.key === key ? { ...p, note } : p)));
+  };
+  const markAllGood = () => setPieces((prev) => prev.map((p) => ({ ...p, condition: 'GOOD' })));
+
+  const counts = useMemo(() => {
+    const c = { good: 0, damaged: 0, lost: 0, pending: 0 };
+    for (const p of pieces) {
+      if (p.condition === 'GOOD') c.good++;
+      else if (p.condition === 'DAMAGED') c.damaged++;
+      else if (p.condition === 'LOST') c.lost++;
+      else c.pending++;
+    }
+    return c;
+  }, [pieces]);
+
+  const allTagged = pieces.length > 0 && counts.pending === 0;
 
   const createAndFinalize = useMutation({
     mutationFn: async () => {
-      const lines = rows.filter((r) => r.qty > 0).map((r) => ({
-        variantId: r.variantId,
-        quantity: r.qty,
-        condition: r.condition,
-        unitReplacementCost: r.unitCost,
-      }));
+      // 1 ligne par pièce (qty=1) — granularité maximale pour audit + wash batch.
+      const lines = pieces
+        .filter((p) => p.condition != null)
+        .map((p) => ({
+          variantId: p.variantId,
+          quantity: 1,
+          condition: p.condition!,
+          unitReplacementCost: p.unitCost,
+        }));
       const created = await uniformService.createReturn({ issuanceId, lines });
       const id = created.data.id;
-      await uniformService.finalizeReturn(id);
-      return id;
+      const fin = await uniformService.finalizeReturn(id);
+      return { id, washBatchId: (fin?.data as any)?.washBatchId ?? null };
     },
-    onSuccess: (id) => { setReturnId(id); enqueueSnackbar('Retour finalisé', { variant: 'success' }); },
+    onSuccess: ({ id, washBatchId: wbId }) => {
+      setReturnId(id);
+      setWashBatchId(wbId);
+      enqueueSnackbar(
+        wbId ? `Retour finalisé — lot de lavage créé (${counts.good} pièce(s))` : 'Retour finalisé',
+        { variant: 'success' },
+      );
+    },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
 
@@ -110,8 +149,16 @@ export default function UniformReturnsPage() {
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Échec SMS', { variant: 'warning' }),
   });
   const counterSign = useMutation({
-    mutationFn: () => uniformService.counterSignReturn(returnId!, { employeeSignatureBase64: empSig || undefined, employerSignatureBase64: emprSig || undefined, signedByName }),
-    onSuccess: () => { enqueueSnackbar('Signature enregistrée', { variant: 'success' }); navigate(`/employees/${employee.id}`); },
+    mutationFn: () =>
+      uniformService.counterSignReturn(returnId!, {
+        employeeSignatureBase64: empSig || undefined,
+        employerSignatureBase64: emprSig || undefined,
+        signedByName,
+      }),
+    onSuccess: () => {
+      enqueueSnackbar('Signature enregistrée', { variant: 'success' });
+      navigate(`/employees/${employee.id}`);
+    },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
 
@@ -126,7 +173,7 @@ export default function UniformReturnsPage() {
             options={employees.data?.data || []}
             getOptionLabel={(o: any) => `${o.firstName} ${o.lastName}`}
             value={employee}
-            onChange={(_, v) => { setEmployee(v); setIssuanceId(''); setRows([]); setReturnId(null); }}
+            onChange={(_, v) => { setEmployee(v); setIssuanceId(''); setPieces([]); setReturnId(null); }}
             onInputChange={(_, v) => setEmpSearch(v)}
             renderInput={(params) => <TextField {...params} label="Agent" size="small" />}
             isOptionEqualToValue={(o: any, v: any) => o.id === v?.id}
@@ -143,53 +190,125 @@ export default function UniformReturnsPage() {
         </Stack>
       </Paper>
 
-      {rows.length > 0 && (
+      {pieces.length > 0 && !returnId && (
         <Paper sx={{ p: 2, mb: 2 }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Pièce</TableCell><TableCell>Grandeur</TableCell><TableCell align="right">Détenu</TableCell>
-                <TableCell align="right">Qté retournée</TableCell><TableCell>État</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rows.map((r, i) => (
-                <TableRow key={r.variantId}>
-                  <TableCell>{r.name}</TableCell>
-                  <TableCell>{r.size}</TableCell>
-                  <TableCell align="right">{r.remaining}</TableCell>
-                  <TableCell align="right">
-                    <TextField type="number" size="small" value={r.qty} disabled={!!returnId}
-                      onChange={(e) => { const v = Math.max(0, Math.min(r.remaining, Number(e.target.value))); setRows(rows.map((x, j) => j === i ? { ...x, qty: v } : x)); }}
-                      sx={{ width: 90 }} />
-                  </TableCell>
-                  <TableCell>
-                    <TextField select size="small" value={r.condition} disabled={!!returnId}
-                      onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, condition: e.target.value as UniformItemCondition } : x))} sx={{ minWidth: 150 }}>
-                      <MenuItem value="GOOD">Bon (réutilisable)</MenuItem>
-                      <MenuItem value="DAMAGED">Endommagé</MenuItem>
-                      <MenuItem value="LOST">Perdu</MenuItem>
-                    </TextField>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {!returnId && (
-            <Stack direction="row" justifyContent="flex-end" mt={2}>
-              <Button variant="contained" disabled={createAndFinalize.isPending || rows.every((r) => r.qty === 0)} onClick={() => createAndFinalize.mutate()}>
-                Finaliser le retour
-              </Button>
-            </Stack>
-          )}
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <strong>Triage pièce par pièce</strong> :
+            <ul style={{ marginTop: 4, marginBottom: 0, paddingLeft: 20 }}>
+              <li>🟢 <strong>Bon</strong> → la pièce part en <strong>lot de lavage</strong> avant ré-intégration au stock.</li>
+              <li>🔴 <strong>Endommagé</strong> → poubelle immédiate (sortie définitive). Coût en dette pour l'agent.</li>
+              <li>⚫ <strong>Perdu</strong> → dette pour l'agent (pas de retour stock).</li>
+            </ul>
+          </Alert>
+
+          <Stack direction="row" spacing={2} mb={2} alignItems="center" flexWrap="wrap">
+            <Chip icon={<CheckCircleIcon />} label={`Bon : ${counts.good}`} color={counts.good > 0 ? 'success' : 'default'} />
+            <Chip icon={<CancelIcon />} label={`Endommagé : ${counts.damaged}`} color={counts.damaged > 0 ? 'error' : 'default'} />
+            <Chip label={`Perdu : ${counts.lost}`} color={counts.lost > 0 ? 'error' : 'default'} variant="outlined" />
+            <Chip icon={<HelpIcon />} label={`À décider : ${counts.pending}`} color={counts.pending > 0 ? 'warning' : 'default'} />
+            <Box flex={1} />
+            <Button size="small" onClick={markAllGood} disabled={counts.pending === 0}>
+              Tout marquer Bon
+            </Button>
+          </Stack>
+
+          <Grid container spacing={1.5}>
+            {pieces.map((p, idx) => (
+              <Grid item xs={12} md={6} key={p.key}>
+                <Card variant="outlined" sx={{
+                  borderColor:
+                    p.condition === 'GOOD' ? 'success.main' :
+                    p.condition === 'DAMAGED' ? 'error.main' :
+                    p.condition === 'LOST' ? 'error.light' : 'divider',
+                  borderWidth: p.condition ? 2 : 1,
+                }}>
+                  <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Stack spacing={1}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Box>
+                          <Typography variant="caption" color="text.secondary">Pièce {idx + 1}/{pieces.length}</Typography>
+                          <Typography variant="body1" fontWeight={500}>
+                            {p.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Taille : {p.size} · {p.unitCost.toFixed(2)} $
+                          </Typography>
+                        </Box>
+                      </Stack>
+                      <ToggleButtonGroup
+                        value={p.condition}
+                        exclusive
+                        onChange={(_, v) => setCondition(p.key, v as UniformItemCondition | null)}
+                        size="small"
+                        fullWidth
+                      >
+                        <ToggleButton value="GOOD" color="success">
+                          <CheckCircleIcon fontSize="small" sx={{ mr: 0.5 }} /> Bon
+                        </ToggleButton>
+                        <ToggleButton value="DAMAGED" color="error">
+                          <CancelIcon fontSize="small" sx={{ mr: 0.5 }} /> Endommagé
+                        </ToggleButton>
+                        <ToggleButton value="LOST" color="error">
+                          Perdu
+                        </ToggleButton>
+                      </ToggleButtonGroup>
+                      {(p.condition === 'DAMAGED' || p.condition === 'LOST') && (
+                        <TextField
+                          size="small"
+                          placeholder="Note (optionnel)"
+                          value={p.note || ''}
+                          onChange={(e) => setNote(p.key, e.target.value)}
+                        />
+                      )}
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+
+          <Stack direction="row" justifyContent="flex-end" mt={2}>
+            <Button
+              variant="contained"
+              disabled={!allTagged || createAndFinalize.isPending}
+              onClick={() => createAndFinalize.mutate()}
+            >
+              Finaliser le retour ({pieces.length} pièce{pieces.length > 1 ? 's' : ''})
+            </Button>
+          </Stack>
         </Paper>
+      )}
+
+      {pieces.length === 0 && employee && issuanceId && (
+        <Alert severity="info">Aucune pièce à retourner pour cette remise (déjà tout retourné).</Alert>
       )}
 
       {returnId && (
         <Paper sx={{ p: 2 }}>
-          <Alert severity="success" sx={{ mb: 2 }}>Retour finalisé. Le stock en bon état a été réintégré ; pertes/dommages portés au montant dû.</Alert>
+          <Alert severity="success" sx={{ mb: 2 }}>
+            Retour finalisé.
+            {washBatchId && (
+              <> Un <strong>lot de lavage</strong> a été créé avec les pièces en bon état.</>
+            )}
+            {' '}Pertes/dommages portés au montant dû.
+          </Alert>
+
+          {washBatchId && (
+            <Box mb={2}>
+              <Button
+                variant="outlined"
+                startIcon={<LocalLaundryServiceIcon />}
+                onClick={() => navigate(`/uniformes/lavage/${washBatchId}`)}
+              >
+                Ouvrir le lot de lavage
+              </Button>
+            </Box>
+          )}
+
           <Stack direction="row" spacing={2} mb={2}>
-            <Button variant="outlined" startIcon={<SendIcon />} onClick={() => sendSms.mutate()} disabled={sendSms.isPending}>Envoyer le lien par SMS</Button>
+            <Button variant="outlined" startIcon={<SendIcon />} onClick={() => sendSms.mutate()} disabled={sendSms.isPending}>
+              Envoyer le lien par SMS
+            </Button>
             <Button variant="text" onClick={() => navigate(`/employees/${employee.id}`)}>Terminer plus tard</Button>
           </Stack>
           <Divider sx={{ my: 2 }}>ou signature au comptoir</Divider>
@@ -200,7 +319,9 @@ export default function UniformReturnsPage() {
               <Box sx={{ flex: 1 }}><SignaturePad label="Signature de l'employeur" onChange={setEmprSig} /></Box>
             </Stack>
             <Stack direction="row" justifyContent="flex-end">
-              <Button variant="contained" disabled={!empSig || counterSign.isPending} onClick={() => counterSign.mutate()}>Enregistrer la signature</Button>
+              <Button variant="contained" disabled={!empSig || counterSign.isPending} onClick={() => counterSign.mutate()}>
+                Enregistrer la signature
+              </Button>
             </Stack>
           </Stack>
         </Paper>

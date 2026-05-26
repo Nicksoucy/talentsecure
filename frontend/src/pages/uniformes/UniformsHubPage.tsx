@@ -6,6 +6,7 @@ const TABS = [
   { label: 'Inventaire', path: '/uniformes/inventaire' },
   { label: 'Remise', path: '/uniformes/remises/nouvelle' },
   { label: 'Retour', path: '/uniformes/retours' },
+  { label: 'Lots de lavage', path: '/uniformes/lavage' },
   { label: 'Rapports', path: '/uniformes/rapports' },
 ];
 
@@ -21,7 +22,8 @@ export default function UniformsHubPage() {
   if (pathname.startsWith('/uniformes/inventaire')) active = 1;
   else if (pathname.startsWith('/uniformes/remises')) active = 2;
   else if (pathname.startsWith('/uniformes/retours')) active = 3;
-  else if (pathname.startsWith('/uniformes/rapports')) active = 4;
+  else if (pathname.startsWith('/uniformes/lavage')) active = 4;
+  else if (pathname.startsWith('/uniformes/rapports')) active = 5;
 
   return (
     <Box>

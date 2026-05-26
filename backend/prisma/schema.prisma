@@ -1095,11 +1095,16 @@ enum UniformPieceType {
 }
 
 enum UniformMovementType {
-  IN // réappro / retour réutilisable
-  OUT // remise à un agent
+  IN // réappro / retour réutilisable (delta +)
+  OUT // remise à un agent (delta -)
   ADJUST // correction d'inventaire (quantity signé)
-  LOST // perdu
-  DAMAGED // endommagé
+  LOST // perdu (delta -, sortie définitive)
+  DAMAGED // endommagé / poubelle directe au retour (delta -, sortie définitive)
+  // === V2 — Cycle de lavage ===
+  WASH_IN // pièce vers lot de lavage (delta - sur quantityOnHand)
+  WASH_OUT_GOOD // pièce sortie du lot vers stock (delta +)
+  WASH_OUT_DAMAGED // pièce sortie du lot vers poubelle (delta 0, audit seul)
+  DISPOSAL // sortie définitive explicite (delta 0, audit seul)
 }
 
 enum UniformItemCondition {
@@ -1128,6 +1133,63 @@ enum UniformSignatureStatus {
 enum UniformSignatureMethod {
   REMOTE_SMS
   COUNTER
+}
+
+// ===========================================================================
+// V2 — Cycle de lavage & rebut
+// ===========================================================================
+
+enum WashBatchStatus {
+  CREATED // pièces collectées, lot en préparation
+  SENT_TO_LAUNDRY // expédié au fournisseur
+  RETURNED_FROM_LAUNDRY // revenu, en attente d'inspection
+  INSPECTED // inspection finalisée (terminal)
+  CANCELLED // lot annulé (pièces réinjectées en stock)
+}
+
+// ===========================================================================
+// V2 — Notifications (multi-canal : in-app + email + sms)
+// ===========================================================================
+
+enum NotificationType {
+  // Cycle de vie pièce
+  UNIFORM_RETURN_DAMAGED
+  UNIFORM_WASH_BATCH_CREATED
+  UNIFORM_WASH_BATCH_SENT
+  UNIFORM_WASH_BATCH_RETURNED
+  UNIFORM_WASH_BATCH_INSPECTED_DAMAGED
+  UNIFORM_WASH_BATCH_STAGNANT
+  // Date butoir & paie
+  UNIFORM_RETURN_DUE_SOON
+  UNIFORM_RETURN_OVERDUE
+  UNIFORM_TERMINATION_CLOSED
+  UNIFORM_SETTLEMENT_RECORDED
+  UNIFORM_DEBT_AGING
+  // Stock & inventaire
+  UNIFORM_LOW_STOCK
+  UNIFORM_STOCK_ZERO
+  UNIFORM_LEDGER_DRIFT
+  // Signature / workflow
+  UNIFORM_SIGNATURE_EXPIRING
+  UNIFORM_SIGNATURE_EXPIRED
+  UNIFORM_EMPLOYER_SIGN_PENDING
+  // Anomalies
+  UNIFORM_BARCODE_UNKNOWN
+  UNIFORM_INACTIVE_VARIANT_HAS_STOCK
+  UNIFORM_DUPLICATE_ACTIVE_ISSUANCE
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  READ // pour IN_APP seulement
 }
 
 model UniformItem {
@@ -1166,10 +1228,11 @@ model UniformVariant {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  item          UniformItem            @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  movements     UniformStockMovement[]
-  issuanceLines UniformIssuanceLine[]
-  returnLines   UniformReturnLine[]
+  item           UniformItem            @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  movements      UniformStockMovement[]
+  issuanceLines  UniformIssuanceLine[]
+  returnLines    UniformReturnLine[]
+  washBatchItems UniformWashBatchItem[]
 
   @@unique([itemId, size])
   @@index([itemId])
@@ -1305,8 +1368,9 @@ model UniformReturnLine {
   condition           UniformItemCondition @default(GOOD)
   unitReplacementCost Decimal              @default(0) @db.Decimal(10, 2) // snapshot pour figer la dette
 
-  return  UniformReturn   @relation(fields: [returnId], references: [id], onDelete: Cascade)
-  variant UniformVariant? @relation(fields: [variantId], references: [id])
+  return         UniformReturn          @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  variant        UniformVariant?        @relation(fields: [variantId], references: [id])
+  washBatchItems UniformWashBatchItem[]
 
   @@index([returnId])
   @@index([variantId])
@@ -1325,4 +1389,80 @@ model UniformDebtSettlement {
 
   @@index([employeeId])
   @@map("uniform_debt_settlements")
+}
+
+// ===========================================================================
+// V2 — Lots de lavage
+// ===========================================================================
+
+model UniformWashBatch {
+  id            String          @id @default(uuid())
+  status        WashBatchStatus @default(CREATED)
+  vendor        String? // fournisseur de lavage (texte libre)
+  notes         String?         @db.Text
+  sentAt        DateTime?
+  returnedAt    DateTime?
+  inspectedAt   DateTime?
+  createdById   String?
+  inspectedById String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  items UniformWashBatchItem[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("uniform_wash_batches")
+}
+
+model UniformWashBatchItem {
+  id                String                @id @default(uuid())
+  batchId           String
+  variantId         String
+  quantity          Int                   @default(1) // qty=1 pour granularité par pièce
+  returnLineId      String? // provenance (UniformReturnLine source)
+  postWashCondition UniformItemCondition? // null jusqu'à inspection
+  notes             String?               @db.Text
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  batch      UniformWashBatch   @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  variant    UniformVariant     @relation(fields: [variantId], references: [id])
+  returnLine UniformReturnLine? @relation(fields: [returnLineId], references: [id])
+
+  @@index([batchId])
+  @@index([variantId])
+  @@index([returnLineId])
+  @@map("uniform_wash_batch_items")
+}
+
+// ===========================================================================
+// V2 — Notifications (in-app + email)
+// ===========================================================================
+
+model Notification {
+  id             String              @id @default(uuid())
+  userId         String? // destinataire IN_APP (null = canal email/sms standalone)
+  type           NotificationType
+  channel        NotificationChannel
+  status         NotificationStatus  @default(PENDING)
+  recipientEmail String? // pour channel=EMAIL (ex: rh@xguard.ca)
+  recipientPhone String? // pour channel=SMS
+  title          String
+  message        String              @db.Text
+  link           String? // URL frontend à ouvrir au clic
+  payload        Json? // données structurées (ex: { issuanceId, employeeId })
+  dedupKey       String?             @unique // idempotence (ex: "due-soon-{issuanceId}")
+  scheduledFor   DateTime? // null = immédiat ; sinon worker ramasse après
+  sentAt         DateTime?
+  failedReason   String?             @db.Text
+  attempts       Int                 @default(0)
+  readAt         DateTime? // IN_APP uniquement
+  createdAt      DateTime            @default(now())
+
+  @@index([userId, readAt])
+  @@index([status, scheduledFor])
+  @@index([channel, status])
+  @@index([createdAt])
+  @@map("notifications")
 }

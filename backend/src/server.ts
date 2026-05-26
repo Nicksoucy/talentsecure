@@ -39,6 +39,8 @@ import skillsRoutes from './routes/skills.routes';
 import extractionRoutes from './routes/extraction.routes';
 import marketplaceRoutes from './routes/talent-marketplace.routes';
 import uniformRoutes from './routes/uniform.routes';
+import notificationRoutes from './routes/notification.routes';
+import { startScheduler } from './jobs/scheduler';
 
 const app: Application = express();
 const PORT = parseInt(process.env.PORT || '8080', 10);
@@ -131,6 +133,7 @@ app.use('/api/skills', skillsRoutes);
 app.use('/api/extraction', extractionRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/uniforms', uniformRoutes);
+app.use('/api/notifications', notificationRoutes);
 // app.use('/api/users', userRoutes);
 
 // 404 handler
@@ -180,6 +183,13 @@ app.listen(PORT, HOST, () => {
   logger.info(`TalentSecure API demarree sur http://${HOST}:${PORT}`);
   logger.info(`Environnement: ${process.env.NODE_ENV || 'development'}`);
   logger.info(`CORS active pour: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+
+  // Démarre les jobs cron uniquement si désactivé explicitement (test/dev)
+  if (process.env.DISABLE_SCHEDULER !== 'true') {
+    startScheduler();
+  } else {
+    logger.info('[scheduler] désactivé (DISABLE_SCHEDULER=true)');
+  }
 });
 
 export default app;
