@@ -64,4 +64,15 @@ export const employeeService = {
     const response = await api.post(`/api/employees/promote/${candidateId}`, data);
     return response.data;
   },
+
+  /**
+   * Promouvoir un candidat potentiel (prospect) directement en employé.
+   */
+  async promoteProspect(
+    prospectId: string,
+    data: { hireDate?: string; position?: string; assignment?: string; employeeNumber?: string } = {}
+  ): Promise<{ data: Employee; message: string }> {
+    const response = await api.post(`/api/employees/promote-prospect/${prospectId}`, data);
+    return response.data;
+  },
 };

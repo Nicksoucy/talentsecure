@@ -51,6 +51,7 @@ import {
   Sync as SyncIcon,
   Star as StarIcon,
   Add as AddIcon,
+  Badge as BadgeIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
 import { TableSkeleton } from '@/components/skeletons';
@@ -60,6 +61,7 @@ import ContactConflictDialog from '@/components/ContactConflictDialog';
 import { ContactConflict } from '@/services/contact.service';
 import { useNavigate } from 'react-router-dom';
 import { prospectService } from '@/services/prospect.service';
+import { employeeService } from '@/services/employee.service';
 import { ProspectCandidate } from '@/types';
 const ProspectsMapClustered = lazy(() => import('@/components/map/ProspectsMapClustered'));
 import { prospectContactSchema } from '@/validation/prospect';
@@ -211,6 +213,21 @@ export default function ProspectsPage() {
     },
   });
 
+  // Promotion directe Prospect -> Employé
+  const promoteToEmployeeMutation = useMutation({
+    mutationFn: (id: string) => employeeService.promoteProspect(id),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['prospects'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      const newId = response?.data?.id;
+      enqueueSnackbar('Candidat potentiel converti en employé', { variant: 'success' });
+      if (newId) navigate(`/employees/${newId}`);
+    },
+    onError: (error: any) => {
+      enqueueSnackbar(error.response?.data?.error || 'Impossible de convertir en employé', { variant: 'error' });
+    },
+  });
+
   const handleContact = (prospect: ProspectCandidate) => {
     setContactDialog({ open: true, prospect });
   };
@@ -240,6 +257,17 @@ export default function ProspectsPage() {
   const handleDelete = (id: string) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce prospect ?')) {
       deleteMutation.mutate(id);
+    }
+  };
+
+  const handlePromoteToEmployee = (prospect: ProspectCandidate) => {
+    const name = `${prospect.firstName} ${prospect.lastName}`;
+    if (window.confirm(
+      `Convertir ${name} directement en employé ?\n\n` +
+      `La fiche sera créée dans Employés (avec son profil et la gestion d'uniforme), ` +
+      `et ${name} sera retiré(e) des Candidats Potentiels. L'étape Candidat est sautée.`
+    )) {
+      promoteToEmployeeMutation.mutate(prospect.id);
     }
   };
 
@@ -832,6 +860,16 @@ export default function ProspectsPage() {
                             color="success"
                           >
                             <TransformIcon />
+                          </IconButton>
+                        )}
+                        {!prospect.isConverted && (
+                          <IconButton
+                            size="small"
+                            onClick={() => handlePromoteToEmployee(prospect)}
+                            title="Convertir directement en employé (saute l'étape candidat)"
+                            color="primary"
+                          >
+                            <BadgeIcon />
                           </IconButton>
                         )}
                         <IconButton

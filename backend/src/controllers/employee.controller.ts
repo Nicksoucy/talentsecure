@@ -229,6 +229,86 @@ export const promoteCandidateToEmployee = async (req: Request, res: Response, ne
   }
 };
 
+/**
+ * Promouvoir un Candidat Potentiel (Prospect) directement en Employé.
+ * Saute l'étape Candidat — utile quand un prospect est validé/embauché direct.
+ * - Crée la fiche Employé depuis les données du prospect.
+ * - Marque le prospect comme converti + soft-delete (il disparaît de la liste).
+ */
+export const promoteProspectToEmployee = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { prospectId } = req.params;
+    const { hireDate, position, assignment, employeeNumber } = req.body || {};
+
+    const prospect = await prisma.prospectCandidate.findUnique({ where: { id: prospectId } });
+    if (!prospect || prospect.isDeleted) {
+      return res.status(404).json({ error: 'Candidat potentiel non trouvé' });
+    }
+
+    // Déjà employé ? (par email/téléphone)
+    const or: any[] = [];
+    if (prospect.email) or.push({ email: { equals: prospect.email, mode: 'insensitive' as const } });
+    if (prospect.phone) or.push({ phone: prospect.phone });
+    if (or.length > 0) {
+      const existingEmp = await prisma.employee.findFirst({ where: { isDeleted: false, OR: or } });
+      if (existingEmp) {
+        return res.status(200).json({
+          message: 'Cette personne est déjà un employé.',
+          data: existingEmp,
+        });
+      }
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const employee = await tx.employee.create({
+        data: {
+          firstName: prospect.firstName,
+          lastName: prospect.lastName,
+          email: prospect.email,
+          phone: prospect.phone,
+          address: prospect.streetAddress,
+          city: prospect.city,
+          province: prospect.province || 'QC',
+          postalCode: prospect.postalCode,
+          status: 'ACTIF',
+          hireDate: hireDate ? new Date(hireDate) : new Date(),
+          position: position || null,
+          assignment: assignment || null,
+          employeeNumber: employeeNumber || null,
+          hasBSP: false,
+          hasVehicle: false,
+          cvUrl: prospect.cvUrl,
+          cvStoragePath: prospect.cvStoragePath,
+          videoUrl: prospect.videoUrl,
+          videoStoragePath: prospect.videoStoragePath,
+          notes: prospect.notes,
+        },
+      });
+
+      // Marquer le prospect : converti + soft-delete (sort de la liste)
+      await tx.prospectCandidate.update({
+        where: { id: prospect.id },
+        data: {
+          isConverted: true,
+          convertedAt: new Date(),
+          convertedToId: employee.id,
+          isDeleted: true,
+          deletedAt: new Date(),
+        },
+      });
+
+      return employee;
+    });
+
+    res.status(201).json({
+      message: 'Candidat potentiel promu directement en employé. Retiré de Candidats Potentiels.',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 function buildEmployeeData(body: any, isUpdate = false) {
   const data: any = {
     firstName: body.firstName,

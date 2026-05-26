@@ -8,12 +8,14 @@ import {
   updateEmployee,
   deleteEmployee,
   promoteCandidateToEmployee,
+  promoteProspectToEmployee,
 } from '../controllers/employee.controller';
 import { authenticateJWT } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
 
 const uuidParam = z.object({ id: z.string().uuid('ID invalide') });
 const candidateIdParam = z.object({ candidateId: z.string().uuid('ID invalide') });
+const prospectIdParam = z.object({ prospectId: z.string().uuid('ID invalide') });
 
 const router = Router();
 
@@ -26,6 +28,9 @@ router.post('/', createEmployee);
 
 // Promouvoir un candidat en employé
 router.post('/promote/:candidateId', validate({ params: candidateIdParam }), promoteCandidateToEmployee);
+
+// Promouvoir un candidat potentiel (prospect) directement en employé
+router.post('/promote-prospect/:prospectId', validate({ params: prospectIdParam }), promoteProspectToEmployee);
 
 router.get('/:id', validate({ params: uuidParam }), getEmployeeById);
 router.put('/:id', validate({ params: uuidParam }), updateEmployee);
