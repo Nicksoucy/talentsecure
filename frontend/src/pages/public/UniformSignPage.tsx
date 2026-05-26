@@ -81,16 +81,19 @@ export default function UniformSignPage() {
   const requiredConsents = isPret ? cPayroll && cFit && (payload?.consents.policy ? cPolicy : true) : true;
 
   return (
-    <Container maxWidth="sm" sx={{ py: 4 }}>
-      <Typography variant="h5" align="center" color="#1b2a4a" fontWeight={700} mb={0.5}>XGUARD SÉCURITÉ</Typography>
-      <Typography variant="subtitle1" align="center" mb={3}>
+    <Container maxWidth="sm" sx={{ py: { xs: 2, sm: 4 }, px: { xs: 1, sm: 2 } }}>
+      <Typography variant="h5" align="center" color="#1b2a4a" fontWeight={700} mb={0.5} sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>
+        XGUARD SÉCURITÉ
+      </Typography>
+      <Typography variant="subtitle1" align="center" mb={{ xs: 2, sm: 3 }}>
         Formulaire de {isPret ? "prêt" : 'retour'} d'uniforme
       </Typography>
 
-      <Paper sx={{ p: 3 }}>
+      <Paper sx={{ p: { xs: 2, sm: 3 } }}>
         <Typography mb={1}>Bonjour {payload?.employeeFirstName || ''}, veuillez vérifier puis signer.</Typography>
 
-        <Table size="small" sx={{ mb: 1 }}>
+        <Box sx={{ overflowX: 'auto', mx: { xs: -1, sm: 0 } }}>
+        <Table size="small" sx={{ mb: 1, '& .MuiTableCell-root': { px: { xs: 0.75, sm: 1.5 }, py: 0.75, fontSize: { xs: '0.8rem', sm: '0.875rem' } } }}>
           <TableHead><TableRow>
             <TableCell>Pièce</TableCell><TableCell>Grandeur</TableCell><TableCell align="right">Qté</TableCell>
             {!isPret && <TableCell>État</TableCell>}
@@ -109,6 +112,7 @@ export default function UniformSignPage() {
             ))}
           </TableBody>
         </Table>
+        </Box>
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
           <Typography variant="subtitle1" fontWeight={700}>
             {isPret ? 'Coût total du prêt' : 'Valeur totale'} : {money(payload?.total)}
