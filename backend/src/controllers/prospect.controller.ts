@@ -949,3 +949,85 @@ export const getProspectVideoUrl = async (req: Request, res: Response, next: Nex
     next(error);
   }
 };
+
+/**
+ * Récupère la vidéo de présentation d'un prospect directement depuis GHL
+ * (utile quand le prospect a été créé AVANT que le workflow envoie video_url).
+ * Cherche le contact GHL par email/téléphone, repère le champ custom contenant
+ * un fichier video/*, le télécharge dans R2, met à jour la fiche.
+ * POST /api/prospects/:id/refresh-video-from-ghl
+ */
+export const refreshProspectVideoFromGhl = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const prospect = await prisma.prospectCandidate.findUnique({
+      where: { id },
+      select: { id: true, firstName: true, lastName: true, email: true, phone: true, videoStoragePath: true },
+    });
+    if (!prospect) return res.status(404).json({ error: 'Prospect introuvable' });
+    if (prospect.videoStoragePath) {
+      return res.status(200).json({ message: 'Vidéo déjà présente', alreadyHasVideo: true });
+    }
+    const email = (prospect.email || '').trim();
+    const phone = (prospect.phone || '').trim();
+    if (!email && !phone) return res.status(400).json({ error: 'Pas d\'email ni téléphone pour chercher dans GHL' });
+
+    const GHL_BASE = 'https://services.leadconnectorhq.com';
+    const TOKEN = process.env.GHL_PIT_TOKEN || 'pit-7de455ab-c46e-47a4-af9e-0b07a6c3a1ee';
+    const LOC = process.env.GHL_LOCATION_ID || 'dfkLurZY2ADWAUZl4zYc';
+    const ghlH = { Authorization: `Bearer ${TOKEN}`, Version: '2021-07-28' };
+
+    // 1) Trouver le contact GHL
+    const axios = require('axios');
+    let contactId: string | null = null;
+    if (email) {
+      const r = await axios.get(`${GHL_BASE}/contacts/search/duplicate`, { params: { locationId: LOC, email }, headers: ghlH }).catch(() => null);
+      contactId = r?.data?.contact?.id || null;
+    }
+    if (!contactId && phone) {
+      const r = await axios.get(`${GHL_BASE}/contacts/search/duplicate`, { params: { locationId: LOC, number: phone }, headers: ghlH }).catch(() => null);
+      contactId = r?.data?.contact?.id || null;
+    }
+    if (!contactId) return res.status(404).json({ error: 'Contact GHL introuvable' });
+
+    // 2) Récupérer les custom fields
+    const full = await axios.get(`${GHL_BASE}/contacts/${contactId}`, { headers: ghlH }).then((r: any) => r.data?.contact);
+    let videoFileUrl: string | null = null;
+    for (const f of (full?.customFields || [])) {
+      const v = f.value;
+      if (!v || typeof v !== 'object') continue;
+      for (const key of Object.keys(v)) {
+        const fo = (v as any)[key];
+        const mime = (fo?.meta?.mimetype || '').toLowerCase();
+        if (fo?.url && mime.startsWith('video/')) {
+          videoFileUrl = fo.url;
+          break;
+        }
+      }
+      if (videoFileUrl) break;
+    }
+    if (!videoFileUrl) return res.status(404).json({ error: 'Aucune vidéo trouvée dans GHL pour ce contact' });
+
+    // 3) Télécharger + vérifier + uploader R2
+    const { downloadGhlFile, detectExtension, isLikelyVideo } = require('../utils/ghlFetch');
+    const { uploadBufferToR2 } = require('../services/r2.service');
+    const file = await downloadGhlFile(videoFileUrl);
+    if (file.buffer.length < 100 || !isLikelyVideo(file.buffer)) {
+      return res.status(400).json({ error: 'Le fichier trouvé n\'est pas une vidéo valide' });
+    }
+    const ext = detectExtension(file, '');
+    const safe = `${prospect.firstName}_${prospect.lastName}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50) || 'video';
+    const key = `videos/prospects/${prospect.id}_${safe}${ext}`;
+    await uploadBufferToR2(file.buffer, key, file.contentType);
+
+    await prisma.prospectCandidate.update({
+      where: { id: prospect.id },
+      data: { videoUrl: videoFileUrl, videoStoragePath: key, videoUploadedAt: new Date() },
+    });
+
+    res.json({ success: true, message: 'Vidéo récupérée et stockée', videoStoragePath: key });
+  } catch (error: any) {
+    console.error('Refresh video from GHL erreur:', error.message);
+    next(error);
+  }
+};

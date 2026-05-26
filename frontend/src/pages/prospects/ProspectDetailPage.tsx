@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSnackbar } from 'notistack';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -226,20 +227,23 @@ export default function ProspectDetailPage() {
         )}
 
         {/* Vidéo de présentation */}
-        {prospect.videoStoragePath && (
-          <Grid item xs={12} md={6}>
-            <Card sx={{ height: '100%' }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <VideoIcon color="primary" />
-                  <Typography variant="h6">Vidéo de présentation</Typography>
-                </Box>
-                <Divider sx={{ mb: 2 }} />
+        <Grid item xs={12} md={6}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <VideoIcon color="primary" />
+                <Typography variant="h6">Vidéo de présentation</Typography>
+              </Box>
+              <Divider sx={{ mb: 2 }} />
+              {prospect.videoStoragePath ? (
                 <ProspectVideoPlayer prospectId={prospect.id} />
-              </CardContent>
-            </Card>
-          </Grid>
-        )}
+              ) : (
+                <ProspectRefreshVideoButton prospectId={prospect.id} />
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
 
         {/* Réponses du formulaire */}
         {prospect.surveyAnswers && Object.keys(prospect.surveyAnswers).length > 0 && (
@@ -288,6 +292,42 @@ export default function ProspectDetailPage() {
           </Grid>
         )}
       </Grid>
+    </Box>
+  );
+}
+
+/**
+ * Bouton de récupération de la vidéo depuis GHL : pour les prospects créés
+ * avant que le workflow GHL n'envoie video_url. Va chercher la vidéo dans le
+ * contact GHL et la copie dans R2.
+ */
+function ProspectRefreshVideoButton({ prospectId }: { prospectId: string }) {
+  const { enqueueSnackbar } = useSnackbar();
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: () => prospectService.refreshVideoFromGhl(prospectId),
+    onSuccess: (res) => {
+      enqueueSnackbar(res.alreadyHasVideo ? 'Vidéo déjà présente' : 'Vidéo récupérée !', { variant: 'success' });
+      queryClient.invalidateQueries({ queryKey: ['prospect', prospectId] });
+      queryClient.invalidateQueries({ queryKey: ['prospects'] });
+    },
+    onError: (e: any) => {
+      enqueueSnackbar(e.response?.data?.error || 'Erreur lors de la récupération', { variant: 'warning' });
+    },
+  });
+  return (
+    <Box sx={{ textAlign: 'center', py: 2 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Aucune vidéo stockée. Si la personne en a uploadé une dans le form, on peut la rapatrier depuis GHL.
+      </Typography>
+      <Button
+        variant="outlined"
+        startIcon={<VideoIcon />}
+        onClick={() => mutation.mutate()}
+        disabled={mutation.isPending}
+      >
+        {mutation.isPending ? 'Récupération…' : 'Récupérer la vidéo depuis GHL'}
+      </Button>
     </Box>
   );
 }

@@ -131,6 +131,14 @@ export const prospectService = {
   },
 
   /**
+   * Récupère la vidéo d'un prospect depuis son contact GHL (champ video) → R2
+   */
+  async refreshVideoFromGhl(prospectId: string): Promise<{ success?: boolean; message?: string; videoStoragePath?: string; alreadyHasVideo?: boolean; error?: string }> {
+    const response = await api.post(`/api/prospects/${prospectId}/refresh-video-from-ghl`, {});
+    return response.data;
+  },
+
+  /**
    * Get prospects statistics
    */
   async getProspectsStats(): Promise<{

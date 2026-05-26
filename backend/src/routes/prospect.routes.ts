@@ -17,6 +17,7 @@ import {
   syncSurveyProspects,
   getProspectCvUrl,
   getProspectVideoUrl,
+  refreshProspectVideoFromGhl,
 } from '../controllers/prospect.controller';
 import { getProspectAnalysis } from '../controllers/prospect-scoring.controller';
 import { proxyCv } from '../controllers/cv-proxy.controller';
@@ -119,6 +120,18 @@ router.get('/:id/cv-url', validate({ params: uuidParam }), getProspectCvUrl);
  * @access  Private (All authenticated users)
  */
 router.get('/:id/video-url', validate({ params: uuidParam }), getProspectVideoUrl);
+
+/**
+ * @route   POST /api/prospects/:id/refresh-video-from-ghl
+ * @desc    Récupère la vidéo de présentation depuis GHL (champ contact) → R2
+ * @access  Private (ADMIN, RH_RECRUITER)
+ */
+router.post(
+  '/:id/refresh-video-from-ghl',
+  authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  validate({ params: uuidParam }),
+  refreshProspectVideoFromGhl
+);
 
 /**
  * @route   POST /api/prospects
