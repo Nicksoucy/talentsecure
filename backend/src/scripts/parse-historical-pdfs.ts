@@ -107,7 +107,8 @@ const CATALOG: CatalogItem[] = SEED_CATALOGUE.flatMap((d) =>
 
 // ------- Détection de la division (boîte cochée) -------
 // Regex tolérante : OCR donne parfois "Coût:tota[ du prêt", "Caût total du prèt", etc.
-const TOTAL_RE = /co[uûaâü]t[^a-z0-9]{0,5}tota[lt\[\(][^a-z0-9]{1,5}du[^a-z0-9]{1,5}pr[eèêé]t[^a-z0-9]{0,15}\$?\s*([\dOo]+[,.][\dOo]{2})/gi;
+// Le montant capturé accepte aussi 's' (OCR pour 5).
+const TOTAL_RE = /co[uûaâü]t[^a-z0-9]{0,5}tota[lt\[\(][^a-z0-9]{1,5}du[^a-z0-9]{1,5}pr[eèêé]t[^a-z0-9]{0,15}\$?\s*([\dOoSs]+[,.][\dOoSs]{2})/gi;
 
 function detectDivision(text: string): UniformDivisionKey | 'BOTH' | 'UNKNOWN' {
   const matches: number[] = [];
