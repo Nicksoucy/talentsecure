@@ -38,6 +38,11 @@ export default function UniformIssuanceWizardPage() {
   const [dueReturnAt, setDueReturnAt] = useState('');
   const [rowState, setRowState] = useState<Record<string, RowState>>({});
   const [customs, setCustoms] = useState<CustomLine[]>([]);
+  // Mode "remise historique" : saisie d'une remise déjà effectuée sur papier.
+  // Le stock n'est PAS décrémenté (sinon on doublerait l'ajustement initial).
+  const [historical, setHistorical] = useState(false);
+  const [historicalDate, setHistoricalDate] = useState('');
+  const [uploadingPdf, setUploadingPdf] = useState(false);
 
   const employees = useQuery({
     queryKey: ['emp-search', empSearch],
@@ -125,12 +130,12 @@ export default function UniformIssuanceWizardPage() {
         lines,
       });
       const id = created.data.id;
-      await uniformService.finalizeIssuance(id);
+      await uniformService.finalizeIssuance(id, historical ? { historical: true, historicalDate: historicalDate || undefined } : undefined);
       return id;
     },
     onSuccess: (id) => {
       setIssuanceId(id);
-      enqueueSnackbar('Remise finalisée — stock décrémenté', { variant: 'success' });
+      enqueueSnackbar(historical ? 'Remise historique enregistrée — stock NON modifié' : 'Remise finalisée — stock décrémenté', { variant: 'success' });
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || e?.message || 'Erreur', { variant: 'error' }),
   });
@@ -271,6 +276,30 @@ export default function UniformIssuanceWizardPage() {
           </TextField>
           <TextField type="date" size="small" label="Retour prévu" InputLabelProps={{ shrink: true }} value={dueReturnAt} onChange={(e) => setDueReturnAt(e.target.value)} disabled={!!issuanceId} />
         </Stack>
+        <Divider sx={{ my: 2 }} />
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ md: 'center' }}>
+          <FormControlLabel
+            control={<Checkbox checked={historical} onChange={(e) => setHistorical(e.target.checked)} disabled={!!issuanceId} />}
+            label={<span><b>Remise historique</b> — saisie d'une remise déjà effectuée (ne décrémente PAS le stock)</span>}
+          />
+          {historical && (
+            <TextField
+              type="date"
+              size="small"
+              label="Date de la remise originale"
+              InputLabelProps={{ shrink: true }}
+              value={historicalDate}
+              onChange={(e) => setHistoricalDate(e.target.value)}
+              disabled={!!issuanceId}
+              sx={{ maxWidth: 220 }}
+            />
+          )}
+        </Stack>
+        {historical && (
+          <Alert severity="info" sx={{ mt: 1 }}>
+            Mode historique : le stock n'est pas modifié, la remise est marquée comme signée (consentements papier), aucun SMS n'est envoyé. Vous pourrez joindre le PDF original après la finalisation.
+          </Alert>
+        )}
       </Paper>
 
       {!issuanceId && (
@@ -311,13 +340,53 @@ export default function UniformIssuanceWizardPage() {
 
           <Stack direction="row" justifyContent="flex-end">
             <Button variant="contained" size="large" disabled={!employee || !anyPicked || finalize.isPending} onClick={() => finalize.mutate()}>
-              Finaliser la remise (décrémente le stock)
+              {historical ? 'Enregistrer la remise historique (sans toucher au stock)' : 'Finaliser la remise (décrémente le stock)'}
             </Button>
           </Stack>
         </>
       )}
 
-      {issuanceId && (
+      {issuanceId && historical && (
+        <Paper sx={{ p: 2 }}>
+          <Alert severity="success" sx={{ mb: 2 }}>
+            Remise historique enregistrée — <b>stock NON modifié</b> et marquée comme signée (papier).
+            Vous pouvez joindre le PDF original ci-dessous.
+          </Alert>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
+            <Button
+              variant="contained"
+              component="label"
+              disabled={uploadingPdf}
+            >
+              {uploadingPdf ? 'Téléversement…' : 'Téléverser le PDF original'}
+              <input
+                type="file"
+                accept="application/pdf"
+                hidden
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  setUploadingPdf(true);
+                  try {
+                    await uniformService.uploadIssuancePdf(issuanceId!, f);
+                    enqueueSnackbar('PDF joint à la remise', { variant: 'success' });
+                  } catch (err: any) {
+                    enqueueSnackbar(err?.response?.data?.error || 'Échec téléversement', { variant: 'error' });
+                  } finally {
+                    setUploadingPdf(false);
+                    (e.target as HTMLInputElement).value = '';
+                  }
+                }}
+              />
+            </Button>
+            <Button variant="outlined" onClick={() => navigate(`/employees/${employee.id}`)}>
+              Aller à la fiche de l'agent
+            </Button>
+          </Stack>
+        </Paper>
+      )}
+
+      {issuanceId && !historical && (
         <Paper sx={{ p: 2 }}>
           <Alert severity="success" sx={{ mb: 2 }}>
             Remise finalisée. <b>L'employeur doit signer en premier</b>, puis l'agent (SMS ou au comptoir).

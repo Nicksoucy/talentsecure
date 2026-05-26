@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { authenticateJWT, authorizeRoles } from '../middleware/auth';
 import { publicShareLimiter } from '../middleware/rate-limit.middleware';
 import * as ctrl from '../controllers/uniform.controller';
@@ -6,6 +7,19 @@ import * as iss from '../controllers/uniform-issuance.controller';
 import * as ret from '../controllers/uniform-return.controller';
 
 const router = Router();
+
+// Upload PDF (mémoire — on relaie direct vers R2).
+const pdfUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Seuls les fichiers PDF sont acceptés'));
+    }
+  },
+});
 
 // -------------------------------------------------------------------------
 // Signature publique (sans auth) — DOIT précéder authenticateJWT.
@@ -67,6 +81,7 @@ router.post('/issuances/:id/counter-sign', iss.counterSignIssuance);
 router.post('/issuances/:id/cancel', iss.cancelIssuance);
 router.post('/issuances/:id/close-termination', iss.closeTermination);
 router.get('/issuances/:id/pdf', iss.getIssuancePdfUrl);
+router.post('/issuances/:id/upload-pdf', pdfUpload.single('pdf'), iss.uploadIssuancePdf);
 
 // Retours
 router.post('/returns', ret.createReturn);

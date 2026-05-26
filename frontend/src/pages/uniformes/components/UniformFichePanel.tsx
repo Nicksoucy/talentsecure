@@ -6,6 +6,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
 } from '@mui/material';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import SignaturePad from './SignaturePad';
@@ -66,6 +67,21 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
     } catch { enqueueSnackbar('PDF indisponible', { variant: 'error' }); }
   };
 
+  // Téléversement du PDF original (utile pour les remises historiques).
+  const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+  const handleUploadPdf = async (issuanceId: string, file: File) => {
+    setUploadingFor(issuanceId);
+    try {
+      await uniformService.uploadIssuancePdf(issuanceId, file);
+      enqueueSnackbar('PDF joint à la remise', { variant: 'success' });
+      qc.invalidateQueries({ queryKey: ['uniform-fiche', employeeId] });
+    } catch (e: any) {
+      enqueueSnackbar(e?.response?.data?.error || 'Échec téléversement', { variant: 'error' });
+    } finally {
+      setUploadingFor(null);
+    }
+  };
+
   if (isLoading) return <Typography>Chargement…</Typography>;
   const fiche = data?.data;
   if (!fiche) return <Typography color="text.secondary">Aucune donnée uniforme.</Typography>;
@@ -115,6 +131,24 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
                 <TableCell align="right">{money(i.totalLoanCost)}</TableCell>
                 <TableCell align="right">
                   <Button size="small" startIcon={<PictureAsPdfIcon />} onClick={() => openPdf('issuance', i.id)}>PDF</Button>
+                  <Button
+                    size="small"
+                    component="label"
+                    startIcon={<UploadFileIcon />}
+                    disabled={uploadingFor === i.id}
+                  >
+                    {uploadingFor === i.id ? '…' : (i.formPdfStoragePath ? 'Remplacer PDF' : 'Téléverser PDF')}
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      hidden
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) handleUploadPdf(i.id, f);
+                        (e.target as HTMLInputElement).value = '';
+                      }}
+                    />
+                  </Button>
                   {!i.employerSignatureStoragePath && i.status !== 'DRAFT' && i.status !== 'CANCELLED' && (
                     <Button size="small" color="primary" onClick={() => setSignEmployerFor(i.id)}>Signer employeur</Button>
                   )}

@@ -105,9 +105,17 @@ export const uniformService = {
     const r = await api.put(`/api/uniforms/issuances/${id}`, data);
     return r.data;
   },
-  async finalizeIssuance(id: string) {
-    const r = await api.post(`/api/uniforms/issuances/${id}/finalize`);
+  async finalizeIssuance(id: string, opts?: { historical?: boolean; historicalDate?: string }) {
+    const r = await api.post(`/api/uniforms/issuances/${id}/finalize`, opts || {});
     return r.data;
+  },
+  async uploadIssuancePdf(id: string, file: File) {
+    const fd = new FormData();
+    fd.append('pdf', file);
+    const r = await api.post(`/api/uniforms/issuances/${id}/upload-pdf`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return r.data as { data: { formPdfStoragePath: string } };
   },
   async sendIssuanceSms(id: string) {
     const r = await api.post(`/api/uniforms/issuances/${id}/send-sms`);

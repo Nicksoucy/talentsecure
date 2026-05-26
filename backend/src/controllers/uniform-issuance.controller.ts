@@ -184,46 +184,89 @@ export const finalizeIssuance = async (req: Request, res: Response, next: NextFu
     if (existing.status !== 'DRAFT') throw new ApiError(400, 'Remise déjà finalisée');
     if (existing.lines.length === 0) throw new ApiError(400, 'Ajoutez au moins une pièce');
 
+    const { historical, historicalDate } = req.body || {};
+    const isHistorical = !!historical;
     const totalLoanCost = existing.lines.reduce((s, l) => s + l.quantity * Number(l.unitCostSnapshot), 0);
-    const signToken = generateShareToken();
-    const signTokenExpiresAt = getTokenExpiration(SIGN_TOKEN_DAYS);
+    const issuedAt = isHistorical && historicalDate ? new Date(historicalDate) : new Date();
+    const signToken = isHistorical ? null : generateShareToken();
+    const signTokenExpiresAt = isHistorical ? null : getTokenExpiration(SIGN_TOKEN_DAYS);
 
     const updated = await prisma.$transaction(async (tx) => {
-      for (const line of existing.lines) {
-        if (!line.variantId) continue; // ligne "Autre" : pas de stock géré
-        await applyMovement(tx, {
-          variantId: line.variantId,
-          type: 'OUT',
-          quantity: line.quantity,
-          reason: `Remise ${existing.id}`,
-          issuanceId: existing.id,
-          createdById: userId(req),
-        });
+      // Mode historique : pas de mouvement de stock (la remise a déjà eu lieu).
+      if (!isHistorical) {
+        for (const line of existing.lines) {
+          if (!line.variantId) continue;
+          await applyMovement(tx, {
+            variantId: line.variantId,
+            type: 'OUT',
+            quantity: line.quantity,
+            reason: `Remise ${existing.id}`,
+            issuanceId: existing.id,
+            createdById: userId(req),
+          });
+        }
       }
       return tx.uniformIssuance.update({
         where: { id: existing.id },
         data: {
           status: 'ISSUED',
-          issuedAt: new Date(),
+          issuedAt,
           totalLoanCost,
           signToken,
           signTokenExpiresAt,
+          // En mode historique, on considère que le PDF original (à téléverser) sert de preuve.
+          ...(isHistorical ? {
+            signatureStatus: 'SIGNED' as const,
+            signatureMethod: 'COUNTER' as const,
+            signedAt: issuedAt,
+            payrollConsentAccepted: true,
+            uniformPolicyConsentAccepted: existing.division === 'SECURITE',
+            fitAttested: true,
+          } : {}),
         },
         include: { lines: { include: { variant: { include: { item: true } } } } },
       });
     });
 
-    // PDF d'archive (sans signature pour l'instant) — régénéré après signature.
-    try {
-      const pdf = await generateIssuancePdf(existing.id);
-      const { key } = await uploadBufferToR2(pdf, `forms/issuances/${existing.id}.pdf`, 'application/pdf');
-      await prisma.uniformIssuance.update({ where: { id: existing.id }, data: { formPdfStoragePath: key } });
-    } catch (e) {
-      // ne bloque pas la finalisation si la génération PDF échoue
-      console.error('PDF remise échoué:', (e as Error).message);
+    // PDF d'archive — en mode historique, on laisse le user uploader le PDF original.
+    if (!isHistorical) {
+      try {
+        const pdf = await generateIssuancePdf(existing.id);
+        const { key } = await uploadBufferToR2(pdf, `forms/issuances/${existing.id}.pdf`, 'application/pdf');
+        await prisma.uniformIssuance.update({ where: { id: existing.id }, data: { formPdfStoragePath: key } });
+      } catch (e) {
+        console.error('PDF remise échoué:', (e as Error).message);
+      }
     }
 
-    res.json({ message: 'Remise finalisée — stock décrémenté', data: updated });
+    res.json({
+      message: isHistorical
+        ? 'Remise historique enregistrée — stock NON modifié'
+        : 'Remise finalisée — stock décrémenté',
+      data: updated,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Téléverse un PDF externe et l'attache à la remise (formPdfStoragePath).
+ * Utile pour les remises historiques où on veut joindre le formulaire papier signé.
+ */
+export const uploadIssuancePdf = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const file = (req as any).file;
+    if (!file) throw new ApiError(400, 'Fichier PDF requis (champ "pdf")');
+    if (file.mimetype && !file.mimetype.includes('pdf')) {
+      throw new ApiError(400, 'Le fichier doit être un PDF');
+    }
+    const issuance = await prisma.uniformIssuance.findUnique({ where: { id } });
+    if (!issuance) throw new ApiError(404, 'Remise introuvable');
+    const { key } = await uploadBufferToR2(file.buffer, `forms/issuances/${id}.pdf`, 'application/pdf');
+    await prisma.uniformIssuance.update({ where: { id }, data: { formPdfStoragePath: key } });
+    res.json({ message: 'PDF téléversé', data: { formPdfStoragePath: key } });
   } catch (error) {
     next(error);
   }
