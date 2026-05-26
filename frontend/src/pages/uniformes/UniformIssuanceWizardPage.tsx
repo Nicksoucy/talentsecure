@@ -149,17 +149,25 @@ export default function UniformIssuanceWizardPage() {
     onSuccess: () => enqueueSnackbar('SMS de signature envoyé à l’agent', { variant: 'success' }),
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Échec SMS — utilisez la signature au comptoir', { variant: 'warning' }),
   });
+  const [employerSigned, setEmployerSigned] = useState(false);
+  const saveEmployer = useMutation({
+    mutationFn: () => uniformService.counterSignIssuance(issuanceId!, { employerSignatureBase64: emprSig! }),
+    onSuccess: () => {
+      enqueueSnackbar("Signature de l'employeur enregistrée", { variant: 'success' });
+      setEmployerSigned(true);
+    },
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
+  });
   const counterSign = useMutation({
     mutationFn: () =>
       uniformService.counterSignIssuance(issuanceId!, {
         employeeSignatureBase64: empSig || undefined,
-        employerSignatureBase64: emprSig || undefined,
         signedByName,
         consents: { payroll: cPayroll, policy: cPolicy, fit: cFit },
       }),
     onSuccess: () => {
-      enqueueSnackbar('Signature enregistrée', { variant: 'success' });
-      navigate(`/uniformes/fiches/${employee.id}`);
+      enqueueSnackbar("Signature de l'agent enregistrée", { variant: 'success' });
+      navigate(`/employees/${employee.id}`);
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
@@ -311,32 +319,55 @@ export default function UniformIssuanceWizardPage() {
 
       {issuanceId && (
         <Paper sx={{ p: 2 }}>
-          <Alert severity="success" sx={{ mb: 2 }}>Remise finalisée. Faites signer l'agent : par SMS (lien sur son téléphone) ou au comptoir.</Alert>
-          <Stack direction="row" spacing={2} mb={2}>
-            <Button variant="outlined" startIcon={<SendIcon />} onClick={() => sendSms.mutate()} disabled={sendSms.isPending}>
-              Envoyer le lien par SMS
-            </Button>
-            <Button variant="text" onClick={() => navigate(`/uniformes/fiches/${employee.id}`)}>Terminer plus tard</Button>
-          </Stack>
-          <Divider sx={{ my: 2 }}>ou signature au comptoir</Divider>
-          <Stack spacing={2}>
-            <Typography variant="body2" color="text.secondary">
-              L'agent consent au prélèvement du coût total sur sa dernière paie si non retourné à la fin d'emploi.
-            </Typography>
-            <FormControlLabel control={<Checkbox checked={cPayroll} onChange={(e) => setCPayroll(e.target.checked)} />} label="Consentement prélèvement dernière paie" />
-            {division === 'SECURITE' && (
-              <FormControlLabel control={<Checkbox checked={cPolicy} onChange={(e) => setCPolicy(e.target.checked)} />} label="Respect du port de l'uniforme (Sécurité)" />
+          <Alert severity="success" sx={{ mb: 2 }}>
+            Remise finalisée. <b>L'employeur doit signer en premier</b>, puis l'agent (SMS ou au comptoir).
+          </Alert>
+
+          {/* 1) Signature employeur — obligatoire avant tout envoi */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle1" mb={1}>1. Signature de l'employeur</Typography>
+            {employerSigned ? (
+              <Alert severity="success">✓ Signature de l'employeur enregistrée.</Alert>
+            ) : (
+              <>
+                <SignaturePad label="Signer au nom de XGuard" onChange={setEmprSig} />
+                <Stack direction="row" justifyContent="flex-end" mt={1}>
+                  <Button variant="contained" disabled={!emprSig || saveEmployer.isPending} onClick={() => saveEmployer.mutate()}>
+                    Enregistrer la signature de l'employeur
+                  </Button>
+                </Stack>
+              </>
             )}
-            <FormControlLabel control={<Checkbox checked={cFit} onChange={(e) => setCFit(e.target.checked)} />} label="Atteste avoir essayé, taille adéquate" />
-            <TextField size="small" label="Nom signataire" value={signedByName} onChange={(e) => setSignedByName(e.target.value)} sx={{ maxWidth: 360 }} />
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
-              <Box sx={{ flex: 1 }}><SignaturePad label="Signature de l'employé" onChange={setEmpSig} /></Box>
-              <Box sx={{ flex: 1 }}><SignaturePad label="Signature de l'employeur" onChange={setEmprSig} /></Box>
+          </Box>
+
+          {/* 2) Signature de l'agent — débloquée une fois l'employeur signé */}
+          <Box>
+            <Typography variant="subtitle1" mb={1}>2. Signature de l'agent</Typography>
+            <Stack direction="row" spacing={2} mb={2}>
+              <Button variant="outlined" startIcon={<SendIcon />} onClick={() => sendSms.mutate()} disabled={!employerSigned || sendSms.isPending}>
+                Envoyer le lien par SMS à l'agent
+              </Button>
+              <Button variant="text" onClick={() => navigate(`/employees/${employee.id}`)}>Terminer plus tard</Button>
             </Stack>
-            <Stack direction="row" justifyContent="flex-end">
-              <Button variant="contained" disabled={!empSig || counterSign.isPending} onClick={() => counterSign.mutate()}>Enregistrer la signature</Button>
+            <Divider sx={{ my: 2 }}>ou signature au comptoir</Divider>
+            <Stack spacing={2}>
+              <Typography variant="body2" color="text.secondary">
+                L'agent consent au prélèvement du coût total sur sa dernière paie si non retourné à la fin d'emploi.
+              </Typography>
+              <FormControlLabel control={<Checkbox checked={cPayroll} onChange={(e) => setCPayroll(e.target.checked)} />} label="Consentement prélèvement dernière paie" />
+              {division === 'SECURITE' && (
+                <FormControlLabel control={<Checkbox checked={cPolicy} onChange={(e) => setCPolicy(e.target.checked)} />} label="Respect du port de l'uniforme (Sécurité)" />
+              )}
+              <FormControlLabel control={<Checkbox checked={cFit} onChange={(e) => setCFit(e.target.checked)} />} label="Atteste avoir essayé, taille adéquate" />
+              <TextField size="small" label="Nom de l'agent" value={signedByName} onChange={(e) => setSignedByName(e.target.value)} sx={{ maxWidth: 360 }} />
+              <SignaturePad label="Signature de l'agent" onChange={setEmpSig} />
+              <Stack direction="row" justifyContent="flex-end">
+                <Button variant="contained" disabled={!employerSigned || !empSig || counterSign.isPending} onClick={() => counterSign.mutate()}>
+                  Enregistrer la signature de l'agent
+                </Button>
+              </Stack>
             </Stack>
-          </Stack>
+          </Box>
         </Paper>
       )}
     </Box>
