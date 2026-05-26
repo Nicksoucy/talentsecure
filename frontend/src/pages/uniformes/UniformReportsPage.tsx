@@ -32,13 +32,14 @@ export default function UniformReportsPage() {
             </Stack>
           )}
           <Table size="small">
-            <TableHead><TableRow><TableCell>Morceau</TableCell><TableCell>Division</TableCell><TableCell>Grandeur</TableCell><TableCell align="right">Stock</TableCell><TableCell align="right">Valeur</TableCell></TableRow></TableHead>
+            <TableHead><TableRow><TableCell>Morceau</TableCell><TableCell>Division</TableCell><TableCell>Grandeur</TableCell><TableCell>Emplacement</TableCell><TableCell align="right">Stock</TableCell><TableCell align="right">Valeur</TableCell></TableRow></TableHead>
             <TableBody>
               {(stock.data?.data.rows || []).map((r: any) => (
                 <TableRow key={r.variantId} sx={r.lowStock ? { bgcolor: '#fff4e5' } : undefined}>
                   <TableCell>{r.itemName}</TableCell>
                   <TableCell>{r.division === 'SIGNALISATION' ? 'Signalisation' : 'Sécurité'}</TableCell>
                   <TableCell>{r.size}</TableCell>
+                  <TableCell>{r.emplacement || '—'}</TableCell>
                   <TableCell align="right">{r.quantityOnHand}{r.lowStock && <Chip size="small" color="warning" label="bas" sx={{ ml: 1 }} />}</TableCell>
                   <TableCell align="right">{money(r.value)}</TableCell>
                 </TableRow>

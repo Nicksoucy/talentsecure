@@ -42,18 +42,19 @@ export default function UniformsCataloguePage() {
 
   // ---- Dialog: nouvelle grandeur ----
   const [variantDlg, setVariantDlg] = useState<UniformItem | null>(null);
-  const [variantForm, setVariantForm] = useState({ size: '', replacementCost: '', reorderThreshold: '' });
+  const [variantForm, setVariantForm] = useState({ size: '', replacementCost: '', reorderThreshold: '', emplacement: '' });
   const createVariant = useMutation({
     mutationFn: () =>
       uniformService.createVariant(variantDlg!.id, {
         size: variantForm.size,
         replacementCost: variantForm.replacementCost ? Number(variantForm.replacementCost) : undefined,
         reorderThreshold: variantForm.reorderThreshold ? Number(variantForm.reorderThreshold) : undefined,
-      }),
+        ...(variantForm.emplacement ? { emplacement: variantForm.emplacement } : {}),
+      } as any),
     onSuccess: () => {
       enqueueSnackbar('Grandeur ajoutée', { variant: 'success' });
       setVariantDlg(null);
-      setVariantForm({ size: '', replacementCost: '', reorderThreshold: '' });
+      setVariantForm({ size: '', replacementCost: '', reorderThreshold: '', emplacement: '' });
       qc.invalidateQueries({ queryKey: ['uniform-items'] });
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
@@ -118,6 +119,7 @@ export default function UniformsCataloguePage() {
                 <TableRow>
                   <TableCell>Grandeur</TableCell>
                   <TableCell>Code-barres</TableCell>
+                  <TableCell>Emplacement</TableCell>
                   <TableCell align="right">Coût</TableCell>
                   <TableCell align="right">En stock</TableCell>
                   <TableCell align="right">Actions</TableCell>
@@ -128,6 +130,7 @@ export default function UniformsCataloguePage() {
                   <TableRow key={v.id}>
                     <TableCell>{v.size}</TableCell>
                     <TableCell><code>{v.barcode}</code></TableCell>
+                    <TableCell>{v.emplacement || '—'}</TableCell>
                     <TableCell align="right">{money(v.replacementCost)}</TableCell>
                     <TableCell align="right">
                       <Chip size="small" color={v.quantityOnHand > 0 ? 'success' : 'default'} label={v.quantityOnHand} />
@@ -147,7 +150,7 @@ export default function UniformsCataloguePage() {
                   </TableRow>
                 ))}
                 {(item.variants || []).length === 0 && (
-                  <TableRow><TableCell colSpan={5}><Typography variant="body2" color="text.secondary">Aucune grandeur.</Typography></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6}><Typography variant="body2" color="text.secondary">Aucune grandeur.</Typography></TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -190,6 +193,7 @@ export default function UniformsCataloguePage() {
             <TextField label="Grandeur (ex. M, 34, Unique)" value={variantForm.size} onChange={(e) => setVariantForm({ ...variantForm, size: e.target.value })} />
             <TextField type="number" label="Coût ($) — défaut du morceau si vide" value={variantForm.replacementCost} onChange={(e) => setVariantForm({ ...variantForm, replacementCost: e.target.value })} />
             <TextField type="number" label="Seuil de réappro (optionnel)" value={variantForm.reorderThreshold} onChange={(e) => setVariantForm({ ...variantForm, reorderThreshold: e.target.value })} />
+            <TextField label="Emplacement (ex. B4, A1-A2, Étagère)" value={variantForm.emplacement} onChange={(e) => setVariantForm({ ...variantForm, emplacement: e.target.value })} />
           </Stack>
         </DialogContent>
         <DialogActions>

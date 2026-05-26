@@ -17,6 +17,7 @@ export interface UniformVariant {
   itemId: string;
   size: string;
   sku?: string | null;
+  emplacement?: string | null;
   barcode: string;
   replacementCost: string | number;
   quantityOnHand: number;

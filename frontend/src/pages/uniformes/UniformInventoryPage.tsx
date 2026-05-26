@@ -58,6 +58,7 @@ export default function UniformInventoryPage() {
                 <TableCell>Morceau</TableCell>
                 <TableCell>Division</TableCell>
                 <TableCell>Grandeur</TableCell>
+                <TableCell>Emplacement</TableCell>
                 <TableCell align="right">En stock</TableCell>
                 <TableCell align="right">Coût</TableCell>
                 <TableCell align="right">Valeur</TableCell>
@@ -70,6 +71,7 @@ export default function UniformInventoryPage() {
                   <TableCell>{r.itemName}</TableCell>
                   <TableCell>{r.division === 'SIGNALISATION' ? 'Signalisation' : 'Sécurité'}</TableCell>
                   <TableCell>{r.size}</TableCell>
+                  <TableCell>{r.emplacement || '—'}</TableCell>
                   <TableCell align="right">
                     <Chip size="small" color={r.lowStock ? 'warning' : r.quantityOnHand > 0 ? 'success' : 'default'} label={r.quantityOnHand} />
                   </TableCell>

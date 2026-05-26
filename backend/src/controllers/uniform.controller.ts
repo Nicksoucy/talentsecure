@@ -135,13 +135,14 @@ export const createVariant = async (req: Request, res: Response, next: NextFunct
   try {
     const item = await prisma.uniformItem.findUnique({ where: { id: req.params.id } });
     if (!item) throw new ApiError(404, 'Morceau introuvable');
-    const { size, replacementCost, reorderThreshold, sku } = req.body;
+    const { size, replacementCost, reorderThreshold, sku, emplacement } = req.body;
     const barcode = await generateUniqueBarcode();
     const variant = await prisma.uniformVariant.create({
       data: {
         itemId: item.id,
         size: size || 'Unique',
         sku: sku ?? null,
+        emplacement: emplacement ?? null,
         barcode,
         replacementCost: replacementCost ?? item.defaultReplacementCost,
         reorderThreshold: reorderThreshold ?? null,
@@ -156,13 +157,14 @@ export const createVariant = async (req: Request, res: Response, next: NextFunct
 
 export const updateVariant = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { size, replacementCost, reorderThreshold, sku, isActive } = req.body;
+    const { size, replacementCost, reorderThreshold, sku, isActive, emplacement } = req.body;
     const data: any = {};
     if (size !== undefined) data.size = size;
     if (replacementCost !== undefined) data.replacementCost = replacementCost;
     if (reorderThreshold !== undefined) data.reorderThreshold = reorderThreshold;
     if (sku !== undefined) data.sku = sku;
     if (isActive !== undefined) data.isActive = isActive;
+    if (emplacement !== undefined) data.emplacement = emplacement;
     const variant = await prisma.uniformVariant.update({
       where: { id: req.params.variantId },
       data,
@@ -385,6 +387,7 @@ export const reportStock = async (_req: Request, res: Response, next: NextFuncti
         type: v.item.type,
         size: v.size,
         barcode: v.barcode,
+        emplacement: v.emplacement,
         quantityOnHand: v.quantityOnHand,
         replacementCost: Number(v.replacementCost),
         value,

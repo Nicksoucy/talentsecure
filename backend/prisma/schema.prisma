@@ -1157,6 +1157,7 @@ model UniformVariant {
   itemId           String
   size             String   @default("Unique") // grandeur libre ; "Unique" si one-size/équipement
   sku              String?
+  emplacement      String? // localisation physique (ex. "B4", "A1-A2", "Étagère")
   barcode          String   @unique // valeur Code128 générée par le système
   replacementCost  Decimal  @default(0) @db.Decimal(10, 2)
   quantityOnHand   Int      @default(0) // cache — voir registre des mouvements
