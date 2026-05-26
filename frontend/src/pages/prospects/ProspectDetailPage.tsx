@@ -312,7 +312,8 @@ function ProspectRefreshVideoButton({ prospectId }: { prospectId: string }) {
       queryClient.invalidateQueries({ queryKey: ['prospects'] });
     },
     onError: (e: any) => {
-      enqueueSnackbar(e.response?.data?.error || 'Erreur lors de la récupération', { variant: 'warning' });
+      const msg = e.response?.data?.error || e.response?.data?.message || e.message || 'Erreur lors de la récupération';
+      enqueueSnackbar(msg, { variant: 'warning', autoHideDuration: 15000 });
     },
   });
   return (

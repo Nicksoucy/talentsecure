@@ -1006,28 +1006,53 @@ export const refreshProspectVideoFromGhl = async (req: Request, res: Response, n
       }
       if (videoFileUrl) break;
     }
-    if (!videoFileUrl) return res.status(404).json({ error: 'Aucune vidéo trouvée dans GHL pour ce contact' });
+    if (!videoFileUrl) return res.status(404).json({ error: 'Aucune vidéo trouvée dans GHL pour ce contact (aucun fichier video/* dans les custom fields).' });
 
-    // 3) Télécharger + vérifier + uploader R2
-    const { downloadGhlFile, detectExtension, isLikelyVideo } = require('../utils/ghlFetch');
-    const { uploadBufferToR2 } = require('../services/r2.service');
-    const file = await downloadGhlFile(videoFileUrl);
-    if (file.buffer.length < 100 || !isLikelyVideo(file.buffer)) {
-      return res.status(400).json({ error: 'Le fichier trouvé n\'est pas une vidéo valide' });
+    // 3) Télécharger
+    let file: any;
+    try {
+      const { downloadGhlFile } = require('../utils/ghlFetch');
+      file = await downloadGhlFile(videoFileUrl);
+    } catch (e: any) {
+      console.error('Refresh video: téléchargement GHL échec', e?.message);
+      return res.status(502).json({ error: `Échec téléchargement GHL : ${e?.message || 'inconnu'}` });
     }
-    const ext = detectExtension(file, '');
-    const safe = `${prospect.firstName}_${prospect.lastName}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50) || 'video';
-    const key = `videos/prospects/${prospect.id}_${safe}${ext}`;
-    await uploadBufferToR2(file.buffer, key, file.contentType);
 
-    await prisma.prospectCandidate.update({
-      where: { id: prospect.id },
-      data: { videoUrl: videoFileUrl, videoStoragePath: key, videoUploadedAt: new Date() },
-    });
+    // 4) Valider que c'est une vraie vidéo (magic bytes)
+    const { isLikelyVideo, detectExtension } = require('../utils/ghlFetch');
+    if (!file?.buffer || file.buffer.length < 100) {
+      return res.status(400).json({ error: `Fichier vide ou trop petit (${file?.buffer?.length || 0} octets).` });
+    }
+    if (!isLikelyVideo(file.buffer)) {
+      return res.status(400).json({ error: `Le fichier téléchargé n'est pas une vidéo valide (magic bytes). Content-Type reçu: ${file.contentType || 'inconnu'}.` });
+    }
+
+    // 5) Upload R2
+    let key: string;
+    try {
+      const { uploadBufferToR2 } = require('../services/r2.service');
+      const ext = detectExtension(file, '');
+      const safe = `${prospect.firstName}_${prospect.lastName}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50) || 'video';
+      key = `videos/prospects/${prospect.id}_${safe}${ext}`;
+      await uploadBufferToR2(file.buffer, key, file.contentType);
+    } catch (e: any) {
+      console.error('Refresh video: upload R2 échec', e?.message);
+      return res.status(500).json({ error: `Échec upload R2 : ${e?.message || 'inconnu'}` });
+    }
+
+    // 6) Mettre à jour la fiche
+    try {
+      await prisma.prospectCandidate.update({
+        where: { id: prospect.id },
+        data: { videoUrl: videoFileUrl, videoStoragePath: key, videoUploadedAt: new Date() },
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: `Échec mise à jour DB : ${e?.message || 'inconnu'}` });
+    }
 
     res.json({ success: true, message: 'Vidéo récupérée et stockée', videoStoragePath: key });
   } catch (error: any) {
-    console.error('Refresh video from GHL erreur:', error.message);
-    next(error);
+    console.error('Refresh video from GHL erreur globale:', error?.message);
+    return res.status(500).json({ error: `Erreur inattendue : ${error?.message || 'inconnu'}` });
   }
 };
