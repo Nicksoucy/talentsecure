@@ -9,6 +9,7 @@ import { publicUniformService } from '@/services/public-uniform.service';
 import SignaturePad from '../uniformes/components/SignaturePad';
 
 const condLabel: Record<string, string> = { GOOD: 'Bon', DAMAGED: 'Endommagé', LOST: 'Perdu', NOT_RETURNED: 'Non retourné' };
+const money = (n: any) => `$ ${Number(n || 0).toFixed(2)}`;
 
 export default function UniformSignPage() {
   const { token } = useParams<{ token: string }>();
@@ -80,8 +81,12 @@ export default function UniformSignPage() {
       <Paper sx={{ p: 3 }}>
         <Typography mb={1}>Bonjour {payload?.employeeFirstName || ''}, veuillez vérifier puis signer.</Typography>
 
-        <Table size="small" sx={{ mb: 2 }}>
-          <TableHead><TableRow><TableCell>Pièce</TableCell><TableCell>Grandeur</TableCell><TableCell align="right">Qté</TableCell>{!isPret && <TableCell>État</TableCell>}</TableRow></TableHead>
+        <Table size="small" sx={{ mb: 1 }}>
+          <TableHead><TableRow>
+            <TableCell>Pièce</TableCell><TableCell>Grandeur</TableCell><TableCell align="right">Qté</TableCell>
+            {!isPret && <TableCell>État</TableCell>}
+            <TableCell align="right">Coût unit.</TableCell><TableCell align="right">Total</TableCell>
+          </TableRow></TableHead>
           <TableBody>
             {payload?.lines.map((l, i) => (
               <TableRow key={i}>
@@ -89,13 +94,23 @@ export default function UniformSignPage() {
                 <TableCell>{l.size}</TableCell>
                 <TableCell align="right">{l.quantity}</TableCell>
                 {!isPret && <TableCell>{condLabel[l.condition || ''] || l.condition}</TableCell>}
+                <TableCell align="right">{money(l.unitCost)}</TableCell>
+                <TableCell align="right">{money(l.lineTotal)}</TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+          <Typography variant="subtitle1" fontWeight={700}>
+            {isPret ? 'Coût total du prêt' : 'Valeur totale'} : {money(payload?.total)}
+          </Typography>
+        </Box>
 
         {isPret && (
           <Stack spacing={1} mb={2}>
+            <Alert severity="warning" sx={{ fontWeight: 600 }}>
+              Montant qui pourrait être prélevé de votre paie si non retourné : {money(payload?.total)}
+            </Alert>
             <Typography variant="body2" color="text.secondary">{payload?.consents.payroll}</Typography>
             <FormControlLabel control={<Checkbox checked={cPayroll} onChange={(e) => setCPayroll(e.target.checked)} />} label="J'accepte le prélèvement sur ma dernière paie si non retourné." />
             {payload?.consents.policy && (

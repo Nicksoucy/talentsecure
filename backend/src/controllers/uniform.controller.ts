@@ -512,12 +512,18 @@ export const getSignPayload = async (req: Request, res: Response, next: NextFunc
     }
     const employee = await prisma.employee.findUnique({ where: { id: found.record.employeeId } });
     const division = (found.record as any).division as string | undefined;
-    const lines = found.record.lines.map((l: any) => ({
-      name: l.variant ? l.variant.item.name : l.customItemName || 'Autre',
-      size: l.variant ? l.variant.size : '—',
-      quantity: l.quantity,
-      condition: l.condition,
-    }));
+    const lines = found.record.lines.map((l: any) => {
+      const unitCost = Number(l.unitCostSnapshot ?? l.unitReplacementCost ?? 0);
+      return {
+        name: l.variant ? l.variant.item.name : l.customItemName || 'Autre',
+        size: l.variant ? l.variant.size : '—',
+        quantity: l.quantity,
+        condition: l.condition,
+        unitCost,
+        lineTotal: unitCost * l.quantity,
+      };
+    });
+    const total = lines.reduce((s: number, l: any) => s + l.lineTotal, 0);
     res.json({
       data: {
         kind: found.kind,
@@ -525,6 +531,7 @@ export const getSignPayload = async (req: Request, res: Response, next: NextFunc
         employeeFirstName: employee?.firstName ?? null,
         division: division ?? null,
         lines,
+        total,
         consents: {
           payroll: UNIFORM_CONSENT_PAYROLL,
           policy: division === 'SECURITE' && found.kind === 'pret' ? UNIFORM_CONSENT_POLICY : null,

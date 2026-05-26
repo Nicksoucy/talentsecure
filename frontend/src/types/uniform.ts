@@ -121,6 +121,7 @@ export interface SignPayload {
   alreadySigned: boolean;
   employeeFirstName: string | null;
   division: UniformDivision | null;
-  lines: { name: string; size: string; quantity: number; condition?: string }[];
+  lines: { name: string; size: string; quantity: number; condition?: string; unitCost?: number; lineTotal?: number }[];
+  total?: number;
   consents: { payroll: string; policy: string | null; fit: string | null };
 }
