@@ -42,6 +42,7 @@ import { useSnackbar } from 'notistack';
 import { useNavigate } from 'react-router-dom';
 
 import { adminService } from '@/services/admin.service';
+import { employeeService } from '@/services/employee.service';
 import { TableSkeleton } from '@/components/skeletons';
 import { catalogueService } from '@/services/catalogue.service';
 import { clientService } from '@/services/client.service';
@@ -592,6 +593,25 @@ export default function CandidatesListPage() {
     },
   });
 
+  // Promote candidate to employee
+  const promoteMutation = useMutation({
+    mutationFn: ({ id }: { id: string; label?: string }) => employeeService.promoteCandidate(id, {}),
+    onSuccess: (response, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      const label = variables?.label || `ID ${variables?.id}`;
+      enqueueSnackbar(`${label} converti en employé`, { variant: 'success' });
+      const newId = response?.data?.id;
+      if (newId) navigate(`/employees/${newId}`);
+    },
+    onError: (error: any, variables) => {
+      const label = variables?.label || `ID ${variables?.id}`;
+      enqueueSnackbar(error.response?.data?.error || `Impossible de convertir ${label} en employé`, {
+        variant: 'error',
+      });
+    },
+  });
+
   // Create catalogue mutation
   const createCatalogueMutation = useMutation({
     mutationFn: catalogueService.createCatalogue,
@@ -1016,6 +1036,7 @@ export default function CandidatesListPage() {
             onUnarchive={(id, label) => unarchiveMutation.mutate({ id, label })}
             onDelete={(id, label) => deleteMutation.mutate({ id, label })}
             onRevertToProspect={(id, label) => revertToProspectMutation.mutate({ id, label })}
+            onPromote={(id, label) => promoteMutation.mutate({ id, label })}
             onExtractSkills={handleExtractSkills}
             page={page}
             onPageChange={setPage}

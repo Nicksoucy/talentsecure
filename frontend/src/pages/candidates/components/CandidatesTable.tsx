@@ -42,6 +42,7 @@ interface CandidatesTableProps {
     onUnarchive: (id: string, label: string) => void;
     onDelete: (id: string, label: string) => void;
     onRevertToProspect?: (id: string, label: string) => void;
+    onPromote?: (id: string, label: string) => void;
     onExtractSkills: (candidate: any) => void;
     // Pagination
     page: number;
@@ -67,6 +68,7 @@ export default function CandidatesTable({
     onUnarchive,
     onDelete,
     onRevertToProspect,
+    onPromote,
     onExtractSkills,
     page,
     onPageChange,
@@ -165,6 +167,7 @@ export default function CandidatesTable({
                                     onUnarchive={() => onUnarchive(candidate.id, label)}
                                     onDelete={() => onDelete(candidate.id, label)}
                                     onRevertToProspect={onRevertToProspect ? () => onRevertToProspect(candidate.id, label) : undefined}
+                                    onPromote={onPromote ? () => onPromote(candidate.id, label) : undefined}
                                     onExtractSkills={() => onExtractSkills(candidate)}
                                     userRole={userRole}
                                 />

@@ -21,6 +21,7 @@ import {
   Visibility as ViewIcon,
   Undo as UndoIcon,
   Psychology as PsychologyIcon,
+  Badge as BadgeIcon,
 } from '@mui/icons-material';
 import { Candidate } from '@/types';
 
@@ -32,6 +33,7 @@ interface CandidateActionsMenuProps {
   onUnarchive: () => void;
   onDelete: () => void;
   onRevertToProspect?: () => void;
+  onPromote?: () => void;
   onExtractSkills?: () => void;
   userRole?: string;
 }
@@ -44,13 +46,14 @@ export default function CandidateActionsMenu({
   onUnarchive,
   onDelete,
   onRevertToProspect,
+  onPromote,
   onExtractSkills,
   userRole = 'ADMIN',
 }: CandidateActionsMenuProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
-    type: 'archive' | 'unarchive' | 'delete' | 'revert' | null;
+    type: 'archive' | 'unarchive' | 'delete' | 'revert' | 'promote' | null;
   }>({ open: false, type: null });
 
   const handleOpenMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -62,7 +65,7 @@ export default function CandidateActionsMenu({
     setAnchorEl(null);
   };
 
-  const handleOpenConfirmDialog = (type: 'archive' | 'unarchive' | 'delete' | 'revert') => {
+  const handleOpenConfirmDialog = (type: 'archive' | 'unarchive' | 'delete' | 'revert' | 'promote') => {
     setConfirmDialog({ open: true, type });
     handleCloseMenu();
   };
@@ -85,6 +88,11 @@ export default function CandidateActionsMenu({
       case 'revert':
         if (onRevertToProspect) {
           onRevertToProspect();
+        }
+        break;
+      case 'promote':
+        if (onPromote) {
+          onPromote();
         }
         break;
     }
@@ -119,6 +127,13 @@ export default function CandidateActionsMenu({
           title: 'Re-convertir en candidat potentiel',
           message: `Êtes-vous sûr de vouloir re-convertir ${candidate.firstName} ${candidate.lastName} en candidat potentiel ? Le candidat sera supprimé et un nouveau prospect sera créé avec toutes ses informations (y compris le CV).`,
           confirmText: 'Re-convertir',
+          confirmColor: 'primary' as const,
+        };
+      case 'promote':
+        return {
+          title: 'Convertir en employé',
+          message: `Êtes-vous sûr de vouloir convertir ${candidate.firstName} ${candidate.lastName} en employé ? La fiche sera créée dans Employés (avec son profil et la gestion d'uniforme), et le candidat sera retiré de la liste des candidats.`,
+          confirmText: 'Convertir en employé',
           confirmColor: 'primary' as const,
         };
       default:
@@ -166,6 +181,15 @@ export default function CandidateActionsMenu({
           </ListItemIcon>
           <ListItemText>Modifier</ListItemText>
         </MenuItem>
+
+        {onPromote && (
+          <MenuItem onClick={() => handleOpenConfirmDialog('promote')}>
+            <ListItemIcon>
+              <BadgeIcon fontSize="small" color="primary" />
+            </ListItemIcon>
+            <ListItemText>Convertir en employé</ListItemText>
+          </MenuItem>
+        )}
 
         {candidate.isArchived ? (
           <MenuItem onClick={() => handleOpenConfirmDialog('unarchive')}>
