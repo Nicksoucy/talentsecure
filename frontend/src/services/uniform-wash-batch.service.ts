@@ -67,6 +67,10 @@ export const washBatchService = {
     const r = await api.post(`/api/uniforms/wash-batches/${id}/inspect`, { inspections });
     return r.data as { data: WashBatch };
   },
+  async inspectAllGood(id: string) {
+    const r = await api.post(`/api/uniforms/wash-batches/${id}/inspect-all-good`);
+    return r.data as { data: WashBatch };
+  },
   async cancel(id: string) {
     const r = await api.post(`/api/uniforms/wash-batches/${id}/cancel`);
     return r.data as { data: WashBatch };

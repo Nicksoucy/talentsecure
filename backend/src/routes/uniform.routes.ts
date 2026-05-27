@@ -100,6 +100,7 @@ router.post('/wash-batches/:id/items', wash.addItems);
 router.post('/wash-batches/:id/send', wash.send);
 router.post('/wash-batches/:id/return', wash.ret);
 router.post('/wash-batches/:id/inspect', wash.inspect);
+router.post('/wash-batches/:id/inspect-all-good', wash.inspectAllGood);
 router.post('/wash-batches/:id/cancel', wash.cancel);
 
 // Fiche agent & règlements

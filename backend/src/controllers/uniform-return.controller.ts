@@ -10,6 +10,7 @@ import { sendSignatureSms } from '../services/sms.service';
 import { generateShareToken, getTokenExpiration } from '../utils/token';
 import { SIGN_TOKEN_DAYS } from '../constants/uniform';
 import { notify } from '../services/notification.service';
+import { getOrCreateOpenBatch } from '../services/uniform-wash-batch.service';
 
 const userId = (req: Request): string | undefined => (req.user as any)?.id;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -141,24 +142,24 @@ export const finalizeReturn = async (req: Request, res: Response, next: NextFunc
     const signTokenExpiresAt = getTokenExpiration(SIGN_TOKEN_DAYS);
 
     let washBatchId: string | null = null;
+    let washBatchIsNew = false;
     let goodCount = 0;
     let damagedCount = 0;
     let lostCount = 0;
 
+    // Récupère le lot ouvert AVANT la transaction (peut créer un nouveau si aucun
+    // n'existe). Tous les items "Bon" de ce retour s'y ajoutent.
+    const hasGood = ret.lines.some((l) => l.condition === 'GOOD' && l.variantId);
+    if (hasGood) {
+      const beforeCount = await prisma.uniformWashBatch.count({ where: { status: 'CREATED' } });
+      const openBatch = await getOrCreateOpenBatch({ createdById: userId(req) });
+      washBatchId = openBatch.id;
+      washBatchIsNew = beforeCount === 0;
+    }
+
     const updated = await prisma.$transaction(async (tx) => {
       for (const line of ret.lines) {
-        if (line.condition === 'GOOD' && line.variantId) {
-          // Crée le wash batch si pas encore créé pour ce retour
-          if (!washBatchId) {
-            const batch = await tx.uniformWashBatch.create({
-              data: {
-                status: 'CREATED',
-                notes: `Retour ${ret.id} — pièces à laver avant ré-intégration`,
-                createdById: userId(req),
-              },
-            });
-            washBatchId = batch.id;
-          }
+        if (line.condition === 'GOOD' && line.variantId && washBatchId) {
           // 1 UniformWashBatchItem par UNITÉ (qty=1) pour granularité d'inspection
           const items: { batchId: string; variantId: string; quantity: number; returnLineId: string }[] = [];
           for (let i = 0; i < line.quantity; i++) {
@@ -215,10 +216,12 @@ export const finalizeReturn = async (req: Request, res: Response, next: NextFunc
         type: 'UNIFORM_WASH_BATCH_CREATED',
         channels: ['IN_APP'],
         audience: 'ADMINS',
-        title: `Lot de lavage créé`,
-        message: `${goodCount} pièce(s) à laver depuis le retour de l'agent`,
+        title: washBatchIsNew ? `Nouveau lot de lavage ouvert` : `Pièces ajoutées au lot ouvert`,
+        message: washBatchIsNew
+          ? `${goodCount} pièce(s) à laver — lot accumule les retours futurs`
+          : `${goodCount} pièce(s) ajoutée(s) au lot ouvert existant`,
         link: `/uniformes/lavage/${washBatchId}`,
-        payload: { batchId: washBatchId, returnId: ret.id, goodCount },
+        payload: { batchId: washBatchId, returnId: ret.id, goodCount, washBatchIsNew },
       }).catch((e) => console.error('notify failed:', e));
     }
     if (damagedCount > 0 || lostCount > 0) {

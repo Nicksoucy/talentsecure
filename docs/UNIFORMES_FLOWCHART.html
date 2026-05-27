@@ -339,8 +339,14 @@
     <!-- [NOTIF EMAIL endo] @ (1380, 1090) → Box [15] Endommagé (right edge ≈ 1360, 1030) -->
     <line x1="1380" y1="1100" x2="1360" y2="1040" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
 
-    <!-- [LOT STAGNANT >7j] @ (1200, 1345) → Box [12] Envoi (right edge ≈ 1170, 1380) -->
-    <line x1="1200" y1="1370" x2="1170" y2="1380" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- [LOT OUVERT @ box 11] @ (780, 1170) → Box [11] Lot ouvert (left ≈ 1010, 1200) -->
+    <line x1="990" y1="1200" x2="1010" y2="1205" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [AUTO À L'ENVOI @ box 12] @ (1200, 1345) → Box [12] Envoi (right ≈ 1170, 1380) -->
+    <line x1="1200" y1="1380" x2="1170" y2="1380" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [LOT STAGNANT >7j] @ (1200, 1455) → Box [12] Envoi (right ≈ 1170, 1390) -->
+    <line x1="1200" y1="1480" x2="1170" y2="1395" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
 
     <!-- [INSPECTION REQUISE] @ (1200, 1520) → Box [13] Retour lot (right edge ≈ 1170, 1555) -->
     <line x1="1200" y1="1545" x2="1170" y2="1555" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
@@ -427,19 +433,19 @@
   </div>
   <div class="box branch bon" style="top:1170px; left:1010px;">
     <div class="num">11</div>
-    Ajouter à un batch<br>de lavage
+    Ajout au <strong>lot ouvert</strong><br>(accumule les retours)
   </div>
   <div class="box branch bon" style="top:1345px; left:1010px;">
     <div class="num">12</div>
-    Envoi du lot au<br>fournisseur (vendor)
+    Envoi du lot<br>au fournisseur
   </div>
   <div class="box branch bon" style="top:1520px; left:1010px;">
     <div class="num">13</div>
-    Retour du lot<br>(réception physique)
+    Lot revenu propre<br>(réception physique)
   </div>
   <div class="box branch bon" style="top:1695px; left:1010px;">
     <div class="num">14</div>
-    Inspection par pièce<br>+ confirmer restock
+    Réception :<br><strong>« Tout Bon »</strong> 1 clic<br>OU inspection détaillée
   </div>
 
   <!-- [10-Endo] Endommagé → Poubelle -->
@@ -523,8 +529,24 @@
     <div class="recipients">→ Admin + rh@xguard.ca</div>
   </div>
 
+  <!-- @Étape 11 - Notion de "lot ouvert" -->
+  <div class="annotation ann-auto" style="top:1170px; left:780px; width:210px;">
+    <div class="label">🔄 LOT OUVERT</div>
+    <strong>Un seul lot ouvert</strong> est actif à la fois.<br>
+    Tous les retours « Bon » s'y ajoutent automatiquement<br>
+    jusqu'à son envoi.
+  </div>
+
+  <!-- @Étape 12 - Auto-création nouvelle batch -->
+  <div class="annotation ann-auto" style="top:1345px; left:1200px; width:230px;">
+    <div class="label">⚡ AUTO À L'ENVOI</div>
+    Dès qu'un lot est envoyé au lavage :<br>
+    → <strong>Une nouvelle batch ouverte est créée automatiquement</strong><br>
+    pour accueillir les prochains retours.
+  </div>
+
   <!-- @Étape 12 - Lot stagnant -->
-  <div class="annotation ann-email" style="top:1345px; left:1200px;">
+  <div class="annotation ann-email" style="top:1455px; left:1200px;">
     <div class="label">📧 SI LOT BLOQUÉ PLUS DE 7 JOURS</div>
     Alerte automatique si le fournisseur ne renvoie pas le lot
     <div class="recipients">→ Admin (email + cloche)</div>
@@ -537,11 +559,14 @@
     <div class="recipients">→ Admin (email + cloche)</div>
   </div>
 
-  <!-- @Étape 14 - Restock -->
-  <div class="annotation ann-inapp" style="top:1695px; left:1200px;">
-    <div class="label">🔔 INSPECTION PIÈCE PAR PIÈCE</div>
-    1 carte par pièce :<br>
-    🟢 Bon → retour au stock disponible<br>
+  <!-- @Étape 14 - Restock — 2 options -->
+  <div class="annotation ann-inapp" style="top:1695px; left:1200px; width:240px;">
+    <div class="label">✅ 2 OPTIONS À LA RÉCEPTION</div>
+    <strong>Option A (cas normal) :</strong><br>
+    1 clic « Tout marquer Bon » → toutes les pièces retournent au stock.<br><br>
+    <strong>Option B (si problème) :</strong><br>
+    Inspection pièce-par-pièce :<br>
+    🟢 Bon → retour stock disponible<br>
     🔴 Endommagé → poubelle (sortie définitive)
   </div>
 

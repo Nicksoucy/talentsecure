@@ -115,8 +115,30 @@ export async function addToBatch(
   });
 }
 
-/** CREATED → SENT_TO_LAUNDRY */
-export async function markSent(batchId: string, opts?: { vendor?: string | null; notes?: string | null }) {
+/**
+ * Récupère le « lot ouvert » courant (status=CREATED), ou en crée un nouveau s'il
+ * n'en existe pas. C'est ce lot qui accumule tous les retours d'agents avec items
+ * « Bon ». Un seul lot ouvert peut exister à la fois.
+ */
+export async function getOrCreateOpenBatch(opts?: { createdById?: string | null }): Promise<{ id: string }> {
+  const existing = await prisma.uniformWashBatch.findFirst({
+    where: { status: 'CREATED' },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (existing) return { id: existing.id };
+
+  const created = await prisma.uniformWashBatch.create({
+    data: {
+      status: 'CREATED',
+      notes: 'Lot ouvert — accumule les retours en attente d\'envoi au lavage',
+      createdById: opts?.createdById ?? null,
+    },
+  });
+  return { id: created.id };
+}
+
+/** CREATED → SENT_TO_LAUNDRY. Crée automatiquement un NOUVEAU lot ouvert. */
+export async function markSent(batchId: string, opts?: { vendor?: string | null; notes?: string | null; createdById?: string | null }) {
   const batch = await prisma.uniformWashBatch.findUnique({ where: { id: batchId } });
   if (!batch) throw new ApiError(404, 'Lot introuvable');
   if (batch.status !== 'CREATED') throw new ApiError(400, `Transition invalide depuis ${batch.status}`);
@@ -132,17 +154,44 @@ export async function markSent(batchId: string, opts?: { vendor?: string | null;
     include: { items: { include: { variant: { include: { item: true } } } } },
   });
 
+  // Auto-crée un nouveau lot ouvert pour les prochains retours
+  await prisma.uniformWashBatch.create({
+    data: {
+      status: 'CREATED',
+      notes: `Lot ouvert — créé automatiquement à l'envoi du lot ${batchId}`,
+      createdById: opts?.createdById ?? null,
+    },
+  });
+
   await notify({
     type: 'UNIFORM_WASH_BATCH_SENT',
     channels: ['IN_APP'],
     audience: 'ADMINS',
     title: `Lot de lavage envoyé`,
-    message: `Lot envoyé à ${updated.vendor || 'fournisseur'} — ${updated.items.length} pièce(s)`,
+    message: `Lot envoyé à ${updated.vendor || 'fournisseur'} — ${updated.items.length} pièce(s). Nouveau lot ouvert créé.`,
     link: `/uniformes/lavage/${batchId}`,
     payload: { batchId },
   });
 
   return updated;
+}
+
+/**
+ * Raccourci : marque toutes les pièces d'un lot revenu comme « Bon » en un seul
+ * appel. Utile pour le cas normal où le fournisseur retourne le lot propre et
+ * complet — évite à l'admin de cliquer sur chaque pièce.
+ */
+export async function inspectAllGood(batchId: string, inspectedById?: string | null) {
+  const batch = await prisma.uniformWashBatch.findUnique({
+    where: { id: batchId },
+    include: { items: true },
+  });
+  if (!batch) throw new ApiError(404, 'Lot introuvable');
+  if (batch.status !== 'RETURNED_FROM_LAUNDRY') {
+    throw new ApiError(400, `Inspection impossible depuis status=${batch.status}`);
+  }
+  const inspections = batch.items.map((i) => ({ itemId: i.id, postWashCondition: 'GOOD' as const }));
+  return inspectBatch(batchId, inspections, inspectedById ?? null);
 }
 
 /** SENT_TO_LAUNDRY → RETURNED_FROM_LAUNDRY */

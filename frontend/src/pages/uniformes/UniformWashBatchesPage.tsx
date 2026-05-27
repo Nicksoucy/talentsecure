@@ -152,6 +152,11 @@ function WashBatchDialog({ batchId, onClose }: { batchId: string; onClose: () =>
     onSuccess: () => { enqueueSnackbar('Lot annulé — pièces réinjectées au stock', { variant: 'success' }); invalidate(); onClose(); },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
+  const allGoodMutation = useMutation({
+    mutationFn: () => washBatchService.inspectAllGood(batchId),
+    onSuccess: () => { enqueueSnackbar('Lot réceptionné — toutes les pièces retournées au stock', { variant: 'success' }); invalidate(); },
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
+  });
 
   return (
     <Dialog open onClose={onClose} maxWidth="md" fullWidth>
@@ -179,9 +184,17 @@ function WashBatchDialog({ batchId, onClose }: { batchId: string; onClose: () =>
               {batch.inspectedAt && <Typography variant="body2"><strong>Inspecté le :</strong> {new Date(batch.inspectedAt).toLocaleString('fr-CA')}</Typography>}
             </Stack>
 
+            {batch.status === 'CREATED' && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                <strong>Lot ouvert</strong> — les retours d'agents marqués « Bon » s'ajoutent automatiquement ici jusqu'à l'envoi au lavage.
+                Quand vous l'envoyez, un nouveau lot ouvert est créé pour les prochains retours.
+              </Alert>
+            )}
             {batch.status === 'RETURNED_FROM_LAUNDRY' && (
               <Alert severity="warning" sx={{ mb: 2 }}>
-                Inspection requise : marquer chaque pièce comme Bonne (retour stock) ou Endommagée (poubelle).
+                <strong>Réception requise</strong> — 2 options :<br/>
+                ✅ <strong>« Tout est OK »</strong> en 1 clic (cas normal — toutes les pièces retournent au stock)<br/>
+                🔍 <strong>Inspection détaillée</strong> si une ou plusieurs pièces ont un problème
               </Alert>
             )}
 
@@ -228,9 +241,20 @@ function WashBatchDialog({ batchId, onClose }: { batchId: string; onClose: () =>
           </Button>
         )}
         {batch?.status === 'RETURNED_FROM_LAUNDRY' && (
-          <Button variant="contained" color="warning" onClick={() => setShowInspect(true)}>
-            Inspecter le lot
-          </Button>
+          <>
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<CheckCircleIcon />}
+              onClick={() => allGoodMutation.mutate()}
+              disabled={allGoodMutation.isPending}
+            >
+              Tout est OK ({batch.items.length} pièces)
+            </Button>
+            <Button variant="outlined" color="warning" onClick={() => setShowInspect(true)}>
+              Inspection détaillée…
+            </Button>
+          </>
         )}
         <Button onClick={onClose}>Fermer</Button>
       </DialogActions>

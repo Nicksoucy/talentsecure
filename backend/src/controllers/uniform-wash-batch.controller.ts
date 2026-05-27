@@ -88,6 +88,16 @@ export const inspect = async (req: Request, res: Response, next: NextFunction) =
   }
 };
 
+/** Raccourci : marque toutes les pièces du lot comme Bon (réception normale). */
+export const inspectAllGood = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await svc.inspectAllGood(req.params.id, userId(req));
+    res.json({ message: 'Lot réceptionné — toutes les pièces marquées Bon', data });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const cancel = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = await svc.cancelBatch(req.params.id, { createdById: userId(req) });
