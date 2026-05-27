@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Module Uniformes — Flow complet (éditable)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px 24px;
+    color: #1a1a1a;
+    background: #f9fafb;
+    line-height: 1.6;
+  }
+  h1 { color: #1e3a8a; border-bottom: 3px solid #2563eb; padding-bottom: 12px; }
+  h2 {
+    color: #1f2937;
+    border-bottom: 2px solid #e5e7eb;
+    padding-bottom: 6px;
+    margin-top: 48px;
+    position: relative;
+  }
+  h2::before {
+    content: "§";
+    color: #93c5fd;
+    margin-right: 8px;
+  }
+  h3 { color: #374151; margin-top: 32px; }
+  .meta {
+    background: #eff6ff;
+    padding: 12px 16px;
+    border-radius: 6px;
+    border-left: 4px solid #2563eb;
+    margin-bottom: 24px;
+    font-size: 14px;
+  }
+  .toc {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 16px 24px;
+    margin: 24px 0;
+  }
+  .toc ol { margin: 8px 0; padding-left: 20px; }
+  .toc a { color: #2563eb; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .section {
+    background: white;
+    padding: 24px;
+    border-radius: 8px;
+    margin: 24px 0;
+    border: 1px solid #e5e7eb;
+  }
+  .action-card, .notif-card, .modif-card, .actor-card {
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin: 12px 0;
+    border-left: 4px solid;
+  }
+  .action-card {
+    background: #fef3c7;
+    border-left-color: #f59e0b;
+  }
+  .action-card::before { content: "⚡ ACTION — "; font-weight: bold; }
+  .notif-card {
+    background: #dbeafe;
+    border-left-color: #2563eb;
+  }
+  .notif-card::before { content: "🔔 NOTIF — "; font-weight: bold; }
+  .modif-card {
+    background: #fee2e2;
+    border-left-color: #dc2626;
+  }
+  .modif-card::before { content: "✏️ MODIFICATION SUGGÉRÉE — "; font-weight: bold; color: #991b1b; }
+  .actor-card {
+    background: #ecfdf5;
+    border-left-color: #10b981;
+  }
+  .actor-card::before { content: "👤 ACTEUR — "; font-weight: bold; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border: 1px solid #e5e7eb;
+  }
+  th { background: #f3f4f6; font-weight: 600; }
+  tr:nth-child(even) td { background: #fafafa; }
+  .mermaid {
+    background: white;
+    padding: 16px;
+    border-radius: 6px;
+    margin: 16px 0;
+    text-align: center;
+  }
+  code { background: #f3f4f6; padding: 2px 6px; border-radius: 3px; font-size: 13px; font-family: 'SF Mono', Consolas, monospace; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .badge-email { background: #dbeafe; color: #1e40af; }
+  .badge-sms { background: #fed7aa; color: #9a3412; }
+  .badge-inapp { background: #d1fae5; color: #065f46; }
+  .badge-rh { background: #ede9fe; color: #5b21b6; }
+  .badge-paie { background: #fee2e2; color: #991b1b; }
+  .badge-admin { background: #fef3c7; color: #92400e; }
+  .badge-agent { background: #e0e7ff; color: #3730a3; }
+  textarea.feedback {
+    width: 100%;
+    min-height: 80px;
+    padding: 10px;
+    border: 2px dashed #fca5a5;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    background: #fef2f2;
+    resize: vertical;
+  }
+  textarea.feedback:focus {
+    outline: none;
+    border-color: #ef4444;
+    background: white;
+  }
+  .toggle {
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 0;
+  }
+  .toggle::before { content: "▼ "; color: #93c5fd; }
+  .toggle.collapsed::before { content: "▶ "; }
+  .toggle.collapsed + .toggle-content { display: none; }
+  .print-only { display: none; }
+  @media print {
+    body { background: white; padding: 0; }
+    .section { break-inside: avoid; box-shadow: none; }
+    .no-print { display: none; }
+    .print-only { display: block; }
+  }
+  .nav-top {
+    position: sticky;
+    top: 0;
+    background: white;
+    padding: 8px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    margin: -32px -24px 24px -24px;
+    z-index: 100;
+    font-size: 13px;
+  }
+  .nav-top a { color: #2563eb; margin-right: 16px; }
+</style>
+</head>
+<body>
+
+<div class="nav-top no-print">
+  <a href="#vision">Vision</a>
+  <a href="#cycle">Cycle de vie</a>
+  <a href="#remise">Remise</a>
+  <a href="#retour">Retour</a>
+  <a href="#lavage">Lavage</a>
+  <a href="#butoir">Date butoir</a>
+  <a href="#termination">Fin d'emploi</a>
+  <a href="#notifs">22 notifs</a>
+  <a href="#feedback">Feedback</a>
+</div>
+
+<h1>📋 Module Uniformes — Flow complet (à éditer)</h1>
+
+<div class="meta">
+  <strong>Pour l'équipe XGuard</strong> · Version V2 en prod · Dernière màj : <span id="last-mod">à remplir</span>
+  <br><br>
+  <strong>Comment utiliser ce document :</strong>
+  <ol>
+    <li>Lis chaque section.</li>
+    <li>Quand tu vois <span class="badge badge-rh">MODIFICATION SUGGÉRÉE</span>, écris ce que tu veux changer dans la zone rouge.</li>
+    <li>Sauvegarde le fichier <code>docs/UNIFORMES_FLOW.html</code></li>
+    <li>Dis à Nicolas/Claude : "applique les modifs" — on te code les changements.</li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECTION 1 : VISION                                            -->
+<!-- ============================================================ -->
+<section class="section" id="vision">
+<h2>1. Vision du module</h2>
+
+<p>XGuard gère les uniformes de <strong>~1300 agents</strong>. Le système doit :</p>
+<ol>
+  <li>Traquer chaque pièce physiquement (où elle est, qui la détient).</li>
+  <li>Décrémenter le stock à la remise, ré-incrémenter au retour <strong>après lavage et inspection</strong>.</li>
+  <li>Faire respecter les délais de retour avec escalations automatiques.</li>
+  <li>Calculer la dette d'un agent et la communiquer à la paie.</li>
+  <li>Alerter aux moments-clés (RH, Admin, Paie) pour ne rien oublier.</li>
+</ol>
+
+<div class="modif-card">
+  <strong>Tu veux changer la vision ?</strong>
+  <textarea class="feedback" placeholder="Ex: ajouter la traçabilité photo, ou retirer la dette automatique, etc."></textarea>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 2 : ACTEURS                                           -->
+<!-- ============================================================ -->
+<section class="section" id="acteurs">
+<h2>2. Acteurs & responsabilités</h2>
+
+<table>
+  <thead>
+    <tr><th>Acteur</th><th>Rôle</th><th>Accès</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><span class="badge badge-admin">ADMIN</span></td><td>Gère catalogue, inventaire, droits d'accès, audit</td><td>App complète</td></tr>
+    <tr><td><span class="badge badge-rh">RH_RECRUITER</span></td><td>Fait remises, retours, gère agents, clôture fins d'emploi</td><td>App complète</td></tr>
+    <tr><td><span class="badge badge-agent">AGENT</span></td><td>Reçoit uniforme, signe formulaire, retourne en fin d'emploi</td><td>Lien public signature uniquement</td></tr>
+    <tr><td>Buanderie</td><td>Lave les lots envoyés</td><td>Pas d'accès — suivi côté Admin</td></tr>
+    <tr><td><code>rh@xguard.ca</code></td><td>Reçoit alertes proactives (dates butoirs, signatures, doublons)</td><td>Email</td></tr>
+    <tr><td><code>paie@xguard.ca</code></td><td>Reçoit alertes finales (montants à prélever)</td><td>Email</td></tr>
+  </tbody>
+</table>
+
+<div class="modif-card">
+  <strong>Tu veux ajouter/modifier un acteur ou ses droits ?</strong>
+  <textarea class="feedback" placeholder="Ex: ajouter un rôle MAGASIN distinct, ou changer les emails destinataires..."></textarea>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 3 : CYCLE DE VIE D'UNE PIÈCE                          -->
+<!-- ============================================================ -->
+<section class="section" id="cycle">
+<h2>3. Cycle de vie d'une pièce d'uniforme</h2>
+
+<p>Une pièce passe par ces états du début à la fin de sa vie :</p>
+
+<div class="mermaid">
+stateDiagram-v2
+    [*] --> AVAILABLE: Réception inventaire (mouvement IN)
+    AVAILABLE --> ISSUED: Remise à un agent (mouvement OUT)
+    ISSUED --> IN_WASHING: Retour Bon (mouvement WASH_IN)
+    ISSUED --> DISCARDED_DAMAGED: Retour Endommagé (DAMAGED)
+    ISSUED --> LOST: Retour Perdu / Non retourné (dette seule)
+    IN_WASHING --> AVAILABLE: Inspection Bon (WASH_OUT_GOOD)
+    IN_WASHING --> DISCARDED_POSTWASH: Inspection KO (WASH_OUT_DAMAGED)
+    AVAILABLE --> [*]: Disposal manuel (rare)
+    DISCARDED_DAMAGED --> [*]
+    DISCARDED_POSTWASH --> [*]
+    LOST --> [*]
+</div>
+
+<div class="modif-card">
+  <strong>Tu veux ajouter un état (ex: RÉPARATION, EN_QUARANTAINE) ?</strong>
+  <textarea class="feedback" placeholder="Ex: ajouter un état IN_REPAIR entre IN_WASHING et AVAILABLE si on fait de la couture..."></textarea>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 4 : WORKFLOW REMISE                                   -->
+<!-- ============================================================ -->
+<section class="section" id="remise">
+<h2>4. Workflow REMISE d'uniforme</h2>
+
+<p>Étape par étape, du clic « Nouvelle remise » jusqu'à la signature de l'agent :</p>
+
+<h3>4.1. Diagramme de séquence</h3>
+<div class="mermaid">
+sequenceDiagram
+    actor Admin
+    actor Agent
+    participant App as TalentSecure
+    participant DB
+    participant GHL
+
+    Admin->>App: 1. Sélectionne agent + division
+    Admin->>App: 2. Scan codes-barres / cartes par pièce
+    Admin->>App: 3. Définit dueReturnAt (date butoir)
+    Admin->>App: 4. Clic "Finaliser"
+    App->>DB: Crée UniformIssuance + lines
+    App->>DB: applyMovement(OUT) × N → quantityOnHand -=
+    App->>DB: Génère PDF formulaire + upload R2
+    App->>DB: Crée notif PENDING due-soon (T-24h ouvrables)
+    Admin->>App: 5. Signature employeur (au comptoir)
+    Admin->>App: 6. Clic "Envoyer SMS à l'agent"
+    App->>GHL: SMS lien signature
+    GHL-->>Agent: 📱 SMS avec URL
+    Agent->>App: 7. Ouvre lien, coche consentements, signe
+    App->>DB: signatureStatus=SIGNED
+</div>
+
+<h3>4.2. Actions & notifications</h3>
+
+<div class="action-card">
+  <strong>Étape 4.1</strong> : Admin sélectionne agent (autocomplete sur Employee) et choisit division (SECURITE / SIGNALISATION).
+</div>
+
+<div class="action-card">
+  <strong>Étape 4.2</strong> : Admin scanne le code-barres de chaque pièce OU ajoute via le bouton "+1" sur les cartes du catalogue. Chaque pièce = 1 ligne qty=1.
+</div>
+
+<div class="action-card">
+  <strong>Étape 4.3</strong> : Admin définit la date butoir <code>dueReturnAt</code> (typiquement 5 jours ouvrables avant fin de contrat OU date fixe selon politique).
+</div>
+
+<div class="action-card">
+  <strong>Étape 4.4</strong> : Clic "Finaliser" → stock décrémenté, PDF généré, notif <code>due-soon</code> planifiée (status=PENDING, scheduledFor=dueReturnAt - 24h ouvrables).
+</div>
+
+<div class="notif-card">
+  <strong>Notif planifiée à T-24h ouvrables</strong> →
+  <span class="badge badge-rh">RH</span>
+  <span class="badge badge-email">EMAIL</span>
+  <span class="badge badge-inapp">CLOCHE</span>
+  : "Rappel — retour d'uniforme demain"
+</div>
+
+<div class="action-card">
+  <strong>Étape 4.5</strong> : Admin signe au nom de XGuard (employeur) — dialog avec pad de signature au comptoir.
+</div>
+
+<div class="action-card">
+  <strong>Étape 4.6</strong> : Admin clic "Envoyer SMS" → GHL envoie un lien public à l'agent (token JWT-like, expire 7j).
+</div>
+
+<div class="notif-card">
+  <strong>SMS lien signature</strong> →
+  <span class="badge badge-agent">AGENT</span>
+  <span class="badge badge-sms">SMS GHL</span>
+  : "Veuillez signer votre formulaire de prêt : [lien]"
+</div>
+
+<div class="action-card">
+  <strong>Étape 4.7</strong> : Agent ouvre le lien sur son téléphone, coche les consentements (prélèvement paie, respect uniforme, taille adéquate), signe avec le doigt, soumet.
+</div>
+
+<div class="modif-card">
+  <strong>Tu veux changer le flow de la remise ?</strong>
+  <textarea class="feedback" placeholder="Exemples :
+- Demander signature employé AVANT employeur (ordre inversé)
+- Bypass signature pour remises < $X
+- Ajouter photo de l'agent avec son uniforme
+- Demander une seconde validation par un superviseur
+- Changer la durée de validité du lien (actuellement 7j)
+"></textarea>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 5 : WORKFLOW RETOUR                                   -->
+<!-- ============================================================ -->
+<section class="section" id="retour">
+<h2>5. Workflow RETOUR d'uniforme (triage par pièce)</h2>
+
+<p>Le retour est l'étape la plus critique : c'est ici que se décide le sort de chaque pièce.</p>
+
+<h3>5.1. Diagramme de séquence</h3>
+<div class="mermaid">
+sequenceDiagram
+    actor Agent
+    actor Admin
+    participant App as TalentSecure
+    participant DB
+
+    Agent->>Admin: Apporte ses uniformes au comptoir
+    Admin->>App: 1. Sélectionne agent + remise active
+    App->>App: 2. Génère 1 carte par pièce détenue
+    Note over Admin: 3. Triage carte par carte
+    Admin->>App: Carte 1 (chemise L) → 🟢 Bon
+    Admin->>App: Carte 2 (chemise L) → 🟢 Bon
+    Admin->>App: Carte 3 (chemise L) → 🔴 Endommagé
+    Admin->>App: Carte 4 (ceinture M) → ⚫ Perdu
+    Admin->>App: 4. Clic "Finaliser le retour"
+    App->>DB: Pour Bon : WASH_IN mvmt + UniformWashBatchItem
+    App->>DB: Pour Endommagé : DAMAGED mvmt + dette
+    App->>DB: Pour Perdu : pas de mvmt + dette
+    App->>App: Crée notif wash batch created
+    App->>App: Crée notif retour damaged (admin+RH)
+</div>
+
+<h3>5.2. Triage — règles par condition</h3>
+
+<table>
+  <thead>
+    <tr><th>Condition</th><th>Décision</th><th>Effet stock</th><th>Effet dette agent</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>🟢 <strong>Bon</strong></td>
+      <td>Va dans un lot de lavage automatique</td>
+      <td><code>WASH_IN</code> — pièce sort de <code>quantityOnHand</code> et entre dans <code>IN_WASHING</code></td>
+      <td>Aucune</td>
+    </tr>
+    <tr>
+      <td>🔴 <strong>Endommagé</strong></td>
+      <td>Poubelle directe (déchirée, brûlée, irrécupérable)</td>
+      <td><code>DAMAGED</code> — sortie définitive</td>
+      <td><strong>Oui</strong> : qty × replacementCost</td>
+    </tr>
+    <tr>
+      <td>⚫ <strong>Perdu</strong></td>
+      <td>Pas physiquement rendue (oubli, vol, perte)</td>
+      <td>Aucun mouvement (déjà sortie à la remise)</td>
+      <td><strong>Oui</strong> : qty × replacementCost</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>5.3. Notifications émises</h3>
+
+<div class="notif-card">
+  <strong>Si ≥1 pièce 🟢 Bon</strong> →
+  <span class="badge badge-admin">ADMIN</span>
+  <span class="badge badge-inapp">CLOCHE</span>
+  : "Lot de lavage créé"
+</div>
+
+<div class="notif-card">
+  <strong>Si ≥1 pièce 🔴 Endommagé ou ⚫ Perdu</strong> →
+  <span class="badge badge-admin">ADMIN</span>
+  <span class="badge badge-rh">RH</span>
+  <span class="badge badge-email">EMAIL</span>
+  <span class="badge badge-inapp">CLOCHE</span>
+  : "Retour avec items endommagés — dette à confirmer"
+</div>
+
+<div class="notif-card">
+  <strong>SMS signature retour</strong> →
+  <span class="badge badge-agent">AGENT</span>
+  <span class="badge badge-sms">SMS GHL</span>
+</div>
+
+<div class="modif-card">
+  <strong>Tu veux changer le flow du retour ?</strong>
+  <textarea class="feedback" placeholder="Exemples :
+- Ajouter une 4ème condition (ex: SALI au-delà du lavage normal → repair batch)
+- Ne pas créer de dette pour Perdu, juste l'enregistrer
+- Permettre à l'agent de contester la condition (workflow validation)
+- Photo obligatoire pour Endommagé
+- Notification automatique à l'agent quand sa dette est enregistrée
+"></textarea>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 6 : CYCLE LAVAGE                                      -->
+<!-- ============================================================ -->
+<section class="section" id="lavage">
+<h2>6. Cycle de LAVAGE d'un lot</h2>
+
+<p>Une fois qu'un lot existe (créé automatiquement au retour), il suit ce parcours :</p>
+
+<div class="mermaid">
+stateDiagram-v2
+    [*] --> CREATED: Auto-créé au finalize d'un retour avec Bon items
+    CREATED --> SENT_TO_LAUNDRY: Admin clic "Envoyer au lavage" + saisit vendor
+    SENT_TO_LAUNDRY --> RETURNED_FROM_LAUNDRY: Admin clic "Marquer revenu"
+    RETURNED_FROM_LAUNDRY --> INSPECTED: Admin inspecte chaque pièce
+    CREATED --> CANCELLED: Admin annule (rare)
+    SENT_TO_LAUNDRY --> CANCELLED: Admin annule
+    INSPECTED --> [*]
+    CANCELLED --> [*]
+</div>
+
+<h3>6.1. Actions par état</h3>
+
+<div class="action-card">
+  <strong>État CREATED</strong> : Admin peut :
+  <ul>
+    <li>Ouvrir le lot et voir les pièces dedans</li>
+    <li>Clic "Envoyer au lavage" + saisir le fournisseur (champ texte libre)</li>
+    <li>Annuler le lot (les pièces re-entrent dans le stock via <code>WASH_OUT_GOOD</code>)</li>
+  </ul>
+</div>
+
+<div class="action-card">
+  <strong>État SENT_TO_LAUNDRY</strong> : Admin peut :
+  <ul>
+    <li>Clic "Marquer revenu" quand le lot est de retour physiquement</li>
+    <li>Annuler le lot (réinjection stock)</li>
+  </ul>
+</div>
+
+<div class="action-card">
+  <strong>État RETURNED_FROM_LAUNDRY</strong> : Admin peut :
+  <ul>
+    <li>Clic "Inspecter" → dialog avec 1 carte par pièce</li>
+    <li>Pour chaque pièce, choisir : 🟢 Bon / 🔴 Endommagé (poubelle) / ⚫ Perdu (par le fournisseur)</li>
+    <li>Finaliser l'inspection : les pièces Bonnes ré-intègrent <code>quantityOnHand</code> (<code>WASH_OUT_GOOD</code>) ; les autres sont jetées (<code>WASH_OUT_DAMAGED</code>)</li>
+  </ul>
+</div>
+
+<h3>6.2. Notifications cycle lavage</h3>
+
+<div class="notif-card">
+  <strong>Lot créé</strong> →
+  <span class="badge badge-admin">ADMIN</span>
+  <span class="badge badge-inapp">CLOCHE</span>
+</div>
+
+<div class="notif-card">
+  <strong>Lot envoyé</strong> →
+  <span class="badge badge-admin">ADMIN</span>
+  <span class="badge badge-inapp">CLOCHE</span>
+</div>
+
+<div class="notif-card">
+  <strong>Lot revenu (inspection requise)</strong> →
+  <span class="badge badge-admin">ADMIN</span>
+  <span class="badge badge-email">EMAIL</span>
+  <span class="badge badge-inapp">CLOCHE</span>
+</div>
+
+<div class="notif-card">
+  <strong>Lot bloqué SENT >7j sans retour</strong> →
+  <span class="badge badge-admin">ADMIN</span>
+  <span class="badge badge-email">EMAIL</span>
+  <span class="badge badge-inapp">CLOCHE</span>
+</div>
+
+<div class="notif-card">
+  <strong>Lot RETURNED >3j sans inspection</strong> →
+  <span class="badge badge-admin">ADMIN</span>
+  <span class="badge badge-email">EMAIL</span>
+  <span class="badge badge-inapp">CLOCHE</span>
+</div>
+
+<div class="modif-card">
+  <strong>Tu veux changer le flow de lavage ?</strong>
+  <textarea class="feedback" placeholder="Exemples :
+- Ajouter une étape EN_REPARATION (couture) entre RETURNED_FROM_LAUNDRY et INSPECTED
+- Tracker le coût du lavage par lot (champ washCost)
+- Avoir une table dédiée pour les fournisseurs (avec leurs délais moyens)
+- Changer les seuils : 7j → 5j pour SENT, 3j → 2j pour RETURNED
+- Permettre inspection partielle (sauvegarde, finir plus tard)
+- Inspection en bulk : 'Tout marquer Bon' si toutes les pièces sont OK
+"></textarea>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 7 : DATE BUTOIR & ESCALATIONS                         -->
+<!-- ============================================================ -->
+<section class="section" id="butoir">
+<h2>7. Date butoir & escalations automatiques</h2>
+
+<p>C'est ici que le système devient <strong>proactif</strong> : il alerte sans qu'on lui demande.</p>
+
+<h3>7.1. Timeline d'une remise avec date butoir</h3>
+
+<div class="mermaid">
+gantt
+    title Cycle date butoir (remise 1er mai, butoir 15 mai)
+    dateFormat YYYY-MM-DD
+    section Remise
+    Remise effectuée        :milestone, 2026-05-01, 1d
+    section Détention agent
+    Détention                :active, 2026-05-01, 14d
+    section Alertes auto
+    T-24h ouvrables → RH    :milestone, 2026-05-14, 1d
+    Date butoir              :milestone, 2026-05-15, 1d
+    Overdue → RH+PAIE        :milestone, 2026-05-16, 1d
+    Dette 30j → RH+PAIE     :milestone, 2026-06-15, 1d
+</div>
+
+<h3>7.2. Délais & destinataires (CONFIGURABLES)</h3>
+
+<table>
+  <thead>
+    <tr><th>Quand</th><th>Délai</th><th>Destinataire</th><th>Canal</th><th>Action</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>T-24h ouvrables</strong></td>
+      <td>24h avant <code>dueReturnAt</code></td>
+      <td><span class="badge badge-rh">RH</span></td>
+      <td><span class="badge badge-email">EMAIL</span> <span class="badge badge-inapp">CLOCHE</span></td>
+      <td>Appeler l'agent pour confirmer retour</td>
+    </tr>
+    <tr style="background: #fef2f2;">
+      <td><strong>T+0 (overdue)</strong></td>
+      <td>0h après <code>dueReturnAt</code></td>
+      <td><span class="badge badge-rh">RH</span> <span class="badge badge-paie">PAIE</span></td>
+      <td><span class="badge badge-email">EMAIL</span> <span class="badge badge-inapp">CLOCHE</span></td>
+      <td>Confirmer prélèvement sur dernière paie</td>
+    </tr>
+    <tr style="background: #fef2f2;">
+      <td><strong>T+30j (dette ancienne)</strong></td>
+      <td>30 jours sans règlement</td>
+      <td><span class="badge badge-rh">RH</span> <span class="badge badge-paie">PAIE</span></td>
+      <td><span class="badge badge-email">EMAIL</span> <span class="badge badge-inapp">CLOCHE</span></td>
+      <td>Relance — radiation à envisager ?</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="modif-card">
+  <strong>Tu veux changer les délais ou destinataires ?</strong>
+  <textarea class="feedback" placeholder="Exemples :
+- Changer T-24h ouvrables en T-48h ouvrables (plus de temps pour RH)
+- Ajouter un rappel T-72h (3 jours avant) en plus
+- Notifier aussi l'agent par SMS au moment du T-24h
+- Changer 30j → 14j pour la dette ancienne
+- Ajouter directeur@xguard.ca en CC sur les Overdue
+- Différencier les destinataires selon le montant (>$200 → CC direction)
+"></textarea>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 8 : FIN D'EMPLOI                                      -->
+<!-- ============================================================ -->
+<section class="section" id="termination">
+<h2>8. Fin d'emploi clôturée</h2>
+
+<p>Quand un agent quitte XGuard, on doit clôturer ses remises actives.</p>
+
+<div class="mermaid">
+sequenceDiagram
+    actor RH
+    participant App
+    participant DB
+    participant Email
+
+    RH->>App: Clic "Clôturer fin d'emploi" sur la fiche agent
+    App->>DB: Calcule pièces restantes détenues
+    App->>DB: Crée UniformReturn auto avec condition=NOT_RETURNED
+    App->>DB: status=CLOSED_TERMINATION
+    App->>DB: Annule notif due-soon en attente
+    App->>App: Calcule dette finale
+    App->>Email: RH (in-app + email)
+    App->>Email: PAIE (email)
+    Email-->>RH: "Fin d'emploi clôturée — dette $X"
+    Email-->>+Paie: "Prélèvement uniforme — $X"
+</div>
+
+<div class="action-card">
+  <strong>Bouton "Clôturer fin d'emploi"</strong> sur la fiche employé → un seul clic. Toutes les pièces restantes passent en <code>NOT_RETURNED</code>. Calcule la dette finale.
+</div>
+
+<div class="notif-card">
+  <strong>Fin d'emploi clôturée</strong> →
+  <span class="badge badge-rh">RH</span>
+  <span class="badge badge-paie">PAIE</span>
+  <span class="badge badge-email">EMAIL</span>
+  <span class="badge badge-inapp">CLOCHE</span>
+  : "Dette uniforme : $X à prélever sur la dernière paie"
+</div>
+
+<div class="modif-card">
+  <strong>Tu veux changer le flow de fin d'emploi ?</strong>
+  <textarea class="feedback" placeholder="Exemples :
+- Ajouter un workflow d'approbation (RH propose → Admin valide)
+- Demander une raison (Démission, Licenciement, Fin de contrat, Autre)
+- Bloquer la clôture si certaines conditions (signature manquante, etc.)
+- Envoyer aussi un email à l'agent (récapitulatif de la dette finale)
+- Auto-trigger à partir du status Employee = ARCHIVÉ
+"></textarea>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 9 : MATRICE COMPLÈTE DES 22 NOTIFICATIONS             -->
+<!-- ============================================================ -->
+<section class="section" id="notifs">
+<h2>9. Matrice complète — les 22 notifications</h2>
+
+<p>Toutes les notifications du système, regroupées par catégorie :</p>
+
+<h3>9.1. Cycle de vie pièce (6)</h3>
+<table>
+  <thead><tr><th>#</th><th>Événement</th><th>Audience</th><th>Canal</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Retour avec items endommagés/perdus</td><td><span class="badge badge-admin">ADMIN</span> <span class="badge badge-rh">RH</span></td><td><span class="badge badge-email">EMAIL</span> <span class="badge badge-inapp">CLOCHE</span></td></tr>
+    <tr><td>2</td><td>Lot de lavage créé</td><td><span class="badge badge-admin">ADMIN</span></td><td><span class="badge badge-inapp">CLOCHE</span></td></tr>
+    <tr><td>3</td><td>Lot envoyé au lavage</td><td><span class="badge badge-admin">ADMIN</span></td><td><span class="badge badge-inapp">CLOCHE</span></td></tr>
+    <tr><td>4</td><td>Lot revenu (inspection requise)</td><td><span class="badge badge-admin">ADMIN</span></td><td><span class="badge badge-email">EMAIL</span> <span class="badge badge-inapp">CLOCHE</span></td></tr>
+    <tr><td>5</td><td>Inspection révèle items endommagés</td><td><span class="badge badge-admin">ADMIN</span></td><td><span class="badge badge-inapp">CLOCHE</span></td></tr>
+    <tr><td>6</td><td>Lot bloqué (>7j envoyé / >3j revenu)</td><td><span class="badge badge-admin">ADMIN</span></td><td><span class="badge badge-email">EMAIL</span> <span class="badge badge-inapp">CLOCHE</span></td></tr>
+  </tbody>
+</table>
+
+<h3>9.2. Date butoir & paie (5)</h3>
+<table>
+  <thead><tr><th>#</th><th>Événement</th><th>Audience</th><th>Canal</th></tr></thead>
+  <tbody>
+    <tr><td>7</td><td>T-24h ouvrables avant date butoir</td><td><span class="badge badge-rh">RH</span></td><td><span class="badge badge-email">EMAIL</span> <span class="badge badge-inapp">CLOCHE</span></td></tr>
+    <tr style="background: #fef2f2;"><td>8</td><td>Date butoir dépassée (overdue)</td><td><span class="badge badge-rh">RH</span> <span class="badge badge-paie">PAIE</span></td><td><span class="badge badge-email">EMAIL</span> <span class="badge badge-inapp">CLOCHE</span></td></tr>
+    <tr style="background: #fef2f2;"><td>9</td><td>Fin d'emploi clôturée avec dette</td><td><span class="badge badge-rh">RH</span> <span class="badge badge-paie">PAIE</span></td><td><span class="badge badge-email">EMAIL</span> <span class="badge badge-inapp">CLOCHE</span></td></tr>
+    <tr><td>10</td><td>Settlement (règlement) enregistré</td><td><span class="badge badge-rh">RH</span></td><td><span class="badge badge-inapp">CLOCHE</span></td></tr>
+    <tr style="background: #fef2f2;"><td>11</td><td>Dette uniforme > 30j non réglée</td><td><span class="badge badge-rh">RH</span> <span class="badge badge-paie">PAIE</span></td><td><span class="badge badge-email">EMAIL</span> <span class="badge badge-inapp">CLOCHE</span></td></tr>
+  </tbody>
+</table>
+
+<h3>9.3. Stock & inventaire (3)</h3>
+<table>
+  <thead><tr><th>#</th><th>Événement</th><th>Audience</th><th>Canal</th></tr></thead>
+  <tbody>
+    <tr><td>12</td><td>Stock variant sous seuil de réappro</td><td><span class="badge badge-admin">ADMIN</span></td><td><span class="badge badge-inapp">CLOCHE</span></td></tr>
+    <tr><td>13</td><td>Stock variant à zéro (et active)</td><td><span class="badge badge-admin">ADMIN</span></td><td><span class="badge badge-email">EMAIL</span> <span class="badge badge-inapp">CLOCHE</span></td></tr>
+    <tr><td>14</td><td>Drift cache vs ledger (audit mensuel)</td><td><span class="badge badge-admin">ADMIN</span></td><td><span class="badge badge-email">EMAIL</span></td></tr>
+  </tbody>
+</table>
+
+<h3>9.4. Signature & workflow (3)</h3>
+<table>
+  <thead><tr><th>#</th><th>Événement</th><th>Audience</th><th>Canal</th></tr></thead>
+  <tbody>
+    <tr><td>15</td><td>Lien signature expire dans <24h</td><td><span class="badge badge-rh">RH</span></td><td><span class="badge badge-inapp">CLOCHE</span></td></tr>
+    <tr><td>16</td><td>Lien signature expiré</td><td><span class="badge badge-rh">RH</span></td><td><span class="badge badge-inapp">CLOCHE</span></td></tr>
+    <tr><td>17</td><td>Employeur n'a pas signé après 24h</td><td><span class="badge badge-admin">ADMIN</span></td><td><span class="badge badge-inapp">CLOCHE</span></td></tr>
+  </tbody>
+</table>
+
+<h3>9.5. Anomalies / audit (3)</h3>
+<table>
+  <thead><tr><th>#</th><th>Événement</th><th>Audience</th><th>Canal</th></tr></thead>
+  <tbody>
+    <tr><td>18</td><td>Code-barres inconnu scanné</td><td><span class="badge badge-admin">ADMIN</span></td><td><span class="badge badge-inapp">CLOCHE</span></td></tr>
+    <tr><td>19</td><td>Variant désactivée avec stock > 0</td><td><span class="badge badge-admin">ADMIN</span></td><td><span class="badge badge-inapp">CLOCHE</span></td></tr>
+    <tr><td>20</td><td>Plusieurs remises actives pour un même agent</td><td><span class="badge badge-rh">RH</span></td><td><span class="badge badge-inapp">CLOCHE</span></td></tr>
+  </tbody>
+</table>
+
+<h3>9.6. SMS agent (2)</h3>
+<table>
+  <thead><tr><th>#</th><th>Événement</th><th>Audience</th><th>Canal</th></tr></thead>
+  <tbody>
+    <tr><td>21</td><td>SMS lien signature remise (à la finalize)</td><td><span class="badge badge-agent">AGENT</span></td><td><span class="badge badge-sms">SMS GHL</span></td></tr>
+    <tr><td>22</td><td>SMS lien signature retour</td><td><span class="badge badge-agent">AGENT</span></td><td><span class="badge badge-sms">SMS GHL</span></td></tr>
+  </tbody>
+</table>
+
+<div class="modif-card">
+  <strong>Tu veux ajouter / retirer / modifier des notifications ?</strong>
+  <textarea class="feedback" placeholder="Exemples :
+- Ajouter une notif AGENT par SMS à T-24h ouvrables (rappel direct, pas seulement RH)
+- Retirer la notif #20 (doublons remises) si pas pertinente
+- Ajouter une notif HEBDOMADAIRE de récap (lundi 9h → RH avec liste des dossiers en cours)
+- Notif quand un lot dépasse $500 (validation managériale requise)
+- SMS à l'agent quand sa dette est confirmée par la paie
+- Notif équipe magasin quand stock à zéro (déclenche commande fournisseur)
+"></textarea>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 10 : FEEDBACK GLOBAL                                  -->
+<!-- ============================================================ -->
+<section class="section" id="feedback">
+<h2>10. Feedback global — autres changements</h2>
+
+<div class="modif-card">
+  <strong>Modifications non couvertes par les sections ci-dessus :</strong>
+  <textarea class="feedback" style="min-height: 200px;" placeholder="Tout ce qui te passe par la tête :
+- Nouveaux écrans / nouveaux rapports
+- Changements UI / UX
+- Nouveaux droits / permissions
+- Intégrations à ajouter (Slack, Teams, calendrier, etc.)
+- Choses qui te semblent étrange / inutile / manquante
+- Idées pour le futur (V3 ?)
+"></textarea>
+</div>
+
+<div class="modif-card">
+  <strong>Questions pour Nicolas / Claude :</strong>
+  <textarea class="feedback" placeholder="Si tu veux qu'on te clarifie quelque chose..."></textarea>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- FOOTER                                                        -->
+<!-- ============================================================ -->
+<div style="margin-top: 48px; padding-top: 24px; border-top: 2px solid #e5e7eb; font-size: 13px; color: #6b7280;">
+  <p><strong>Pour appliquer les changements :</strong></p>
+  <ol>
+    <li>Sauvegarde ce fichier (Ctrl+S dans ton éditeur)</li>
+    <li>Vérifie les modifs avec : <code>cd C:\Users\nicol\talentsecure && git diff docs/UNIFORMES_FLOW.html</code></li>
+    <li>Dis à Claude : "applique les modifs du flow"</li>
+  </ol>
+  <p><strong>Fichier source :</strong> <code>docs/UNIFORMES_FLOW.html</code></p>
+  <p><strong>Document complet (technique) :</strong> <code>docs/UNIFORMES_ARCHITECTURE.md</code></p>
+</div>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'default', themeVariables: { primaryColor: '#2563eb' } });
+  document.getElementById('last-mod').textContent = new Date().toLocaleDateString('fr-CA');
+</script>
+
+</body>
+</html>

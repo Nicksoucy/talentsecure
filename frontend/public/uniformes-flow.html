@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Module Uniformes — Flowchart visuel</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #f3f4f6;
+    color: #1f2937;
+    padding: 24px;
+  }
+  h1 {
+    color: #1e3a8a;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+  .subtitle {
+    text-align: center;
+    color: #6b7280;
+    margin-bottom: 24px;
+    font-size: 14px;
+  }
+
+  /* ============ LEGEND ============ */
+  .legend {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    padding: 12px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .legend-box {
+    width: 32px;
+    height: 22px;
+    border-radius: 4px;
+    border: 2px solid;
+  }
+  .legend-step      { background: #fff; border-color: #1f2937; }
+  .legend-decision  { background: #fef3c7; border-color: #d97706; transform: rotate(0deg); border-radius: 0; clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+  .legend-email     { background: #dbeafe; border-color: #2563eb; }
+  .legend-sms       { background: #fed7aa; border-color: #ea580c; }
+  .legend-inapp     { background: #d1fae5; border-color: #059669; }
+  .legend-debt      { background: #fee2e2; border-color: #dc2626; }
+  .legend-auto      { background: #ede9fe; border-color: #7c3aed; }
+
+  /* ============ CANVAS ============ */
+  .canvas {
+    position: relative;
+    width: 1700px;
+    height: 1900px;
+    margin: 0 auto;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .canvas svg.arrows {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* ============ BOX (étape) ============ */
+  .box {
+    position: absolute;
+    width: 160px;
+    min-height: 70px;
+    border: 2px solid #1f2937;
+    background: white;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+    line-height: 1.3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    z-index: 2;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    transition: transform 0.15s;
+  }
+  .box:hover { transform: scale(1.04); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  .box .num {
+    position: absolute;
+    top: -10px; left: -10px;
+    background: #1f2937;
+    color: white;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Diamond (décision) */
+  .decision {
+    width: 180px;
+    height: 100px;
+    background: #fef3c7;
+    border-color: #d97706;
+    transform: rotate(45deg);
+    border-radius: 8px;
+  }
+  .decision span {
+    transform: rotate(-45deg);
+    display: block;
+    font-weight: 600;
+    color: #92400e;
+  }
+
+  /* Branches output (Bon/Endo/Perdu) */
+  .branch {
+    width: 140px;
+    min-height: 60px;
+    font-weight: 600;
+  }
+  .branch.bon       { border-color: #059669; background: #ecfdf5; color: #065f46; }
+  .branch.endommage { border-color: #dc2626; background: #fef2f2; color: #991b1b; }
+  .branch.perdu     { border-color: #6b7280; background: #f3f4f6; color: #1f2937; }
+
+  /* Terminal (poubelle / fin) */
+  .terminal {
+    background: #f3f4f6;
+    border-color: #6b7280;
+    border-style: dashed;
+  }
+
+  /* ============ ANNOTATION (notif) ============ */
+  .annotation {
+    position: absolute;
+    width: 200px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    line-height: 1.35;
+    z-index: 3;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border-left: 4px solid;
+  }
+  .annotation .label {
+    font-weight: 700;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .ann-email  { background: #dbeafe; border-left-color: #2563eb; color: #1e3a8a; }
+  .ann-sms    { background: #fed7aa; border-left-color: #ea580c; color: #7c2d12; }
+  .ann-inapp  { background: #d1fae5; border-left-color: #059669; color: #064e3b; }
+  .ann-debt   { background: #fee2e2; border-left-color: #dc2626; color: #7f1d1d; font-weight: 600; }
+  .ann-auto   { background: #ede9fe; border-left-color: #7c3aed; color: #4c1d95; }
+
+  .annotation .recipients {
+    margin-top: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    opacity: 0.85;
+  }
+
+  /* Section labels (groupe d'étapes) */
+  .section-label {
+    position: absolute;
+    background: #1f2937;
+    color: white;
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    z-index: 4;
+  }
+
+  /* ============ FEEDBACK ============ */
+  .feedback-section {
+    max-width: 1000px;
+    margin: 32px auto 0;
+    background: white;
+    padding: 24px;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+  }
+  .feedback-section h2 { color: #dc2626; margin-bottom: 12px; }
+  .feedback-section textarea {
+    width: 100%;
+    min-height: 150px;
+    padding: 12px;
+    border: 2px dashed #fca5a5;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    background: #fef2f2;
+    resize: vertical;
+  }
+  .feedback-section textarea:focus {
+    outline: none;
+    border-color: #ef4444;
+    background: white;
+  }
+</style>
+</head>
+<body>
+
+<h1>📊 Module Uniformes — Flowchart visuel</h1>
+<p class="subtitle">
+  Cycle complet : inventaire → remise → détention → retour → triage → lavage → restock
+  &nbsp;·&nbsp; Toutes les notifications (📧 email, 📱 SMS, 🔔 cloche in-app) sont annotées.
+</p>
+
+<!-- ============================================================ -->
+<!-- LEGEND                                                        -->
+<!-- ============================================================ -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-box legend-step"></div> Étape</div>
+  <div class="legend-item"><div class="legend-box legend-decision"></div> Décision</div>
+  <div class="legend-item"><div class="legend-box legend-auto"></div> 🔄 Action auto</div>
+  <div class="legend-item"><div class="legend-box legend-email"></div> 📧 Email</div>
+  <div class="legend-item"><div class="legend-box legend-sms"></div> 📱 SMS</div>
+  <div class="legend-item"><div class="legend-box legend-inapp"></div> 🔔 Cloche dans l'app</div>
+  <div class="legend-item"><div class="legend-box legend-debt"></div> 💰 Dette agent</div>
+  <div class="legend-item" style="border-left: 1px solid #d1d5db; padding-left: 24px; margin-left: 8px;">
+    <svg width="40" height="16"><line x1="0" y1="8" x2="38" y2="8" stroke="#374151" stroke-width="2" marker-end="url(#leg-arrow)"/><defs><marker id="leg-arrow" markerWidth="8" markerHeight="8" refX="7" refY="2.5" orient="auto"><polygon points="0 0, 8 2.5, 0 5" fill="#374151"/></marker></defs></svg>
+    Flux d'étape
+  </div>
+  <div class="legend-item">
+    <svg width="40" height="16"><line x1="0" y1="8" x2="38" y2="8" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/></svg>
+    Lien notification ↔ étape
+  </div>
+  <div class="legend-item">
+    <svg width="40" height="16"><line x1="0" y1="8" x2="38" y2="8" stroke="#059669" stroke-width="2.5"/></svg>
+    Boucle de retour au stock
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- FLOWCHART CANVAS                                              -->
+<!-- ============================================================ -->
+<div class="canvas">
+
+  <!-- ARROWS (drawn first, behind boxes) -->
+  <svg class="arrows" viewBox="0 0 1700 1900" preserveAspectRatio="none">
+    <defs>
+      <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+        <polygon points="0 0, 10 3, 0 6" fill="#374151"/>
+      </marker>
+      <marker id="arrow-loop" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+        <polygon points="0 0, 10 3, 0 6" fill="#059669"/>
+      </marker>
+      <marker id="arrow-dash" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+        <polygon points="0 0, 10 3, 0 6" fill="#9ca3af"/>
+      </marker>
+    </defs>
+
+    <!-- === MAIN HORIZONTAL FLOW (top row) === -->
+    <!-- Rentrer Inv → Remise -->
+    <line x1="220" y1="125" x2="320" y2="125" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- Remise → Sign Employer (down) -->
+    <line x1="400" y1="160" x2="400" y2="240" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- Sign Employer → SMS Agent -->
+    <line x1="400" y1="345" x2="400" y2="425" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- SMS Agent → Agent signe -->
+    <line x1="400" y1="530" x2="400" y2="610" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- Agent signe → Stock OUT -->
+    <line x1="400" y1="715" x2="400" y2="795" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- Stock OUT → Détention -->
+    <line x1="480" y1="830" x2="580" y2="830" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- Détention → Retour (right) -->
+    <line x1="740" y1="830" x2="840" y2="830" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- Retour → Triage -->
+    <line x1="1000" y1="830" x2="1100" y2="830" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <!-- === TRIAGE BRANCHES === -->
+    <!-- Triage → Bon -->
+    <path d="M 1190 880 Q 1190 950, 1100 1000" stroke="#059669" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+    <!-- Triage → Endommagé -->
+    <line x1="1190" y1="880" x2="1290" y2="1000" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow)"/>
+    <!-- Triage → Perdu -->
+    <path d="M 1190 880 Q 1290 950, 1480 1000" stroke="#6b7280" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+
+    <!-- === BON BRANCH (left) === -->
+    <line x1="1080" y1="1090" x2="1080" y2="1170" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="1080" y1="1265" x2="1080" y2="1345" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="1080" y1="1440" x2="1080" y2="1520" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+    <line x1="1080" y1="1615" x2="1080" y2="1695" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <!-- LOOP back from Restock → Rentrer d'inv (long curve to the left) -->
+    <path d="M 1000 1730 Q 600 1730, 220 1730 Q 80 1730, 80 800 Q 80 125, 140 125"
+          stroke="#059669" stroke-width="3" fill="none" marker-end="url(#arrow-loop)" stroke-dasharray="0"/>
+
+    <!-- === ENDO BRANCH (middle) === -->
+    <line x1="1290" y1="1090" x2="1290" y2="1170" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <!-- === PERDU BRANCH (right) === -->
+    <line x1="1480" y1="1090" x2="1480" y2="1170" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <!-- ============================================================ -->
+    <!-- DASHED CONNECTORS — relient chaque annotation à sa box      -->
+    <!-- ============================================================ -->
+
+    <!-- [PLANIFIÉ AUTO] @ (540, 30) → Box [2] Remise (right edge ≈ 480, 130) -->
+    <line x1="540" y1="80" x2="480" y2="130" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [FIN D'EMPLOI panel] @ (1100, 30, w:380) → Box [7] Détention (top ≈ 660, 800) -->
+    <line x1="1290" y1="160" x2="900" y2="800" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [SMS GHL remise] @ (540, 425) → Box [4] SMS Agent (right edge ≈ 480, 460) -->
+    <line x1="540" y1="460" x2="480" y2="460" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [SURVEILLANCE] @ (580, 580, h:120) → Box [7] Détention (top ≈ 660, 800) -->
+    <line x1="700" y1="700" x2="700" y2="800" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [T-24h ouvrables] @ (520, 870) → Box [7] Détention (left ≈ 580, 850) -->
+    <line x1="520" y1="895" x2="580" y2="855" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [OVERDUE] @ (520, 960) → Box [7] Détention (left ≈ 580, 860) -->
+    <line x1="520" y1="985" x2="580" y2="865" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [SMS retour] @ (840, 870) → Box [8] Retour (bottom ≈ 920, 865) -->
+    <line x1="920" y1="870" x2="920" y2="865" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [NOTIF lot créé] @ (820, 1090) → Box [11] Batch (left edge ≈ 1010, 1200) -->
+    <line x1="1020" y1="1130" x2="1010" y2="1190" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [NOTIF EMAIL endo] @ (1380, 1090) → Box [15] Endommagé (right edge ≈ 1360, 1030) -->
+    <line x1="1380" y1="1100" x2="1360" y2="1040" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [LOT STAGNANT >7j] @ (1200, 1345) → Box [12] Envoi (right edge ≈ 1170, 1380) -->
+    <line x1="1200" y1="1370" x2="1170" y2="1380" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [INSPECTION REQUISE] @ (1200, 1520) → Box [13] Retour lot (right edge ≈ 1170, 1555) -->
+    <line x1="1200" y1="1545" x2="1170" y2="1555" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [INSPECTION] @ (1200, 1695) → Box [14] Inspection (right edge ≈ 1170, 1730) -->
+    <line x1="1200" y1="1720" x2="1170" y2="1730" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [DETTE AGENT] @ (1410, 1310, top) → Box [18] Dette (bottom ≈ 1480, 1265) -->
+    <line x1="1480" y1="1310" x2="1480" y2="1265" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [DETTE >30j] @ (1410, 1480, top) → Box [18] Dette (bottom ≈ 1480, 1265) -->
+    <line x1="1480" y1="1480" x2="1480" y2="1270" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+  </svg>
+
+  <!-- ============== SECTION LABELS ============== -->
+  <div class="section-label" style="top:30px; left:30px;">📦 INVENTAIRE</div>
+  <div class="section-label" style="top:30px; left:330px;">📤 REMISE</div>
+  <div class="section-label" style="top:790px; left:580px;">⏳ DÉTENTION</div>
+  <div class="section-label" style="top:790px; left:870px;">📥 RETOUR</div>
+  <div class="section-label" style="top:790px; left:1110px;">🔀 TRIAGE</div>
+  <div class="section-label" style="top:1170px; left:1010px;">🧺 LAVAGE</div>
+
+  <!-- ============== BOXES ============== -->
+
+  <!-- [1] Rentrer d'inventaire (loop start) -->
+  <div class="box" style="top:90px; left:60px;">
+    <div class="num">1</div>
+    Rentrer de l'inventaire<br>(entrée en stock)
+  </div>
+
+  <!-- [2] Remise -->
+  <div class="box" style="top:90px; left:320px;">
+    <div class="num">2</div>
+    Remise d'uniforme
+  </div>
+
+  <!-- [3] Signature employeur -->
+  <div class="box" style="top:240px; left:320px;">
+    <div class="num">3</div>
+    Remplir qty + signer employeur (comptoir)
+  </div>
+
+  <!-- [4] SMS Agent -->
+  <div class="box" style="top:425px; left:320px;">
+    <div class="num">4</div>
+    Envoi SMS lien signature à l'agent
+  </div>
+
+  <!-- [5] Agent signe -->
+  <div class="box" style="top:610px; left:320px;">
+    <div class="num">5</div>
+    Agent ouvre lien + signe<br>(consentements)
+  </div>
+
+  <!-- [6] Stock OUT -->
+  <div class="box" style="top:795px; left:320px;">
+    <div class="num">6</div>
+    Pièces retirées du stock<br>+ formulaire PDF archivé
+  </div>
+
+  <!-- [7] Détention -->
+  <div class="box" style="top:795px; left:580px;">
+    <div class="num">7</div>
+    Détention par l'agent<br>(jusqu'à la date butoir)
+  </div>
+
+  <!-- [8] Retour uniforme -->
+  <div class="box" style="top:795px; left:840px;">
+    <div class="num">8</div>
+    Retour uniforme<br>(au comptoir)
+  </div>
+
+  <!-- [9] Triage (decision) -->
+  <div class="box decision" style="top:780px; left:1100px;">
+    <div class="num" style="left:30px; top:30px;">9</div>
+    <span>Triage<br>par pièce</span>
+  </div>
+
+  <!-- [10-Bon] Bon → Batch -->
+  <div class="box branch bon" style="top:1000px; left:1010px;">
+    <div class="num">10</div>
+    🟢 Bon
+  </div>
+  <div class="box branch bon" style="top:1170px; left:1010px;">
+    <div class="num">11</div>
+    Ajouter à un batch<br>de lavage
+  </div>
+  <div class="box branch bon" style="top:1345px; left:1010px;">
+    <div class="num">12</div>
+    Envoi du lot au<br>fournisseur (vendor)
+  </div>
+  <div class="box branch bon" style="top:1520px; left:1010px;">
+    <div class="num">13</div>
+    Retour du lot<br>(réception physique)
+  </div>
+  <div class="box branch bon" style="top:1695px; left:1010px;">
+    <div class="num">14</div>
+    Inspection par pièce<br>+ confirmer restock
+  </div>
+
+  <!-- [10-Endo] Endommagé → Poubelle -->
+  <div class="box branch endommage" style="top:1000px; left:1220px;">
+    <div class="num">15</div>
+    🔴 Endommagé
+  </div>
+  <div class="box branch endommage terminal" style="top:1170px; left:1220px;">
+    <div class="num">16</div>
+    Poubelle<br>(pas de dette à l'agent)
+  </div>
+
+  <!-- [10-Perdu] Perdu → Dette -->
+  <div class="box branch perdu" style="top:1000px; left:1410px;">
+    <div class="num">17</div>
+    ⚫ Perdu / Non retourné
+  </div>
+  <div class="box branch perdu" style="top:1170px; left:1410px; background:#fee2e2; border-color:#dc2626;">
+    <div class="num">18</div>
+    Dette agent<br>+ email RH + Paie
+  </div>
+
+  <!-- ============== ANNOTATIONS (notifs) ============== -->
+
+  <!-- @Étape 2 - Notif planifiée -->
+  <div class="annotation ann-auto" style="top:30px; left:540px;">
+    <div class="label">🔄 RAPPEL PROGRAMMÉ AUTO</div>
+    Le système programme un rappel email/cloche<br>pour 24 heures ouvrables avant la date butoir
+  </div>
+
+  <!-- @Étape 4 - SMS lien -->
+  <div class="annotation ann-sms" style="top:425px; left:540px;">
+    <div class="label">📱 SMS via GoHighLevel</div>
+    Lien sécurisé pour signer<br>(valide 7 jours)
+    <div class="recipients">→ Agent</div>
+  </div>
+
+  <!-- @Étape 7 - SURVEILLANCE (cron horaire) -->
+  <div class="annotation ann-auto" style="top:580px; left:580px; width:240px;">
+    <div class="label">🔄 SURVEILLANCE AUTO (toutes les heures)</div>
+    Pendant la détention, le système vérifie automatiquement :<br>
+    • Stock bas ou à zéro<br>
+    • Lots de lavage bloqués<br>
+    • Liens de signature qui expirent<br>
+    • Plusieurs remises actives au même agent
+    <div class="recipients">→ Admin (cloche)</div>
+  </div>
+
+  <!-- @Étape 7 - T-24h ouvrables → RH -->
+  <div class="annotation ann-email" style="top:870px; left:520px;">
+    <div class="label">📧 T-24h OUVRABLES</div>
+    "Rappel — retour d'uniforme dans 24h ouvrables"
+    <div class="recipients">→ rh@xguard.ca (+ cloche)</div>
+  </div>
+
+  <!-- @Étape 7 - Overdue → RH + Paie -->
+  <div class="annotation ann-email" style="top:960px; left:520px; background:#fecaca; border-left-color:#dc2626;">
+    <div class="label">📧 DATE BUTOIR DÉPASSÉE</div>
+    « ⚠️ Uniforme NON retourné — prélèvement requis $X »
+    <div class="recipients">→ rh@xguard.ca + paie@xguard.ca</div>
+  </div>
+
+  <!-- @Étape 8 - SMS retour -->
+  <div class="annotation ann-sms" style="top:870px; left:840px;">
+    <div class="label">📱 SMS via GoHighLevel</div>
+    Lien sécurisé pour signer le retour
+    <div class="recipients">→ Agent</div>
+  </div>
+
+  <!-- @Triage Bon → Notif lot créé -->
+  <div class="annotation ann-inapp" style="top:1090px; left:820px;">
+    <div class="label">🔔 NOTIF DANS L'APP (cloche)</div>
+    « Lot de lavage créé — N pièces à laver »
+    <div class="recipients">→ Admin (cloche)</div>
+  </div>
+
+  <!-- @Triage Endo → Notif retour damaged -->
+  <div class="annotation ann-email" style="top:1090px; left:1380px;">
+    <div class="label">📧 EMAIL D'ALERTE</div>
+    « Retour avec pièces endommagées »
+    <div class="recipients">→ Admin + rh@xguard.ca</div>
+  </div>
+
+  <!-- @Étape 12 - Lot stagnant -->
+  <div class="annotation ann-email" style="top:1345px; left:1200px;">
+    <div class="label">📧 SI LOT BLOQUÉ PLUS DE 7 JOURS</div>
+    Alerte automatique si le fournisseur ne renvoie pas le lot
+    <div class="recipients">→ Admin (email + cloche)</div>
+  </div>
+
+  <!-- @Étape 13 - Retour lot inspection -->
+  <div class="annotation ann-email" style="top:1520px; left:1200px;">
+    <div class="label">📧 INSPECTION À FAIRE</div>
+    « Lot revenu du lavage — à inspecter »
+    <div class="recipients">→ Admin (email + cloche)</div>
+  </div>
+
+  <!-- @Étape 14 - Restock -->
+  <div class="annotation ann-inapp" style="top:1695px; left:1200px;">
+    <div class="label">🔔 INSPECTION PIÈCE PAR PIÈCE</div>
+    1 carte par pièce :<br>
+    🟢 Bon → retour au stock disponible<br>
+    🔴 Endommagé → poubelle (sortie définitive)
+  </div>
+
+  <!-- @Perdu - Dette créée -->
+  <div class="annotation ann-debt" style="top:1310px; left:1410px;">
+    <div class="label">💰 DETTE AGENT</div>
+    Coût pièce × qty = $X<br>
+    À prélever sur dernière paie
+    <div class="recipients">📧 → rh@xguard.ca + paie@xguard.ca</div>
+  </div>
+
+  <!-- @Dette aging 30j -->
+  <div class="annotation ann-email" style="top:1480px; left:1410px;">
+    <div class="label">📧 SI DETTE &gt;30j</div>
+    Cron : relance auto si pas réglé
+    <div class="recipients">→ rh@xguard.ca + paie@xguard.ca</div>
+  </div>
+
+  <!-- @ Boucle restock → Inventaire -->
+  <div class="annotation ann-inapp" style="top:1755px; left:280px; width:380px; background:#ecfdf5; border-left-color:#059669;">
+    <div class="label">🔄 RETOUR AU STOCK DISPONIBLE</div>
+    Quand l'inspection est finalisée, les pièces marquées Bon retournent automatiquement dans le stock disponible et peuvent être remises à un autre agent.
+  </div>
+
+  <!-- @ FIN D'EMPLOI -->
+  <div class="annotation ann-email" style="top:30px; left:1100px; width:380px; background:#fee2e2; border-left-color:#dc2626;">
+    <div class="label">🚪 FIN D'EMPLOI (cas spécial)</div>
+    Quand RH clique « Clôturer fin d'emploi » sur la fiche agent :<br>
+    → Toutes les pièces non retournées sont marquées comme telles<br>
+    → La dette est calculée automatiquement (somme des coûts de remplacement)<br>
+    → La remise est fermée définitivement
+    <div class="recipients">📧 → rh@xguard.ca + paie@xguard.ca + cloche</div>
+  </div>
+
+</div>
+
+<!-- ============================================================ -->
+<!-- FEEDBACK SECTION                                              -->
+<!-- ============================================================ -->
+<div class="feedback-section">
+  <h2>✏️ Modifications suggérées</h2>
+  <p style="color:#6b7280; margin-bottom:12px;">
+    Note ici tes changements (références aux numéros [1]-[18] des boxes) :
+  </p>
+  <textarea placeholder="Exemples de feedback :
+
+[3] Signature employeur : on veut signer AVANT d'envoyer le SMS (déjà le cas) ou changer l'ordre ?
+
+[7] Détention : on veut un SMS direct à l'agent à T-48h (pas seulement RH par email) ?
+
+[10] Triage Bon : permettre 'Mettre de côté' pour décision ultérieure par un superviseur ?
+
+[12] Envoi fournisseur : tracker le coût du lavage ? Plusieurs fournisseurs ?
+
+[14] Inspection : permettre inspection partielle (sauver brouillon, finir plus tard) ?
+
+[18] Dette : envoyer aussi un SMS à l'agent quand sa dette est créée ?
+
+NOUVEAU : ajouter un état RÉPARATION entre [13] Retour lot et [14] Inspection (couture interne)
+
+NOTIF MANQUANTE : alerte hebdomadaire récap (lundi matin) avec dossiers en cours ?
+
+DÉLAIS : changer T-24h → T-48h ouvrables ?
+        changer 7j → 5j pour 'lot stagnant' ?
+        changer 30j → 14j pour 'dette aging' ?
+"></textarea>
+</div>
+
+</body>
+</html>
