@@ -21,6 +21,10 @@ import {
   Prisma,
 } from '@prisma/client';
 import { sendEmail, EMAIL_RH, EMAIL_PAIE } from './email.service';
+import { sendEmailViaGhl } from './ghl-email.service';
+
+/** Provider de courriel : 'ghl' (par défaut) ou 'smtp'. */
+const EMAIL_PROVIDER = (process.env.EMAIL_PROVIDER || 'ghl').toLowerCase();
 
 export interface NotifyAudience {
   userIds?: string[];
@@ -217,11 +221,12 @@ export async function dispatchPendingNotifications(): Promise<DispatchResult> {
         });
         sent++;
       } else if (n.channel === 'EMAIL' && n.recipientEmail) {
-        await sendEmail({
-          to: n.recipientEmail,
-          subject: n.title,
-          html: htmlFromMessage(n),
-        });
+        const html = htmlFromMessage(n);
+        if (EMAIL_PROVIDER === 'ghl') {
+          await sendEmailViaGhl({ to: n.recipientEmail, subject: n.title, html });
+        } else {
+          await sendEmail({ to: n.recipientEmail, subject: n.title, html });
+        }
         await prisma.notification.update({
           where: { id: n.id },
           data: { status: 'SENT', sentAt: new Date(), attempts: n.attempts + 1 },

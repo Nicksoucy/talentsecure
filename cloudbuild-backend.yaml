@@ -64,7 +64,7 @@ steps:
       - '--min-instances=1'
       # V2 — destinataires email pour les notifications (RH, paie, fin d'emploi, etc.)
       # Non-sensibles : on les met en clair via --update-env-vars (préserve les autres envs).
-      - '--update-env-vars=EMAIL_RH=rh@xguard.ca,EMAIL_PAIE=paie@xguard.ca'
+      - '--update-env-vars=EMAIL_RH=rh@xguard.ca,EMAIL_PAIE=paie@xguard.ca,EMAIL_PROVIDER=ghl'
     id: 'deploy-service'
 
 images:
