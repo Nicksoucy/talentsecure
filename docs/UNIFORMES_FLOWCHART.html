@@ -314,7 +314,7 @@
   <!-- [1] Rentrer d'inventaire (loop start) -->
   <div class="box" style="top:90px; left:60px;">
     <div class="num">1</div>
-    Rentrer d'inventaire<br>(mouvement IN)
+    Rentrer de l'inventaire<br>(entrée en stock)
   </div>
 
   <!-- [2] Remise -->
@@ -344,13 +344,13 @@
   <!-- [6] Stock OUT -->
   <div class="box" style="top:795px; left:320px;">
     <div class="num">6</div>
-    Stock décrémenté (OUT)<br>+ PDF archivé
+    Pièces retirées du stock<br>+ formulaire PDF archivé
   </div>
 
   <!-- [7] Détention -->
   <div class="box" style="top:795px; left:580px;">
     <div class="num">7</div>
-    Détention par l'agent<br>(jusqu'à dueReturnAt)
+    Détention par l'agent<br>(jusqu'à la date butoir)
   </div>
 
   <!-- [8] Retour uniforme -->
@@ -411,25 +411,25 @@
 
   <!-- @Étape 2 - Notif planifiée -->
   <div class="annotation ann-auto" style="top:30px; left:540px;">
-    <div class="label">🔄 PLANIFIÉ AUTO</div>
-    Notif <code>due-soon</code> programmée<br>pour T-24h ouvrables avant <code>dueReturnAt</code>
+    <div class="label">🔄 RAPPEL PROGRAMMÉ AUTO</div>
+    Le système programme un rappel email/cloche<br>pour 24 heures ouvrables avant la date butoir
   </div>
 
   <!-- @Étape 4 - SMS lien -->
   <div class="annotation ann-sms" style="top:425px; left:540px;">
-    <div class="label">📱 SMS GHL</div>
-    Lien public de signature<br>(token, expire 7j)
+    <div class="label">📱 SMS via GoHighLevel</div>
+    Lien sécurisé pour signer<br>(valide 7 jours)
     <div class="recipients">→ Agent</div>
   </div>
 
   <!-- @Étape 7 - SURVEILLANCE (cron horaire) -->
   <div class="annotation ann-auto" style="top:580px; left:580px; width:240px;">
-    <div class="label">🔄 SURVEILLANCE CRON HORAIRE</div>
-    Pendant la détention, le cron vérifie toutes les heures :<br>
-    • Stock bas / à zéro<br>
-    • Lots stagnants<br>
-    • Signatures expirantes<br>
-    • Doublons remises actives
+    <div class="label">🔄 SURVEILLANCE AUTO (toutes les heures)</div>
+    Pendant la détention, le système vérifie automatiquement :<br>
+    • Stock bas ou à zéro<br>
+    • Lots de lavage bloqués<br>
+    • Liens de signature qui expirent<br>
+    • Plusieurs remises actives au même agent
     <div class="recipients">→ Admin (cloche)</div>
   </div>
 
@@ -442,52 +442,52 @@
 
   <!-- @Étape 7 - Overdue → RH + Paie -->
   <div class="annotation ann-email" style="top:960px; left:520px; background:#fecaca; border-left-color:#dc2626;">
-    <div class="label">📧 T+0 OVERDUE</div>
-    "⚠️ Uniforme NON retourné — prélèvement requis $X"
+    <div class="label">📧 DATE BUTOIR DÉPASSÉE</div>
+    « ⚠️ Uniforme NON retourné — prélèvement requis $X »
     <div class="recipients">→ rh@xguard.ca + paie@xguard.ca</div>
   </div>
 
   <!-- @Étape 8 - SMS retour -->
   <div class="annotation ann-sms" style="top:870px; left:840px;">
-    <div class="label">📱 SMS GHL</div>
-    Lien de signature retour
+    <div class="label">📱 SMS via GoHighLevel</div>
+    Lien sécurisé pour signer le retour
     <div class="recipients">→ Agent</div>
   </div>
 
   <!-- @Triage Bon → Notif lot créé -->
   <div class="annotation ann-inapp" style="top:1090px; left:820px;">
-    <div class="label">🔔 NOTIF IN-APP</div>
-    "Lot de lavage créé — N pièces à laver"
+    <div class="label">🔔 NOTIF DANS L'APP (cloche)</div>
+    « Lot de lavage créé — N pièces à laver »
     <div class="recipients">→ Admin (cloche)</div>
   </div>
 
   <!-- @Triage Endo → Notif retour damaged -->
   <div class="annotation ann-email" style="top:1090px; left:1380px;">
-    <div class="label">📧 NOTIF EMAIL</div>
-    "Retour avec items endommagés"
+    <div class="label">📧 EMAIL D'ALERTE</div>
+    « Retour avec pièces endommagées »
     <div class="recipients">→ Admin + rh@xguard.ca</div>
   </div>
 
   <!-- @Étape 12 - Lot stagnant -->
   <div class="annotation ann-email" style="top:1345px; left:1200px;">
-    <div class="label">📧 SI LOT STAGNANT &gt;7j</div>
-    Cron : alerte si pas de retour du fournisseur
+    <div class="label">📧 SI LOT BLOQUÉ PLUS DE 7 JOURS</div>
+    Alerte automatique si le fournisseur ne renvoie pas le lot
     <div class="recipients">→ Admin (email + cloche)</div>
   </div>
 
   <!-- @Étape 13 - Retour lot inspection -->
   <div class="annotation ann-email" style="top:1520px; left:1200px;">
-    <div class="label">📧 INSPECTION REQUISE</div>
-    "Lot revenu — inspection à faire"
+    <div class="label">📧 INSPECTION À FAIRE</div>
+    « Lot revenu du lavage — à inspecter »
     <div class="recipients">→ Admin (email + cloche)</div>
   </div>
 
   <!-- @Étape 14 - Restock -->
   <div class="annotation ann-inapp" style="top:1695px; left:1200px;">
-    <div class="label">🔔 INSPECTION</div>
+    <div class="label">🔔 INSPECTION PIÈCE PAR PIÈCE</div>
     1 carte par pièce :<br>
-    🟢 Bon → re-stock (<code>WASH_OUT_GOOD</code>)<br>
-    🔴 Endommagé → poubelle (<code>WASH_OUT_DAMAGED</code>)
+    🟢 Bon → retour au stock disponible<br>
+    🔴 Endommagé → poubelle (sortie définitive)
   </div>
 
   <!-- @Perdu - Dette créée -->
@@ -507,17 +507,17 @@
 
   <!-- @ Boucle restock → Inventaire -->
   <div class="annotation ann-inapp" style="top:1755px; left:280px; width:380px; background:#ecfdf5; border-left-color:#059669;">
-    <div class="label">🔄 BOUCLE RESTOCK</div>
-    Quand inspection finalisée avec pièces Bon → <code>WASH_OUT_GOOD</code> ré-incrémente <code>quantityOnHand</code> → ces pièces sont de nouveau disponibles pour une remise future.
+    <div class="label">🔄 RETOUR AU STOCK DISPONIBLE</div>
+    Quand l'inspection est finalisée, les pièces marquées Bon retournent automatiquement dans le stock disponible et peuvent être remises à un autre agent.
   </div>
 
   <!-- @ FIN D'EMPLOI -->
   <div class="annotation ann-email" style="top:30px; left:1100px; width:380px; background:#fee2e2; border-left-color:#dc2626;">
     <div class="label">🚪 FIN D'EMPLOI (cas spécial)</div>
-    Quand RH clic "Clôturer fin d'emploi" sur la fiche agent :<br>
-    → Toutes les pièces non retournées passent en <code>NOT_RETURNED</code><br>
-    → Dette = somme des replacementCost<br>
-    → Status = <code>CLOSED_TERMINATION</code>
+    Quand RH clique « Clôturer fin d'emploi » sur la fiche agent :<br>
+    → Toutes les pièces non retournées sont marquées comme telles<br>
+    → La dette est calculée automatiquement (somme des coûts de remplacement)<br>
+    → La remise est fermée définitivement
     <div class="recipients">📧 → rh@xguard.ca + paie@xguard.ca + cloche</div>
   </div>
 
