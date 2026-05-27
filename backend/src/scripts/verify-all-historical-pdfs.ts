@@ -35,6 +35,7 @@ const FOLDERS = [
 ];
 const API_URL = process.env.API_URL || 'https://talentsecure-572017163659.northamerica-northeast1.run.app';
 const APPLY = process.argv.includes('--apply');
+const INCLUDE_INACTIF = process.argv.includes('--include-inactif');
 
 // ============================================================================
 // PARSER (réutilise la logique de parse-historical-pdfs.ts)
@@ -509,7 +510,7 @@ async function main() {
       report.employeeNotFound.push({ file: base });
       continue;
     }
-    if (emp.status !== 'ACTIF') {
+    if (emp.status !== 'ACTIF' && !INCLUDE_INACTIF) {
       report.skippedNonActif.push({ file: base, emp: `${emp.firstName} ${emp.lastName}`, status: emp.status });
       continue;
     }

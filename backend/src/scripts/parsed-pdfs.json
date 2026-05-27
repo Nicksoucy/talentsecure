@@ -1,0 +1,835 @@
+[
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260213 Ceres dorcely.pdf",
+    "division": "SECURITE",
+    "totalLoanCost": 235,
+    "computedTotal": 235,
+    "match": true,
+    "lines": [
+      {
+        "itemName": "Chemise grise (ML)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "L",
+        "rawSizeToken": null,
+        "quantity": 2,
+        "unitCost": 40,
+        "total": 80,
+        "matched": true,
+        "rawLine": "Chemise grise (ML) L 2 $ 4o,oo $ 80,00"
+      },
+      {
+        "itemName": "Pantalon noir (militaire)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "L",
+        "quantity": 2,
+        "unitCost": 65,
+        "total": 130,
+        "matched": true,
+        "rawLine": "Pantalon noir (militaire) L 2 $ 130,00"
+      },
+      {
+        "itemName": "Ceinture",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 25,
+        "total": 25,
+        "matched": true,
+        "rawLine": "Ceinture 1 $ 25,00 $ 25,00"
+      }
+    ]
+  },
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260213 Lansana Guirassy.pdf",
+    "division": "SECURITE",
+    "totalLoanCost": 170,
+    "computedTotal": 170,
+    "match": true,
+    "lines": [
+      {
+        "itemName": "Chemise grise (ML)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "L",
+        "rawSizeToken": null,
+        "quantity": 2,
+        "unitCost": 40,
+        "total": 80,
+        "matched": true,
+        "rawLine": "Chemise grise (ML) L 2 $ 40,00 $ 8o,oo"
+      },
+      {
+        "itemName": "Pantalon noir (militaire)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "L",
+        "quantity": 1,
+        "unitCost": 65,
+        "total": 65,
+        "matched": true,
+        "rawLine": "Pantalon noir (militaire) L 1 $ 65,00 $ 65,00"
+      },
+      {
+        "itemName": "Ceinture",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 25,
+        "total": 25,
+        "matched": true,
+        "rawLine": "Ceinture 1 $ 25.00 $ 25,00"
+      }
+    ]
+  },
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260216 Calixte ludger.pdf",
+    "division": "UNKNOWN",
+    "totalLoanCost": 170,
+    "computedTotal": 0,
+    "match": false,
+    "lines": []
+  },
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260305 Salah Eddine.pdf",
+    "division": "SECURITE",
+    "totalLoanCost": 235,
+    "computedTotal": 235,
+    "match": true,
+    "lines": [
+      {
+        "itemName": "Chemise grise (MC)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "XL",
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 40,
+        "total": 40,
+        "matched": true,
+        "rawLine": "XL 1 $ 40,00 $ 40,00\tChemise grise (MC)"
+      },
+      {
+        "itemName": "Chemise grise (ML)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "XL",
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 40,
+        "total": 40,
+        "matched": true,
+        "rawLine": "XL 1 $ 40,00 $ 40,00\tChemise grise (ML)"
+      },
+      {
+        "itemName": "Pantalon noir (militaire)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "L",
+        "quantity": 2,
+        "unitCost": 65,
+        "total": 130,
+        "matched": true,
+        "rawLine": "Pantalon noir (militaire) L 2 $ 65,00 $ 130,00"
+      },
+      {
+        "itemName": "Ceinture",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 25,
+        "total": 25,
+        "matched": true,
+        "rawLine": "1 $ 25,00 $ 25,00\tCeinture"
+      }
+    ]
+  },
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260306 Papa Massamba Sock.pdf",
+    "division": "SECURITE",
+    "totalLoanCost": 170,
+    "computedTotal": 170,
+    "match": true,
+    "lines": [
+      {
+        "itemName": "Chemise grise (MC)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "L",
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 40,
+        "total": 40,
+        "matched": true,
+        "rawLine": "L 1 $ 4o,oo $ 40,00\tChemise grise (MC)"
+      },
+      {
+        "itemName": "Chemise grise (ML)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "L",
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 40,
+        "total": 40,
+        "matched": true,
+        "rawLine": "L 1 $ 40,00 $ 40,00\tChemise grise (ML)"
+      },
+      {
+        "itemName": "Pantalon noir (militaire)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "M",
+        "quantity": 1,
+        "unitCost": 65,
+        "total": 65,
+        "matched": true,
+        "rawLine": "$ 65,00\tPantalon noir (m ititaire) L 1 $ 65,00"
+      },
+      {
+        "itemName": "Ceinture",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 25,
+        "total": 25,
+        "matched": true,
+        "rawLine": "$ 25,00 $ 25,00\tCeinture 1"
+      }
+    ]
+  },
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260427 Crisleidy Charlis.pdf",
+    "division": "SECURITE",
+    "totalLoanCost": 170,
+    "computedTotal": 170,
+    "match": true,
+    "lines": [
+      {
+        "itemName": "Chemise grise (MC)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "M",
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 40,
+        "total": 40,
+        "matched": true,
+        "rawLine": "$ 40,00 $ 40,00\tChemise grise (MC) M 1"
+      },
+      {
+        "itemName": "Chemise grise (ML)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "M",
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 40,
+        "total": 40,
+        "matched": true,
+        "rawLine": "M 1 $ 40,00 $ 40,00\tChemise grise (ML)"
+      },
+      {
+        "itemName": "Pantalon noir (militaire)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "M",
+        "quantity": 1,
+        "unitCost": 65,
+        "total": 65,
+        "matched": true,
+        "rawLine": "M 1 $ 6s,oo $ 65,00\tPantalon noir (militaire)"
+      },
+      {
+        "itemName": "Ceinture",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 25,
+        "total": 25,
+        "matched": true,
+        "rawLine": "Ceinture 1 $ 25,00 $ 2s,oo"
+      }
+    ]
+  },
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260427 Mamadou Balde.pdf",
+    "division": "SECURITE",
+    "totalLoanCost": 235,
+    "computedTotal": 235,
+    "match": true,
+    "lines": [
+      {
+        "itemName": "Chemise grise (ML)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "L",
+        "rawSizeToken": null,
+        "quantity": 2,
+        "unitCost": 40,
+        "total": 80,
+        "matched": true,
+        "rawLine": "Chemise grise (ML) L 2 $ 40,00 $ 80,00"
+      },
+      {
+        "itemName": "Pantalon noir (militaire)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "L",
+        "quantity": 2,
+        "unitCost": 65,
+        "total": 130,
+        "matched": true,
+        "rawLine": "Pantalon noir (mil.itaire) L 2 $ 6s,00 $ 130,00"
+      },
+      {
+        "itemName": "Ceinture",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 25,
+        "total": 25,
+        "matched": true,
+        "rawLine": "Ceinture 1 $ 25,00 $ 25,00"
+      }
+    ]
+  },
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260427 Mohamed Diakité.pdf",
+    "division": "SECURITE",
+    "totalLoanCost": 275,
+    "computedTotal": 275,
+    "match": true,
+    "lines": [
+      {
+        "itemName": "Chemise blanche (ML)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "XL",
+        "rawSizeToken": null,
+        "quantity": 3,
+        "unitCost": 40,
+        "total": 120,
+        "matched": true,
+        "rawLine": "Chemise blanche (ML) XL 3 $ 40,00 $ 120,00"
+      },
+      {
+        "itemName": "Pantalon noir (militaire)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "XL",
+        "quantity": 2,
+        "unitCost": 65,
+        "total": 130,
+        "matched": true,
+        "rawLine": "Pantalon noir (mil.itaire) XL 2 $ 65,00 $ 130,00"
+      },
+      {
+        "itemName": "Ceinture",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 25,
+        "total": 25,
+        "matched": true,
+        "rawLine": "Ceinture 1 $ 25,00 $ 25,00"
+      }
+    ]
+  },
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260428 Raafat Al Jrab.pdf",
+    "division": "SECURITE",
+    "totalLoanCost": 235,
+    "computedTotal": 235,
+    "match": true,
+    "lines": [
+      {
+        "itemName": "Chemise grise (ML)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "S",
+        "rawSizeToken": null,
+        "quantity": 2,
+        "unitCost": 40,
+        "total": 80,
+        "matched": true,
+        "rawLine": "Chemise grise (ML) S 2 $ 40,00 $ 8o,oo"
+      },
+      {
+        "itemName": "Pantalon noir (militaire)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "S",
+        "quantity": 2,
+        "unitCost": 65,
+        "total": 130,
+        "matched": true,
+        "rawLine": "Pantalon noir (militaire) S 2 $ 65,00 $ 130,00"
+      },
+      {
+        "itemName": "Ceinture",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 25,
+        "total": 25,
+        "matched": true,
+        "rawLine": "Ceinture 1 $ 2s,00 $ 25,00"
+      }
+    ]
+  },
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260501 Ian Gibilaro.pdf",
+    "division": "SECURITE",
+    "totalLoanCost": 275,
+    "computedTotal": 275,
+    "match": true,
+    "lines": [
+      {
+        "itemName": "Chemise blanche (ML)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "L",
+        "rawSizeToken": null,
+        "quantity": 3,
+        "unitCost": 40,
+        "total": 120,
+        "matched": true,
+        "rawLine": "Chemise blanche (ML) L 3 $ 40,00 $ 120,00"
+      },
+      {
+        "itemName": "Pantalon noir (militaire)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "L",
+        "quantity": 2,
+        "unitCost": 65,
+        "total": 130,
+        "matched": true,
+        "rawLine": "Pantalon noir (militaire) L 2 $ 65,00 $ 130,00"
+      },
+      {
+        "itemName": "Ceinture",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 25,
+        "total": 25,
+        "matched": true,
+        "rawLine": "Ceinture 1 $ 25,00 $ 25,00"
+      }
+    ]
+  },
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260501 Rene Descharte Ngoulour.pdf",
+    "division": "SECURITE",
+    "totalLoanCost": 130,
+    "computedTotal": 355,
+    "match": false,
+    "lines": [
+      {
+        "itemName": "Polo noir",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "L",
+        "rawSizeToken": null,
+        "quantity": 2,
+        "unitCost": 35,
+        "total": 65,
+        "matched": true,
+        "rawLine": "Polo noir $ 65,00\t6 00\t1\tL\tPantalon noir (mititai $ 0,00\t6 00"
+      },
+      {
+        "itemName": "Ceinture",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 10,
+        "unitCost": 25,
+        "total": 250,
+        "matched": true,
+        "rawLine": "ceinture $ o,oo\t$ 2s0,00"
+      },
+      {
+        "itemName": "Lunette de sécurité",
+        "division": "SECURITE",
+        "type": "EQUIPEMENT",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 3,
+        "unitCost": 10,
+        "total": 25,
+        "matched": true,
+        "rawLine": "Lunette de sécurité $ 0,00\t$ 25,00"
+      },
+      {
+        "itemName": "Gant de sécurité",
+        "division": "SECURITE",
+        "type": "EQUIPEMENT",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 25,
+        "total": 15,
+        "matched": true,
+        "rawLine": "Gant de sécurité $ 0,00\t$ 15,00"
+      }
+    ]
+  },
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260506 Patrick Cesars.pdf",
+    "division": "SECURITE",
+    "totalLoanCost": 170,
+    "computedTotal": 170,
+    "match": true,
+    "lines": [
+      {
+        "itemName": "Chemise grise (MC)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "L",
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 40,
+        "total": 40,
+        "matched": true,
+        "rawLine": "Chemise grise (MC) L 1 $ 40,00 $ 40,00"
+      },
+      {
+        "itemName": "Chemise grise (ML)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "L",
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 40,
+        "total": 40,
+        "matched": true,
+        "rawLine": "Chemise grise (ML) L 1 $ 40,00 $ 40,00"
+      },
+      {
+        "itemName": "Pantalon noir (militaire)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "L",
+        "quantity": 1,
+        "unitCost": 65,
+        "total": 65,
+        "matched": true,
+        "rawLine": "Pantalon noir (mil,itaire) L 1 $ 65,00 $ 65,00"
+      },
+      {
+        "itemName": "Ceinture",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 25,
+        "total": 25,
+        "matched": true,
+        "rawLine": "Ceinture 1 $ 25,00 $ 25,00"
+      }
+    ]
+  },
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260507 Emmanuel Nanguep Chetcho.pdf",
+    "division": "SECURITE",
+    "totalLoanCost": 0,
+    "computedTotal": 45,
+    "match": false,
+    "lines": [
+      {
+        "itemName": "Pantalon noir (militaire)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "L",
+        "quantity": 1,
+        "unitCost": 65,
+        "total": 45,
+        "matched": true,
+        "rawLine": "$ o,oo\t$ 45,00\tChemise blanche com $ 0,00\t$ 10,00\tTaille unique\tCravate $ 0,00\t$ 35,00\tpolo noir $ 65,00\t$ 65,00\t1\tL\tPantalon noir militaire) $ 0,00\t$ 65,00\tPantalon noir (co Let"
+      }
+    ]
+  },
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260522 Anthony Jn Roland Jacques.pdf",
+    "division": "SECURITE",
+    "totalLoanCost": 170,
+    "computedTotal": 170,
+    "match": true,
+    "lines": [
+      {
+        "itemName": "Chemise grise (ML)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "4XL",
+        "quantity": 2,
+        "unitCost": 40,
+        "total": 80,
+        "matched": true,
+        "rawLine": "$ 80,00\t$ 40,00\t2\t4XL\tChemise grise (ML)"
+      },
+      {
+        "itemName": "Pantalon noir (militaire)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "2XL",
+        "quantity": 1,
+        "unitCost": 65,
+        "total": 65,
+        "matched": true,
+        "rawLine": "$ 6s,00 $ 65,00\t1\tzXL\tPantalon noir (militaire)"
+      },
+      {
+        "itemName": "Ceinture",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 25,
+        "total": 25,
+        "matched": true,
+        "rawLine": "$ 25,00\t$ 25,00\t1\tCeinture"
+      }
+    ]
+  },
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260522 Boualem Dahmouni.pdf",
+    "division": "SECURITE",
+    "totalLoanCost": 170,
+    "computedTotal": 170,
+    "match": true,
+    "lines": [
+      {
+        "itemName": "Chemise grise (ML)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "L",
+        "rawSizeToken": null,
+        "quantity": 2,
+        "unitCost": 40,
+        "total": 80,
+        "matched": true,
+        "rawLine": "Chemise grise (ML) L 2 $ 40,00 $ 80,00"
+      },
+      {
+        "itemName": "Pantalon noir (militaire)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "L",
+        "quantity": 1,
+        "unitCost": 65,
+        "total": 65,
+        "matched": true,
+        "rawLine": "Pantalon noir (militaire) L 1 $ 65,00 $ 65,00"
+      },
+      {
+        "itemName": "Ceinture",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 25,
+        "total": 25,
+        "matched": true,
+        "rawLine": "Ceinture I $ 2s,00 $ 25,00"
+      }
+    ]
+  },
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260522 Colette Flora Ngo Bilong.pdf",
+    "division": "SECURITE",
+    "totalLoanCost": 170,
+    "computedTotal": 170,
+    "match": true,
+    "lines": [
+      {
+        "itemName": "Chemise grise (ML)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "M",
+        "rawSizeToken": null,
+        "quantity": 2,
+        "unitCost": 40,
+        "total": 80,
+        "matched": true,
+        "rawLine": "Chemise grise (ML) M 2 $ 40,00 $ 80,00"
+      },
+      {
+        "itemName": "Pantalon noir (militaire)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "M",
+        "quantity": 1,
+        "unitCost": 65,
+        "total": 65,
+        "matched": true,
+        "rawLine": "Pantalon noir (militaire) M 1 $ 65,00 $ 65,00"
+      },
+      {
+        "itemName": "Ceinture",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 25,
+        "total": 25,
+        "matched": true,
+        "rawLine": "Ceinture 1 $ 25,00 $ 25,00"
+      }
+    ]
+  },
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260522 Mohamed Lamine Sylla.pdf",
+    "division": "SECURITE",
+    "totalLoanCost": 170,
+    "computedTotal": 170,
+    "match": true,
+    "lines": [
+      {
+        "itemName": "Chemise grise (MC)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "2XL",
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 40,
+        "total": 40,
+        "matched": true,
+        "rawLine": "Chemise grise (MC) 2XL 1 $ 40,00 $ 40,00"
+      },
+      {
+        "itemName": "Chemise grise (ML)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "2XL",
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 40,
+        "total": 40,
+        "matched": true,
+        "rawLine": "Chemise grise (ML) 2XL 1 $ 40,00 $ 40,00"
+      },
+      {
+        "itemName": "Pantalon noir (militaire)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "L",
+        "quantity": 1,
+        "unitCost": 65,
+        "total": 65,
+        "matched": true,
+        "rawLine": "Pantalon noir (militaire) L 1 $ 65,00 $ 65,00"
+      },
+      {
+        "itemName": "Ceinture",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 25,
+        "total": 25,
+        "matched": true,
+        "rawLine": "Ceinture I $ 25,00 $ 25,00"
+      }
+    ]
+  },
+  {
+    "file": "C:\\Users\\nicol\\Downloads\\OneDrive_1_26-05-2026\\20260522 Omar Nadir.pdf",
+    "division": "SECURITE",
+    "totalLoanCost": 170,
+    "computedTotal": 170,
+    "match": true,
+    "lines": [
+      {
+        "itemName": "Chemise grise (MC)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "2XL",
+        "quantity": 1,
+        "unitCost": 40,
+        "total": 40,
+        "matched": true,
+        "rawLine": "Chemise grise (MC) zXL 1 $ 40,00 $ 40,00"
+      },
+      {
+        "itemName": "Chemise grise (ML)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": "2XL",
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 40,
+        "total": 40,
+        "matched": true,
+        "rawLine": "Chemise grise (ML) 2XL 1 $ 4o,oo $ 40,00"
+      },
+      {
+        "itemName": "Pantalon noir (militaire)",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": "XL",
+        "quantity": 1,
+        "unitCost": 65,
+        "total": 65,
+        "matched": true,
+        "rawLine": "Pantalon noir (militaire) XL 1 $ 65,00 $ 65,00"
+      },
+      {
+        "itemName": "Ceinture",
+        "division": "SECURITE",
+        "type": "UNIFORME",
+        "size": null,
+        "rawSizeToken": null,
+        "quantity": 1,
+        "unitCost": 25,
+        "total": 25,
+        "matched": true,
+        "rawLine": "Ceinture 1 $ 25,00 $ 25,00"
+      }
+    ]
+  }
+]

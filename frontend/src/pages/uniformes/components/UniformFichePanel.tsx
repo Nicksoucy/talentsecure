@@ -12,13 +12,27 @@ import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import SignaturePad from './SignaturePad';
 import IssuanceLinesEditor from './IssuanceLinesEditor';
-import type { UniformIssuance } from '@/types/uniform';
+import type { UniformIssuance, UniformIssuanceLine } from '@/types/uniform';
 
 const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
 const statusLabel: Record<string, string> = {
   DRAFT: 'Brouillon', ISSUED: 'Remis', PARTIALLY_RETURNED: 'Retour partiel',
   RETURNED: 'Retourné', CLOSED_TERMINATION: 'Clôturé (fin emploi)', CANCELLED: 'Annulé',
 };
+
+/** Résume les lignes d'une remise en une chaîne lisible :
+ *  "2× Chemise grise (ML) L • 1× Pantalon militaire L • 1× Ceinture Unique". */
+function summarizeLines(lines: UniformIssuanceLine[] | undefined): string {
+  if (!lines || lines.length === 0) return '—';
+  return lines
+    .map((l) => {
+      const name = l.variant?.item?.name || l.customItemName || '?';
+      const size = l.variant?.size;
+      const sizeStr = size && size !== 'Unique' ? ` ${size}` : '';
+      return `${l.quantity}× ${name}${sizeStr}`;
+    })
+    .join(' • ');
+}
 
 /**
  * Panneau de gestion d'uniforme pour un agent (détentions, transactions,
@@ -127,13 +141,18 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle1" mb={1}>Historique des remises</Typography>
         <Table size="small">
-          <TableHead><TableRow><TableCell>Date</TableCell><TableCell>Division</TableCell><TableCell>Statut</TableCell><TableCell align="right">Coût</TableCell><TableCell align="right">Actions</TableCell></TableRow></TableHead>
+          <TableHead><TableRow><TableCell>Date</TableCell><TableCell>Division</TableCell><TableCell>Statut</TableCell><TableCell>Pièces</TableCell><TableCell align="right">Coût</TableCell><TableCell align="right">Actions</TableCell></TableRow></TableHead>
           <TableBody>
             {issuances.map((i) => (
               <TableRow key={i.id}>
                 <TableCell>{new Date(i.issuedAt || i.createdAt).toLocaleDateString('fr-CA')}</TableCell>
                 <TableCell>{i.division === 'SIGNALISATION' ? 'Signalisation' : 'Sécurité'}</TableCell>
                 <TableCell><Chip size="small" label={statusLabel[i.status] || i.status} /></TableCell>
+                <TableCell sx={{ maxWidth: 360, fontSize: '0.85rem' }}>
+                  <Typography variant="body2" sx={{ whiteSpace: 'normal', lineHeight: 1.3 }}>
+                    {summarizeLines(i.lines)}
+                  </Typography>
+                </TableCell>
                 <TableCell align="right">{money(i.totalLoanCost)}</TableCell>
                 <TableCell align="right">
                   <Button size="small" startIcon={<PictureAsPdfIcon />} onClick={() => openPdf('issuance', i.id)}>PDF</Button>
@@ -170,7 +189,7 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
                 </TableCell>
               </TableRow>
             ))}
-            {issuances.length === 0 && <TableRow><TableCell colSpan={5}><Typography variant="body2" color="text.secondary">Aucune remise.</Typography></TableCell></TableRow>}
+            {issuances.length === 0 && <TableRow><TableCell colSpan={6}><Typography variant="body2" color="text.secondary">Aucune remise.</Typography></TableCell></TableRow>}
           </TableBody>
         </Table>
       </Paper>
