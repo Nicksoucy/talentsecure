@@ -367,9 +367,9 @@
 
     <!-- Note : annotation 'NOTIF lot créé' supprimée car fusionnée dans LOT OUVERT (voir plus bas). -->
 
-    <!-- [EMAIL D'ALERTE] @ (1610, 1090) → connecte à la fois [15] Endommagé (right ≈ 1370, 1040) et [17] Perdu (right ≈ 1560, 1040) -->
-    <line x1="1610" y1="1100" x2="1560" y2="1040" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
-    <line x1="1610" y1="1120" x2="1370" y2="1040" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- [EMAIL D'ALERTE] @ (1210, 1280) → connecte à [15] Endo (bottom ≈ 1290, 1080) ET [17] Perdu (bottom ≈ 1480, 1080) -->
+    <line x1="1290" y1="1280" x2="1290" y2="1080" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <line x1="1430" y1="1280" x2="1480" y2="1080" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
 
     <!-- [LOT OUVERT @ box 11] @ (750, 1170) → Box [11] left edge (1000, 1210) -->
     <line x1="990" y1="1210" x2="1000" y2="1210" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5 4"/>
@@ -544,10 +544,10 @@
     <div class="recipients">→ Agent</div>
   </div>
 
-  <!-- @Triage Endo/Perdu → Notif retour damaged -->
-  <div class="annotation ann-email" style="top:1090px; left:1610px;">
+  <!-- @Triage Endo/Perdu → Notif retour damaged (positionnée sous [16] Poubelle) -->
+  <div class="annotation ann-email" style="top:1280px; left:1210px; width:230px;">
     <div class="label">📧 EMAIL D'ALERTE</div>
-    « Retour avec pièces endommagées »
+    « Retour avec pièces endommagées ou perdues »
     <div class="recipients">→ Admin + rh@xguard.ca</div>
   </div>
 
