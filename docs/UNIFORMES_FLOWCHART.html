@@ -228,11 +228,23 @@
 <div class="legend">
   <div class="legend-item"><div class="legend-box legend-step"></div> Étape</div>
   <div class="legend-item"><div class="legend-box legend-decision"></div> Décision</div>
-  <div class="legend-item"><div class="legend-box legend-auto"></div> 🔄 Action auto (cron)</div>
+  <div class="legend-item"><div class="legend-box legend-auto"></div> 🔄 Action auto</div>
   <div class="legend-item"><div class="legend-box legend-email"></div> 📧 Email</div>
   <div class="legend-item"><div class="legend-box legend-sms"></div> 📱 SMS</div>
-  <div class="legend-item"><div class="legend-box legend-inapp"></div> 🔔 In-app</div>
+  <div class="legend-item"><div class="legend-box legend-inapp"></div> 🔔 Cloche dans l'app</div>
   <div class="legend-item"><div class="legend-box legend-debt"></div> 💰 Dette agent</div>
+  <div class="legend-item" style="border-left: 1px solid #d1d5db; padding-left: 24px; margin-left: 8px;">
+    <svg width="40" height="16"><line x1="0" y1="8" x2="38" y2="8" stroke="#374151" stroke-width="2" marker-end="url(#leg-arrow)"/><defs><marker id="leg-arrow" markerWidth="8" markerHeight="8" refX="7" refY="2.5" orient="auto"><polygon points="0 0, 8 2.5, 0 5" fill="#374151"/></marker></defs></svg>
+    Flux d'étape
+  </div>
+  <div class="legend-item">
+    <svg width="40" height="16"><line x1="0" y1="8" x2="38" y2="8" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/></svg>
+    Lien notification ↔ étape
+  </div>
+  <div class="legend-item">
+    <svg width="40" height="16"><line x1="0" y1="8" x2="38" y2="8" stroke="#059669" stroke-width="2.5"/></svg>
+    Boucle de retour au stock
+  </div>
 </div>
 
 <!-- ============================================================ -->
@@ -296,8 +308,51 @@
     <!-- === PERDU BRANCH (right) === -->
     <line x1="1480" y1="1090" x2="1480" y2="1170" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow)"/>
 
-    <!-- === SURVEILLANCE DASHED LINES (from Détention to side annotations) === -->
-    <line x1="660" y1="800" x2="660" y2="650" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrow-dash)"/>
+    <!-- ============================================================ -->
+    <!-- DASHED CONNECTORS — relient chaque annotation à sa box      -->
+    <!-- ============================================================ -->
+
+    <!-- [PLANIFIÉ AUTO] @ (540, 30) → Box [2] Remise (right edge ≈ 480, 130) -->
+    <line x1="540" y1="80" x2="480" y2="130" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [FIN D'EMPLOI panel] @ (1100, 30, w:380) → Box [7] Détention (top ≈ 660, 800) -->
+    <line x1="1290" y1="160" x2="900" y2="800" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [SMS GHL remise] @ (540, 425) → Box [4] SMS Agent (right edge ≈ 480, 460) -->
+    <line x1="540" y1="460" x2="480" y2="460" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [SURVEILLANCE] @ (580, 580, h:120) → Box [7] Détention (top ≈ 660, 800) -->
+    <line x1="700" y1="700" x2="700" y2="800" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [T-24h ouvrables] @ (520, 870) → Box [7] Détention (left ≈ 580, 850) -->
+    <line x1="520" y1="895" x2="580" y2="855" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [OVERDUE] @ (520, 960) → Box [7] Détention (left ≈ 580, 860) -->
+    <line x1="520" y1="985" x2="580" y2="865" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [SMS retour] @ (840, 870) → Box [8] Retour (bottom ≈ 920, 865) -->
+    <line x1="920" y1="870" x2="920" y2="865" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [NOTIF lot créé] @ (820, 1090) → Box [11] Batch (left edge ≈ 1010, 1200) -->
+    <line x1="1020" y1="1130" x2="1010" y2="1190" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [NOTIF EMAIL endo] @ (1380, 1090) → Box [15] Endommagé (right edge ≈ 1360, 1030) -->
+    <line x1="1380" y1="1100" x2="1360" y2="1040" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [LOT STAGNANT >7j] @ (1200, 1345) → Box [12] Envoi (right edge ≈ 1170, 1380) -->
+    <line x1="1200" y1="1370" x2="1170" y2="1380" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [INSPECTION REQUISE] @ (1200, 1520) → Box [13] Retour lot (right edge ≈ 1170, 1555) -->
+    <line x1="1200" y1="1545" x2="1170" y2="1555" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [INSPECTION] @ (1200, 1695) → Box [14] Inspection (right edge ≈ 1170, 1730) -->
+    <line x1="1200" y1="1720" x2="1170" y2="1730" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [DETTE AGENT] @ (1410, 1310, top) → Box [18] Dette (bottom ≈ 1480, 1265) -->
+    <line x1="1480" y1="1310" x2="1480" y2="1265" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="5 4"/>
+
+    <!-- [DETTE >30j] @ (1410, 1480, top) → Box [18] Dette (bottom ≈ 1480, 1265) -->
+    <line x1="1480" y1="1480" x2="1480" y2="1270" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
 
   </svg>
 
