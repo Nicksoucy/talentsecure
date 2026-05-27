@@ -339,14 +339,14 @@
     <!-- [NOTIF EMAIL endo] @ (1380, 1090) → Box [15] Endommagé (right edge ≈ 1360, 1030) -->
     <line x1="1380" y1="1100" x2="1360" y2="1040" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
 
-    <!-- [LOT OUVERT @ box 11] @ (780, 1170) → Box [11] Lot ouvert (left ≈ 1010, 1200) -->
-    <line x1="990" y1="1200" x2="1010" y2="1205" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- [LOT OUVERT @ box 11] @ (750, 1170) → Box [11] Lot ouvert (left ≈ 1010, 1210) -->
+    <line x1="990" y1="1210" x2="1010" y2="1210" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5 4"/>
 
-    <!-- [AUTO À L'ENVOI @ box 12] @ (1200, 1345) → Box [12] Envoi (right ≈ 1170, 1380) -->
-    <line x1="1200" y1="1380" x2="1170" y2="1380" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- [AUTO À L'ENVOI @ box 12] @ (740, 1345) → Box [12] Envoi (left ≈ 1010, 1385) -->
+    <line x1="990" y1="1385" x2="1010" y2="1385" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5 4"/>
 
-    <!-- [LOT STAGNANT >7j] @ (1200, 1455) → Box [12] Envoi (right ≈ 1170, 1390) -->
-    <line x1="1200" y1="1480" x2="1170" y2="1395" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- [LOT STAGNANT >7j] @ (1200, 1345) → Box [12] Envoi (right ≈ 1170, 1385) -->
+    <line x1="1200" y1="1385" x2="1170" y2="1385" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
 
     <!-- [INSPECTION REQUISE] @ (1200, 1520) → Box [13] Retour lot (right edge ≈ 1170, 1555) -->
     <line x1="1200" y1="1545" x2="1170" y2="1555" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
@@ -354,21 +354,16 @@
     <!-- [INSPECTION] @ (1200, 1695) → Box [14] Inspection (right edge ≈ 1170, 1730) -->
     <line x1="1200" y1="1720" x2="1170" y2="1730" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
 
-    <!-- [DETTE AGENT] @ (1410, 1310, top) → Box [18] Dette (bottom ≈ 1480, 1265) -->
-    <line x1="1480" y1="1310" x2="1480" y2="1265" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- [DETTE AGENT] @ (1465, 1310) → Box [18] Dette (bottom-right ≈ 1550, 1250) -->
+    <line x1="1465" y1="1310" x2="1550" y2="1255" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="5 4"/>
 
-    <!-- [DETTE >30j] @ (1410, 1480, top) → Box [18] Dette (bottom ≈ 1480, 1265) -->
-    <line x1="1480" y1="1480" x2="1480" y2="1270" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- [DETTE >30j] @ (1465, 1500) → Box [18] Dette (bottom-right ≈ 1550, 1255) -->
+    <line x1="1465" y1="1500" x2="1550" y2="1260" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
 
   </svg>
 
-  <!-- ============== SECTION LABELS (positionnés AU-DESSUS des boxes) ============== -->
-  <div class="section-label" style="top:50px; left:30px;">📦 INVENTAIRE</div>
-  <div class="section-label" style="top:50px; left:330px;">📤 REMISE</div>
-  <div class="section-label" style="top:755px; left:580px;">⏳ DÉTENTION</div>
-  <div class="section-label" style="top:755px; left:840px;">📥 RETOUR</div>
-  <div class="section-label" style="top:755px; left:1100px;">🔀 TRIAGE</div>
-  <div class="section-label" style="top:1130px; left:1010px;">🧺 CYCLE LAVAGE</div>
+  <!-- Section labels supprimés — causaient trop de chevauchements visuels.
+       Le flow est suffisamment clair par la position et les couleurs. -->
 
   <!-- ============== BOXES ============== -->
 
@@ -515,73 +510,66 @@
     <div class="recipients">→ Agent</div>
   </div>
 
-  <!-- @Triage Bon → Notif lot créé -->
-  <div class="annotation ann-inapp" style="top:1090px; left:820px;">
-    <div class="label">🔔 NOTIF DANS L'APP (cloche)</div>
-    « Lot de lavage créé — N pièces à laver »
-    <div class="recipients">→ Admin (cloche)</div>
-  </div>
-
-  <!-- @Triage Endo → Notif retour damaged -->
-  <div class="annotation ann-email" style="top:1090px; left:1380px;">
+  <!-- @Triage Endo/Perdu → Notif retour damaged -->
+  <div class="annotation ann-email" style="top:1090px; left:1610px;">
     <div class="label">📧 EMAIL D'ALERTE</div>
     « Retour avec pièces endommagées »
     <div class="recipients">→ Admin + rh@xguard.ca</div>
   </div>
 
-  <!-- @Étape 11 - Notion de "lot ouvert" -->
-  <div class="annotation ann-auto" style="top:1170px; left:780px; width:210px;">
-    <div class="label">🔄 LOT OUVERT</div>
+  <!-- @Étape 11 - LOT OUVERT (consolidé : explique le concept + la notif cloche) -->
+  <div class="annotation ann-auto" style="top:1170px; left:750px; width:240px;">
+    <div class="label">🔄 LOT DE LAVAGE OUVERT</div>
     <strong>Un seul lot ouvert</strong> est actif à la fois.<br>
-    Tous les retours « Bon » s'y ajoutent automatiquement<br>
-    jusqu'à son envoi.
+    Tous les retours « Bon » s'y ajoutent.<br>
+    🔔 Notif cloche Admin à chaque ajout.
   </div>
 
   <!-- @Étape 12 - Auto-création nouvelle batch -->
-  <div class="annotation ann-auto" style="top:1345px; left:1200px; width:230px;">
+  <div class="annotation ann-auto" style="top:1345px; left:740px; width:250px;">
     <div class="label">⚡ AUTO À L'ENVOI</div>
-    Dès qu'un lot est envoyé au lavage :<br>
-    → <strong>Une nouvelle batch ouverte est créée automatiquement</strong><br>
-    pour accueillir les prochains retours.
+    Dès qu'un lot est envoyé au lavage,<br>
+    un <strong>nouveau lot ouvert</strong> est créé automatiquement<br>
+    pour les prochains retours.
   </div>
 
   <!-- @Étape 12 - Lot stagnant -->
-  <div class="annotation ann-email" style="top:1455px; left:1200px;">
-    <div class="label">📧 SI LOT BLOQUÉ PLUS DE 7 JOURS</div>
-    Alerte automatique si le fournisseur ne renvoie pas le lot
+  <div class="annotation ann-email" style="top:1345px; left:1200px; width:230px;">
+    <div class="label">📧 SI LOT BLOQUÉ &gt; 7 JOURS</div>
+    Alerte automatique si le fournisseur ne renvoie pas le lot.
     <div class="recipients">→ Admin (email + cloche)</div>
   </div>
 
   <!-- @Étape 13 - Retour lot inspection -->
-  <div class="annotation ann-email" style="top:1520px; left:1200px;">
+  <div class="annotation ann-email" style="top:1520px; left:1200px; width:230px;">
     <div class="label">📧 INSPECTION À FAIRE</div>
     « Lot revenu du lavage — à inspecter »
     <div class="recipients">→ Admin (email + cloche)</div>
   </div>
 
   <!-- @Étape 14 - Restock — 2 options -->
-  <div class="annotation ann-inapp" style="top:1695px; left:1200px; width:240px;">
+  <div class="annotation ann-inapp" style="top:1695px; left:1200px; width:260px;">
     <div class="label">✅ 2 OPTIONS À LA RÉCEPTION</div>
-    <strong>Option A (cas normal) :</strong><br>
-    1 clic « Tout marquer Bon » → toutes les pièces retournent au stock.<br><br>
-    <strong>Option B (si problème) :</strong><br>
+    <strong>Option A (cas normal)</strong> :<br>
+    1 clic « Tout est OK » → toutes les pièces retournent au stock.<br><br>
+    <strong>Option B (si problème)</strong> :<br>
     Inspection pièce-par-pièce :<br>
     🟢 Bon → retour stock disponible<br>
     🔴 Endommagé → poubelle (sortie définitive)
   </div>
 
-  <!-- @Perdu - Dette créée -->
-  <div class="annotation ann-debt" style="top:1310px; left:1410px;">
+  <!-- @Perdu - Dette créée (déplacée à droite pour ne pas chevaucher LOT STAGNANT) -->
+  <div class="annotation ann-debt" style="top:1310px; left:1465px; width:210px;">
     <div class="label">💰 DETTE AGENT</div>
-    Coût pièce × qty = $X<br>
+    Coût pièce × qté = $X<br>
     À prélever sur dernière paie
     <div class="recipients">📧 → rh@xguard.ca + paie@xguard.ca</div>
   </div>
 
   <!-- @Dette aging 30j -->
-  <div class="annotation ann-email" style="top:1480px; left:1410px;">
-    <div class="label">📧 SI DETTE &gt;30j</div>
-    Cron : relance auto si pas réglé
+  <div class="annotation ann-email" style="top:1500px; left:1465px; width:210px;">
+    <div class="label">📧 SI DETTE &gt; 30 JOURS</div>
+    Relance automatique si pas réglé.
     <div class="recipients">→ rh@xguard.ca + paie@xguard.ca</div>
   </div>
 
