@@ -122,9 +122,12 @@
 
   /* Branches output (Bon/Endo/Perdu) */
   .branch {
-    width: 140px;
+    width: 160px;
     min-height: 60px;
     font-weight: 600;
+  }
+  .branch.wide {
+    width: 180px;
   }
   .branch.bon       { border-color: #059669; background: #ecfdf5; color: #065f46; }
   .branch.endommage { border-color: #dc2626; background: #fef2f2; color: #991b1b; }
@@ -333,32 +336,32 @@
     <!-- [SMS retour] @ (840, 870) → Box [8] Retour (bottom ≈ 920, 865) -->
     <line x1="920" y1="870" x2="920" y2="865" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
 
-    <!-- [NOTIF lot créé] @ (820, 1090) → Box [11] Batch (left edge ≈ 1010, 1200) -->
-    <line x1="1020" y1="1130" x2="1010" y2="1190" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- Note : annotation 'NOTIF lot créé' supprimée car fusionnée dans LOT OUVERT (voir plus bas). -->
 
-    <!-- [NOTIF EMAIL endo] @ (1380, 1090) → Box [15] Endommagé (right edge ≈ 1360, 1030) -->
-    <line x1="1380" y1="1100" x2="1360" y2="1040" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- [EMAIL D'ALERTE] @ (1610, 1090) → connecte à la fois [15] Endommagé (right ≈ 1370, 1040) et [17] Perdu (right ≈ 1560, 1040) -->
+    <line x1="1610" y1="1100" x2="1560" y2="1040" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <line x1="1610" y1="1120" x2="1370" y2="1040" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
 
-    <!-- [LOT OUVERT @ box 11] @ (750, 1170) → Box [11] Lot ouvert (left ≈ 1010, 1210) -->
-    <line x1="990" y1="1210" x2="1010" y2="1210" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- [LOT OUVERT @ box 11] @ (750, 1170) → Box [11] left edge (1000, 1210) -->
+    <line x1="990" y1="1210" x2="1000" y2="1210" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5 4"/>
 
-    <!-- [AUTO À L'ENVOI @ box 12] @ (740, 1345) → Box [12] Envoi (left ≈ 1010, 1385) -->
-    <line x1="990" y1="1385" x2="1010" y2="1385" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- [AUTO À L'ENVOI @ box 12] @ (740, 1345) → Box [12] left edge (1000, 1385) -->
+    <line x1="990" y1="1385" x2="1000" y2="1385" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="5 4"/>
 
-    <!-- [LOT STAGNANT >7j] @ (1200, 1345) → Box [12] Envoi (right ≈ 1170, 1385) -->
-    <line x1="1200" y1="1385" x2="1170" y2="1385" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- [LOT STAGNANT >7j] @ (1200, 1345) → Box [12] right edge (1160, 1385) -->
+    <line x1="1200" y1="1385" x2="1160" y2="1385" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
 
-    <!-- [INSPECTION REQUISE] @ (1200, 1520) → Box [13] Retour lot (right edge ≈ 1170, 1555) -->
-    <line x1="1200" y1="1545" x2="1170" y2="1555" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- [INSPECTION REQUISE] @ (1200, 1520) → Box [13] right edge (1160, 1555) -->
+    <line x1="1200" y1="1545" x2="1160" y2="1555" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
 
-    <!-- [INSPECTION] @ (1200, 1695) → Box [14] Inspection (right edge ≈ 1170, 1730) -->
-    <line x1="1200" y1="1720" x2="1170" y2="1730" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- [INSPECTION (2 options)] @ (1200, 1695) → Box [14] right edge (1160, 1730) -->
+    <line x1="1200" y1="1720" x2="1160" y2="1730" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
 
-    <!-- [DETTE AGENT] @ (1465, 1310) → Box [18] Dette (bottom-right ≈ 1550, 1250) -->
-    <line x1="1465" y1="1310" x2="1550" y2="1255" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- [DETTE AGENT] @ (1465, 1310) → Box [18] bottom-center (1480, 1245) -->
+    <line x1="1465" y1="1320" x2="1480" y2="1245" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="5 4"/>
 
-    <!-- [DETTE >30j] @ (1465, 1500) → Box [18] Dette (bottom-right ≈ 1550, 1255) -->
-    <line x1="1465" y1="1500" x2="1550" y2="1260" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- [DETTE >30j] @ (1465, 1500) → Box [18] bottom-right (1545, 1250) -->
+    <line x1="1465" y1="1500" x2="1545" y2="1250" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 4"/>
 
   </svg>
 
@@ -421,44 +424,44 @@
     <span>Triage<br>par pièce</span>
   </div>
 
-  <!-- [10-Bon] Bon → Batch -->
-  <div class="box branch bon" style="top:1000px; left:1010px;">
+  <!-- [10-Bon] Bon → Batch (col centrée sur x=1080) -->
+  <div class="box branch bon" style="top:1000px; left:1000px;">
     <div class="num">10</div>
     🟢 Bon
   </div>
-  <div class="box branch bon" style="top:1170px; left:1010px;">
+  <div class="box branch bon" style="top:1170px; left:1000px;">
     <div class="num">11</div>
-    Ajout au <strong>lot ouvert</strong><br>(accumule les retours)
+    Ajout au lot ouvert<br>(accumule les retours)
   </div>
-  <div class="box branch bon" style="top:1345px; left:1010px;">
+  <div class="box branch bon" style="top:1345px; left:1000px;">
     <div class="num">12</div>
     Envoi du lot<br>au fournisseur
   </div>
-  <div class="box branch bon" style="top:1520px; left:1010px;">
+  <div class="box branch bon" style="top:1520px; left:1000px;">
     <div class="num">13</div>
     Lot revenu propre<br>(réception physique)
   </div>
-  <div class="box branch bon" style="top:1695px; left:1010px;">
+  <div class="box branch bon" style="top:1695px; left:1000px;">
     <div class="num">14</div>
-    Réception :<br><strong>« Tout Bon »</strong> 1 clic<br>OU inspection détaillée
+    Réception du lot<br>(« Tout est OK » ou inspection)
   </div>
 
-  <!-- [10-Endo] Endommagé → Poubelle -->
-  <div class="box branch endommage" style="top:1000px; left:1220px;">
+  <!-- [10-Endo] Endommagé → Poubelle (col centrée sur x=1290) -->
+  <div class="box branch endommage" style="top:1000px; left:1210px;">
     <div class="num">15</div>
     🔴 Endommagé
   </div>
-  <div class="box branch endommage terminal" style="top:1170px; left:1220px;">
+  <div class="box branch endommage terminal" style="top:1170px; left:1210px;">
     <div class="num">16</div>
     Poubelle<br>(pas de dette à l'agent)
   </div>
 
-  <!-- [10-Perdu] Perdu → Dette -->
-  <div class="box branch perdu" style="top:1000px; left:1410px;">
+  <!-- [10-Perdu] Perdu → Dette (col centrée sur x=1480) -->
+  <div class="box branch perdu" style="top:1000px; left:1400px;">
     <div class="num">17</div>
     ⚫ Perdu / Non retourné
   </div>
-  <div class="box branch perdu" style="top:1170px; left:1410px; background:#fee2e2; border-color:#dc2626;">
+  <div class="box branch perdu" style="top:1170px; left:1400px; background:#fee2e2; border-color:#dc2626;">
     <div class="num">18</div>
     Dette agent<br>+ email RH + Paie
   </div>
