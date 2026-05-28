@@ -1056,3 +1056,78 @@ export const refreshProspectVideoFromGhl = async (req: Request, res: Response, n
     return res.status(500).json({ error: `Erreur inattendue : ${error?.message || 'inconnu'}` });
   }
 };
+
+/**
+ * Assigne (transfère) plusieurs prospects à un client donné.
+ * Assignation interne gratuite : crée/upsert un ClientPurchase par prospect
+ * (type=CV_ONLY, price=0). Les assignations ne sont PAS visibles dans le
+ * portail client (côté client, les prospects sont déjà filtrés).
+ *
+ * POST /api/prospects/bulk-assign-to-client
+ * body: { prospectIds: string[], clientId: string }
+ */
+export const bulkAssignProspectsToClient = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { prospectIds, clientId } = req.body || {};
+    if (!Array.isArray(prospectIds) || prospectIds.length === 0) {
+      return res.status(400).json({ error: 'prospectIds requis (tableau non vide)' });
+    }
+    if (!clientId || typeof clientId !== 'string') {
+      return res.status(400).json({ error: 'clientId requis' });
+    }
+
+    // Vérifier que le client existe
+    const client = await prisma.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } });
+    if (!client) return res.status(404).json({ error: 'Client introuvable' });
+
+    const prospects = await prisma.prospectCandidate.findMany({
+      where: { id: { in: prospectIds }, isDeleted: false },
+      select: { id: true, firstName: true, lastName: true, city: true },
+    });
+
+    let assigned = 0;
+    let already = 0;
+    let errors = 0;
+    const details: string[] = [];
+
+    for (const p of prospects) {
+      try {
+        // upsert : si déjà assigné (unique [clientId, prospectId]), on saute
+        const existing = await prisma.clientPurchase.findUnique({
+          where: { clientId_prospectId: { clientId, prospectId: p.id } },
+        }).catch(() => null);
+        if (existing) {
+          already++;
+          continue;
+        }
+        await prisma.clientPurchase.create({
+          data: {
+            clientId,
+            prospectId: p.id,
+            type: 'CV_ONLY',
+            city: p.city || 'N/A',
+            price: 0,
+          },
+        });
+        assigned++;
+      } catch (e: any) {
+        errors++;
+        details.push(`${p.firstName} ${p.lastName}: ${e?.message || 'erreur inconnue'}`);
+      }
+    }
+
+    await invalidateProspectCaches();
+    res.json({
+      message: `${assigned} prospect(s) transféré(s) vers ${client.name}.`,
+      assigned,
+      alreadyAssigned: already,
+      errors,
+      details,
+      clientId,
+      clientName: client.name,
+    });
+  } catch (error: any) {
+    console.error('Bulk-assign prospects erreur:', error?.message);
+    return res.status(500).json({ error: `Erreur : ${error?.message || 'inconnu'}` });
+  }
+};

@@ -62,6 +62,7 @@ import { ContactConflict } from '@/services/contact.service';
 import { useNavigate } from 'react-router-dom';
 import { prospectService } from '@/services/prospect.service';
 import { employeeService } from '@/services/employee.service';
+import { clientService } from '@/services/client.service';
 import { ProspectCandidate } from '@/types';
 const ProspectsMapClustered = lazy(() => import('@/components/map/ProspectsMapClustered'));
 import { prospectContactSchema } from '@/validation/prospect';
@@ -135,6 +136,36 @@ export default function ProspectsPage() {
         return;
       }
       enqueueSnackbar(error.response?.data?.error || 'Erreur lors de la création', { variant: 'error' });
+    },
+  });
+
+  // Transfert (assignation) de prospects vers un client
+  const [assignClientDialogOpen, setAssignClientDialogOpen] = useState(false);
+  const [assignClientId, setAssignClientId] = useState<string>('');
+
+  const { data: clientsData } = useQuery({
+    queryKey: ['clients', 'all'],
+    queryFn: () => clientService.getClients({ limit: 200 }),
+    enabled: assignClientDialogOpen, // ne charge que quand on ouvre le dialog
+  });
+
+  const assignToClientMutation = useMutation({
+    mutationFn: () => {
+      const ids = Array.from(selectedProspects);
+      return prospectService.bulkAssignToClient(ids, assignClientId);
+    },
+    onSuccess: (res) => {
+      enqueueSnackbar(
+        `${res.assigned} transféré(s) vers ${res.clientName}${res.alreadyAssigned ? ` — ${res.alreadyAssigned} déjà assigné(s)` : ''}${res.errors ? ` — ${res.errors} erreur(s)` : ''}.`,
+        { variant: res.errors ? 'warning' : 'success', autoHideDuration: 8000 }
+      );
+      setAssignClientDialogOpen(false);
+      setAssignClientId('');
+      setSelectedProspects(new Set());
+      queryClient.invalidateQueries({ queryKey: ['prospects'] });
+    },
+    onError: (e: any) => {
+      enqueueSnackbar(e.response?.data?.error || 'Erreur lors du transfert', { variant: 'error' });
     },
   });
 
@@ -688,6 +719,14 @@ export default function ProspectsPage() {
                     Exporter CSV
                   </Button>
                   <Button
+                    variant="contained"
+                    color="secondary"
+                    startIcon={<BadgeIcon />}
+                    onClick={() => setAssignClientDialogOpen(true)}
+                  >
+                    Transférer vers un client
+                  </Button>
+                  <Button
                     variant="outlined"
                     sx={{ color: 'white', borderColor: 'white' }}
                     onClick={() => {
@@ -1059,6 +1098,45 @@ export default function ProspectsPage() {
         creatingIn="prospect"
         onClose={() => setContactConflict(null)}
       />
+
+      {/* Dialog : transférer prospects vers un client (assignation interne gratuite) */}
+      <Dialog
+        open={assignClientDialogOpen}
+        onClose={() => setAssignClientDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Transférer vers un client</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <strong>{selectedProspects.size}</strong> prospect{selectedProspects.size > 1 ? 's' : ''} seront assigné{selectedProspects.size > 1 ? 's' : ''} au client choisi (assignation interne, gratuit). Le client ne voit pas l'assignation tant qu'elle n'est pas confirmée comme achat.
+          </Alert>
+          <FormControl fullWidth>
+            <InputLabel>Client</InputLabel>
+            <Select
+              label="Client"
+              value={assignClientId}
+              onChange={(e) => setAssignClientId(e.target.value)}
+            >
+              {(clientsData?.data || []).map((c: any) => (
+                <MenuItem key={c.id} value={c.id}>
+                  {c.name}{c.companyName ? ` — ${c.companyName}` : ''}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAssignClientDialogOpen(false)}>Annuler</Button>
+          <Button
+            variant="contained"
+            onClick={() => assignToClientMutation.mutate()}
+            disabled={!assignClientId || assignToClientMutation.isPending}
+          >
+            {assignToClientMutation.isPending ? 'Transfert…' : 'Transférer'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

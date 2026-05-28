@@ -18,6 +18,7 @@ import {
   getProspectCvUrl,
   getProspectVideoUrl,
   refreshProspectVideoFromGhl,
+  bulkAssignProspectsToClient,
 } from '../controllers/prospect.controller';
 import { getProspectAnalysis } from '../controllers/prospect-scoring.controller';
 import { proxyCv } from '../controllers/cv-proxy.controller';
@@ -131,6 +132,17 @@ router.post(
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
   validate({ params: uuidParam }),
   refreshProspectVideoFromGhl
+);
+
+/**
+ * @route   POST /api/prospects/bulk-assign-to-client
+ * @desc    Transfère plusieurs prospects à un client (assignation interne, gratuit)
+ * @access  Private (ADMIN, RH_RECRUITER, SALES)
+ */
+router.post(
+  '/bulk-assign-to-client',
+  authorizeRoles('ADMIN', 'RH_RECRUITER', 'SALES'),
+  bulkAssignProspectsToClient
 );
 
 /**

@@ -139,6 +139,20 @@ export const prospectService = {
   },
 
   /**
+   * Transfère (assigne) plusieurs prospects à un client (assignation interne gratuite).
+   */
+  async bulkAssignToClient(prospectIds: string[], clientId: string): Promise<{
+    message: string;
+    assigned: number;
+    alreadyAssigned: number;
+    errors: number;
+    clientName: string;
+  }> {
+    const response = await api.post('/api/prospects/bulk-assign-to-client', { prospectIds, clientId });
+    return response.data;
+  },
+
+  /**
    * Get prospects statistics
    */
   async getProspectsStats(): Promise<{
