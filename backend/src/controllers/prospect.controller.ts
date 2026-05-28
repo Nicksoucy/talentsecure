@@ -1131,3 +1131,115 @@ export const bulkAssignProspectsToClient = async (req: Request, res: Response, n
     return res.status(500).json({ error: `Erreur : ${error?.message || 'inconnu'}` });
   }
 };
+
+/**
+ * Export ZIP : un .zip contenant prospects.csv + dossier cvs/ avec les CV
+ * de chaque prospect téléchargés (R2 ou GHL).
+ *
+ * POST /api/prospects/export-zip  body: { prospectIds: string[] }
+ */
+export const exportProspectsZip = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { prospectIds } = req.body || {};
+    if (!Array.isArray(prospectIds) || prospectIds.length === 0) {
+      return res.status(400).json({ error: 'prospectIds requis (tableau non vide)' });
+    }
+    const LIMIT = 200;
+    const ids = prospectIds.slice(0, LIMIT);
+
+    const prospects = await prisma.prospectCandidate.findMany({
+      where: { id: { in: ids }, isDeleted: false },
+      orderBy: { submissionDate: 'desc' },
+      select: {
+        id: true, firstName: true, lastName: true, email: true, phone: true,
+        city: true, province: true, postalCode: true, streetAddress: true,
+        cvUrl: true, cvStoragePath: true, videoStoragePath: true,
+        submissionDate: true, isContacted: true, isConverted: true, notes: true,
+      },
+    });
+
+    const archiver = require('archiver');
+    const { downloadGhlFile, detectExtension } = require('../utils/ghlFetch');
+    const { getSignedFileUrl } = require('../services/r2.service');
+    const axios = require('axios');
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="prospects_${new Date().toISOString().slice(0,10)}.zip"`);
+
+    const archive = archiver('zip', { zlib: { level: 6 } });
+    archive.on('error', (err: any) => { console.error('ZIP error:', err); try { res.end(); } catch {} });
+    archive.pipe(res);
+
+    // 1) Construire le CSV des prospects
+    const sanitize = (s: string) => (s || '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50) || 'sans_nom';
+    const csvHeaders = [
+      'No', 'Prénom', 'Nom', 'Email', 'Téléphone', 'Ville', 'Province', 'Code Postal', 'Adresse',
+      'CV', 'Vidéo', 'Fichier CV', 'Date de soumission', 'Contacté', 'Converti', 'Notes',
+    ];
+    const rows: string[] = [csvHeaders.join(',')];
+
+    // 2) Pour chaque prospect, télécharger le CV et l'ajouter au ZIP
+    let cvDownloaded = 0, cvFailed = 0;
+    for (let i = 0; i < prospects.length; i++) {
+      const p = prospects[i];
+      const num = String(i + 1).padStart(3, '0');
+      let cvFilename = '';
+
+      try {
+        let buffer: Buffer | null = null;
+        let contentType = '';
+        if (p.cvStoragePath) {
+          const url = await getSignedFileUrl(p.cvStoragePath, 600);
+          const r = await axios.get(url, { responseType: 'arraybuffer', timeout: 60000 });
+          buffer = Buffer.from(r.data);
+          contentType = r.headers['content-type'] || 'application/octet-stream';
+        } else if (p.cvUrl) {
+          const file = await downloadGhlFile(p.cvUrl);
+          buffer = file.buffer;
+          contentType = file.contentType;
+        }
+        if (buffer && buffer.length > 100) {
+          const ext = detectExtension({ buffer, contentType, contentDisposition: '' }, '');
+          cvFilename = `${num}_${sanitize(p.firstName)}_${sanitize(p.lastName)}${ext}`;
+          archive.append(buffer, { name: `cvs/${cvFilename}` });
+          cvDownloaded++;
+        }
+      } catch (e: any) {
+        cvFailed++;
+        console.warn(`ZIP: CV échec pour ${p.firstName} ${p.lastName}: ${e?.message}`);
+      }
+
+      const escapeCsv = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      rows.push([
+        num,
+        escapeCsv(p.firstName),
+        escapeCsv(p.lastName),
+        escapeCsv(p.email || ''),
+        escapeCsv(p.phone || ''),
+        escapeCsv(p.city || ''),
+        escapeCsv(p.province || ''),
+        escapeCsv(p.postalCode || ''),
+        escapeCsv(p.streetAddress || ''),
+        (p.cvUrl || p.cvStoragePath) ? 'Oui' : 'Non',
+        p.videoStoragePath ? 'Oui' : 'Non',
+        escapeCsv(cvFilename),
+        p.submissionDate ? new Date(p.submissionDate).toISOString().slice(0, 10) : '',
+        p.isContacted ? 'Oui' : 'Non',
+        p.isConverted ? 'Oui' : 'Non',
+        escapeCsv(p.notes || ''),
+      ].join(','));
+    }
+
+    // 3) Ajouter le CSV (avec BOM UTF-8 pour Excel)
+    archive.append('﻿' + rows.join('\n'), { name: 'prospects.csv' });
+    archive.append(
+      `Export de ${prospects.length} prospects\nCVs téléchargés : ${cvDownloaded}\nCVs en échec : ${cvFailed}\nDate : ${new Date().toISOString()}\n`,
+      { name: 'README.txt' }
+    );
+
+    await archive.finalize();
+  } catch (error: any) {
+    console.error('Export ZIP erreur:', error?.message);
+    if (!res.headersSent) res.status(500).json({ error: `Erreur : ${error?.message || 'inconnu'}` });
+  }
+};

@@ -153,6 +153,18 @@ export const prospectService = {
   },
 
   /**
+   * Télécharge un .zip contenant les CV + un CSV pour les prospects sélectionnés.
+   */
+  async exportZipWithCvs(prospectIds: string[]): Promise<Blob> {
+    const response = await api.post(
+      '/api/prospects/export-zip',
+      { prospectIds },
+      { responseType: 'blob', timeout: 600000 }, // 10 min, le download peut être long
+    );
+    return response.data;
+  },
+
+  /**
    * Get prospects statistics
    */
   async getProspectsStats(): Promise<{

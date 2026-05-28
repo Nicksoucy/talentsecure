@@ -393,6 +393,38 @@ export default function ProspectsPage() {
     }
   };
 
+  const [isExportingZip, setIsExportingZip] = useState(false);
+
+  const handleExportZip = async () => {
+    if (selectedProspects.size === 0) {
+      enqueueSnackbar('Sélectionne d\'abord les prospects à exporter', { variant: 'warning' });
+      return;
+    }
+    if (selectedProspects.size > 200) {
+      enqueueSnackbar('Maximum 200 prospects par ZIP. Sélectionne moins de prospects.', { variant: 'warning' });
+      return;
+    }
+    setIsExportingZip(true);
+    enqueueSnackbar(`Préparation du ZIP (${selectedProspects.size} prospects)… ça peut prendre une minute.`, { variant: 'info', autoHideDuration: 6000 });
+    try {
+      const ids = Array.from(selectedProspects);
+      const blob = await prospectService.exportZipWithCvs(ids);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `prospects_avec_cvs_${new Date().toISOString().slice(0, 10)}.zip`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      enqueueSnackbar(`${selectedProspects.size} prospects exportés (ZIP avec CV)`, { variant: 'success' });
+    } catch (e: any) {
+      enqueueSnackbar(e.response?.data?.error || e.message || 'Erreur lors de l\'export ZIP', { variant: 'error' });
+    } finally {
+      setIsExportingZip(false);
+    }
+  };
+
   const handleExportCSV = async () => {
     if (selectedProspects.size === 0 && !selectAllPages) return;
 
@@ -428,15 +460,18 @@ export default function ProspectsPage() {
         'Code Postal',
         'Adresse',
         'CV',
+        'Vidéo',
         'Date de soumission',
         'Contacté',
         'Converti',
+        'Lien fiche TalentSecure',
         'Notes',
       ];
 
+      const appOrigin = window.location.origin;
       const csvRows = [
         headers.join(','),
-        ...prospectsToExport.map((prospect) =>
+        ...prospectsToExport.map((prospect: any) =>
           [
             `"${prospect.firstName || ''}"`,
             `"${prospect.lastName || ''}"`,
@@ -446,10 +481,12 @@ export default function ProspectsPage() {
             `"${prospect.province || ''}"`,
             `"${prospect.postalCode || ''}"`,
             `"${prospect.streetAddress || ''}"`,
-            prospect.cvUrl ? 'Oui' : 'Non',
+            prospect.cvUrl || prospect.cvStoragePath ? 'Oui' : 'Non',
+            prospect.videoStoragePath ? 'Oui' : 'Non',
             prospect.submissionDate ? new Date(prospect.submissionDate).toLocaleDateString('fr-CA') : '',
             prospect.isContacted ? 'Oui' : 'Non',
             prospect.isConverted ? 'Oui' : 'Non',
+            `"${appOrigin}/prospects/${prospect.id}"`,
             `"${(prospect.notes || '').replace(/"/g, '""')}"`,
           ].join(',')
         ),
@@ -717,6 +754,15 @@ export default function ProspectsPage() {
                     onClick={handleExportCSV}
                   >
                     Exporter CSV
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="info"
+                    startIcon={<FileDownloadIcon />}
+                    onClick={handleExportZip}
+                    disabled={isExportingZip}
+                  >
+                    {isExportingZip ? 'Préparation…' : 'Exporter avec CVs (ZIP)'}
                   </Button>
                   <Button
                     variant="contained"

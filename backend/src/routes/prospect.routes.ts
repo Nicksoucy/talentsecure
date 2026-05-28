@@ -19,6 +19,7 @@ import {
   getProspectVideoUrl,
   refreshProspectVideoFromGhl,
   bulkAssignProspectsToClient,
+  exportProspectsZip,
 } from '../controllers/prospect.controller';
 import { getProspectAnalysis } from '../controllers/prospect-scoring.controller';
 import { proxyCv } from '../controllers/cv-proxy.controller';
@@ -143,6 +144,17 @@ router.post(
   '/bulk-assign-to-client',
   authorizeRoles('ADMIN', 'RH_RECRUITER', 'SALES'),
   bulkAssignProspectsToClient
+);
+
+/**
+ * @route   POST /api/prospects/export-zip
+ * @desc    Export ZIP avec prospects.csv + dossier cvs/ (CV téléchargés)
+ * @access  Private (ADMIN, RH_RECRUITER, SALES)
+ */
+router.post(
+  '/export-zip',
+  authorizeRoles('ADMIN', 'RH_RECRUITER', 'SALES'),
+  exportProspectsZip
 );
 
 /**
