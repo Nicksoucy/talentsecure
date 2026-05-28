@@ -1158,7 +1158,13 @@ export const exportProspectsZip = async (req: Request, res: Response, next: Next
       },
     });
 
-    const archiver = require('archiver');
+    // archiver: en v7 CJS le module.exports est la factory ; en v8 ESM c'est { default }.
+    // Belt + suspenders : prend l'un ou l'autre.
+    const archiverMod = require('archiver');
+    const archiver: any = typeof archiverMod === 'function' ? archiverMod : archiverMod.default;
+    if (typeof archiver !== 'function') {
+      throw new Error('archiver introuvable (factory non callable)');
+    }
     const { downloadGhlFile, detectExtension } = require('../utils/ghlFetch');
     const { getSignedFileUrl } = require('../services/r2.service');
     const axios = require('axios');
