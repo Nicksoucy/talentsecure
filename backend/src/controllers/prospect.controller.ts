@@ -1239,7 +1239,14 @@ export const exportProspectsZip = async (req: Request, res: Response, next: Next
 
     await archive.finalize();
   } catch (error: any) {
-    console.error('Export ZIP erreur:', error?.message);
-    if (!res.headersSent) res.status(500).json({ error: `Erreur : ${error?.message || 'inconnu'}` });
+    console.error('Export ZIP erreur:', error?.message, error?.stack);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: `Erreur ZIP : ${error?.message || 'inconnu'}`,
+        stack: process.env.NODE_ENV === 'production' ? undefined : error?.stack,
+      });
+    } else {
+      try { res.end(); } catch {}
+    }
   }
 };

@@ -419,7 +419,20 @@ export default function ProspectsPage() {
       URL.revokeObjectURL(url);
       enqueueSnackbar(`${selectedProspects.size} prospects exportés (ZIP avec CV)`, { variant: 'success' });
     } catch (e: any) {
-      enqueueSnackbar(e.response?.data?.error || e.message || 'Erreur lors de l\'export ZIP', { variant: 'error' });
+      // responseType:'blob' → l'erreur backend (JSON) est dans un Blob, faut le lire
+      let msg = e.message || 'Erreur lors de l\'export ZIP';
+      if (e.response?.data instanceof Blob) {
+        try {
+          const text = await e.response.data.text();
+          const parsed = JSON.parse(text);
+          msg = parsed.error || parsed.message || msg;
+        } catch {
+          // garde msg par défaut
+        }
+      } else if (e.response?.data?.error) {
+        msg = e.response.data.error;
+      }
+      enqueueSnackbar(msg, { variant: 'error', autoHideDuration: 15000 });
     } finally {
       setIsExportingZip(false);
     }
