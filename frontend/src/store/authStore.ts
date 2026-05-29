@@ -14,11 +14,30 @@ interface AuthState {
   initializeFromStorage: () => void;
 }
 
+// Lit localStorage de façon SYNCHRONE au moment de la création du store
+// (avant le premier render React) pour éviter la race condition qui renvoyait
+// l'utilisateur vers /login à chaque rafraîchissement de page.
+function getInitialAuthState(): Pick<AuthState, 'user' | 'accessToken' | 'refreshToken' | 'isAuthenticated'> {
+  const loggedOut = { user: null, accessToken: null, refreshToken: null, isAuthenticated: false };
+  try {
+    const accessToken = localStorage.getItem('accessToken');
+    const refreshToken = localStorage.getItem('refreshToken');
+    const userStr = localStorage.getItem('user');
+    if (accessToken && refreshToken && userStr) {
+      const user = JSON.parse(userStr) as User;
+      return { user, accessToken, refreshToken, isAuthenticated: true };
+    }
+  } catch {
+    // JSON corrompu → on nettoie et on reste déconnecté
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+  }
+  return loggedOut;
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  accessToken: null,
-  refreshToken: null,
-  isAuthenticated: false,
+  ...getInitialAuthState(),
 
   setAuth: (user, accessToken, refreshToken) => {
     localStorage.setItem('accessToken', accessToken);

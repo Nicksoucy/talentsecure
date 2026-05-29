@@ -20,11 +20,30 @@ interface ClientAuthState {
   initializeFromStorage: () => void;
 }
 
+// Lit localStorage de façon SYNCHRONE au moment de la création du store
+// (avant le premier render React) pour éviter la race condition qui renvoyait
+// le client vers /client/login à chaque rafraîchissement de page.
+function getInitialClientAuthState(): Pick<ClientAuthState, 'client' | 'accessToken' | 'refreshToken' | 'isAuthenticated'> {
+  const loggedOut = { client: null, accessToken: null, refreshToken: null, isAuthenticated: false };
+  try {
+    const accessToken = localStorage.getItem('clientAccessToken');
+    const refreshToken = localStorage.getItem('clientRefreshToken');
+    const clientStr = localStorage.getItem('client');
+    if (accessToken && refreshToken && clientStr) {
+      const client = JSON.parse(clientStr) as ClientUser;
+      return { client, accessToken, refreshToken, isAuthenticated: true };
+    }
+  } catch {
+    // JSON corrompu → on nettoie et on reste déconnecté
+    localStorage.removeItem('clientAccessToken');
+    localStorage.removeItem('clientRefreshToken');
+    localStorage.removeItem('client');
+  }
+  return loggedOut;
+}
+
 export const useClientAuthStore = create<ClientAuthState>((set) => ({
-  client: null,
-  accessToken: null,
-  refreshToken: null,
-  isAuthenticated: false,
+  ...getInitialClientAuthState(),
 
   setAuth: (client, accessToken, refreshToken) => {
     localStorage.setItem('clientAccessToken', accessToken);

@@ -1,4 +1,4 @@
-﻿import { Suspense, useEffect, lazy } from 'react';
+﻿import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Box, CircularProgress, Typography } from '@mui/material';
 import MainLayout from './layouts/MainLayout';
@@ -41,13 +41,11 @@ const ClientPurchasesPage = lazy(() => import('./pages/client/ClientPurchasesPag
 const ClientCatalogueDetailPage = lazy(() => import('./pages/client/ClientCatalogueDetailPage'));
 
 function App() {
-  const { isAuthenticated, user, initializeFromStorage } = useAuthStore();
-  const { isAuthenticated: isClientAuthenticated, initializeFromStorage: initializeClientFromStorage } = useClientAuthStore();
-
-  useEffect(() => {
-    initializeFromStorage();
-    initializeClientFromStorage();
-  }, [initializeFromStorage, initializeClientFromStorage]);
+  // Les stores s'initialisent SYNCHRONIQUEMENT depuis localStorage à leur création
+  // (cf. getInitialAuthState dans authStore.ts), donc isAuthenticated est déjà
+  // correct dès le premier render — plus besoin d'un useEffect de réhydratation.
+  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated: isClientAuthenticated } = useClientAuthStore();
 
   // Defense in depth: even if a client token somehow ended up in the admin
   // store (token swap, manual localStorage tampering, etc.), block access
