@@ -152,7 +152,11 @@ export default function UniformIssuanceWizardPage() {
   const sendSms = useMutation({
     mutationFn: () => uniformService.sendIssuanceSms(issuanceId!),
     onSuccess: () => enqueueSnackbar('SMS de signature envoyé à l’agent', { variant: 'success' }),
-    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Échec SMS — utilisez la signature au comptoir', { variant: 'warning' }),
+    onError: (e: any) =>
+      enqueueSnackbar(
+        e?.response?.data?.message || e?.response?.data?.error || 'Échec SMS — utilisez la signature au comptoir',
+        { variant: 'warning', autoHideDuration: 12000 }
+      ),
   });
   const [employerSigned, setEmployerSigned] = useState(false);
   const saveEmployer = useMutation({

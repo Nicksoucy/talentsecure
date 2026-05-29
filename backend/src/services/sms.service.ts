@@ -79,7 +79,14 @@ export async function sendSms(contactId: string, message: string): Promise<{ mes
 
 /**
  * Envoie le lien de signature d'un formulaire (prêt ou retour) à un agent.
- * Lève une ApiError 422 si aucun contact GHL n'est trouvé.
+ *
+ * Distingue clairement 3 causes d'échec pour que l'UI affiche un message
+ * actionnable :
+ *  - TELEPHONE_MANQUANT (422)     : aucune coordonnée au dossier de l'agent.
+ *  - GHL_CONTACT_INTROUVABLE (422): coordonnées présentes mais aucun contact GHL
+ *                                   correspondant (jamais synchronisé / numéro erroné).
+ *  - GHL_ENVOI_ECHEC (502)        : le contact existe mais l'envoi a planté côté
+ *                                   GHL (problème technique, numéro non-SMS, etc.).
  */
 export async function sendSignatureSms(opts: {
   phone?: string | null;
@@ -88,11 +95,26 @@ export async function sendSignatureSms(opts: {
   url: string;
   kind: 'pret' | 'retour';
 }): Promise<{ contactId: string; messageId?: string }> {
+  const hasPhone = !!opts.phone && opts.phone.trim().length > 0;
+  const hasEmail = !!opts.email && opts.email.trim().length > 0;
+
+  // Cas 1 — aucune coordonnée au dossier : on ne peut rien tenter.
+  if (!hasPhone && !hasEmail) {
+    throw new ApiError(
+      422,
+      "Aucun numéro de téléphone au dossier de cet agent. Ajoutez son numéro sur sa fiche employé, puis réessayez — ou utilisez la signature au comptoir.",
+      'TELEPHONE_MANQUANT'
+    );
+  }
+
+  // Cas 2 — coordonnées présentes mais aucun contact GHL correspondant.
   const contactId = await resolveGhlContactId(opts.phone, opts.email);
   if (!contactId) {
     throw new ApiError(
       422,
-      "Aucun contact GHL trouvé pour cet agent (téléphone/email). Utilisez la signature au comptoir.",
+      hasPhone
+        ? `Le numéro « ${opts.phone} » ne correspond à aucun contact GHL (agent jamais synchronisé ou numéro erroné). Vérifiez le numéro sur sa fiche, ou utilisez la signature au comptoir.`
+        : "Aucun contact GHL ne correspond au courriel de cet agent. Ajoutez un numéro de téléphone valide sur sa fiche, ou utilisez la signature au comptoir.",
       'GHL_CONTACT_INTROUVABLE'
     );
   }
@@ -102,6 +124,20 @@ export async function sendSignatureSms(opts: {
     `Bonjour ${opts.firstName || ''}`.trim() +
     `, veuillez signer votre formulaire de ${label} d'uniforme XGuard : ${opts.url}`;
 
-  const res = await sendSms(contactId, message);
-  return { contactId, messageId: res.messageId };
+  // Cas 3 — le contact existe mais l'envoi échoue (API GHL, numéro non-SMS, etc.).
+  try {
+    const res = await sendSms(contactId, message);
+    return { contactId, messageId: res.messageId };
+  } catch (err: any) {
+    const detail =
+      err?.response?.data?.message ||
+      err?.response?.data?.error ||
+      err?.message ||
+      'erreur inconnue';
+    throw new ApiError(
+      502,
+      `Le contact existe dans GHL mais l'envoi du SMS a échoué (${detail}). C'est un problème technique d'envoi (pas un numéro manquant) — réessayez, ou utilisez la signature au comptoir.`,
+      'GHL_ENVOI_ECHEC'
+    );
+  }
 }

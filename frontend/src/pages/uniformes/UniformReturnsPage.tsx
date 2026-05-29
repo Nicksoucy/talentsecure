@@ -146,7 +146,11 @@ export default function UniformReturnsPage() {
   const sendSms = useMutation({
     mutationFn: () => uniformService.sendReturnSms(returnId!),
     onSuccess: () => enqueueSnackbar('SMS envoyé', { variant: 'success' }),
-    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Échec SMS', { variant: 'warning' }),
+    onError: (e: any) =>
+      enqueueSnackbar(
+        e?.response?.data?.message || e?.response?.data?.error || 'Échec SMS — utilisez la signature au comptoir',
+        { variant: 'warning', autoHideDuration: 12000 }
+      ),
   });
   const counterSign = useMutation({
     mutationFn: () =>
