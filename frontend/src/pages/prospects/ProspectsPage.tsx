@@ -922,7 +922,13 @@ export default function ProspectsPage() {
                         {prospect.isContacted ? (
                           <Chip label="Contacté" color="success" size="small" />
                         ) : (
-                          <Chip label="À contacter" color="warning" size="small" />
+                          <Chip
+                            label="À contacter"
+                            color="warning"
+                            size="small"
+                            onClick={() => handleContact(prospect)}
+                            sx={{ cursor: 'pointer', '&:hover': { opacity: 0.85 } }}
+                          />
                         )}
                       </TableCell>
                       <TableCell>
