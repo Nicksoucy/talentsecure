@@ -648,6 +648,9 @@ model ProspectCandidate {
   @@index([submissionDate])
   @@index([createdAt])
   @@index([ghlSubmissionId])
+  // O4 — composites pour la liste (filtre isDeleted/isConverted + tri submissionDate)
+  @@index([isDeleted, submissionDate])
+  @@index([isDeleted, isConverted, submissionDate])
   @@map("prospect_candidates")
 }
 
