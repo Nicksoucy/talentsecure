@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Inventaire — Design A : Cards par morceau</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #f3f4f6;
+    color: #1f2937;
+    padding: 24px;
+    line-height: 1.5;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+
+  /* Top banner */
+  .design-banner {
+    background: #1e3a8a;
+    color: white;
+    padding: 14px 20px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .design-banner h1 { font-size: 18px; font-weight: 600; }
+  .design-banner .badge { background: #fbbf24; color: #422006; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+
+  /* KPI tiles */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .kpi {
+    background: white;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    text-align: center;
+  }
+  .kpi .v { font-size: 24px; font-weight: 700; color: #1f2937; }
+  .kpi .l { font-size: 12px; color: #6b7280; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .kpi.warn .v { color: #d97706; }
+  .kpi.danger .v { color: #dc2626; }
+  .kpi.info .v { color: #2563eb; }
+
+  /* Action requise */
+  .alerts-section {
+    background: white;
+    border: 2px solid #fca5a5;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+  .alerts-section h2 {
+    color: #991b1b;
+    font-size: 16px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .alerts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 8px;
+  }
+  .alert-row {
+    background: #fef2f2;
+    border-left: 3px solid #dc2626;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .alert-row.low { background: #fffbeb; border-left-color: #d97706; }
+  .alert-row strong { display: block; }
+  .alert-row small { color: #6b7280; font-size: 11px; }
+  .alert-row button {
+    background: #dc2626;
+    color: white;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .alert-row.low button { background: #d97706; }
+
+  /* Filters */
+  .filters {
+    background: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    margin-bottom: 20px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .filters input, .filters select {
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .filters input[type="search"] { flex: 1; min-width: 200px; }
+  .filters .export-btn {
+    margin-left: auto;
+    background: #2563eb;
+    color: white;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+
+  /* Division section */
+  .division-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 24px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e5e7eb;
+  }
+  .division-title .count { font-size: 12px; color: #9ca3af; font-weight: 500; margin-left: 8px; }
+
+  /* Item cards */
+  .items-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 16px;
+  }
+  .item-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: box-shadow 0.15s, transform 0.15s;
+  }
+  .item-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); transform: translateY(-2px); }
+  .item-card.has-alert { border-color: #fca5a5; background: linear-gradient(to bottom, #fef2f2 0%, white 60px); }
+
+  .item-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid #f3f4f6;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .item-header h3 { font-size: 15px; font-weight: 600; }
+  .item-meta { font-size: 11px; color: #6b7280; margin-top: 2px; }
+  .item-total {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1f2937;
+  }
+  .item-total small { font-size: 11px; font-weight: 500; color: #6b7280; }
+
+  .sizes-grid {
+    padding: 12px 16px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .size-cell {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 8px;
+    text-align: center;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .size-cell:hover { background: #f3f4f6; }
+  .size-cell.ok { border-color: #86efac; background: #f0fdf4; }
+  .size-cell.low { border-color: #fcd34d; background: #fffbeb; }
+  .size-cell.zero { border-color: #fca5a5; background: #fef2f2; }
+  .size-cell .size-label { font-size: 10px; color: #6b7280; font-weight: 600; }
+  .size-cell .size-qty { font-size: 18px; font-weight: 700; margin-top: 2px; }
+  .size-cell.ok .size-qty { color: #065f46; }
+  .size-cell.low .size-qty { color: #92400e; }
+  .size-cell.zero .size-qty { color: #991b1b; }
+  .size-cell .bar {
+    margin-top: 4px;
+    height: 4px;
+    background: #e5e7eb;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .size-cell .bar-fill {
+    height: 100%;
+    background: #10b981;
+    transition: width 0.3s;
+  }
+  .size-cell.low .bar-fill { background: #f59e0b; }
+  .size-cell.zero .bar-fill { background: #dc2626; width: 100% !important; }
+
+  .item-footer {
+    padding: 10px 16px;
+    background: #f9fafb;
+    border-top: 1px solid #f3f4f6;
+    font-size: 12px;
+    color: #6b7280;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .item-footer .action-btn {
+    background: white;
+    border: 1px solid #d1d5db;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .item-footer .action-btn:hover { background: #f3f4f6; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="design-banner">
+  <h1>📦 Inventaire — Design A : Cards par morceau</h1>
+  <span class="badge">RECOMMANDÉ</span>
+</div>
+
+<!-- KPI tiles -->
+<div class="kpi-row">
+  <div class="kpi">
+    <div class="v">2 750</div>
+    <div class="l">📦 Unités en stock</div>
+  </div>
+  <div class="kpi info">
+    <div class="v">$ 120 050</div>
+    <div class="l">💰 Valeur totale</div>
+  </div>
+  <div class="kpi warn">
+    <div class="v">8</div>
+    <div class="l">⚠️ Stock bas</div>
+  </div>
+  <div class="kpi danger">
+    <div class="v">3</div>
+    <div class="l">🔴 À zéro</div>
+  </div>
+  <div class="kpi info">
+    <div class="v">12</div>
+    <div class="l">🧺 En lavage</div>
+  </div>
+</div>
+
+<!-- Action requise -->
+<div class="alerts-section">
+  <h2>🚨 Action requise — 11 variantes en alerte</h2>
+  <div class="alerts-grid">
+    <div class="alert-row">
+      <div>
+        <strong>🔴 Ceinture · Unique</strong>
+        <small>Stock 0 · seuil 5</small>
+      </div>
+      <button>Réappro</button>
+    </div>
+    <div class="alert-row">
+      <div>
+        <strong>🔴 Pantalon militaire · 40</strong>
+        <small>Stock 0 · seuil 5</small>
+      </div>
+      <button>Réappro</button>
+    </div>
+    <div class="alert-row">
+      <div>
+        <strong>🔴 Manteau 3en1 · 3XL</strong>
+        <small>Stock 0 · seuil 5</small>
+      </div>
+      <button>Réappro</button>
+    </div>
+    <div class="alert-row low">
+      <div>
+        <strong>⚠️ Chemise grise (ML) · L</strong>
+        <small>Stock 4 / seuil 10</small>
+      </div>
+      <button>Ajuster</button>
+    </div>
+    <div class="alert-row low">
+      <div>
+        <strong>⚠️ Chemise blanche (MC) · XL</strong>
+        <small>Stock 5 / seuil 10</small>
+      </div>
+      <button>Ajuster</button>
+    </div>
+    <div class="alert-row low">
+      <div>
+        <strong>⚠️ Pantalon militaire · 38</strong>
+        <small>Stock 2 / seuil 5</small>
+      </div>
+      <button>Ajuster</button>
+    </div>
+    <div class="alert-row low">
+      <div>
+        <strong>⚠️ Chandail HV (MC) · 4XL</strong>
+        <small>Stock 1 / seuil 5</small>
+      </div>
+      <button>Ajuster</button>
+    </div>
+    <div class="alert-row low">
+      <div>
+        <strong>⚠️ Polo noir · 3XL</strong>
+        <small>Stock 2 / seuil 5</small>
+      </div>
+      <button>Ajuster</button>
+    </div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="filters">
+  <input type="search" placeholder="🔍 Rechercher un morceau, taille, emplacement...">
+  <select>
+    <option>Division : Toutes</option>
+    <option>Sécurité</option>
+    <option>Signalisation</option>
+  </select>
+  <select>
+    <option>Type : Tous</option>
+    <option>Uniforme</option>
+    <option>Équipement</option>
+  </select>
+  <select>
+    <option>État : Tous</option>
+    <option>Stock OK</option>
+    <option>Stock bas</option>
+    <option>À zéro</option>
+  </select>
+  <button class="export-btn">📥 Exporter Excel</button>
+</div>
+
+<!-- Sécurité section -->
+<div class="division-title">
+  Sécurité <span class="count">· 14 morceaux · 1 850 unités</span>
+</div>
+
+<div class="items-grid">
+
+  <div class="item-card has-alert">
+    <div class="item-header">
+      <div>
+        <h3>Chemise grise (ML)</h3>
+        <div class="item-meta">📍 B4 — Étagère 2 · $40 unit.</div>
+      </div>
+      <div class="item-total" style="text-align: right;">
+        68
+        <div><small>$ 2 720</small></div>
+      </div>
+    </div>
+    <div class="sizes-grid">
+      <div class="size-cell ok">
+        <div class="size-label">S</div>
+        <div class="size-qty">12</div>
+        <div class="bar"><div class="bar-fill" style="width: 100%"></div></div>
+      </div>
+      <div class="size-cell ok">
+        <div class="size-label">M</div>
+        <div class="size-qty">18</div>
+        <div class="bar"><div class="bar-fill" style="width: 100%"></div></div>
+      </div>
+      <div class="size-cell low">
+        <div class="size-label">L ⚠️</div>
+        <div class="size-qty">4</div>
+        <div class="bar"><div class="bar-fill" style="width: 40%"></div></div>
+      </div>
+      <div class="size-cell ok">
+        <div class="size-label">XL</div>
+        <div class="size-qty">15</div>
+        <div class="bar"><div class="bar-fill" style="width: 100%"></div></div>
+      </div>
+      <div class="size-cell ok">
+        <div class="size-label">2XL</div>
+        <div class="size-qty">14</div>
+        <div class="bar"><div class="bar-fill" style="width: 100%"></div></div>
+      </div>
+      <div class="size-cell zero">
+        <div class="size-label">3XL 🔴</div>
+        <div class="size-qty">5</div>
+        <div class="bar"><div class="bar-fill" style="width: 100%"></div></div>
+      </div>
+    </div>
+    <div class="item-footer">
+      <span>Total : 68 unités · Valeur $2 720</span>
+      <button class="action-btn">⚙ Ajuster toutes</button>
+    </div>
+  </div>
+
+  <div class="item-card">
+    <div class="item-header">
+      <div>
+        <h3>Chemise grise (MC)</h3>
+        <div class="item-meta">📍 B4 — Étagère 1 · $40 unit.</div>
+      </div>
+      <div class="item-total" style="text-align: right;">
+        52
+        <div><small>$ 2 080</small></div>
+      </div>
+    </div>
+    <div class="sizes-grid">
+      <div class="size-cell ok"><div class="size-label">S</div><div class="size-qty">10</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell ok"><div class="size-label">M</div><div class="size-qty">12</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell ok"><div class="size-label">L</div><div class="size-qty">14</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell ok"><div class="size-label">XL</div><div class="size-qty">10</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell ok"><div class="size-label">2XL</div><div class="size-qty">6</div><div class="bar"><div class="bar-fill" style="width: 60%"></div></div></div>
+    </div>
+    <div class="item-footer">
+      <span>Total : 52 unités · Valeur $2 080</span>
+      <button class="action-btn">⚙ Ajuster toutes</button>
+    </div>
+  </div>
+
+  <div class="item-card has-alert">
+    <div class="item-header">
+      <div>
+        <h3>Pantalon noir (militaire)</h3>
+        <div class="item-meta">📍 A1 — Penderie · $65 unit.</div>
+      </div>
+      <div class="item-total" style="text-align: right;">
+        42
+        <div><small>$ 2 730</small></div>
+      </div>
+    </div>
+    <div class="sizes-grid">
+      <div class="size-cell ok"><div class="size-label">28</div><div class="size-qty">5</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell ok"><div class="size-label">30</div><div class="size-qty">8</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell ok"><div class="size-label">32</div><div class="size-qty">12</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell ok"><div class="size-label">34</div><div class="size-qty">10</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell low"><div class="size-label">38 ⚠️</div><div class="size-qty">2</div><div class="bar"><div class="bar-fill" style="width: 40%"></div></div></div>
+      <div class="size-cell zero"><div class="size-label">40 🔴</div><div class="size-qty">0</div><div class="bar"><div class="bar-fill" style="width: 0%"></div></div></div>
+    </div>
+    <div class="item-footer">
+      <span>Total : 42 unités · Valeur $2 730</span>
+      <button class="action-btn">⚙ Ajuster toutes</button>
+    </div>
+  </div>
+
+  <div class="item-card has-alert">
+    <div class="item-header">
+      <div>
+        <h3>Ceinture</h3>
+        <div class="item-meta">📍 D2 — Petits articles · $25 unit.</div>
+      </div>
+      <div class="item-total" style="text-align: right;">
+        181
+        <div><small>$ 4 525</small></div>
+      </div>
+    </div>
+    <div class="sizes-grid">
+      <div class="size-cell ok"><div class="size-label">S</div><div class="size-qty">61</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell ok"><div class="size-label">M</div><div class="size-qty">60</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell ok"><div class="size-label">L</div><div class="size-qty">60</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell zero"><div class="size-label">Unique 🔴</div><div class="size-qty">0</div><div class="bar"><div class="bar-fill" style="width: 0%"></div></div></div>
+    </div>
+    <div class="item-footer">
+      <span>Total : 181 unités · Valeur $4 525</span>
+      <button class="action-btn">⚙ Ajuster toutes</button>
+    </div>
+  </div>
+
+  <div class="item-card">
+    <div class="item-header">
+      <div>
+        <h3>Polo noir</h3>
+        <div class="item-meta">📍 A3 · $35 unit.</div>
+      </div>
+      <div class="item-total" style="text-align: right;">
+        85
+        <div><small>$ 2 975</small></div>
+      </div>
+    </div>
+    <div class="sizes-grid">
+      <div class="size-cell ok"><div class="size-label">S</div><div class="size-qty">20</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell ok"><div class="size-label">M</div><div class="size-qty">18</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell ok"><div class="size-label">L</div><div class="size-qty">22</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell ok"><div class="size-label">XL</div><div class="size-qty">15</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell ok"><div class="size-label">2XL</div><div class="size-qty">8</div><div class="bar"><div class="bar-fill" style="width: 80%"></div></div></div>
+      <div class="size-cell low"><div class="size-label">3XL ⚠️</div><div class="size-qty">2</div><div class="bar"><div class="bar-fill" style="width: 40%"></div></div></div>
+    </div>
+    <div class="item-footer">
+      <span>Total : 85 unités · Valeur $2 975</span>
+      <button class="action-btn">⚙ Ajuster toutes</button>
+    </div>
+  </div>
+
+  <div class="item-card has-alert">
+    <div class="item-header">
+      <div>
+        <h3>Manteau (3 en 1)</h3>
+        <div class="item-meta">📍 C1 — Penderie · $250 unit.</div>
+      </div>
+      <div class="item-total" style="text-align: right;">
+        11
+        <div><small>$ 2 750</small></div>
+      </div>
+    </div>
+    <div class="sizes-grid">
+      <div class="size-cell ok"><div class="size-label">2XL</div><div class="size-qty">8</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell zero"><div class="size-label">3XL 🔴</div><div class="size-qty">0</div><div class="bar"><div class="bar-fill" style="width: 0%"></div></div></div>
+      <div class="size-cell ok"><div class="size-label">L</div><div class="size-qty">3</div><div class="bar"><div class="bar-fill" style="width: 60%"></div></div></div>
+    </div>
+    <div class="item-footer">
+      <span>Total : 11 unités · Valeur $2 750</span>
+      <button class="action-btn">⚙ Ajuster toutes</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Signalisation section -->
+<div class="division-title">
+  Signalisation <span class="count">· 8 morceaux · 900 unités</span>
+</div>
+
+<div class="items-grid">
+
+  <div class="item-card has-alert">
+    <div class="item-header">
+      <div>
+        <h3>Chandail HV (MC)</h3>
+        <div class="item-meta">📍 E2 · $25 unit.</div>
+      </div>
+      <div class="item-total" style="text-align: right;">
+        41
+        <div><small>$ 1 025</small></div>
+      </div>
+    </div>
+    <div class="sizes-grid">
+      <div class="size-cell ok"><div class="size-label">2XL</div><div class="size-qty">8</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell ok"><div class="size-label">3XL</div><div class="size-qty">8</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell low"><div class="size-label">4XL ⚠️</div><div class="size-qty">1</div><div class="bar"><div class="bar-fill" style="width: 20%"></div></div></div>
+      <div class="size-cell ok"><div class="size-label">XL</div><div class="size-qty">12</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+      <div class="size-cell ok"><div class="size-label">L</div><div class="size-qty">12</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+    </div>
+    <div class="item-footer">
+      <span>Total : 41 unités · Valeur $1 025</span>
+      <button class="action-btn">⚙ Ajuster toutes</button>
+    </div>
+  </div>
+
+  <div class="item-card">
+    <div class="item-header">
+      <div>
+        <h3>Casque de sécurité</h3>
+        <div class="item-meta">📍 F1 · $35 unit. · Taille unique</div>
+      </div>
+      <div class="item-total" style="text-align: right;">
+        17
+        <div><small>$ 595</small></div>
+      </div>
+    </div>
+    <div class="sizes-grid" style="grid-template-columns: 1fr;">
+      <div class="size-cell ok"><div class="size-label">Unique</div><div class="size-qty">17</div><div class="bar"><div class="bar-fill" style="width: 100%"></div></div></div>
+    </div>
+    <div class="item-footer">
+      <span>Total : 17 unités · Valeur $595</span>
+      <button class="action-btn">⚙ Ajuster</button>
+    </div>
+  </div>
+
+</div>
+
+</div>
+</body>
+</html>

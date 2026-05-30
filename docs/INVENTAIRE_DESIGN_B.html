@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Inventaire — Design B : Heatmap matrice</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #f3f4f6;
+    color: #1f2937;
+    padding: 24px;
+    line-height: 1.5;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+
+  .design-banner {
+    background: #1e3a8a;
+    color: white;
+    padding: 14px 20px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .design-banner h1 { font-size: 18px; font-weight: 600; }
+
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .kpi {
+    background: white;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    text-align: center;
+  }
+  .kpi .v { font-size: 24px; font-weight: 700; }
+  .kpi .l { font-size: 12px; color: #6b7280; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .kpi.warn .v { color: #d97706; }
+  .kpi.danger .v { color: #dc2626; }
+  .kpi.info .v { color: #2563eb; }
+
+  /* Action requise */
+  .alerts-section {
+    background: white;
+    border: 2px solid #fca5a5;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+  .alerts-section h2 { color: #991b1b; font-size: 16px; margin-bottom: 12px; }
+  .alerts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 8px;
+  }
+  .alert-row {
+    background: #fef2f2;
+    border-left: 3px solid #dc2626;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .alert-row.low { background: #fffbeb; border-left-color: #d97706; }
+  .alert-row strong { display: block; }
+  .alert-row small { color: #6b7280; font-size: 11px; }
+  .alert-row button {
+    background: #dc2626;
+    color: white;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .alert-row.low button { background: #d97706; }
+
+  .filters {
+    background: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    margin-bottom: 20px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .filters select {
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .filters .export-btn {
+    margin-left: auto;
+    background: #2563eb;
+    color: white;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .legend { display: flex; gap: 12px; font-size: 12px; color: #6b7280; align-items: center; }
+  .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; }
+  .legend-dot.ok { background: #86efac; }
+  .legend-dot.low { background: #fcd34d; }
+  .legend-dot.zero { background: #fca5a5; }
+  .legend-dot.na { background: #e5e7eb; }
+
+  /* Heatmap */
+  .heatmap-section {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .heatmap-title {
+    padding: 12px 16px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    font-weight: 600;
+    color: #1f2937;
+  }
+  .heatmap {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .heatmap th, .heatmap td {
+    border: 1px solid #f3f4f6;
+    padding: 0;
+    text-align: center;
+  }
+  .heatmap th {
+    background: #f9fafb;
+    color: #6b7280;
+    font-weight: 600;
+    font-size: 11px;
+    padding: 8px 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .heatmap th.item-col {
+    text-align: left;
+    padding-left: 16px;
+    width: 240px;
+  }
+  .heatmap td.item-name {
+    text-align: left;
+    padding: 10px 16px;
+    font-weight: 500;
+    background: white;
+    border-right: 1px solid #e5e7eb;
+  }
+  .heatmap td.item-name small { display: block; color: #6b7280; font-size: 11px; margin-top: 2px; }
+  .heatmap td.cell {
+    width: 70px;
+    height: 50px;
+    cursor: pointer;
+    transition: transform 0.1s;
+    font-weight: 600;
+    font-size: 15px;
+    position: relative;
+  }
+  .heatmap td.cell:hover { transform: scale(1.15); z-index: 1; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  .heatmap td.cell.ok { background: #d1fae5; color: #065f46; }
+  .heatmap td.cell.ok-mid { background: #86efac; color: #064e3b; }
+  .heatmap td.cell.low { background: #fde68a; color: #92400e; }
+  .heatmap td.cell.zero { background: #fca5a5; color: #7f1d1d; }
+  .heatmap td.cell.na { background: #fafafa; color: #d1d5db; font-weight: 400; }
+  .heatmap td.total {
+    background: #eff6ff;
+    color: #1e3a8a;
+    font-weight: 700;
+    border-left: 2px solid #2563eb;
+  }
+  .division-row {
+    background: #1f2937 !important;
+    color: white !important;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 8px 16px !important;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="design-banner">
+  <h1>📊 Inventaire — Design B : Heatmap matrice (tailles × morceaux)</h1>
+</div>
+
+<div class="kpi-row">
+  <div class="kpi"><div class="v">2 750</div><div class="l">📦 Unités</div></div>
+  <div class="kpi info"><div class="v">$ 120 050</div><div class="l">💰 Valeur</div></div>
+  <div class="kpi warn"><div class="v">8</div><div class="l">⚠️ Bas</div></div>
+  <div class="kpi danger"><div class="v">3</div><div class="l">🔴 Zéro</div></div>
+  <div class="kpi info"><div class="v">12</div><div class="l">🧺 Lavage</div></div>
+</div>
+
+<div class="alerts-section">
+  <h2>🚨 Action requise — 11 variantes en alerte</h2>
+  <div class="alerts-grid">
+    <div class="alert-row"><div><strong>🔴 Ceinture · Unique</strong><small>Stock 0 · seuil 5</small></div><button>Réappro</button></div>
+    <div class="alert-row"><div><strong>🔴 Pantalon militaire · 40</strong><small>Stock 0 · seuil 5</small></div><button>Réappro</button></div>
+    <div class="alert-row"><div><strong>🔴 Manteau 3en1 · 3XL</strong><small>Stock 0 · seuil 5</small></div><button>Réappro</button></div>
+    <div class="alert-row low"><div><strong>⚠️ Chemise grise (ML) · L</strong><small>Stock 4 / seuil 10</small></div><button>Ajuster</button></div>
+    <div class="alert-row low"><div><strong>⚠️ Chemise blanche (MC) · XL</strong><small>Stock 5 / seuil 10</small></div><button>Ajuster</button></div>
+    <div class="alert-row low"><div><strong>⚠️ Pantalon militaire · 38</strong><small>Stock 2 / seuil 5</small></div><button>Ajuster</button></div>
+    <div class="alert-row low"><div><strong>⚠️ Chandail HV (MC) · 4XL</strong><small>Stock 1 / seuil 5</small></div><button>Ajuster</button></div>
+    <div class="alert-row low"><div><strong>⚠️ Polo noir · 3XL</strong><small>Stock 2 / seuil 5</small></div><button>Ajuster</button></div>
+  </div>
+</div>
+
+<div class="filters">
+  <select>
+    <option>Division : Toutes</option>
+    <option>Sécurité</option>
+    <option>Signalisation</option>
+  </select>
+  <select>
+    <option>Type : Tous</option>
+    <option>Uniforme (hauts)</option>
+    <option>Uniforme (pantalons)</option>
+    <option>Équipement</option>
+  </select>
+  <div class="legend">
+    <span><span class="legend-dot ok"></span>Stock OK</span>
+    <span><span class="legend-dot low"></span>Bas</span>
+    <span><span class="legend-dot zero"></span>Zéro</span>
+    <span><span class="legend-dot na"></span>N/A</span>
+  </div>
+  <button class="export-btn">📥 Exporter Excel</button>
+</div>
+
+<!-- Heatmap UNIFORMES (hauts) -->
+<div class="heatmap-section">
+  <div class="heatmap-title">Hauts (chemises, polo, chandail) — tailles S à 3XL</div>
+  <table class="heatmap">
+    <thead>
+      <tr>
+        <th class="item-col">Morceau</th>
+        <th>S</th>
+        <th>M</th>
+        <th>L</th>
+        <th>XL</th>
+        <th>2XL</th>
+        <th>3XL</th>
+        <th>4XL</th>
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td colspan="9" class="division-row">▾ Sécurité</td></tr>
+      <tr>
+        <td class="item-name">Chemise grise (MC) <small>📍 B4 · $40</small></td>
+        <td class="cell ok">10</td>
+        <td class="cell ok">12</td>
+        <td class="cell ok-mid">14</td>
+        <td class="cell ok">10</td>
+        <td class="cell ok">6</td>
+        <td class="cell na">—</td>
+        <td class="cell na">—</td>
+        <td class="total">52</td>
+      </tr>
+      <tr>
+        <td class="item-name">Chemise grise (ML) <small>📍 B4 · $40</small></td>
+        <td class="cell ok">12</td>
+        <td class="cell ok-mid">18</td>
+        <td class="cell low">4</td>
+        <td class="cell ok">15</td>
+        <td class="cell ok">14</td>
+        <td class="cell ok">5</td>
+        <td class="cell na">—</td>
+        <td class="total">68</td>
+      </tr>
+      <tr>
+        <td class="item-name">Chemise blanche (MC) <small>📍 B5 · $40</small></td>
+        <td class="cell ok">8</td>
+        <td class="cell low">6</td>
+        <td class="cell ok">12</td>
+        <td class="cell low">5</td>
+        <td class="cell low">3</td>
+        <td class="cell zero">0</td>
+        <td class="cell na">—</td>
+        <td class="total">34</td>
+      </tr>
+      <tr>
+        <td class="item-name">Polo noir <small>📍 A3 · $35</small></td>
+        <td class="cell ok-mid">20</td>
+        <td class="cell ok">18</td>
+        <td class="cell ok-mid">22</td>
+        <td class="cell ok">15</td>
+        <td class="cell ok">8</td>
+        <td class="cell low">2</td>
+        <td class="cell na">—</td>
+        <td class="total">85</td>
+      </tr>
+      <tr><td colspan="9" class="division-row">▾ Signalisation</td></tr>
+      <tr>
+        <td class="item-name">Chandail HV (MC) <small>📍 E2 · $25</small></td>
+        <td class="cell na">—</td>
+        <td class="cell na">—</td>
+        <td class="cell ok">12</td>
+        <td class="cell ok">12</td>
+        <td class="cell ok">8</td>
+        <td class="cell ok">8</td>
+        <td class="cell low">1</td>
+        <td class="total">41</td>
+      </tr>
+      <tr>
+        <td class="item-name">Chandail HV (ML) <small>📍 E2 · $35</small></td>
+        <td class="cell na">—</td>
+        <td class="cell na">—</td>
+        <td class="cell ok">10</td>
+        <td class="cell ok">14</td>
+        <td class="cell ok">10</td>
+        <td class="cell ok">6</td>
+        <td class="cell na">—</td>
+        <td class="total">40</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Heatmap PANTALONS -->
+<div class="heatmap-section">
+  <div class="heatmap-title">Pantalons — tailles 28 à 44</div>
+  <table class="heatmap">
+    <thead>
+      <tr>
+        <th class="item-col">Morceau</th>
+        <th>28</th>
+        <th>30</th>
+        <th>32</th>
+        <th>34</th>
+        <th>36</th>
+        <th>38</th>
+        <th>40</th>
+        <th>42</th>
+        <th>44</th>
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td colspan="11" class="division-row">▾ Sécurité</td></tr>
+      <tr>
+        <td class="item-name">Pantalon noir (militaire) <small>📍 A1 · $65</small></td>
+        <td class="cell ok">5</td>
+        <td class="cell ok-mid">8</td>
+        <td class="cell ok-mid">12</td>
+        <td class="cell ok-mid">10</td>
+        <td class="cell low">5</td>
+        <td class="cell low">2</td>
+        <td class="cell zero">0</td>
+        <td class="cell na">—</td>
+        <td class="cell na">—</td>
+        <td class="total">42</td>
+      </tr>
+      <tr>
+        <td class="item-name">Pantalon noir (complet) <small>📍 A2 · $65</small></td>
+        <td class="cell ok">4</td>
+        <td class="cell ok">6</td>
+        <td class="cell ok">10</td>
+        <td class="cell ok">8</td>
+        <td class="cell ok">7</td>
+        <td class="cell low">3</td>
+        <td class="cell ok">5</td>
+        <td class="cell na">—</td>
+        <td class="cell na">—</td>
+        <td class="total">43</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Heatmap TAILLE UNIQUE -->
+<div class="heatmap-section">
+  <div class="heatmap-title">Pièces sans grandeur (taille unique) — Équipement / accessoires</div>
+  <table class="heatmap">
+    <thead>
+      <tr>
+        <th class="item-col">Morceau</th>
+        <th colspan="4">Stock</th>
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td colspan="6" class="division-row">▾ Sécurité</td></tr>
+      <tr>
+        <td class="item-name">Cravate <small>📍 D3 · $10</small></td>
+        <td class="cell ok" colspan="4">25</td>
+        <td class="total">25</td>
+      </tr>
+      <tr>
+        <td class="item-name">Casquette A3 <small>📍 D1 · $15</small></td>
+        <td class="cell ok" colspan="4">9</td>
+        <td class="total">9</td>
+      </tr>
+      <tr>
+        <td class="item-name">Lunette de sécurité <small>📍 F2 · $10</small></td>
+        <td class="cell ok-mid" colspan="4">35</td>
+        <td class="total">35</td>
+      </tr>
+      <tr><td colspan="6" class="division-row">▾ Signalisation</td></tr>
+      <tr>
+        <td class="item-name">Casque de sécurité <small>📍 F1 · $35</small></td>
+        <td class="cell ok" colspan="4">17</td>
+        <td class="total">17</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+</div>
+</body>
+</html>
