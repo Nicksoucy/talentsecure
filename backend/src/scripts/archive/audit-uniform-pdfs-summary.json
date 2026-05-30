@@ -1,0 +1,19 @@
+{
+  "dbHost": "ep-polished-breeze-a8tnezrf-pooler.eastus2.azure.neon.tech",
+  "stats": {
+    "totalPdfs": 84,
+    "employeeFound": 77,
+    "employeeNotFound": 7,
+    "employeeInactif": 5,
+    "employeeActif": 72,
+    "issuancePresent": 77,
+    "issuanceMissing": 0,
+    "pdfAttached": 77,
+    "pdfNotAttached": 0,
+    "hasLines": 72,
+    "zeroLines": 5,
+    "totalZero": 5,
+    "fullyOk": 72
+  },
+  "generatedAt": "2026-05-27T19:07:16.122Z"
+}
