@@ -299,6 +299,217 @@ export class CandidateService {
             .sort((a, b) => b.similarityScore - a.similarityScore)
             .slice(0, limit);
     }
+
+    /** Statistiques agrégées (total + comptage par statut). */
+    async getStats() {
+        const total = await prisma.candidate.count({
+            where: { isDeleted: false, isActive: true },
+        });
+
+        const byStatus = await prisma.candidate.groupBy({
+            by: ['status'],
+            where: { isDeleted: false, isActive: true },
+            _count: { status: true },
+        });
+
+        const statusCounts: Record<string, number> = {};
+        byStatus.forEach((item) => {
+            statusCounts[item.status] = item._count.status;
+        });
+
+        return {
+            total,
+            byStatus: statusCounts,
+            elite: statusCounts['ELITE'] || 0,
+            excellent: statusCounts['EXCELLENT'] || 0,
+            veryGood: statusCounts['TRES_BON'] || 0,
+            good: statusCounts['BON'] || 0,
+            qualified: statusCounts['QUALIFIE'] || 0,
+            toReview: statusCounts['A_REVOIR'] || 0,
+            pending: statusCounts['EN_ATTENTE'] || 0,
+            absent: statusCounts['ABSENT'] || 0,
+            inactive: statusCounts['INACTIF'] || 0,
+        };
+    }
+
+    /** Répartition des candidats par ville (triée décroissant, hors N/A). */
+    async getByCity() {
+        const candidates = await prisma.candidate.findMany({
+            where: { isDeleted: false, isActive: true },
+            select: { city: true, id: true },
+        });
+
+        const cityStats: { [key: string]: number } = {};
+        candidates.forEach((candidate) => {
+            const city = candidate.city || 'N/A';
+            cityStats[city] = (cityStats[city] || 0) + 1;
+        });
+
+        return Object.entries(cityStats)
+            .filter(([city]) => city !== 'N/A')
+            .map(([city, count]) => ({ city, count }))
+            .sort((a, b) => b.count - a.count);
+    }
+
+    /**
+     * Construit les lignes d'export CSV (mêmes filtres que la liste, sans
+     * pagination). Le contrôleur se charge de la sérialisation json2csv.
+     */
+    async buildExportRows(query: Record<string, any>) {
+        const {
+            search, status, minRating, city, hasBSP, hasVehicle,
+            hasDriverLicense, hasCV, canWorkUrgent, maxTravelKm, bspStatus,
+            interviewDateStart, interviewDateEnd, includeArchived, certification,
+        } = query;
+
+        const where: any = { isDeleted: false };
+        if (includeArchived !== 'true') where.isArchived = false;
+
+        const orConditions: any[] = [];
+        if (search) {
+            orConditions.push({
+                OR: [
+                    { firstName: { contains: search as string, mode: 'insensitive' } },
+                    { lastName: { contains: search as string, mode: 'insensitive' } },
+                    { email: { contains: search as string, mode: 'insensitive' } },
+                    { phone: { contains: search as string, mode: 'insensitive' } },
+                ],
+            });
+        }
+        if (status) where.status = status;
+        if (minRating) where.globalRating = { gte: Number(minRating) };
+        if (city) where.city = { contains: city as string, mode: 'insensitive' };
+        if (hasBSP !== undefined) where.hasBSP = hasBSP === 'true';
+        if (hasVehicle !== undefined) where.hasVehicle = hasVehicle === 'true';
+        if (hasDriverLicense !== undefined) where.hasDriverLicense = hasDriverLicense === 'true';
+        if (canWorkUrgent !== undefined) where.canWorkUrgent = canWorkUrgent === 'true';
+        if (hasCV !== undefined) {
+            if (hasCV === 'true') {
+                orConditions.push({ OR: [{ cvUrl: { not: null } }, { cvStoragePath: { not: null } }] });
+            } else {
+                where.AND = [{ cvUrl: null }, { cvStoragePath: null }];
+            }
+        }
+        if (maxTravelKm) where.maxTravelKm = { gte: Number(maxTravelKm) };
+        if (bspStatus) where.bspStatus = bspStatus;
+        if (interviewDateStart || interviewDateEnd) {
+            where.interviewDate = {};
+            if (interviewDateStart) where.interviewDate.gte = new Date(interviewDateStart as string);
+            if (interviewDateEnd) where.interviewDate.lte = new Date(interviewDateEnd as string);
+        }
+        if (certification) {
+            where.certifications = { some: { name: certification as string } };
+        }
+        if (orConditions.length > 0) where.AND = orConditions;
+
+        const candidates = await prisma.candidate.findMany({
+            where,
+            select: {
+                id: true, firstName: true, lastName: true, email: true, phone: true,
+                city: true, province: true, postalCode: true, status: true,
+                globalRating: true, interviewDate: true, hasBSP: true, bspStatus: true,
+                bspExpiryDate: true, hasVehicle: true, hasDriverLicense: true,
+                canWorkUrgent: true, canTravelKm: true, cvUrl: true, videoUrl: true,
+                isArchived: true, createdAt: true,
+                certifications: { select: { name: true, expiryDate: true } },
+                languages: { select: { language: true, level: true } },
+            },
+            orderBy: [
+                { globalRating: { sort: 'desc', nulls: 'last' } },
+                { lastName: 'asc' },
+            ],
+        });
+
+        return candidates.map((candidate) => ({
+            ID: candidate.id,
+            Prénom: candidate.firstName,
+            Nom: candidate.lastName,
+            Email: candidate.email || '',
+            Téléphone: candidate.phone || '',
+            Ville: candidate.city || '',
+            Province: candidate.province || '',
+            'Code postal': candidate.postalCode || '',
+            Statut: candidate.status || '',
+            'Note globale': candidate.globalRating || '',
+            'Date entrevue': candidate.interviewDate
+                ? new Date(candidate.interviewDate).toLocaleDateString('fr-CA') : '',
+            'A BSP': candidate.hasBSP ? 'Oui' : 'Non',
+            'Statut BSP': candidate.bspStatus || '',
+            'BSP expiration': candidate.bspExpiryDate
+                ? new Date(candidate.bspExpiryDate).toLocaleDateString('fr-CA') : '',
+            'A véhicule': candidate.hasVehicle ? 'Oui' : 'Non',
+            'Permis de conduire': candidate.hasDriverLicense ? 'Oui' : 'Non',
+            'Disponible urgent': candidate.canWorkUrgent ? 'Oui' : 'Non',
+            'Distance max (km)': candidate.canTravelKm || '',
+            'A CV': candidate.cvUrl ? 'Oui' : 'Non',
+            'A vidéo': candidate.videoUrl ? 'Oui' : 'Non',
+            Certifications: candidate.certifications.map((c) => c.name).join(', '),
+            Langues: candidate.languages.map((l) => `${l.language} (${l.level})`).join(', '),
+            Archivé: candidate.isArchived ? 'Oui' : 'Non',
+            'Créé le': new Date(candidate.createdAt).toLocaleDateString('fr-CA'),
+        }));
+    }
+
+    /** Recherche avancée multi-critères (POST body) avec pagination. */
+    async advancedSearch(body: any) {
+        const {
+            cities = [], certifications = [], availability = [],
+            minRating, hasVehicle, languages = [], skills = [],
+            page = 1, limit = 20,
+        } = body;
+
+        const where: any = { isDeleted: false, isActive: true };
+
+        if (cities.length > 0) where.city = { in: cities };
+
+        if (certifications.includes('BSP')) where.hasBSP = true;
+        if (certifications.includes('RCR')) where.hasRCR = true;
+        if (certifications.includes('SSIAP')) where.hasSSIAP = true;
+        if (certifications.includes('Permis')) where.hasDriverLicense = true;
+
+        if (availability.includes('24/7')) where.available24_7 = true;
+        if (availability.includes('days')) where.availableDays = true;
+        if (availability.includes('nights')) where.availableNights = true;
+        if (availability.includes('weekends')) where.availableWeekends = true;
+
+        if (minRating) where.globalRating = { gte: Number(minRating) };
+        if (hasVehicle !== undefined) where.hasVehicle = hasVehicle;
+
+        if (languages.length > 0) {
+            where.languages = { some: { language: { in: languages } } };
+        }
+        if (skills.length > 0) {
+            where.skills = { some: { skill: { name: { in: skills, mode: 'insensitive' } } } };
+        }
+
+        const skip = (Number(page) - 1) * Number(limit);
+        const take = Number(limit);
+
+        const [candidates, total] = await Promise.all([
+            prisma.candidate.findMany({
+                where,
+                skip,
+                take,
+                include: {
+                    languages: true,
+                    certifications: true,
+                    skills: { include: { skill: true } },
+                },
+                orderBy: { globalRating: 'desc' },
+            }),
+            prisma.candidate.count({ where }),
+        ]);
+
+        return {
+            data: candidates,
+            pagination: {
+                page: Number(page),
+                limit: Number(limit),
+                total,
+                totalPages: Math.ceil(total / Number(limit)),
+            },
+        };
+    }
 }
 
 export const candidateService = new CandidateService();
