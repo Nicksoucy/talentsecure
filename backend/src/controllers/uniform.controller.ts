@@ -383,16 +383,20 @@ export const reportStock = async (_req: Request, res: Response, next: NextFuncti
       totalValue += value;
       return {
         variantId: v.id,
+        itemId: v.itemId,
         itemName: v.item.name,
         division: v.item.division,
         type: v.item.type,
+        isOneSize: v.item.isOneSize,
         size: v.size,
         barcode: v.barcode,
         emplacement: v.emplacement,
         quantityOnHand: v.quantityOnHand,
         replacementCost: Number(v.replacementCost),
+        reorderThreshold: v.reorderThreshold,
         value,
         lowStock: v.reorderThreshold != null && v.quantityOnHand <= v.reorderThreshold,
+        outOfStock: v.quantityOnHand === 0,
       };
     });
     res.json({ data: { rows, totals: { totalUnits, totalValue } } });
