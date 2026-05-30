@@ -2,498 +2,607 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Inventaire — Design C : Galerie cards par variante</title>
+<title>Inventaire — Design C</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --border-strong: #d6d3d1;
+    --text: #0c0a09;
+    --text-2: #44403c;
+    --text-3: #78716c;
+    --text-4: #a8a29e;
+    --accent: #0a0a0a;
+    --accent-soft: #f5f5f4;
+    --success: #16a34a;
+    --warning: #ca8a04;
+    --warning-bg: #fefce8;
+    --warning-border: #fef08a;
+    --danger: #dc2626;
+    --danger-bg: #fef2f2;
+    --danger-border: #fecaca;
+    --radius: 6px;
+    --radius-lg: 10px;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
-    background: #f3f4f6;
-    color: #1f2937;
-    padding: 24px;
-    line-height: 1.5;
-  }
-  .container { max-width: 1400px; margin: 0 auto; }
-
-  .design-banner {
-    background: #1e3a8a;
-    color: white;
-    padding: 14px 20px;
-    border-radius: 8px;
-    margin-bottom: 24px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .design-banner h1 { font-size: 18px; font-weight: 600; }
-
-  .kpi-row {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 12px;
-    margin-bottom: 24px;
-  }
-  .kpi {
-    background: white;
-    padding: 16px;
-    border-radius: 8px;
-    border: 1px solid #e5e7eb;
-    text-align: center;
-  }
-  .kpi .v { font-size: 24px; font-weight: 700; }
-  .kpi .l { font-size: 12px; color: #6b7280; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .kpi.warn .v { color: #d97706; }
-  .kpi.danger .v { color: #dc2626; }
-  .kpi.info .v { color: #2563eb; }
-
-  .alerts-section {
-    background: white;
-    border: 2px solid #fca5a5;
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 24px;
-  }
-  .alerts-section h2 { color: #991b1b; font-size: 16px; margin-bottom: 12px; }
-  .alerts-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 8px;
-  }
-  .alert-row {
-    background: #fef2f2;
-    border-left: 3px solid #dc2626;
-    padding: 8px 12px;
-    border-radius: 4px;
-    font-size: 13px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .alert-row.low { background: #fffbeb; border-left-color: #d97706; }
-  .alert-row strong { display: block; }
-  .alert-row small { color: #6b7280; font-size: 11px; }
-  .alert-row button {
-    background: #dc2626;
-    color: white;
-    border: none;
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 11px;
-    cursor: pointer;
-  }
-  .alert-row.low button { background: #d97706; }
-
-  .filters {
-    background: white;
-    padding: 12px 16px;
-    border-radius: 8px;
-    border: 1px solid #e5e7eb;
-    margin-bottom: 20px;
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-  .filters input, .filters select {
-    padding: 8px 12px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
     font-size: 14px;
-    font-family: inherit;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: 40px 32px;
+    font-feature-settings: 'cv11', 'ss01';
   }
-  .filters input[type="search"] { flex: 1; min-width: 200px; }
-  .filters .export-btn {
-    margin-left: auto;
-    background: #2563eb;
-    color: white;
-    border: none;
-    padding: 8px 14px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 13px;
-  }
+  .num { font-variant-numeric: tabular-nums; }
+  .container { max-width: 1280px; margin: 0 auto; }
 
-  /* Gallery cards */
-  .gallery {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  .label {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+  }
+  h1, h2, h3 { font-weight: 600; letter-spacing: -0.011em; color: var(--text); }
+  h1 { font-size: 24px; }
+  h2 { font-size: 15px; }
+
+  .page-header {
+    margin-bottom: 32px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  .breadcrumb { font-size: 12px; color: var(--text-3); margin-bottom: 4px; }
+  .breadcrumb a { color: inherit; text-decoration: none; }
+  .meta-strip {
+    font-size: 12px;
+    color: var(--text-3);
+    display: flex;
+    align-items: center;
     gap: 16px;
   }
-  .variant-card {
-    background: white;
-    border: 2px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 16px;
-    text-align: center;
-    transition: all 0.15s;
-    position: relative;
-    cursor: pointer;
-  }
-  .variant-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-  }
-  .variant-card.ok { border-color: #86efac; }
-  .variant-card.ok::before {
-    content: "✓ STOCK OK";
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: #d1fae5;
-    color: #065f46;
-    font-size: 9px;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 10px;
-    letter-spacing: 0.5px;
-  }
-  .variant-card.low { border-color: #fcd34d; background: linear-gradient(to bottom, #fffbeb, white 40px); }
-  .variant-card.low::before {
-    content: "⚠ STOCK BAS";
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: #fde68a;
-    color: #92400e;
-    font-size: 9px;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 10px;
-    letter-spacing: 0.5px;
-  }
-  .variant-card.zero { border-color: #fca5a5; background: linear-gradient(to bottom, #fef2f2, white 40px); }
-  .variant-card.zero::before {
-    content: "🔴 ZÉRO STOCK";
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: #fee2e2;
-    color: #991b1b;
-    font-size: 9px;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 10px;
-    letter-spacing: 0.5px;
-  }
+  .meta-strip .dot { width: 4px; height: 4px; background: var(--text-4); border-radius: 50%; }
 
-  .card-photo {
-    width: 80px;
-    height: 80px;
-    margin: 24px auto 12px;
-    background: #f3f4f6;
-    border-radius: 50%;
-    display: flex;
+  .btn {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 14px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    font-size: 36px;
+    gap: 6px;
+    transition: all 0.1s;
   }
-  .card-name { font-size: 13px; color: #6b7280; font-weight: 500; }
-  .card-item { font-size: 14px; font-weight: 700; color: #1f2937; margin-top: 2px; }
-  .card-size {
-    display: inline-block;
-    margin-top: 8px;
-    background: #1f2937;
-    color: white;
-    padding: 4px 12px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 1px;
+  .btn:hover { background: var(--accent-soft); }
+  .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: 24px;
   }
-  .card-qty {
-    font-size: 42px;
-    font-weight: 800;
-    margin: 12px 0 4px;
-    color: #1f2937;
-  }
-  .variant-card.zero .card-qty { color: #dc2626; }
-  .variant-card.low .card-qty { color: #d97706; }
-  .variant-card.ok .card-qty { color: #059669; }
-  .card-bar {
-    width: 80%;
-    height: 6px;
-    background: #e5e7eb;
-    border-radius: 3px;
-    margin: 8px auto;
+  .kpi { padding: 20px 24px; border-right: 1px solid var(--border); }
+  .kpi:last-child { border-right: none; }
+  .kpi .label { margin-bottom: 8px; }
+  .kpi .value { font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -0.02em; }
+  .kpi .delta { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+  .kpi .delta.up { color: var(--success); }
+  .kpi .delta.down { color: var(--danger); }
+  .kpi .value.muted { color: var(--text-3); }
+  .kpi .value.danger { color: var(--danger); }
+  .kpi .value.warning { color: var(--warning); }
+
+  .alert-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    margin-bottom: 24px;
     overflow: hidden;
   }
-  .card-bar-fill {
-    height: 100%;
-    background: #10b981;
-    border-radius: 3px;
-  }
-  .variant-card.low .card-bar-fill { background: #f59e0b; }
-  .variant-card.zero .card-bar-fill { background: #dc2626; width: 0 !important; }
-  .card-threshold { font-size: 10px; color: #9ca3af; }
-  .card-meta {
+  .alert-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
     display: flex;
-    justify-content: space-around;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .alert-header h2 { display: flex; align-items: center; gap: 10px; }
+  .alert-pill {
     font-size: 11px;
-    color: #6b7280;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid #f3f4f6;
+    font-weight: 500;
+    background: var(--danger-bg);
+    color: var(--danger);
+    padding: 2px 8px;
+    border-radius: 12px;
+    border: 1px solid var(--danger-border);
   }
-  .card-action {
-    margin-top: 12px;
-    background: white;
-    border: 1px solid #d1d5db;
-    padding: 6px 14px;
-    border-radius: 6px;
+  .alert-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+  }
+  .alert-row {
+    background: var(--surface);
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .alert-row .info { display: flex; align-items: center; gap: 12px; }
+  .alert-row .status-icon { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .alert-row .status-icon.zero { background: var(--danger); }
+  .alert-row .status-icon.low { background: var(--warning); }
+  .alert-row .item { font-weight: 500; font-size: 13px; }
+  .alert-row .item span { color: var(--text-3); font-weight: 400; }
+  .alert-row .ratio {
+    font-family: 'JetBrains Mono', monospace;
     font-size: 12px;
-    color: #374151;
-    cursor: pointer;
-    width: 100%;
+    color: var(--text-3);
+    margin-top: 2px;
   }
-  .card-action:hover { background: #f3f4f6; }
+
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    align-items: center;
+  }
+  .search { flex: 1; position: relative; }
+  .search input {
+    width: 100%;
+    padding: 8px 12px 8px 34px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-family: inherit;
+    background: var(--surface);
+    color: var(--text);
+  }
+  .search input:focus {
+    outline: none;
+    border-color: var(--text);
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.04);
+  }
+  .search .icon {
+    position: absolute; left: 10px; top: 50%;
+    transform: translateY(-50%); color: var(--text-3);
+  }
+  .filter-chip {
+    padding: 6px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--surface);
+    font-size: 13px;
+    color: var(--text-2);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .filter-chip:hover { background: var(--accent-soft); }
+
+  /* Variant gallery */
+  .variant-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+  }
+  .variant {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    transition: border-color 0.1s, transform 0.1s;
+    cursor: pointer;
+    position: relative;
+  }
+  .variant:hover { border-color: var(--text-3); transform: translateY(-2px); }
+  .variant.warning { border-color: var(--warning-border); }
+  .variant.danger { border-color: var(--danger-border); }
+
+  .variant-status {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 3px 8px;
+    border-radius: 12px;
+  }
+  .variant.ok .variant-status { background: var(--accent-soft); color: var(--text-3); }
+  .variant.warning .variant-status { background: var(--warning-bg); color: var(--warning); }
+  .variant.danger .variant-status { background: var(--danger-bg); color: var(--danger); }
+
+  .variant-icon {
+    width: 36px;
+    height: 36px;
+    color: var(--text-3);
+    margin-bottom: 16px;
+  }
+  .variant-name {
+    font-size: 13px;
+    color: var(--text-3);
+    margin-bottom: 1px;
+  }
+  .variant-item {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .variant-size {
+    margin-top: 8px;
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: var(--accent-soft);
+    color: var(--text-2);
+    padding: 2px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+  }
+
+  .variant-qty {
+    margin-top: 16px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .variant-qty .num {
+    font-size: 36px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.03em;
+  }
+  .variant.warning .variant-qty .num { color: var(--warning); }
+  .variant.danger .variant-qty .num { color: var(--danger); }
+  .variant-qty .threshold {
+    font-size: 12px;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .variant-bar {
+    margin-top: 8px;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .variant-bar-fill { height: 100%; background: var(--text); }
+  .variant.warning .variant-bar-fill { background: var(--warning); }
+  .variant.danger .variant-bar-fill { background: var(--danger); }
+
+  .variant-meta {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+  }
 </style>
 </head>
 <body>
+
+<svg width="0" height="0" style="position:absolute;">
+  <defs>
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 2v8m-3-3l3 3 3-3M3 13h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 16 16"><path d="M8 1L1 14h14L8 1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6v3M8 11v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-shirt" viewBox="0 0 32 32"><path d="M11 4l2 3 3 1 3-1 2-3 6 3-2 5-3-1v17H10V11l-3 1-2-5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+    <symbol id="i-pants" viewBox="0 0 32 32"><path d="M8 4h16v6l-2 18h-5l-1-12-1 12h-5L8 10z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+    <symbol id="i-jacket" viewBox="0 0 32 32"><path d="M10 4l3 4h6l3-4 6 3v6l-3-1v16H7V12l-3 1V7z M16 8v20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+    <symbol id="i-helmet" viewBox="0 0 32 32"><path d="M4 20a12 12 0 0124 0v3H4v-3z M16 8v12 M8 14v6 M24 14v6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-belt" viewBox="0 0 32 32"><rect x="3" y="11" width="26" height="10" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="16" cy="16" r="2" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="9" y1="16" x2="11" y2="16" stroke="currentColor" stroke-width="1.4"/></symbol>
+    <symbol id="i-vest" viewBox="0 0 32 32"><path d="M9 4l3 4h8l3-4 5 3v9l-3 1v15H8V17l-3-1V7z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
 <div class="container">
 
-<div class="design-banner">
-  <h1>🛍️ Inventaire — Design C : Galerie cards par variante (style e-commerce)</h1>
-</div>
-
-<div class="kpi-row">
-  <div class="kpi"><div class="v">2 750</div><div class="l">📦 Unités</div></div>
-  <div class="kpi info"><div class="v">$ 120 050</div><div class="l">💰 Valeur</div></div>
-  <div class="kpi warn"><div class="v">8</div><div class="l">⚠️ Bas</div></div>
-  <div class="kpi danger"><div class="v">3</div><div class="l">🔴 Zéro</div></div>
-  <div class="kpi info"><div class="v">12</div><div class="l">🧺 Lavage</div></div>
-</div>
-
-<div class="alerts-section">
-  <h2>🚨 Action requise — 11 variantes en alerte</h2>
-  <div class="alerts-grid">
-    <div class="alert-row"><div><strong>🔴 Ceinture · Unique</strong><small>Stock 0 · seuil 5</small></div><button>Réappro</button></div>
-    <div class="alert-row"><div><strong>🔴 Pantalon militaire · 40</strong><small>Stock 0 · seuil 5</small></div><button>Réappro</button></div>
-    <div class="alert-row"><div><strong>🔴 Manteau 3en1 · 3XL</strong><small>Stock 0 · seuil 5</small></div><button>Réappro</button></div>
-    <div class="alert-row low"><div><strong>⚠️ Chemise grise (ML) · L</strong><small>Stock 4 / seuil 10</small></div><button>Ajuster</button></div>
-    <div class="alert-row low"><div><strong>⚠️ Chemise blanche (MC) · XL</strong><small>Stock 5 / seuil 10</small></div><button>Ajuster</button></div>
-    <div class="alert-row low"><div><strong>⚠️ Pantalon militaire · 38</strong><small>Stock 2 / seuil 5</small></div><button>Ajuster</button></div>
-    <div class="alert-row low"><div><strong>⚠️ Chandail HV (MC) · 4XL</strong><small>Stock 1 / seuil 5</small></div><button>Ajuster</button></div>
-    <div class="alert-row low"><div><strong>⚠️ Polo noir · 3XL</strong><small>Stock 2 / seuil 5</small></div><button>Ajuster</button></div>
-  </div>
-</div>
-
-<div class="filters">
-  <input type="search" placeholder="🔍 Rechercher...">
-  <select>
-    <option>Division : Toutes</option>
-    <option>Sécurité</option>
-    <option>Signalisation</option>
-  </select>
-  <select>
-    <option>État : Tous</option>
-    <option>Stock OK</option>
-    <option>Bas</option>
-    <option>Zéro</option>
-  </select>
-  <select>
-    <option>Tri : Alertes en premier</option>
-    <option>Tri : Nom A-Z</option>
-    <option>Tri : Stock croissant</option>
-    <option>Tri : Valeur décroissante</option>
-  </select>
-  <button class="export-btn">📥 Exporter Excel</button>
-</div>
-
-<div class="gallery">
-
-  <div class="variant-card zero">
-    <div class="card-photo">👖</div>
-    <div class="card-name">Pantalon noir</div>
-    <div class="card-item">militaire</div>
-    <span class="card-size">TAILLE 40</span>
-    <div class="card-qty">0</div>
-    <div class="card-bar"><div class="card-bar-fill" style="width: 0%"></div></div>
-    <div class="card-threshold">Seuil : 5</div>
-    <div class="card-meta">
-      <span>📍 A1</span>
-      <span>$65/u</span>
-      <span>$0</span>
+  <header class="page-header">
+    <div>
+      <div class="breadcrumb">
+        <a href="#">Uniformes</a> &nbsp;/&nbsp; <span>Inventaire</span>
+      </div>
+      <h1 style="margin-top: 4px;">Inventaire</h1>
+      <div class="meta-strip" style="margin-top: 8px;">
+        <span>Vue galerie par variante</span>
+        <span class="dot"></span>
+        <span>178 variantes actives</span>
+      </div>
     </div>
-    <button class="card-action">⚙ Ajuster</button>
-  </div>
-
-  <div class="variant-card zero">
-    <div class="card-photo">🧥</div>
-    <div class="card-name">Manteau</div>
-    <div class="card-item">3 en 1</div>
-    <span class="card-size">TAILLE 3XL</span>
-    <div class="card-qty">0</div>
-    <div class="card-bar"><div class="card-bar-fill" style="width: 0%"></div></div>
-    <div class="card-threshold">Seuil : 5</div>
-    <div class="card-meta">
-      <span>📍 C1</span>
-      <span>$250/u</span>
-      <span>$0</span>
+    <div style="display: flex; gap: 8px;">
+      <button class="btn"><svg width="14" height="14"><use href="#i-download"/></svg>Exporter</button>
+      <button class="btn btn-primary">Nouveau morceau</button>
     </div>
-    <button class="card-action">⚙ Ajuster</button>
+  </header>
+
+  <div class="kpi-grid">
+    <div class="kpi"><div class="label">Unités</div><div class="value num">2 750</div><div class="delta up">+124 cette semaine</div></div>
+    <div class="kpi"><div class="label">Valeur</div><div class="value num">$120 050</div><div class="delta">$43.65 / unité</div></div>
+    <div class="kpi"><div class="label">En alerte</div><div class="value warning num">11</div><div class="delta down">+3 vs semaine</div></div>
+    <div class="kpi"><div class="label">À zéro</div><div class="value danger num">3</div><div class="delta">Action requise</div></div>
+    <div class="kpi"><div class="label">En lavage</div><div class="value muted num">12</div><div class="delta">2 lots actifs</div></div>
   </div>
 
-  <div class="variant-card zero">
-    <div class="card-photo">🎗️</div>
-    <div class="card-name">Ceinture</div>
-    <div class="card-item">&nbsp;</div>
-    <span class="card-size">UNIQUE</span>
-    <div class="card-qty">0</div>
-    <div class="card-bar"><div class="card-bar-fill" style="width: 0%"></div></div>
-    <div class="card-threshold">Seuil : 5</div>
-    <div class="card-meta">
-      <span>📍 D2</span>
-      <span>$25/u</span>
-      <span>$0</span>
+  <section class="alert-section">
+    <div class="alert-header">
+      <h2><svg width="14" height="14" style="color: var(--danger)"><use href="#i-alert"/></svg>Action requise <span class="alert-pill">11 variantes</span></h2>
+      <button class="btn btn-sm">Voir l'historique</button>
     </div>
-    <button class="card-action">⚙ Ajuster</button>
-  </div>
-
-  <div class="variant-card low">
-    <div class="card-photo">👕</div>
-    <div class="card-name">Chemise grise</div>
-    <div class="card-item">(ML)</div>
-    <span class="card-size">TAILLE L</span>
-    <div class="card-qty">4</div>
-    <div class="card-bar"><div class="card-bar-fill" style="width: 40%"></div></div>
-    <div class="card-threshold">Seuil : 10</div>
-    <div class="card-meta">
-      <span>📍 B4</span>
-      <span>$40/u</span>
-      <span>$160</span>
+    <div class="alert-list">
+      <div class="alert-row"><div class="info"><span class="status-icon zero"></span><div><div class="item">Ceinture <span>· Unique</span></div><div class="ratio">0 / 5</div></div></div><button class="btn btn-sm">Réapprovisionner</button></div>
+      <div class="alert-row"><div class="info"><span class="status-icon zero"></span><div><div class="item">Pantalon noir (militaire) <span>· 40</span></div><div class="ratio">0 / 5</div></div></div><button class="btn btn-sm">Réapprovisionner</button></div>
+      <div class="alert-row"><div class="info"><span class="status-icon zero"></span><div><div class="item">Manteau (3 en 1) <span>· 3XL</span></div><div class="ratio">0 / 5</div></div></div><button class="btn btn-sm">Réapprovisionner</button></div>
+      <div class="alert-row"><div class="info"><span class="status-icon low"></span><div><div class="item">Chemise grise (ML) <span>· L</span></div><div class="ratio">4 / 10</div></div></div><button class="btn btn-sm">Ajuster</button></div>
+      <div class="alert-row"><div class="info"><span class="status-icon low"></span><div><div class="item">Chemise blanche (MC) <span>· XL</span></div><div class="ratio">5 / 10</div></div></div><button class="btn btn-sm">Ajuster</button></div>
+      <div class="alert-row"><div class="info"><span class="status-icon low"></span><div><div class="item">Pantalon militaire <span>· 38</span></div><div class="ratio">2 / 5</div></div></div><button class="btn btn-sm">Ajuster</button></div>
+      <div class="alert-row"><div class="info"><span class="status-icon low"></span><div><div class="item">Chandail HV (MC) <span>· 4XL</span></div><div class="ratio">1 / 5</div></div></div><button class="btn btn-sm">Ajuster</button></div>
+      <div class="alert-row"><div class="info"><span class="status-icon low"></span><div><div class="item">Polo noir <span>· 3XL</span></div><div class="ratio">2 / 5</div></div></div><button class="btn btn-sm">Ajuster</button></div>
     </div>
-    <button class="card-action">⚙ Ajuster</button>
-  </div>
+  </section>
 
-  <div class="variant-card low">
-    <div class="card-photo">👕</div>
-    <div class="card-name">Chemise blanche</div>
-    <div class="card-item">(MC)</div>
-    <span class="card-size">TAILLE XL</span>
-    <div class="card-qty">5</div>
-    <div class="card-bar"><div class="card-bar-fill" style="width: 50%"></div></div>
-    <div class="card-threshold">Seuil : 10</div>
-    <div class="card-meta">
-      <span>📍 B5</span>
-      <span>$40/u</span>
-      <span>$200</span>
+  <div class="toolbar">
+    <div class="search">
+      <svg class="icon" width="14" height="14"><use href="#i-search"/></svg>
+      <input placeholder="Rechercher…">
     </div>
-    <button class="card-action">⚙ Ajuster</button>
+    <button class="filter-chip">Division <svg width="12" height="12"><use href="#i-chevron"/></svg></button>
+    <button class="filter-chip">État : Alertes en premier <svg width="12" height="12"><use href="#i-chevron"/></svg></button>
+    <button class="filter-chip">Tri : Stock croissant <svg width="12" height="12"><use href="#i-chevron"/></svg></button>
   </div>
 
-  <div class="variant-card low">
-    <div class="card-photo">👖</div>
-    <div class="card-name">Pantalon noir</div>
-    <div class="card-item">militaire</div>
-    <span class="card-size">TAILLE 38</span>
-    <div class="card-qty">2</div>
-    <div class="card-bar"><div class="card-bar-fill" style="width: 40%"></div></div>
-    <div class="card-threshold">Seuil : 5</div>
-    <div class="card-meta">
-      <span>📍 A1</span>
-      <span>$65/u</span>
-      <span>$130</span>
+  <div class="variant-grid">
+
+    <div class="variant danger">
+      <div class="variant-status">À zéro</div>
+      <svg class="variant-icon"><use href="#i-pants"/></svg>
+      <div class="variant-name">Pantalon noir</div>
+      <div class="variant-item">militaire</div>
+      <div class="variant-size">TAILLE 40</div>
+      <div class="variant-qty">
+        <span class="num">0</span>
+        <span class="threshold">/ 5</span>
+      </div>
+      <div class="variant-bar"><div class="variant-bar-fill" style="width: 0%"></div></div>
+      <div class="variant-meta">
+        <span>A1 · $65/u</span>
+        <span>$0</span>
+      </div>
     </div>
-    <button class="card-action">⚙ Ajuster</button>
-  </div>
 
-  <div class="variant-card ok">
-    <div class="card-photo">👕</div>
-    <div class="card-name">Chemise grise</div>
-    <div class="card-item">(ML)</div>
-    <span class="card-size">TAILLE M</span>
-    <div class="card-qty">18</div>
-    <div class="card-bar"><div class="card-bar-fill" style="width: 100%"></div></div>
-    <div class="card-threshold">Seuil : 10</div>
-    <div class="card-meta">
-      <span>📍 B4</span>
-      <span>$40/u</span>
-      <span>$720</span>
+    <div class="variant danger">
+      <div class="variant-status">À zéro</div>
+      <svg class="variant-icon"><use href="#i-jacket"/></svg>
+      <div class="variant-name">Manteau</div>
+      <div class="variant-item">3 en 1</div>
+      <div class="variant-size">TAILLE 3XL</div>
+      <div class="variant-qty">
+        <span class="num">0</span>
+        <span class="threshold">/ 5</span>
+      </div>
+      <div class="variant-bar"><div class="variant-bar-fill" style="width: 0%"></div></div>
+      <div class="variant-meta">
+        <span>C1 · $250/u</span>
+        <span>$0</span>
+      </div>
     </div>
-    <button class="card-action">⚙ Ajuster</button>
-  </div>
 
-  <div class="variant-card ok">
-    <div class="card-photo">🎽</div>
-    <div class="card-name">Polo noir</div>
-    <div class="card-item">&nbsp;</div>
-    <span class="card-size">TAILLE M</span>
-    <div class="card-qty">18</div>
-    <div class="card-bar"><div class="card-bar-fill" style="width: 100%"></div></div>
-    <div class="card-threshold">Seuil : 10</div>
-    <div class="card-meta">
-      <span>📍 A3</span>
-      <span>$35/u</span>
-      <span>$630</span>
+    <div class="variant danger">
+      <div class="variant-status">À zéro</div>
+      <svg class="variant-icon"><use href="#i-belt"/></svg>
+      <div class="variant-name">Ceinture</div>
+      <div class="variant-item">&nbsp;</div>
+      <div class="variant-size">UNIQUE</div>
+      <div class="variant-qty">
+        <span class="num">0</span>
+        <span class="threshold">/ 5</span>
+      </div>
+      <div class="variant-bar"><div class="variant-bar-fill" style="width: 0%"></div></div>
+      <div class="variant-meta">
+        <span>D2 · $25/u</span>
+        <span>$0</span>
+      </div>
     </div>
-    <button class="card-action">⚙ Ajuster</button>
-  </div>
 
-  <div class="variant-card ok">
-    <div class="card-photo">🎗️</div>
-    <div class="card-name">Ceinture</div>
-    <div class="card-item">&nbsp;</div>
-    <span class="card-size">TAILLE L</span>
-    <div class="card-qty">60</div>
-    <div class="card-bar"><div class="card-bar-fill" style="width: 100%"></div></div>
-    <div class="card-threshold">Seuil : 20</div>
-    <div class="card-meta">
-      <span>📍 D2</span>
-      <span>$25/u</span>
-      <span>$1500</span>
+    <div class="variant warning">
+      <div class="variant-status">Bas</div>
+      <svg class="variant-icon"><use href="#i-shirt"/></svg>
+      <div class="variant-name">Chemise grise</div>
+      <div class="variant-item">(ML)</div>
+      <div class="variant-size">TAILLE L</div>
+      <div class="variant-qty">
+        <span class="num">4</span>
+        <span class="threshold">/ 10</span>
+      </div>
+      <div class="variant-bar"><div class="variant-bar-fill" style="width: 40%"></div></div>
+      <div class="variant-meta">
+        <span>B4 · $40/u</span>
+        <span>$160</span>
+      </div>
     </div>
-    <button class="card-action">⚙ Ajuster</button>
-  </div>
 
-  <div class="variant-card ok">
-    <div class="card-photo">🦺</div>
-    <div class="card-name">Chandail HV</div>
-    <div class="card-item">(MC)</div>
-    <span class="card-size">TAILLE 2XL</span>
-    <div class="card-qty">8</div>
-    <div class="card-bar"><div class="card-bar-fill" style="width: 80%"></div></div>
-    <div class="card-threshold">Seuil : 5</div>
-    <div class="card-meta">
-      <span>📍 E2</span>
-      <span>$25/u</span>
-      <span>$200</span>
+    <div class="variant warning">
+      <div class="variant-status">Bas</div>
+      <svg class="variant-icon"><use href="#i-shirt"/></svg>
+      <div class="variant-name">Chemise blanche</div>
+      <div class="variant-item">(MC)</div>
+      <div class="variant-size">TAILLE XL</div>
+      <div class="variant-qty">
+        <span class="num">5</span>
+        <span class="threshold">/ 10</span>
+      </div>
+      <div class="variant-bar"><div class="variant-bar-fill" style="width: 50%"></div></div>
+      <div class="variant-meta">
+        <span>B5 · $40/u</span>
+        <span>$200</span>
+      </div>
     </div>
-    <button class="card-action">⚙ Ajuster</button>
-  </div>
 
-  <div class="variant-card ok">
-    <div class="card-photo">⛑️</div>
-    <div class="card-name">Casque</div>
-    <div class="card-item">de sécurité</div>
-    <span class="card-size">UNIQUE</span>
-    <div class="card-qty">17</div>
-    <div class="card-bar"><div class="card-bar-fill" style="width: 100%"></div></div>
-    <div class="card-threshold">Seuil : 5</div>
-    <div class="card-meta">
-      <span>📍 F1</span>
-      <span>$35/u</span>
-      <span>$595</span>
+    <div class="variant warning">
+      <div class="variant-status">Bas</div>
+      <svg class="variant-icon"><use href="#i-pants"/></svg>
+      <div class="variant-name">Pantalon noir</div>
+      <div class="variant-item">militaire</div>
+      <div class="variant-size">TAILLE 38</div>
+      <div class="variant-qty">
+        <span class="num">2</span>
+        <span class="threshold">/ 5</span>
+      </div>
+      <div class="variant-bar"><div class="variant-bar-fill" style="width: 40%"></div></div>
+      <div class="variant-meta">
+        <span>A1 · $65/u</span>
+        <span>$130</span>
+      </div>
     </div>
-    <button class="card-action">⚙ Ajuster</button>
-  </div>
 
-  <div class="variant-card ok">
-    <div class="card-photo">👕</div>
-    <div class="card-name">Chemise grise</div>
-    <div class="card-item">(ML)</div>
-    <span class="card-size">TAILLE XL</span>
-    <div class="card-qty">15</div>
-    <div class="card-bar"><div class="card-bar-fill" style="width: 100%"></div></div>
-    <div class="card-threshold">Seuil : 10</div>
-    <div class="card-meta">
-      <span>📍 B4</span>
-      <span>$40/u</span>
-      <span>$600</span>
+    <div class="variant warning">
+      <div class="variant-status">Bas</div>
+      <svg class="variant-icon"><use href="#i-vest"/></svg>
+      <div class="variant-name">Chandail HV</div>
+      <div class="variant-item">(MC)</div>
+      <div class="variant-size">TAILLE 4XL</div>
+      <div class="variant-qty">
+        <span class="num">1</span>
+        <span class="threshold">/ 5</span>
+      </div>
+      <div class="variant-bar"><div class="variant-bar-fill" style="width: 20%"></div></div>
+      <div class="variant-meta">
+        <span>E2 · $25/u</span>
+        <span>$25</span>
+      </div>
     </div>
-    <button class="card-action">⚙ Ajuster</button>
-  </div>
 
-</div>
+    <div class="variant warning">
+      <div class="variant-status">Bas</div>
+      <svg class="variant-icon"><use href="#i-shirt"/></svg>
+      <div class="variant-name">Polo noir</div>
+      <div class="variant-item">&nbsp;</div>
+      <div class="variant-size">TAILLE 3XL</div>
+      <div class="variant-qty">
+        <span class="num">2</span>
+        <span class="threshold">/ 5</span>
+      </div>
+      <div class="variant-bar"><div class="variant-bar-fill" style="width: 40%"></div></div>
+      <div class="variant-meta">
+        <span>A3 · $35/u</span>
+        <span>$70</span>
+      </div>
+    </div>
+
+    <div class="variant ok">
+      <div class="variant-status">OK</div>
+      <svg class="variant-icon"><use href="#i-shirt"/></svg>
+      <div class="variant-name">Chemise grise</div>
+      <div class="variant-item">(ML)</div>
+      <div class="variant-size">TAILLE M</div>
+      <div class="variant-qty">
+        <span class="num">18</span>
+        <span class="threshold">/ 10</span>
+      </div>
+      <div class="variant-bar"><div class="variant-bar-fill" style="width: 100%"></div></div>
+      <div class="variant-meta">
+        <span>B4 · $40/u</span>
+        <span>$720</span>
+      </div>
+    </div>
+
+    <div class="variant ok">
+      <div class="variant-status">OK</div>
+      <svg class="variant-icon"><use href="#i-belt"/></svg>
+      <div class="variant-name">Ceinture</div>
+      <div class="variant-item">&nbsp;</div>
+      <div class="variant-size">TAILLE L</div>
+      <div class="variant-qty">
+        <span class="num">60</span>
+        <span class="threshold">/ 20</span>
+      </div>
+      <div class="variant-bar"><div class="variant-bar-fill" style="width: 100%"></div></div>
+      <div class="variant-meta">
+        <span>D2 · $25/u</span>
+        <span>$1 500</span>
+      </div>
+    </div>
+
+    <div class="variant ok">
+      <div class="variant-status">OK</div>
+      <svg class="variant-icon"><use href="#i-vest"/></svg>
+      <div class="variant-name">Chandail HV</div>
+      <div class="variant-item">(MC)</div>
+      <div class="variant-size">TAILLE 2XL</div>
+      <div class="variant-qty">
+        <span class="num">8</span>
+        <span class="threshold">/ 5</span>
+      </div>
+      <div class="variant-bar"><div class="variant-bar-fill" style="width: 100%"></div></div>
+      <div class="variant-meta">
+        <span>E2 · $25/u</span>
+        <span>$200</span>
+      </div>
+    </div>
+
+    <div class="variant ok">
+      <div class="variant-status">OK</div>
+      <svg class="variant-icon"><use href="#i-helmet"/></svg>
+      <div class="variant-name">Casque</div>
+      <div class="variant-item">de sécurité</div>
+      <div class="variant-size">UNIQUE</div>
+      <div class="variant-qty">
+        <span class="num">17</span>
+        <span class="threshold">/ 5</span>
+      </div>
+      <div class="variant-bar"><div class="variant-bar-fill" style="width: 100%"></div></div>
+      <div class="variant-meta">
+        <span>F1 · $35/u</span>
+        <span>$595</span>
+      </div>
+    </div>
+
+    <div class="variant ok">
+      <div class="variant-status">OK</div>
+      <svg class="variant-icon"><use href="#i-shirt"/></svg>
+      <div class="variant-name">Chemise grise</div>
+      <div class="variant-item">(ML)</div>
+      <div class="variant-size">TAILLE XL</div>
+      <div class="variant-qty">
+        <span class="num">15</span>
+        <span class="threshold">/ 10</span>
+      </div>
+      <div class="variant-bar"><div class="variant-bar-fill" style="width: 100%"></div></div>
+      <div class="variant-meta">
+        <span>B4 · $40/u</span>
+        <span>$600</span>
+      </div>
+    </div>
+
+  </div>
 
 </div>
 </body>

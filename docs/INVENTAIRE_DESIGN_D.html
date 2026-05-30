@@ -2,438 +2,579 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Inventaire — Design D : Dashboard alertes + liste compacte</title>
+<title>Inventaire — Design D</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --border-strong: #d6d3d1;
+    --text: #0c0a09;
+    --text-2: #44403c;
+    --text-3: #78716c;
+    --text-4: #a8a29e;
+    --accent: #0a0a0a;
+    --accent-soft: #f5f5f4;
+    --success: #16a34a;
+    --warning: #ca8a04;
+    --warning-bg: #fefce8;
+    --warning-border: #fef08a;
+    --danger: #dc2626;
+    --danger-bg: #fef2f2;
+    --danger-border: #fecaca;
+    --radius: 6px;
+    --radius-lg: 10px;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
-    background: #f3f4f6;
-    color: #1f2937;
-    padding: 24px;
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
     line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: 40px 32px;
+    font-feature-settings: 'cv11', 'ss01';
   }
-  .container { max-width: 1300px; margin: 0 auto; }
+  .num { font-variant-numeric: tabular-nums; }
+  .container { max-width: 1280px; margin: 0 auto; }
 
-  .design-banner {
-    background: #1e3a8a;
-    color: white;
-    padding: 14px 20px;
-    border-radius: 8px;
+  .label {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+  }
+  h1, h2, h3 { font-weight: 600; letter-spacing: -0.011em; color: var(--text); }
+  h1 { font-size: 24px; }
+  h2 { font-size: 15px; }
+
+  .page-header {
+    margin-bottom: 32px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+  .breadcrumb { font-size: 12px; color: var(--text-3); margin-bottom: 4px; }
+  .breadcrumb a { color: inherit; text-decoration: none; }
+  .meta-strip {
+    font-size: 12px;
+    color: var(--text-3);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .meta-strip .dot { width: 4px; height: 4px; background: var(--text-4); border-radius: 50%; }
+
+  .btn {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 14px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.1s;
+  }
+  .btn:hover { background: var(--accent-soft); }
+  .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn-danger { background: var(--danger); color: white; border-color: var(--danger); }
+  .btn-danger:hover { background: #b91c1c; }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
     margin-bottom: 24px;
+  }
+  .kpi { padding: 20px 24px; border-right: 1px solid var(--border); }
+  .kpi:last-child { border-right: none; }
+  .kpi .label { margin-bottom: 8px; }
+  .kpi .value { font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -0.02em; }
+  .kpi .delta { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+  .kpi .delta.up { color: var(--success); }
+  .kpi .delta.down { color: var(--danger); }
+  .kpi .value.muted { color: var(--text-3); }
+  .kpi .value.danger { color: var(--danger); }
+  .kpi .value.warning { color: var(--warning); }
+
+  /* PROMINENT action block (le focus de ce design) */
+  .action-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    margin-bottom: 24px;
+    overflow: hidden;
+    position: relative;
+  }
+  .action-block::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, var(--danger) 0%, var(--warning) 100%);
+  }
+  .action-block-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
-  .design-banner h1 { font-size: 18px; font-weight: 600; }
-
-  .kpi-row {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 12px;
-    margin-bottom: 24px;
-  }
-  .kpi {
-    background: white;
-    padding: 16px;
-    border-radius: 8px;
-    border: 1px solid #e5e7eb;
-    text-align: center;
-  }
-  .kpi .v { font-size: 24px; font-weight: 700; }
-  .kpi .l { font-size: 12px; color: #6b7280; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .kpi.warn .v { color: #d97706; }
-  .kpi.danger .v { color: #dc2626; }
-  .kpi.info .v { color: #2563eb; }
-
-  /* PROMINENT Action section */
-  .action-section {
-    background: white;
-    border-left: 6px solid #dc2626;
-    border-radius: 12px;
-    padding: 24px;
-    margin-bottom: 24px;
-    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.08);
-  }
-  .action-section h2 {
-    color: #1f2937;
-    font-size: 20px;
-    margin-bottom: 16px;
+  .action-block-header h2 {
+    font-size: 18px;
     display: flex;
     align-items: center;
     gap: 10px;
   }
-  .action-section h2 .pill {
-    background: #fee2e2;
-    color: #991b1b;
-    padding: 4px 12px;
-    border-radius: 12px;
+  .action-block-header .count {
     font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
+    color: var(--text-3);
+    font-weight: 400;
+    margin-left: 8px;
   }
 
   .action-group {
-    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
   }
-  .action-group:last-child { margin-bottom: 0; }
+  .action-group:last-child { border-bottom: none; }
   .action-group-title {
-    font-size: 13px;
-    font-weight: 700;
+    padding: 12px 24px;
+    background: var(--accent-soft);
+    font-size: 11px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 8px;
+    letter-spacing: 0.08em;
+    color: var(--text-2);
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
   }
-  .action-group.zero .action-group-title { color: #991b1b; }
-  .action-group.low .action-group-title { color: #92400e; }
+  .action-group-title .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .action-group.zero .action-group-title .dot { background: var(--danger); }
+  .action-group.low .action-group-title .dot { background: var(--warning); }
 
   .action-table {
     width: 100%;
     border-collapse: collapse;
   }
-  .action-table tr {
-    border-bottom: 1px solid #f3f4f6;
-  }
+  .action-table tr { border-bottom: 1px solid var(--border); }
   .action-table tr:last-child { border-bottom: none; }
+  .action-table tr:hover { background: var(--accent-soft); }
   .action-table td {
-    padding: 10px 8px;
+    padding: 14px 24px;
     vertical-align: middle;
   }
   .action-table .item-cell { width: 30%; }
-  .action-table .item-cell strong { display: block; font-size: 14px; }
-  .action-table .item-cell small { color: #6b7280; font-size: 11px; }
-  .action-table .stock-cell {
+  .action-table .item-cell .item {
+    font-weight: 500;
     font-size: 14px;
-    font-weight: 600;
-    width: 15%;
   }
-  .action-group.zero .stock-cell { color: #dc2626; }
-  .action-group.low .stock-cell { color: #d97706; }
-  .progress-cell { width: 30%; }
+  .action-table .item-cell .item span { color: var(--text-3); font-weight: 400; }
+  .action-table .item-cell .meta {
+    font-size: 12px;
+    color: var(--text-3);
+    margin-top: 2px;
+  }
+  .action-table .stock-cell {
+    width: 15%;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text-2);
+    font-variant-numeric: tabular-nums;
+  }
+  .action-table .stock-cell strong {
+    font-size: 16px;
+    color: var(--text);
+    font-weight: 600;
+    margin-right: 4px;
+  }
+  .action-group.zero .stock-cell strong { color: var(--danger); }
+  .action-group.low .stock-cell strong { color: var(--warning); }
+  .progress-cell { width: 25%; }
   .progress-bar {
-    height: 8px;
-    background: #e5e7eb;
-    border-radius: 4px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
     overflow: hidden;
   }
-  .progress-fill {
-    height: 100%;
-    border-radius: 4px;
+  .progress-fill { height: 100%; border-radius: 2px; }
+  .action-group.zero .progress-fill { background: var(--danger); }
+  .action-group.low .progress-fill { background: var(--warning); }
+  .progress-text {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
   }
-  .action-group.zero .progress-fill { background: #dc2626; }
-  .action-group.low .progress-fill { background: #f59e0b; }
-  .progress-text { font-size: 11px; color: #6b7280; margin-top: 2px; }
-  .action-table .loc-cell { font-size: 12px; color: #6b7280; }
-  .action-table .action-cell { width: 15%; text-align: right; }
-  .action-table button {
-    background: white;
-    border: 1px solid #d1d5db;
-    padding: 6px 14px;
-    border-radius: 6px;
+  .action-table .loc-cell {
     font-size: 12px;
-    cursor: pointer;
-    font-weight: 500;
+    color: var(--text-3);
+    width: 15%;
+    font-variant-numeric: tabular-nums;
   }
-  .action-group.zero button { background: #dc2626; color: white; border-color: #dc2626; }
-  .action-group.low button { background: #d97706; color: white; border-color: #d97706; }
+  .action-table .action-cell { text-align: right; width: 15%; }
 
-  /* Full inventory section */
+  /* Inventory section */
   .inventory-section {
-    background: white;
-    border-radius: 12px;
-    border: 1px solid #e5e7eb;
-    padding: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
   }
-  .inventory-section h2 {
-    font-size: 16px;
-    margin-bottom: 16px;
-    color: #1f2937;
-  }
-
-  .filters {
+  .inventory-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
     display: flex;
-    gap: 12px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
+    justify-content: space-between;
     align-items: center;
   }
-  .filters input, .filters select {
-    padding: 7px 12px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
+  .inventory-toolbar {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .search { flex: 1; position: relative; }
+  .search input {
+    width: 100%;
+    padding: 7px 12px 7px 32px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
     font-size: 13px;
     font-family: inherit;
   }
-  .filters input[type="search"] { flex: 1; min-width: 180px; }
-  .filters .export-btn {
-    margin-left: auto;
-    background: #2563eb;
-    color: white;
-    border: none;
-    padding: 7px 14px;
-    border-radius: 6px;
-    cursor: pointer;
+  .search input:focus {
+    outline: none;
+    border-color: var(--text);
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.04);
+  }
+  .search .icon {
+    position: absolute; left: 10px; top: 50%;
+    transform: translateY(-50%); color: var(--text-3);
+  }
+  .filter-chip {
+    padding: 5px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    background: var(--surface);
     font-size: 13px;
+    color: var(--text-2);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
 
-  .inventory-table {
+  .inv-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
   }
-  .inventory-table th {
-    background: #f9fafb;
-    padding: 10px 12px;
+  .inv-table th {
+    background: var(--accent-soft);
+    padding: 8px 16px;
     text-align: left;
-    font-size: 11px;
-    color: #6b7280;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 2px solid #e5e7eb;
-  }
-  .inventory-table th.right { text-align: right; }
-  .inventory-table td {
-    padding: 8px 12px;
-    border-bottom: 1px solid #f3f4f6;
-  }
-  .inventory-table tr:hover { background: #f9fafb; }
-  .inventory-table tr.alert { background: #fef2f2; }
-  .inventory-table tr.alert.low { background: #fffbeb; }
-  .inventory-table td.right { text-align: right; }
-  .inventory-table td.qty-cell {
+    font-size: 10px;
     font-weight: 600;
-    cursor: pointer;
-    border-radius: 4px;
-    padding: 4px 8px;
-    display: inline-block;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--border);
   }
-  .inventory-table td.qty-cell:hover { background: #dbeafe; }
-  .inventory-table .badge {
-    display: inline-block;
+  .inv-table th.right { text-align: right; }
+  .inv-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .inv-table td.right { text-align: right; font-variant-numeric: tabular-nums; }
+  .inv-table tr:hover { background: var(--accent-soft); }
+  .inv-table tr:last-child td { border-bottom: none; }
+  .inv-table .item-name { font-weight: 500; }
+  .inv-table .size-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: var(--accent-soft);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--text-2);
+  }
+  .inv-table .div-tag {
+    font-size: 11px;
+    color: var(--text-3);
+  }
+  .inv-table .badge {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
     padding: 2px 8px;
     border-radius: 10px;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
   }
-  .badge.ok { background: #d1fae5; color: #065f46; }
-  .badge.low { background: #fde68a; color: #92400e; }
-  .badge.zero { background: #fee2e2; color: #991b1b; }
-  .inventory-table .division-tag {
-    display: inline-block;
-    background: #eff6ff;
-    color: #1e3a8a;
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-weight: 600;
+  .badge .dot { width: 5px; height: 5px; border-radius: 50%; }
+  .badge.ok { background: var(--accent-soft); color: var(--text-3); }
+  .badge.ok .dot { background: var(--success); }
+  .badge.low { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-border); }
+  .badge.low .dot { background: var(--warning); }
+  .badge.zero { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border); }
+  .badge.zero .dot { background: var(--danger); }
+  .inv-pagination {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-3);
   }
+  .inv-pagination a { color: var(--text); }
 </style>
 </head>
 <body>
+
+<svg width="0" height="0" style="position:absolute;">
+  <defs>
+    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 2v8m-3-3l3 3 3-3M3 13h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 16 16"><path d="M8 1L1 14h14L8 1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6v3M8 11v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  </defs>
+</svg>
+
 <div class="container">
 
-<div class="design-banner">
-  <h1>📊 Inventaire — Design D : Dashboard alertes + liste compacte</h1>
-</div>
+  <header class="page-header">
+    <div>
+      <div class="breadcrumb">
+        <a href="#">Uniformes</a> &nbsp;/&nbsp; <span>Inventaire</span>
+      </div>
+      <h1 style="margin-top: 4px;">Inventaire</h1>
+      <div class="meta-strip" style="margin-top: 8px;">
+        <span>Vue action-first</span>
+        <span class="dot"></span>
+        <span>11 alertes ouvertes</span>
+      </div>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button class="btn"><svg width="14" height="14"><use href="#i-download"/></svg>Exporter</button>
+      <button class="btn btn-primary">Nouveau morceau</button>
+    </div>
+  </header>
 
-<div class="kpi-row">
-  <div class="kpi"><div class="v">2 750</div><div class="l">📦 Unités</div></div>
-  <div class="kpi info"><div class="v">$ 120 050</div><div class="l">💰 Valeur</div></div>
-  <div class="kpi warn"><div class="v">8</div><div class="l">⚠️ Bas</div></div>
-  <div class="kpi danger"><div class="v">3</div><div class="l">🔴 Zéro</div></div>
-  <div class="kpi info"><div class="v">12</div><div class="l">🧺 Lavage</div></div>
-</div>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="label">Unités</div><div class="value num">2 750</div><div class="delta up">+124 cette semaine</div></div>
+    <div class="kpi"><div class="label">Valeur</div><div class="value num">$120 050</div><div class="delta">$43.65 / unité</div></div>
+    <div class="kpi"><div class="label">En alerte</div><div class="value warning num">11</div><div class="delta down">+3 vs semaine</div></div>
+    <div class="kpi"><div class="label">À zéro</div><div class="value danger num">3</div><div class="delta">Action requise</div></div>
+    <div class="kpi"><div class="label">En lavage</div><div class="value muted num">12</div><div class="delta">2 lots actifs</div></div>
+  </div>
 
-<!-- BIG Action requise section (le focus principal du design) -->
-<div class="action-section">
-  <h2>
-    🚨 Action requise
-    <span class="pill">11 VARIANTES EN ALERTE</span>
-  </h2>
+  <!-- ACTION block — le cœur de ce design -->
+  <section class="action-block">
+    <div class="action-block-header">
+      <h2>
+        <svg width="16" height="16" style="color: var(--danger)"><use href="#i-alert"/></svg>
+        Action requise
+        <span class="count">· 11 variantes en alerte sur 178 total</span>
+      </h2>
+      <button class="btn btn-sm">Voir l'historique</button>
+    </div>
 
-  <div class="action-group zero">
-    <div class="action-group-title">🔴 Zéro stock (3) — Réapprovisionnement urgent</div>
-    <table class="action-table">
-      <tr>
-        <td class="item-cell">
-          <strong>Ceinture</strong>
-          <small>Taille unique · <span class="division-tag">Sécurité</span></small>
-        </td>
-        <td class="stock-cell">0 / 5</td>
-        <td class="progress-cell">
-          <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
-          <div class="progress-text">À zéro depuis 5 jours</div>
-        </td>
-        <td class="loc-cell">📍 D2 · $25/u</td>
-        <td class="action-cell"><button>Réapprovisionner</button></td>
-      </tr>
-      <tr>
-        <td class="item-cell">
-          <strong>Pantalon noir (militaire)</strong>
-          <small>Taille 40 · <span class="division-tag">Sécurité</span></small>
-        </td>
-        <td class="stock-cell">0 / 5</td>
-        <td class="progress-cell">
-          <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
-          <div class="progress-text">À zéro depuis 2 jours</div>
-        </td>
-        <td class="loc-cell">📍 A1 · $65/u</td>
-        <td class="action-cell"><button>Réapprovisionner</button></td>
-      </tr>
-      <tr>
-        <td class="item-cell">
-          <strong>Manteau (3 en 1)</strong>
-          <small>Taille 3XL · <span class="division-tag">Sécurité</span></small>
-        </td>
-        <td class="stock-cell">0 / 5</td>
-        <td class="progress-cell">
-          <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
-          <div class="progress-text">À zéro depuis 12 jours</div>
-        </td>
-        <td class="loc-cell">📍 C1 · $250/u</td>
-        <td class="action-cell"><button>Réapprovisionner</button></td>
-      </tr>
+    <div class="action-group zero">
+      <div class="action-group-title">
+        <span class="dot"></span>
+        À zéro — réapprovisionnement urgent (3)
+      </div>
+      <table class="action-table">
+        <tr>
+          <td class="item-cell">
+            <div class="item">Ceinture <span>· Unique</span></div>
+            <div class="meta">Sécurité · sortie il y a 5 jours</div>
+          </td>
+          <td class="stock-cell"><strong>0</strong>/ 5</td>
+          <td class="progress-cell">
+            <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
+            <div class="progress-text">À zéro depuis 5j</div>
+          </td>
+          <td class="loc-cell">D2 · $25/u</td>
+          <td class="action-cell"><button class="btn btn-sm btn-danger">Réapprovisionner</button></td>
+        </tr>
+        <tr>
+          <td class="item-cell">
+            <div class="item">Pantalon noir (militaire) <span>· 40</span></div>
+            <div class="meta">Sécurité · sortie il y a 2 jours</div>
+          </td>
+          <td class="stock-cell"><strong>0</strong>/ 5</td>
+          <td class="progress-cell">
+            <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
+            <div class="progress-text">À zéro depuis 2j</div>
+          </td>
+          <td class="loc-cell">A1 · $65/u</td>
+          <td class="action-cell"><button class="btn btn-sm btn-danger">Réapprovisionner</button></td>
+        </tr>
+        <tr>
+          <td class="item-cell">
+            <div class="item">Manteau (3 en 1) <span>· 3XL</span></div>
+            <div class="meta">Sécurité · sortie il y a 12 jours</div>
+          </td>
+          <td class="stock-cell"><strong>0</strong>/ 5</td>
+          <td class="progress-cell">
+            <div class="progress-bar"><div class="progress-fill" style="width: 0%"></div></div>
+            <div class="progress-text">À zéro depuis 12j</div>
+          </td>
+          <td class="loc-cell">C1 · $250/u</td>
+          <td class="action-cell"><button class="btn btn-sm btn-danger">Réapprovisionner</button></td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="action-group low">
+      <div class="action-group-title">
+        <span class="dot"></span>
+        Stock bas — sous le seuil (8)
+      </div>
+      <table class="action-table">
+        <tr>
+          <td class="item-cell">
+            <div class="item">Chemise grise (ML) <span>· L</span></div>
+            <div class="meta">Sécurité · ajustement il y a 3h</div>
+          </td>
+          <td class="stock-cell"><strong>4</strong>/ 10</td>
+          <td class="progress-cell">
+            <div class="progress-bar"><div class="progress-fill" style="width: 40%"></div></div>
+            <div class="progress-text">40% du seuil</div>
+          </td>
+          <td class="loc-cell">B4 · $40/u</td>
+          <td class="action-cell"><button class="btn btn-sm">Ajuster</button></td>
+        </tr>
+        <tr>
+          <td class="item-cell">
+            <div class="item">Chemise blanche (MC) <span>· XL</span></div>
+            <div class="meta">Sécurité · ajustement il y a 1j</div>
+          </td>
+          <td class="stock-cell"><strong>5</strong>/ 10</td>
+          <td class="progress-cell">
+            <div class="progress-bar"><div class="progress-fill" style="width: 50%"></div></div>
+            <div class="progress-text">50% du seuil</div>
+          </td>
+          <td class="loc-cell">B5 · $40/u</td>
+          <td class="action-cell"><button class="btn btn-sm">Ajuster</button></td>
+        </tr>
+        <tr>
+          <td class="item-cell">
+            <div class="item">Pantalon noir (militaire) <span>· 38</span></div>
+            <div class="meta">Sécurité · sortie il y a 6h</div>
+          </td>
+          <td class="stock-cell"><strong>2</strong>/ 5</td>
+          <td class="progress-cell">
+            <div class="progress-bar"><div class="progress-fill" style="width: 40%"></div></div>
+            <div class="progress-text">40% du seuil</div>
+          </td>
+          <td class="loc-cell">A1 · $65/u</td>
+          <td class="action-cell"><button class="btn btn-sm">Ajuster</button></td>
+        </tr>
+        <tr>
+          <td class="item-cell">
+            <div class="item">Chandail HV (MC) <span>· 4XL</span></div>
+            <div class="meta">Signalisation · ajustement il y a 4j</div>
+          </td>
+          <td class="stock-cell"><strong>1</strong>/ 5</td>
+          <td class="progress-cell">
+            <div class="progress-bar"><div class="progress-fill" style="width: 20%"></div></div>
+            <div class="progress-text">20% du seuil</div>
+          </td>
+          <td class="loc-cell">E2 · $25/u</td>
+          <td class="action-cell"><button class="btn btn-sm">Ajuster</button></td>
+        </tr>
+        <tr>
+          <td class="item-cell">
+            <div class="item">Polo noir <span>· 3XL</span></div>
+            <div class="meta">Sécurité · sortie il y a 4h</div>
+          </td>
+          <td class="stock-cell"><strong>2</strong>/ 5</td>
+          <td class="progress-cell">
+            <div class="progress-bar"><div class="progress-fill" style="width: 40%"></div></div>
+            <div class="progress-text">40% du seuil</div>
+          </td>
+          <td class="loc-cell">A3 · $35/u</td>
+          <td class="action-cell"><button class="btn btn-sm">Ajuster</button></td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- Liste compacte de tout l'inventaire -->
+  <section class="inventory-section">
+    <div class="inventory-header">
+      <h2>Tout l'inventaire <span style="color: var(--text-3); font-weight: 400;">· 178 variantes</span></h2>
+      <button class="btn btn-sm"><svg width="13" height="13"><use href="#i-download"/></svg> Exporter Excel</button>
+    </div>
+    <div class="inventory-toolbar">
+      <div class="search">
+        <svg class="icon" width="14" height="14"><use href="#i-search"/></svg>
+        <input placeholder="Rechercher morceau, taille, emplacement…">
+      </div>
+      <button class="filter-chip">Division <svg width="11" height="11"><use href="#i-chevron"/></svg></button>
+      <button class="filter-chip">État <svg width="11" height="11"><use href="#i-chevron"/></svg></button>
+      <button class="filter-chip">Tri : Alertes ↑ <svg width="11" height="11"><use href="#i-chevron"/></svg></button>
+    </div>
+
+    <table class="inv-table">
+      <thead>
+        <tr>
+          <th>Morceau</th>
+          <th>Taille</th>
+          <th>Division</th>
+          <th>Emplacement</th>
+          <th class="right">Stock</th>
+          <th class="right">Seuil</th>
+          <th>État</th>
+          <th class="right">Valeur</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="item-name">Ceinture</td><td><span class="size-tag">Unique</span></td><td><span class="div-tag">Sécurité</span></td><td class="div-tag">D2</td><td class="right num">0</td><td class="right num">5</td><td><span class="badge zero"><span class="dot"></span>Zéro</span></td><td class="right num">$ 0</td></tr>
+        <tr><td class="item-name">Pantalon noir (militaire)</td><td><span class="size-tag">40</span></td><td><span class="div-tag">Sécurité</span></td><td class="div-tag">A1</td><td class="right num">0</td><td class="right num">5</td><td><span class="badge zero"><span class="dot"></span>Zéro</span></td><td class="right num">$ 0</td></tr>
+        <tr><td class="item-name">Manteau (3 en 1)</td><td><span class="size-tag">3XL</span></td><td><span class="div-tag">Sécurité</span></td><td class="div-tag">C1</td><td class="right num">0</td><td class="right num">5</td><td><span class="badge zero"><span class="dot"></span>Zéro</span></td><td class="right num">$ 0</td></tr>
+        <tr><td class="item-name">Chandail HV (MC)</td><td><span class="size-tag">4XL</span></td><td><span class="div-tag">Signalisation</span></td><td class="div-tag">E2</td><td class="right num">1</td><td class="right num">5</td><td><span class="badge low"><span class="dot"></span>Bas</span></td><td class="right num">$ 25</td></tr>
+        <tr><td class="item-name">Pantalon noir (militaire)</td><td><span class="size-tag">38</span></td><td><span class="div-tag">Sécurité</span></td><td class="div-tag">A1</td><td class="right num">2</td><td class="right num">5</td><td><span class="badge low"><span class="dot"></span>Bas</span></td><td class="right num">$ 130</td></tr>
+        <tr><td class="item-name">Polo noir</td><td><span class="size-tag">3XL</span></td><td><span class="div-tag">Sécurité</span></td><td class="div-tag">A3</td><td class="right num">2</td><td class="right num">5</td><td><span class="badge low"><span class="dot"></span>Bas</span></td><td class="right num">$ 70</td></tr>
+        <tr><td class="item-name">Chemise grise (ML)</td><td><span class="size-tag">L</span></td><td><span class="div-tag">Sécurité</span></td><td class="div-tag">B4</td><td class="right num">4</td><td class="right num">10</td><td><span class="badge low"><span class="dot"></span>Bas</span></td><td class="right num">$ 160</td></tr>
+        <tr><td class="item-name">Chemise blanche (MC)</td><td><span class="size-tag">XL</span></td><td><span class="div-tag">Sécurité</span></td><td class="div-tag">B5</td><td class="right num">5</td><td class="right num">10</td><td><span class="badge low"><span class="dot"></span>Bas</span></td><td class="right num">$ 200</td></tr>
+        <tr><td class="item-name">Chemise blanche (MC)</td><td><span class="size-tag">2XL</span></td><td><span class="div-tag">Sécurité</span></td><td class="div-tag">B5</td><td class="right num">3</td><td class="right num">3</td><td><span class="badge ok"><span class="dot"></span>OK</span></td><td class="right num">$ 120</td></tr>
+        <tr><td class="item-name">Chandail HV (MC)</td><td><span class="size-tag">2XL</span></td><td><span class="div-tag">Signalisation</span></td><td class="div-tag">E2</td><td class="right num">8</td><td class="right num">5</td><td><span class="badge ok"><span class="dot"></span>OK</span></td><td class="right num">$ 200</td></tr>
+        <tr><td class="item-name">Casque de sécurité</td><td><span class="size-tag">Unique</span></td><td><span class="div-tag">Signalisation</span></td><td class="div-tag">F1</td><td class="right num">17</td><td class="right num">5</td><td><span class="badge ok"><span class="dot"></span>OK</span></td><td class="right num">$ 595</td></tr>
+        <tr><td class="item-name">Chemise grise (ML)</td><td><span class="size-tag">M</span></td><td><span class="div-tag">Sécurité</span></td><td class="div-tag">B4</td><td class="right num">18</td><td class="right num">10</td><td><span class="badge ok"><span class="dot"></span>OK</span></td><td class="right num">$ 720</td></tr>
+        <tr><td class="item-name">Polo noir</td><td><span class="size-tag">M</span></td><td><span class="div-tag">Sécurité</span></td><td class="div-tag">A3</td><td class="right num">18</td><td class="right num">10</td><td><span class="badge ok"><span class="dot"></span>OK</span></td><td class="right num">$ 630</td></tr>
+        <tr><td class="item-name">Polo noir</td><td><span class="size-tag">L</span></td><td><span class="div-tag">Sécurité</span></td><td class="div-tag">A3</td><td class="right num">22</td><td class="right num">10</td><td><span class="badge ok"><span class="dot"></span>OK</span></td><td class="right num">$ 770</td></tr>
+        <tr><td class="item-name">Ceinture</td><td><span class="size-tag">L</span></td><td><span class="div-tag">Sécurité</span></td><td class="div-tag">D2</td><td class="right num">60</td><td class="right num">20</td><td><span class="badge ok"><span class="dot"></span>OK</span></td><td class="right num">$ 1 500</td></tr>
+        <tr><td class="item-name">Ceinture</td><td><span class="size-tag">M</span></td><td><span class="div-tag">Sécurité</span></td><td class="div-tag">D2</td><td class="right num">60</td><td class="right num">20</td><td><span class="badge ok"><span class="dot"></span>OK</span></td><td class="right num">$ 1 500</td></tr>
+        <tr><td class="item-name">Ceinture</td><td><span class="size-tag">S</span></td><td><span class="div-tag">Sécurité</span></td><td class="div-tag">D2</td><td class="right num">61</td><td class="right num">20</td><td><span class="badge ok"><span class="dot"></span>OK</span></td><td class="right num">$ 1 525</td></tr>
+      </tbody>
     </table>
-  </div>
-
-  <div class="action-group low">
-    <div class="action-group-title">⚠️ Stock bas (8) — Sous le seuil de réapprovisionnement</div>
-    <table class="action-table">
-      <tr>
-        <td class="item-cell">
-          <strong>Chemise grise (ML)</strong>
-          <small>Taille L · <span class="division-tag">Sécurité</span></small>
-        </td>
-        <td class="stock-cell">4 / 10</td>
-        <td class="progress-cell">
-          <div class="progress-bar"><div class="progress-fill" style="width: 40%"></div></div>
-          <div class="progress-text">40% du seuil</div>
-        </td>
-        <td class="loc-cell">📍 B4 · $40/u</td>
-        <td class="action-cell"><button>Ajuster</button></td>
-      </tr>
-      <tr>
-        <td class="item-cell">
-          <strong>Chemise blanche (MC)</strong>
-          <small>Taille XL · <span class="division-tag">Sécurité</span></small>
-        </td>
-        <td class="stock-cell">5 / 10</td>
-        <td class="progress-cell">
-          <div class="progress-bar"><div class="progress-fill" style="width: 50%"></div></div>
-          <div class="progress-text">50% du seuil</div>
-        </td>
-        <td class="loc-cell">📍 B5 · $40/u</td>
-        <td class="action-cell"><button>Ajuster</button></td>
-      </tr>
-      <tr>
-        <td class="item-cell">
-          <strong>Pantalon noir (militaire)</strong>
-          <small>Taille 38 · <span class="division-tag">Sécurité</span></small>
-        </td>
-        <td class="stock-cell">2 / 5</td>
-        <td class="progress-cell">
-          <div class="progress-bar"><div class="progress-fill" style="width: 40%"></div></div>
-          <div class="progress-text">40% du seuil</div>
-        </td>
-        <td class="loc-cell">📍 A1 · $65/u</td>
-        <td class="action-cell"><button>Ajuster</button></td>
-      </tr>
-      <tr>
-        <td class="item-cell">
-          <strong>Chandail HV (MC)</strong>
-          <small>Taille 4XL · <span class="division-tag">Signalisation</span></small>
-        </td>
-        <td class="stock-cell">1 / 5</td>
-        <td class="progress-cell">
-          <div class="progress-bar"><div class="progress-fill" style="width: 20%"></div></div>
-          <div class="progress-text">20% du seuil</div>
-        </td>
-        <td class="loc-cell">📍 E2 · $25/u</td>
-        <td class="action-cell"><button>Ajuster</button></td>
-      </tr>
-      <tr>
-        <td class="item-cell">
-          <strong>Polo noir</strong>
-          <small>Taille 3XL · <span class="division-tag">Sécurité</span></small>
-        </td>
-        <td class="stock-cell">2 / 5</td>
-        <td class="progress-cell">
-          <div class="progress-bar"><div class="progress-fill" style="width: 40%"></div></div>
-          <div class="progress-text">40% du seuil</div>
-        </td>
-        <td class="loc-cell">📍 A3 · $35/u</td>
-        <td class="action-cell"><button>Ajuster</button></td>
-      </tr>
-    </table>
-  </div>
-</div>
-
-<!-- Full inventory list -->
-<div class="inventory-section">
-  <h2>📋 Tout l'inventaire — vue compacte (200 variantes)</h2>
-  <div class="filters">
-    <input type="search" placeholder="🔍 Rechercher morceau, taille, emplacement...">
-    <select>
-      <option>Division : Toutes</option>
-      <option>Sécurité</option>
-      <option>Signalisation</option>
-    </select>
-    <select>
-      <option>État : Tous</option>
-      <option>Stock OK</option>
-      <option>Bas</option>
-      <option>Zéro</option>
-    </select>
-    <select>
-      <option>Tri : Alertes en premier</option>
-      <option>Tri : Nom A-Z</option>
-      <option>Tri : Quantité ↑</option>
-    </select>
-    <button class="export-btn">📥 Exporter Excel</button>
-  </div>
-
-  <table class="inventory-table">
-    <thead>
-      <tr>
-        <th>Morceau</th>
-        <th>Taille</th>
-        <th>Division</th>
-        <th>Emplacement</th>
-        <th class="right">Stock</th>
-        <th class="right">Seuil</th>
-        <th>État</th>
-        <th class="right">Valeur</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr class="alert"><td>Ceinture</td><td>Unique</td><td><span class="division-tag">Sécurité</span></td><td>📍 D2</td><td class="right"><span class="qty-cell">0</span></td><td class="right">5</td><td><span class="badge zero">🔴 Zéro</span></td><td class="right">$ 0</td></tr>
-      <tr class="alert"><td>Pantalon noir (militaire)</td><td>40</td><td><span class="division-tag">Sécurité</span></td><td>📍 A1</td><td class="right"><span class="qty-cell">0</span></td><td class="right">5</td><td><span class="badge zero">🔴 Zéro</span></td><td class="right">$ 0</td></tr>
-      <tr class="alert"><td>Manteau (3 en 1)</td><td>3XL</td><td><span class="division-tag">Sécurité</span></td><td>📍 C1</td><td class="right"><span class="qty-cell">0</span></td><td class="right">5</td><td><span class="badge zero">🔴 Zéro</span></td><td class="right">$ 0</td></tr>
-      <tr class="alert low"><td>Chandail HV (MC)</td><td>4XL</td><td><span class="division-tag">Signalisation</span></td><td>📍 E2</td><td class="right"><span class="qty-cell">1</span></td><td class="right">5</td><td><span class="badge low">⚠️ Bas</span></td><td class="right">$ 25</td></tr>
-      <tr class="alert low"><td>Pantalon noir (militaire)</td><td>38</td><td><span class="division-tag">Sécurité</span></td><td>📍 A1</td><td class="right"><span class="qty-cell">2</span></td><td class="right">5</td><td><span class="badge low">⚠️ Bas</span></td><td class="right">$ 130</td></tr>
-      <tr class="alert low"><td>Polo noir</td><td>3XL</td><td><span class="division-tag">Sécurité</span></td><td>📍 A3</td><td class="right"><span class="qty-cell">2</span></td><td class="right">5</td><td><span class="badge low">⚠️ Bas</span></td><td class="right">$ 70</td></tr>
-      <tr class="alert low"><td>Chemise grise (ML)</td><td>L</td><td><span class="division-tag">Sécurité</span></td><td>📍 B4</td><td class="right"><span class="qty-cell">4</span></td><td class="right">10</td><td><span class="badge low">⚠️ Bas</span></td><td class="right">$ 160</td></tr>
-      <tr class="alert low"><td>Chemise blanche (MC)</td><td>XL</td><td><span class="division-tag">Sécurité</span></td><td>📍 B5</td><td class="right"><span class="qty-cell">5</span></td><td class="right">10</td><td><span class="badge low">⚠️ Bas</span></td><td class="right">$ 200</td></tr>
-      <tr><td>Chemise blanche (MC)</td><td>2XL</td><td><span class="division-tag">Sécurité</span></td><td>📍 B5</td><td class="right"><span class="qty-cell">3</span></td><td class="right">3</td><td><span class="badge ok">🟢 OK</span></td><td class="right">$ 120</td></tr>
-      <tr><td>Casque de sécurité</td><td>Unique</td><td><span class="division-tag">Signalisation</span></td><td>📍 F1</td><td class="right"><span class="qty-cell">17</span></td><td class="right">5</td><td><span class="badge ok">🟢 OK</span></td><td class="right">$ 595</td></tr>
-      <tr><td>Chandail HV (MC)</td><td>2XL</td><td><span class="division-tag">Signalisation</span></td><td>📍 E2</td><td class="right"><span class="qty-cell">8</span></td><td class="right">5</td><td><span class="badge ok">🟢 OK</span></td><td class="right">$ 200</td></tr>
-      <tr><td>Chemise grise (ML)</td><td>S</td><td><span class="division-tag">Sécurité</span></td><td>📍 B4</td><td class="right"><span class="qty-cell">12</span></td><td class="right">10</td><td><span class="badge ok">🟢 OK</span></td><td class="right">$ 480</td></tr>
-      <tr><td>Chemise grise (ML)</td><td>M</td><td><span class="division-tag">Sécurité</span></td><td>📍 B4</td><td class="right"><span class="qty-cell">18</span></td><td class="right">10</td><td><span class="badge ok">🟢 OK</span></td><td class="right">$ 720</td></tr>
-      <tr><td>Ceinture</td><td>L</td><td><span class="division-tag">Sécurité</span></td><td>📍 D2</td><td class="right"><span class="qty-cell">60</span></td><td class="right">20</td><td><span class="badge ok">🟢 OK</span></td><td class="right">$ 1 500</td></tr>
-      <tr><td>Ceinture</td><td>M</td><td><span class="division-tag">Sécurité</span></td><td>📍 D2</td><td class="right"><span class="qty-cell">60</span></td><td class="right">20</td><td><span class="badge ok">🟢 OK</span></td><td class="right">$ 1 500</td></tr>
-      <tr><td>Ceinture</td><td>S</td><td><span class="division-tag">Sécurité</span></td><td>📍 D2</td><td class="right"><span class="qty-cell">61</span></td><td class="right">20</td><td><span class="badge ok">🟢 OK</span></td><td class="right">$ 1 525</td></tr>
-      <tr><td>Polo noir</td><td>M</td><td><span class="division-tag">Sécurité</span></td><td>📍 A3</td><td class="right"><span class="qty-cell">18</span></td><td class="right">10</td><td><span class="badge ok">🟢 OK</span></td><td class="right">$ 630</td></tr>
-      <tr><td>Polo noir</td><td>L</td><td><span class="division-tag">Sécurité</span></td><td>📍 A3</td><td class="right"><span class="qty-cell">22</span></td><td class="right">10</td><td><span class="badge ok">🟢 OK</span></td><td class="right">$ 770</td></tr>
-    </tbody>
-  </table>
-  <div style="padding: 12px 0 0; text-align: center; font-size: 12px; color: #6b7280;">
-    Affichage 1-18 sur 200 · <a href="#" style="color: #2563eb;">Voir tout</a>
-  </div>
-</div>
+    <div class="inv-pagination">
+      Affichage 1–17 sur 178 &nbsp;·&nbsp; <a href="#">Charger plus</a>
+    </div>
+  </section>
 
 </div>
 </body>
