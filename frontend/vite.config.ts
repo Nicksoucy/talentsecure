@@ -60,6 +60,23 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       sourcemap: true,
+      // O5 — sépare les gros vendors (recharts/d3, MUI) dans leurs propres
+      // chunks pour un meilleur cache navigateur (ils changent rarement). On ne
+      // touche pas à react lui-même pour éviter tout souci d'ordre de chargement.
+      rollupOptions: {
+        output: {
+          manualChunks(id: string) {
+            if (!id.includes('node_modules')) return;
+            if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-vendor')) {
+              return 'vendor-charts';
+            }
+            if (id.includes('@mui') || id.includes('@emotion')) {
+              return 'vendor-mui';
+            }
+            return undefined;
+          },
+        },
+      },
     },
   };
 });
