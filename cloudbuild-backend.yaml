@@ -62,6 +62,17 @@ steps:
       # V2 — min-instances=1 nécessaire pour faire tourner node-cron (scheduler)
       # in-process : sans cela Cloud Run scale-down détruit les jobs.
       - '--min-instances=1'
+      # O3 — réglages de capacité explicites (avant : valeurs par défaut) :
+      #  - memory 1Gi (def. 512Mi) : marge pour exports CSV/ZIP + génération PDF.
+      #  - cpu 1 : explicite.
+      #  - concurrency 40 (def. 80) : réduit la pression sur le pool de connexions Neon.
+      #  - max-instances 10 : plafonne le scaling (coût + connexions DB).
+      #  - timeout 600s (def. 300s) : aligne sur les exports longs (ZIP CV, PDF catalogue).
+      - '--memory=1Gi'
+      - '--cpu=1'
+      - '--concurrency=40'
+      - '--max-instances=10'
+      - '--timeout=600'
       # V2 — destinataires email pour les notifications (RH, paie, fin d'emploi, etc.)
       # Non-sensibles : on les met en clair via --update-env-vars (préserve les autres envs).
       - '--update-env-vars=EMAIL_RH=rh@xguard.ca,EMAIL_PAIE=paie@xguard.ca,EMAIL_PROVIDER=ghl'

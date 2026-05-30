@@ -501,39 +501,64 @@ export const generateCataloguePDF = async (
     // If includeCV is true, merge CVs
     let finalPdfBuffer: Buffer;
     if (catalogue.includeCV) {
-      // Collect CV paths
-      const cvPaths: string[] = [];
-      for (const item of catalogue.items) {
-        const candidate = item.candidate;
-        if (candidate && candidate.cvStoragePath) {
-          if (useR2 && candidate.cvStoragePath.startsWith('cvs/')) {
-            // CV is on R2 - download it to temp
-            try {
-              const signedUrl = await getSignedFileUrl(candidate.cvStoragePath, 3600);
-              const response = await axios.get(signedUrl, { responseType: 'arraybuffer' });
+      // O2 — Récupère les CV EN PARALLÈLE (concurrence bornée) au lieu de
+      // séquentiellement (~1 s par CV R2). L'ordre du catalogue est préservé
+      // via un tableau indexé.
+      const CV_DOWNLOAD_CONCURRENCY = 6;
 
-              // Save to temp file
-              const tempCvPath = path.join(tempDir, `cv_${item.id}_${Date.now()}.pdf`);
-              fs.writeFileSync(tempCvPath, response.data);
-              cvPaths.push(tempCvPath);
-              tempCvPaths.push(tempCvPath);
-            } catch (error) {
-              logger.error('Catalogue: failed to download CV from R2', {
-                candidateId: candidate.id,
-                firstName: candidate.firstName,
-                lastName: candidate.lastName,
-                error: error instanceof Error ? error.message : String(error),
-              });
-            }
-          } else {
-            // CV is local
-            const cvPath = path.join(__dirname, '../../', candidate.cvStoragePath);
-            if (fs.existsSync(cvPath)) {
-              cvPaths.push(cvPath);
-            }
+      const cvSources = catalogue.items
+        .map((item) => {
+          const candidate = item.candidate;
+          if (!candidate || !candidate.cvStoragePath) return null;
+          return { itemId: item.id, candidate, storagePath: candidate.cvStoragePath as string };
+        })
+        .filter((x): x is { itemId: string; candidate: any; storagePath: string } => x !== null);
+
+      // Résout chaque CV à sa position d'origine (null si absent/échec).
+      const resolvedCvPaths: (string | null)[] = new Array(cvSources.length).fill(null);
+
+      const resolveCv = async (idx: number) => {
+        const { itemId, candidate, storagePath } = cvSources[idx];
+        if (useR2 && storagePath.startsWith('cvs/')) {
+          // CV sur R2 — téléchargé vers un fichier temporaire.
+          try {
+            const signedUrl = await getSignedFileUrl(storagePath, 3600);
+            const response = await axios.get(signedUrl, { responseType: 'arraybuffer' });
+            const tempCvPath = path.join(tempDir, `cv_${itemId}_${Date.now()}_${idx}.pdf`);
+            fs.writeFileSync(tempCvPath, response.data);
+            tempCvPaths.push(tempCvPath);
+            resolvedCvPaths[idx] = tempCvPath;
+          } catch (error) {
+            logger.error('Catalogue: failed to download CV from R2', {
+              candidateId: candidate.id,
+              firstName: candidate.firstName,
+              lastName: candidate.lastName,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        } else {
+          // CV local
+          const cvPath = path.join(__dirname, '../../', storagePath);
+          if (fs.existsSync(cvPath)) {
+            resolvedCvPaths[idx] = cvPath;
           }
         }
-      }
+      };
+
+      // Pool à concurrence bornée (évite d'ouvrir N téléchargements R2 d'un coup).
+      let cvCursor = 0;
+      const cvWorkers = Array.from(
+        { length: Math.min(CV_DOWNLOAD_CONCURRENCY, cvSources.length) },
+        async () => {
+          while (cvCursor < cvSources.length) {
+            const idx = cvCursor++;
+            await resolveCv(idx);
+          }
+        }
+      );
+      await Promise.all(cvWorkers);
+
+      const cvPaths = resolvedCvPaths.filter((p): p is string => p !== null);
 
       // Merge CVs if any exist
       if (cvPaths.length > 0) {

@@ -1,6 +1,9 @@
 import { prisma } from '../config/database';
 import { Prisma } from '@prisma/client';
 
+// O1 — plafond du nombre de lignes exportées d'un coup (sécurité mémoire/timeout).
+const EXPORT_ROW_CAP = 5000;
+
 interface CandidateFilters {
     search?: string;
     status?: string;
@@ -404,6 +407,9 @@ export class CandidateService {
 
         const candidates = await prisma.candidate.findMany({
             where,
+            // O1 — plafond de sécurité : évite de charger toute la table en mémoire
+            // (risque OOM/timeout Cloud Run sur de très gros exports).
+            take: EXPORT_ROW_CAP,
             select: {
                 id: true, firstName: true, lastName: true, email: true, phone: true,
                 city: true, province: true, postalCode: true, status: true,
