@@ -1,609 +1,788 @@
 <!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<title>Inventaire — Design C</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+
+<html class="light" lang="fr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>TalentSecure | Inventaire — Variant Gallery</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@450;600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;display=swap" rel="stylesheet"/>
 <style>
-  :root {
-    --bg: #fafaf9;
-    --surface: #ffffff;
-    --border: #e7e5e4;
-    --border-strong: #d6d3d1;
-    --text: #0c0a09;
-    --text-2: #44403c;
-    --text-3: #78716c;
-    --text-4: #a8a29e;
-    --accent: #0a0a0a;
-    --accent-soft: #f5f5f4;
-    --success: #16a34a;
-    --warning: #ca8a04;
-    --warning-bg: #fefce8;
-    --warning-border: #fef08a;
-    --danger: #dc2626;
-    --danger-bg: #fef2f2;
-    --danger-border: #fecaca;
-    --radius: 6px;
-    --radius-lg: 10px;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: 'Inter', -apple-system, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    font-size: 14px;
-    line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
-    padding: 40px 32px;
-    font-feature-settings: 'cv11', 'ss01';
-  }
-  .num { font-variant-numeric: tabular-nums; }
-  .container { max-width: 1280px; margin: 0 auto; }
-
-  .label {
-    font-size: 11px;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-3);
-  }
-  h1, h2, h3 { font-weight: 600; letter-spacing: -0.011em; color: var(--text); }
-  h1 { font-size: 24px; }
-  h2 { font-size: 15px; }
-
-  .page-header {
-    margin-bottom: 32px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-  }
-  .breadcrumb { font-size: 12px; color: var(--text-3); margin-bottom: 4px; }
-  .breadcrumb a { color: inherit; text-decoration: none; }
-  .meta-strip {
-    font-size: 12px;
-    color: var(--text-3);
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-  .meta-strip .dot { width: 4px; height: 4px; background: var(--text-4); border-radius: 50%; }
-
-  .btn {
-    font-family: inherit;
-    font-size: 13px;
-    font-weight: 500;
-    padding: 7px 14px;
-    border-radius: var(--radius);
-    border: 1px solid var(--border-strong);
-    background: var(--surface);
-    color: var(--text);
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.1s;
-  }
-  .btn:hover { background: var(--accent-soft); }
-  .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
-  .btn-sm { padding: 4px 10px; font-size: 12px; }
-
-  .kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    margin-bottom: 24px;
-  }
-  .kpi { padding: 20px 24px; border-right: 1px solid var(--border); }
-  .kpi:last-child { border-right: none; }
-  .kpi .label { margin-bottom: 8px; }
-  .kpi .value { font-size: 28px; font-weight: 600; line-height: 1.1; letter-spacing: -0.02em; }
-  .kpi .delta { font-size: 12px; color: var(--text-3); margin-top: 4px; }
-  .kpi .delta.up { color: var(--success); }
-  .kpi .delta.down { color: var(--danger); }
-  .kpi .value.muted { color: var(--text-3); }
-  .kpi .value.danger { color: var(--danger); }
-  .kpi .value.warning { color: var(--warning); }
-
-  .alert-section {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    margin-bottom: 24px;
-    overflow: hidden;
-  }
-  .alert-header {
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .alert-header h2 { display: flex; align-items: center; gap: 10px; }
-  .alert-pill {
-    font-size: 11px;
-    font-weight: 500;
-    background: var(--danger-bg);
-    color: var(--danger);
-    padding: 2px 8px;
-    border-radius: 12px;
-    border: 1px solid var(--danger-border);
-  }
-  .alert-list {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1px;
-    background: var(--border);
-  }
-  .alert-row {
-    background: var(--surface);
-    padding: 12px 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .alert-row .info { display: flex; align-items: center; gap: 12px; }
-  .alert-row .status-icon { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .alert-row .status-icon.zero { background: var(--danger); }
-  .alert-row .status-icon.low { background: var(--warning); }
-  .alert-row .item { font-weight: 500; font-size: 13px; }
-  .alert-row .item span { color: var(--text-3); font-weight: 400; }
-  .alert-row .ratio {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    color: var(--text-3);
-    margin-top: 2px;
-  }
-
-  .toolbar {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 20px;
-    align-items: center;
-  }
-  .search { flex: 1; position: relative; }
-  .search input {
-    width: 100%;
-    padding: 8px 12px 8px 34px;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
-    font-size: 13px;
-    font-family: inherit;
-    background: var(--surface);
-    color: var(--text);
-  }
-  .search input:focus {
-    outline: none;
-    border-color: var(--text);
-    box-shadow: 0 0 0 3px rgba(0,0,0,0.04);
-  }
-  .search .icon {
-    position: absolute; left: 10px; top: 50%;
-    transform: translateY(-50%); color: var(--text-3);
-  }
-  .filter-chip {
-    padding: 6px 12px;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
-    background: var(--surface);
-    font-size: 13px;
-    color: var(--text-2);
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .filter-chip:hover { background: var(--accent-soft); }
-
-  /* Variant gallery */
-  .variant-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 12px;
-  }
-  .variant {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 20px;
-    transition: border-color 0.1s, transform 0.1s;
-    cursor: pointer;
-    position: relative;
-  }
-  .variant:hover { border-color: var(--text-3); transform: translateY(-2px); }
-  .variant.warning { border-color: var(--warning-border); }
-  .variant.danger { border-color: var(--danger-border); }
-
-  .variant-status {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    font-size: 9px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    padding: 3px 8px;
-    border-radius: 12px;
-  }
-  .variant.ok .variant-status { background: var(--accent-soft); color: var(--text-3); }
-  .variant.warning .variant-status { background: var(--warning-bg); color: var(--warning); }
-  .variant.danger .variant-status { background: var(--danger-bg); color: var(--danger); }
-
-  .variant-icon {
-    width: 36px;
-    height: 36px;
-    color: var(--text-3);
-    margin-bottom: 16px;
-  }
-  .variant-name {
-    font-size: 13px;
-    color: var(--text-3);
-    margin-bottom: 1px;
-  }
-  .variant-item {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text);
-  }
-  .variant-size {
-    margin-top: 8px;
-    display: inline-block;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    background: var(--accent-soft);
-    color: var(--text-2);
-    padding: 2px 8px;
-    border-radius: 4px;
-    letter-spacing: 0.04em;
-  }
-
-  .variant-qty {
-    margin-top: 16px;
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-  }
-  .variant-qty .num {
-    font-size: 36px;
-    font-weight: 600;
-    line-height: 1;
-    letter-spacing: -0.03em;
-  }
-  .variant.warning .variant-qty .num { color: var(--warning); }
-  .variant.danger .variant-qty .num { color: var(--danger); }
-  .variant-qty .threshold {
-    font-size: 12px;
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .variant-bar {
-    margin-top: 8px;
-    height: 3px;
-    background: var(--border);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-  .variant-bar-fill { height: 100%; background: var(--text); }
-  .variant.warning .variant-bar-fill { background: var(--warning); }
-  .variant.danger .variant-bar-fill { background: var(--danger); }
-
-  .variant-meta {
-    margin-top: 14px;
-    padding-top: 12px;
-    border-top: 1px solid var(--border);
-    display: flex;
-    justify-content: space-between;
-    font-size: 12px;
-    color: var(--text-3);
-    font-variant-numeric: tabular-nums;
-  }
-</style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 200, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body {
+            background-color: #fdf8f8;
+            color: #1c1b1b;
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .tabular-nums {
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary-container": "#1c1b1b",
+                    "on-primary-fixed-variant": "#474646",
+                    "surface-container-lowest": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "primary": "#000000",
+                    "error-container": "#ffdad6",
+                    "on-secondary-container": "#68635f",
+                    "on-tertiary-container": "#868381",
+                    "on-secondary-fixed": "#1e1b18",
+                    "tertiary-fixed-dim": "#cac6c3",
+                    "secondary-fixed": "#e9e1db",
+                    "primary-fixed-dim": "#c9c6c5",
+                    "on-tertiary": "#ffffff",
+                    "outline": "#747878",
+                    "on-surface-variant": "#444748",
+                    "primary-fixed": "#e5e2e1",
+                    "on-error-container": "#93000a",
+                    "surface-bright": "#fdf8f8",
+                    "inverse-primary": "#c9c6c5",
+                    "inverse-on-surface": "#f4f0ef",
+                    "surface-dim": "#ddd9d8",
+                    "tertiary-fixed": "#e6e1df",
+                    "on-secondary": "#ffffff",
+                    "on-background": "#1c1b1b",
+                    "tertiary-container": "#1d1b1a",
+                    "on-tertiary-fixed-variant": "#484645",
+                    "surface-container-low": "#f7f3f2",
+                    "on-primary-fixed": "#1c1b1b",
+                    "surface-tint": "#5f5e5e",
+                    "outline-variant": "#c4c7c7",
+                    "on-secondary-fixed-variant": "#4a4642",
+                    "surface-variant": "#e5e2e1",
+                    "secondary-container": "#e9e1db",
+                    "on-surface": "#1c1b1b",
+                    "surface-container-high": "#ebe7e6",
+                    "surface-container": "#f1edec",
+                    "error": "#ba1a1a",
+                    "secondary-fixed-dim": "#ccc5c0",
+                    "background": "#fdf8f8",
+                    "tertiary": "#000000",
+                    "on-error": "#ffffff",
+                    "surface-container-highest": "#e5e2e1",
+                    "inverse-surface": "#313030",
+                    "surface": "#fdf8f8",
+                    "secondary": "#625e59",
+                    "on-tertiary-fixed": "#1d1b1a",
+                    "on-primary-container": "#858383"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "container-padding": "24px",
+                    "element-gap": "12px",
+                    "unit": "4px",
+                    "section-gap": "48px",
+                    "gutter": "16px"
+            },
+            "fontFamily": {
+                    "body-md": ["Inter"],
+                    "mono-data": ["JetBrains Mono"],
+                    "headline-lg-mobile": ["Inter"],
+                    "headline-md": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "display": ["Inter"],
+                    "label-caps": ["Inter"]
+            },
+            "fontSize": {
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "mono-data": ["13px", {"lineHeight": "18px", "fontWeight": "450"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "500"}],
+                    "headline-lg": ["30px", {"lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "display": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                    "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.06em", "fontWeight": "500"}]
+            }
+          },
+        },
+      }
+    </script>
 </head>
-<body>
+<body class="bg-surface text-on-surface">
+<!-- Sidebar Navigation Shell -->
+<aside class="hidden md:flex flex-col h-screen w-64 fixed left-0 top-0 bg-surface-container-low border-r border-outline-variant p-gutter gap-element-gap z-50">
+<div class="flex items-center gap-3 mb-8 px-2">
+<div class="w-8 h-8 bg-primary rounded flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 500;">security</span>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md font-bold text-primary">TalentSecure</h2>
+<p class="text-[10px] text-on-surface-variant tracking-wider uppercase">Security Staffing Pro</p>
+</div>
+</div>
+<nav class="flex flex-col gap-1 flex-grow">
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant transition-colors rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">dashboard</span> Overview
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 bg-primary text-on-primary rounded-lg font-body-md text-body-md font-semibold" href="#">
+<span class="material-symbols-outlined">inventory_2</span> Inventory
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant transition-colors rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">local_shipping</span> Shipments
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant transition-colors rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">group</span> Suppliers
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant transition-colors rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">analytics</span> Reports
+            </a>
+</nav>
+<div class="mt-auto flex flex-col gap-1 border-t border-outline-variant pt-4">
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant transition-colors rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">help</span> Support
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant transition-colors rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">settings</span> Settings
+            </a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 min-h-screen px-section-gap py-gutter max-w-[1280px]">
+<!-- Header Section -->
+<header class="mb-section-gap">
+<div class="flex items-center gap-2 text-[#78716c] font-body-md text-[13px] mb-2">
+<span>Uniformes</span>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+<span>Inventaire</span>
+</div>
+<div class="flex justify-between items-end">
+<div>
+<h1 class="font-headline-lg text-headline-lg font-semibold tracking-tight text-primary mb-1">Inventaire</h1>
+<p class="text-on-surface-variant font-body-md text-body-md">
+                        Updated 12 min ago · 22 items · 178 active variants
+                    </p>
+</div>
+<div class="flex gap-3">
+<button class="px-4 py-2 border border-outline-variant text-primary font-body-md text-body-md rounded-lg hover:bg-surface-container transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined">ios_share</span> Export
+                    </button>
+<button class="px-4 py-2 bg-[#0a0a0a] text-white font-body-md text-body-md font-medium rounded-lg hover:opacity-90 transition-opacity flex items-center gap-2">
+<span class="material-symbols-outlined">add</span> New item
+                    </button>
+</div>
+</div>
+</header>
+<!-- KPI Strip -->
+<div class="grid grid-cols-5 border border-outline-variant bg-surface-container-lowest divide-x divide-outline-variant rounded-xl overflow-hidden mb-section-gap">
+<div class="p-gutter">
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-2 uppercase tracking-[0.06em]">Units in stock</p>
+<div class="flex items-baseline gap-2">
+<span class="font-mono-data text-[28px] font-semibold tabular-nums">2,750</span>
+<span class="text-[12px] font-medium text-green-600">+124</span>
+</div>
+</div>
+<div class="p-gutter">
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-2 uppercase tracking-[0.06em]">Inventory value</p>
+<div class="flex items-baseline gap-2">
+<span class="font-mono-data text-[28px] font-semibold tabular-nums">$120,050</span>
+</div>
+<p class="text-[11px] text-on-tertiary-container">$43.65 per unit avg</p>
+</div>
+<div class="p-gutter">
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-2 uppercase tracking-[0.06em]">Low stock</p>
+<div class="flex items-baseline gap-2">
+<span class="font-mono-data text-[28px] font-semibold tabular-nums">11</span>
+<span class="text-[12px] font-medium text-red-600">+3</span>
+</div>
+</div>
+<div class="p-gutter">
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-2 uppercase tracking-[0.06em]">Out of stock</p>
+<div class="flex items-baseline gap-2">
+<span class="font-mono-data text-[28px] font-semibold tabular-nums text-red-600">3</span>
+</div>
+<p class="text-[11px] text-on-tertiary-container uppercase">Reorder required</p>
+</div>
+<div class="p-gutter">
+<p class="font-label-caps text-label-caps text-on-surface-variant mb-2 uppercase tracking-[0.06em]">In washing</p>
+<div class="flex items-baseline gap-2">
+<span class="font-mono-data text-[28px] font-semibold tabular-nums">12</span>
+</div>
+<p class="text-[11px] text-on-tertiary-container">2 active batches</p>
+</div>
+</div>
+<!-- Action Required Section -->
+<section class="mb-section-gap bg-surface-container-lowest border border-outline-variant border-l-[3px] border-l-[#dc2626] rounded-xl overflow-hidden">
+<div class="px-gutter py-4 flex items-center justify-between border-b border-outline-variant">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-red-600">error</span>
+<h2 class="font-headline-md text-headline-md font-semibold">Action required</h2>
+<span class="px-2 py-0.5 bg-red-100 text-red-700 text-[11px] font-bold rounded-full uppercase tracking-wider">11 variants</span>
+</div>
+</div>
+<div class="p-gutter space-y-gutter">
+<!-- Group 1: Out of stock -->
+<div>
+<div class="flex items-center gap-2 mb-3">
+<div class="w-2 h-2 rounded-full bg-red-600"></div>
+<h3 class="font-body-md font-semibold text-primary">Out of stock — urgent reorder (3)</h3>
+</div>
+<div class="space-y-1">
+<div class="flex items-center justify-between p-3 hover:bg-surface-container-low rounded-lg group transition-colors border border-transparent hover:border-outline-variant">
+<div class="flex items-center gap-8 flex-grow">
+<div class="w-48 font-body-md font-medium text-primary">Ceinture</div>
+<div class="w-20 font-mono-data text-on-surface-variant">Unique</div>
+<div class="w-24 flex items-center gap-3">
+<span class="font-mono-data font-semibold text-red-600">0/5</span>
+<div class="flex-grow h-1 bg-surface-variant rounded-full overflow-hidden w-24">
+<div class="h-full bg-red-600" style="width: 0%"></div>
+</div>
+</div>
+<div class="w-12 font-mono-data text-[12px] text-on-surface-variant">D2</div>
+<div class="font-mono-data text-on-surface-variant">$15/u</div>
+</div>
+<button class="opacity-0 group-hover:opacity-100 px-3 py-1 text-[12px] font-semibold text-primary border border-outline-variant rounded-md hover:bg-white">Reorder</button>
+</div>
+<div class="flex items-center justify-between p-3 hover:bg-surface-container-low rounded-lg group transition-colors border border-transparent hover:border-outline-variant">
+<div class="flex items-center gap-8 flex-grow">
+<div class="w-48 font-body-md font-medium text-primary">Pantalon noir militaire</div>
+<div class="w-20 font-mono-data text-on-surface-variant">40</div>
+<div class="w-24 flex items-center gap-3">
+<span class="font-mono-data font-semibold text-red-600">0/5</span>
+<div class="flex-grow h-1 bg-surface-variant rounded-full overflow-hidden w-24">
+<div class="h-full bg-red-600" style="width: 0%"></div>
+</div>
+</div>
+<div class="w-12 font-mono-data text-[12px] text-on-surface-variant">B4</div>
+<div class="font-mono-data text-on-surface-variant">$45/u</div>
+</div>
+<button class="opacity-0 group-hover:opacity-100 px-3 py-1 text-[12px] font-semibold text-primary border border-outline-variant rounded-md hover:bg-white">Reorder</button>
+</div>
+</div>
+</div>
+<!-- Group 2: Low stock -->
+<div>
+<div class="flex items-center gap-2 mb-3">
+<div class="w-2 h-2 rounded-full bg-amber-500"></div>
+<h3 class="font-body-md font-semibold text-primary">Low stock — below threshold (8)</h3>
+</div>
+<div class="space-y-1">
+<div class="flex items-center justify-between p-3 hover:bg-surface-container-low rounded-lg group transition-colors border border-transparent hover:border-outline-variant">
+<div class="flex items-center gap-8 flex-grow">
+<div class="w-48 font-body-md font-medium text-primary">Chemise grise (ML)</div>
+<div class="w-20 font-mono-data text-on-surface-variant">L</div>
+<div class="w-24 flex items-center gap-3">
+<span class="font-mono-data font-semibold text-amber-600">4/10</span>
+<div class="flex-grow h-1 bg-surface-variant rounded-full overflow-hidden w-24">
+<div class="h-full bg-amber-500" style="width: 40%"></div>
+</div>
+</div>
+<div class="w-12 font-mono-data text-[12px] text-on-surface-variant">A1</div>
+<div class="font-mono-data text-on-surface-variant">$40/u</div>
+</div>
+<button class="opacity-0 group-hover:opacity-100 px-3 py-1 text-[12px] font-semibold text-primary border border-outline-variant rounded-md hover:bg-white">Restock</button>
+</div>
+<div class="flex items-center justify-between p-3 hover:bg-surface-container-low rounded-lg group transition-colors border border-transparent hover:border-outline-variant">
+<div class="flex items-center gap-8 flex-grow">
+<div class="w-48 font-body-md font-medium text-primary">Polo noir</div>
+<div class="w-20 font-mono-data text-on-surface-variant">3XL</div>
+<div class="w-24 flex items-center gap-3">
+<span class="font-mono-data font-semibold text-amber-600">2/5</span>
+<div class="flex-grow h-1 bg-surface-variant rounded-full overflow-hidden w-24">
+<div class="h-full bg-amber-500" style="width: 40%"></div>
+</div>
+</div>
+<div class="w-12 font-mono-data text-[12px] text-on-surface-variant">C3</div>
+<div class="font-mono-data text-on-surface-variant">$30/u</div>
+</div>
+<button class="opacity-0 group-hover:opacity-100 px-3 py-1 text-[12px] font-semibold text-primary border border-outline-variant rounded-md hover:bg-white">Restock</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Toolbar -->
+<div class="flex items-center justify-between mb-8 gap-4">
+<div class="relative flex-grow max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all" placeholder="Search items, sizes, locations…" type="text"/>
+</div>
+<div class="flex items-center gap-2">
+<button class="px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md flex items-center gap-2 hover:bg-surface-container transition-colors">
+                    Division: All <span class="material-symbols-outlined text-[18px]">expand_more</span>
+</button>
+<button class="px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md flex items-center gap-2 hover:bg-surface-container transition-colors">
+                    Type: All <span class="material-symbols-outlined text-[18px]">expand_more</span>
+</button>
+<button class="px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md flex items-center gap-2 hover:bg-surface-container transition-colors">
+                    Status: All <span class="material-symbols-outlined text-[18px]">expand_more</span>
+</button>
+</div>
+</div>
+<!-- Main Content : Variant Gallery -->
+<section>
+<div class="flex items-center gap-4 mb-6">
+<h2 class="font-body-md font-semibold text-on-surface-variant uppercase tracking-wider text-[12px]">All variants — sorted by alert priority</h2>
+<div class="flex-grow h-[1px] bg-outline-variant"></div>
+<span class="text-[12px] text-on-surface-variant tabular-nums">178 variants</span>
+</div>
 
-<svg width="0" height="0" style="position:absolute;">
-  <defs>
-    <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
-    <symbol id="i-chevron" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-    <symbol id="i-download" viewBox="0 0 16 16"><path d="M8 2v8m-3-3l3 3 3-3M3 13h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-    <symbol id="i-alert" viewBox="0 0 16 16"><path d="M8 1L1 14h14L8 1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6v3M8 11v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
-    <symbol id="i-shirt" viewBox="0 0 32 32"><path d="M11 4l2 3 3 1 3-1 2-3 6 3-2 5-3-1v17H10V11l-3 1-2-5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
-    <symbol id="i-pants" viewBox="0 0 32 32"><path d="M8 4h16v6l-2 18h-5l-1-12-1 12h-5L8 10z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
-    <symbol id="i-jacket" viewBox="0 0 32 32"><path d="M10 4l3 4h6l3-4 6 3v6l-3-1v16H7V12l-3 1V7z M16 8v20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
-    <symbol id="i-helmet" viewBox="0 0 32 32"><path d="M4 20a12 12 0 0124 0v3H4v-3z M16 8v12 M8 14v6 M24 14v6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-    <symbol id="i-belt" viewBox="0 0 32 32"><rect x="3" y="11" width="26" height="10" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="16" cy="16" r="2" fill="none" stroke="currentColor" stroke-width="1.4"/><line x1="9" y1="16" x2="11" y2="16" stroke="currentColor" stroke-width="1.4"/></symbol>
-    <symbol id="i-vest" viewBox="0 0 32 32"><path d="M9 4l3 4h8l3-4 5 3v9l-3 1v15H8V17l-3-1V7z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
-  </defs>
-</svg>
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-gutter">
 
-<div class="container">
+<!-- VARIANT CARD: out of stock -->
+<div class="bg-surface-container-lowest border border-outline-variant border-l-2 border-l-red-600 rounded-xl p-gutter hover:shadow-sm transition-shadow group">
+<div class="flex items-start justify-between mb-3">
+<span class="material-symbols-outlined text-[28px] text-on-surface-variant" style="font-variation-settings: 'wght' 200;">checkroom</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-red-600">Out</span>
+</div>
+<div class="text-[13px] text-on-surface-variant">Pantalon noir</div>
+<div class="font-body-md font-semibold text-primary mb-2">militaire</div>
+<div class="inline-block px-2 py-0.5 bg-surface-container rounded font-mono-data text-[11px] mb-3">40</div>
+<div class="flex items-baseline gap-1.5 mb-1">
+<span class="font-mono-data text-[36px] font-semibold tabular-nums text-red-600">0</span>
+<span class="font-mono-data text-[12px] text-on-surface-variant">/ 5</span>
+</div>
+<div class="h-1 bg-surface-variant rounded-full overflow-hidden mb-3">
+<div class="h-full bg-red-600" style="width: 0%"></div>
+</div>
+<div class="flex justify-between text-[11px] text-on-surface-variant border-t border-outline-variant pt-3 font-mono-data">
+<span>A1 · $65</span>
+<span>$0</span>
+</div>
+</div>
 
-  <header class="page-header">
-    <div>
-      <div class="breadcrumb">
-        <a href="#">Uniformes</a> &nbsp;/&nbsp; <span>Inventaire</span>
-      </div>
-      <h1 style="margin-top: 4px;">Inventaire</h1>
-      <div class="meta-strip" style="margin-top: 8px;">
-        <span>Vue galerie par variante</span>
-        <span class="dot"></span>
-        <span>178 variantes actives</span>
-      </div>
-    </div>
-    <div style="display: flex; gap: 8px;">
-      <button class="btn"><svg width="14" height="14"><use href="#i-download"/></svg>Exporter</button>
-      <button class="btn btn-primary">Nouveau morceau</button>
-    </div>
-  </header>
+<!-- VARIANT CARD: out of stock -->
+<div class="bg-surface-container-lowest border border-outline-variant border-l-2 border-l-red-600 rounded-xl p-gutter hover:shadow-sm transition-shadow">
+<div class="flex items-start justify-between mb-3">
+<span class="material-symbols-outlined text-[28px] text-on-surface-variant" style="font-variation-settings: 'wght' 200;">styler</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-red-600">Out</span>
+</div>
+<div class="text-[13px] text-on-surface-variant">Manteau</div>
+<div class="font-body-md font-semibold text-primary mb-2">3 en 1</div>
+<div class="inline-block px-2 py-0.5 bg-surface-container rounded font-mono-data text-[11px] mb-3">3XL</div>
+<div class="flex items-baseline gap-1.5 mb-1">
+<span class="font-mono-data text-[36px] font-semibold tabular-nums text-red-600">0</span>
+<span class="font-mono-data text-[12px] text-on-surface-variant">/ 5</span>
+</div>
+<div class="h-1 bg-surface-variant rounded-full overflow-hidden mb-3">
+<div class="h-full bg-red-600" style="width: 0%"></div>
+</div>
+<div class="flex justify-between text-[11px] text-on-surface-variant border-t border-outline-variant pt-3 font-mono-data">
+<span>C1 · $250</span>
+<span>$0</span>
+</div>
+</div>
 
-  <div class="kpi-grid">
-    <div class="kpi"><div class="label">Unités</div><div class="value num">2 750</div><div class="delta up">+124 cette semaine</div></div>
-    <div class="kpi"><div class="label">Valeur</div><div class="value num">$120 050</div><div class="delta">$43.65 / unité</div></div>
-    <div class="kpi"><div class="label">En alerte</div><div class="value warning num">11</div><div class="delta down">+3 vs semaine</div></div>
-    <div class="kpi"><div class="label">À zéro</div><div class="value danger num">3</div><div class="delta">Action requise</div></div>
-    <div class="kpi"><div class="label">En lavage</div><div class="value muted num">12</div><div class="delta">2 lots actifs</div></div>
-  </div>
+<!-- VARIANT CARD: out of stock -->
+<div class="bg-surface-container-lowest border border-outline-variant border-l-2 border-l-red-600 rounded-xl p-gutter hover:shadow-sm transition-shadow">
+<div class="flex items-start justify-between mb-3">
+<span class="material-symbols-outlined text-[28px] text-on-surface-variant" style="font-variation-settings: 'wght' 200;">link</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-red-600">Out</span>
+</div>
+<div class="text-[13px] text-on-surface-variant">Ceinture</div>
+<div class="font-body-md font-semibold text-primary mb-2">&nbsp;</div>
+<div class="inline-block px-2 py-0.5 bg-surface-container rounded font-mono-data text-[11px] mb-3">Unique</div>
+<div class="flex items-baseline gap-1.5 mb-1">
+<span class="font-mono-data text-[36px] font-semibold tabular-nums text-red-600">0</span>
+<span class="font-mono-data text-[12px] text-on-surface-variant">/ 5</span>
+</div>
+<div class="h-1 bg-surface-variant rounded-full overflow-hidden mb-3">
+<div class="h-full bg-red-600" style="width: 0%"></div>
+</div>
+<div class="flex justify-between text-[11px] text-on-surface-variant border-t border-outline-variant pt-3 font-mono-data">
+<span>D2 · $25</span>
+<span>$0</span>
+</div>
+</div>
 
-  <section class="alert-section">
-    <div class="alert-header">
-      <h2><svg width="14" height="14" style="color: var(--danger)"><use href="#i-alert"/></svg>Action requise <span class="alert-pill">11 variantes</span></h2>
-      <button class="btn btn-sm">Voir l'historique</button>
-    </div>
-    <div class="alert-list">
-      <div class="alert-row"><div class="info"><span class="status-icon zero"></span><div><div class="item">Ceinture <span>· Unique</span></div><div class="ratio">0 / 5</div></div></div><button class="btn btn-sm">Réapprovisionner</button></div>
-      <div class="alert-row"><div class="info"><span class="status-icon zero"></span><div><div class="item">Pantalon noir (militaire) <span>· 40</span></div><div class="ratio">0 / 5</div></div></div><button class="btn btn-sm">Réapprovisionner</button></div>
-      <div class="alert-row"><div class="info"><span class="status-icon zero"></span><div><div class="item">Manteau (3 en 1) <span>· 3XL</span></div><div class="ratio">0 / 5</div></div></div><button class="btn btn-sm">Réapprovisionner</button></div>
-      <div class="alert-row"><div class="info"><span class="status-icon low"></span><div><div class="item">Chemise grise (ML) <span>· L</span></div><div class="ratio">4 / 10</div></div></div><button class="btn btn-sm">Ajuster</button></div>
-      <div class="alert-row"><div class="info"><span class="status-icon low"></span><div><div class="item">Chemise blanche (MC) <span>· XL</span></div><div class="ratio">5 / 10</div></div></div><button class="btn btn-sm">Ajuster</button></div>
-      <div class="alert-row"><div class="info"><span class="status-icon low"></span><div><div class="item">Pantalon militaire <span>· 38</span></div><div class="ratio">2 / 5</div></div></div><button class="btn btn-sm">Ajuster</button></div>
-      <div class="alert-row"><div class="info"><span class="status-icon low"></span><div><div class="item">Chandail HV (MC) <span>· 4XL</span></div><div class="ratio">1 / 5</div></div></div><button class="btn btn-sm">Ajuster</button></div>
-      <div class="alert-row"><div class="info"><span class="status-icon low"></span><div><div class="item">Polo noir <span>· 3XL</span></div><div class="ratio">2 / 5</div></div></div><button class="btn btn-sm">Ajuster</button></div>
-    </div>
-  </section>
+<!-- VARIANT CARD: low stock -->
+<div class="bg-surface-container-lowest border border-outline-variant border-l-2 border-l-amber-500 rounded-xl p-gutter hover:shadow-sm transition-shadow">
+<div class="flex items-start justify-between mb-3">
+<span class="material-symbols-outlined text-[28px] text-on-surface-variant" style="font-variation-settings: 'wght' 200;">checkroom</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-amber-600">Low</span>
+</div>
+<div class="text-[13px] text-on-surface-variant">Chemise grise</div>
+<div class="font-body-md font-semibold text-primary mb-2">(ML)</div>
+<div class="inline-block px-2 py-0.5 bg-surface-container rounded font-mono-data text-[11px] mb-3">L</div>
+<div class="flex items-baseline gap-1.5 mb-1">
+<span class="font-mono-data text-[36px] font-semibold tabular-nums text-amber-600">4</span>
+<span class="font-mono-data text-[12px] text-on-surface-variant">/ 10</span>
+</div>
+<div class="h-1 bg-surface-variant rounded-full overflow-hidden mb-3">
+<div class="h-full bg-amber-500" style="width: 40%"></div>
+</div>
+<div class="flex justify-between text-[11px] text-on-surface-variant border-t border-outline-variant pt-3 font-mono-data">
+<span>B4 · $40</span>
+<span>$160</span>
+</div>
+</div>
 
-  <div class="toolbar">
-    <div class="search">
-      <svg class="icon" width="14" height="14"><use href="#i-search"/></svg>
-      <input placeholder="Rechercher…">
-    </div>
-    <button class="filter-chip">Division <svg width="12" height="12"><use href="#i-chevron"/></svg></button>
-    <button class="filter-chip">État : Alertes en premier <svg width="12" height="12"><use href="#i-chevron"/></svg></button>
-    <button class="filter-chip">Tri : Stock croissant <svg width="12" height="12"><use href="#i-chevron"/></svg></button>
-  </div>
+<!-- VARIANT CARD: low stock -->
+<div class="bg-surface-container-lowest border border-outline-variant border-l-2 border-l-amber-500 rounded-xl p-gutter hover:shadow-sm transition-shadow">
+<div class="flex items-start justify-between mb-3">
+<span class="material-symbols-outlined text-[28px] text-on-surface-variant" style="font-variation-settings: 'wght' 200;">checkroom</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-amber-600">Low</span>
+</div>
+<div class="text-[13px] text-on-surface-variant">Chemise blanche</div>
+<div class="font-body-md font-semibold text-primary mb-2">(MC)</div>
+<div class="inline-block px-2 py-0.5 bg-surface-container rounded font-mono-data text-[11px] mb-3">XL</div>
+<div class="flex items-baseline gap-1.5 mb-1">
+<span class="font-mono-data text-[36px] font-semibold tabular-nums text-amber-600">5</span>
+<span class="font-mono-data text-[12px] text-on-surface-variant">/ 10</span>
+</div>
+<div class="h-1 bg-surface-variant rounded-full overflow-hidden mb-3">
+<div class="h-full bg-amber-500" style="width: 50%"></div>
+</div>
+<div class="flex justify-between text-[11px] text-on-surface-variant border-t border-outline-variant pt-3 font-mono-data">
+<span>B5 · $40</span>
+<span>$200</span>
+</div>
+</div>
 
-  <div class="variant-grid">
+<!-- VARIANT CARD: low stock -->
+<div class="bg-surface-container-lowest border border-outline-variant border-l-2 border-l-amber-500 rounded-xl p-gutter hover:shadow-sm transition-shadow">
+<div class="flex items-start justify-between mb-3">
+<span class="material-symbols-outlined text-[28px] text-on-surface-variant" style="font-variation-settings: 'wght' 200;">styler</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-amber-600">Low</span>
+</div>
+<div class="text-[13px] text-on-surface-variant">Chandail HV</div>
+<div class="font-body-md font-semibold text-primary mb-2">(MC)</div>
+<div class="inline-block px-2 py-0.5 bg-surface-container rounded font-mono-data text-[11px] mb-3">4XL</div>
+<div class="flex items-baseline gap-1.5 mb-1">
+<span class="font-mono-data text-[36px] font-semibold tabular-nums text-amber-600">1</span>
+<span class="font-mono-data text-[12px] text-on-surface-variant">/ 5</span>
+</div>
+<div class="h-1 bg-surface-variant rounded-full overflow-hidden mb-3">
+<div class="h-full bg-amber-500" style="width: 20%"></div>
+</div>
+<div class="flex justify-between text-[11px] text-on-surface-variant border-t border-outline-variant pt-3 font-mono-data">
+<span>E2 · $25</span>
+<span>$25</span>
+</div>
+</div>
 
-    <div class="variant danger">
-      <div class="variant-status">À zéro</div>
-      <svg class="variant-icon"><use href="#i-pants"/></svg>
-      <div class="variant-name">Pantalon noir</div>
-      <div class="variant-item">militaire</div>
-      <div class="variant-size">TAILLE 40</div>
-      <div class="variant-qty">
-        <span class="num">0</span>
-        <span class="threshold">/ 5</span>
-      </div>
-      <div class="variant-bar"><div class="variant-bar-fill" style="width: 0%"></div></div>
-      <div class="variant-meta">
-        <span>A1 · $65/u</span>
-        <span>$0</span>
-      </div>
-    </div>
+<!-- OK STOCK CARDS -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-gutter hover:shadow-sm transition-shadow">
+<div class="flex items-start justify-between mb-3">
+<span class="material-symbols-outlined text-[28px] text-on-surface-variant" style="font-variation-settings: 'wght' 200;">checkroom</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">OK</span>
+</div>
+<div class="text-[13px] text-on-surface-variant">Chemise grise</div>
+<div class="font-body-md font-semibold text-primary mb-2">(ML)</div>
+<div class="inline-block px-2 py-0.5 bg-surface-container rounded font-mono-data text-[11px] mb-3">M</div>
+<div class="flex items-baseline gap-1.5 mb-1">
+<span class="font-mono-data text-[36px] font-semibold tabular-nums">18</span>
+<span class="font-mono-data text-[12px] text-on-surface-variant">/ 10</span>
+</div>
+<div class="h-1 bg-surface-variant rounded-full overflow-hidden mb-3">
+<div class="h-full bg-primary" style="width: 100%"></div>
+</div>
+<div class="flex justify-between text-[11px] text-on-surface-variant border-t border-outline-variant pt-3 font-mono-data">
+<span>B4 · $40</span>
+<span>$720</span>
+</div>
+</div>
 
-    <div class="variant danger">
-      <div class="variant-status">À zéro</div>
-      <svg class="variant-icon"><use href="#i-jacket"/></svg>
-      <div class="variant-name">Manteau</div>
-      <div class="variant-item">3 en 1</div>
-      <div class="variant-size">TAILLE 3XL</div>
-      <div class="variant-qty">
-        <span class="num">0</span>
-        <span class="threshold">/ 5</span>
-      </div>
-      <div class="variant-bar"><div class="variant-bar-fill" style="width: 0%"></div></div>
-      <div class="variant-meta">
-        <span>C1 · $250/u</span>
-        <span>$0</span>
-      </div>
-    </div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-gutter hover:shadow-sm transition-shadow">
+<div class="flex items-start justify-between mb-3">
+<span class="material-symbols-outlined text-[28px] text-on-surface-variant" style="font-variation-settings: 'wght' 200;">link</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">OK</span>
+</div>
+<div class="text-[13px] text-on-surface-variant">Ceinture</div>
+<div class="font-body-md font-semibold text-primary mb-2">&nbsp;</div>
+<div class="inline-block px-2 py-0.5 bg-surface-container rounded font-mono-data text-[11px] mb-3">L</div>
+<div class="flex items-baseline gap-1.5 mb-1">
+<span class="font-mono-data text-[36px] font-semibold tabular-nums">60</span>
+<span class="font-mono-data text-[12px] text-on-surface-variant">/ 20</span>
+</div>
+<div class="h-1 bg-surface-variant rounded-full overflow-hidden mb-3">
+<div class="h-full bg-primary" style="width: 100%"></div>
+</div>
+<div class="flex justify-between text-[11px] text-on-surface-variant border-t border-outline-variant pt-3 font-mono-data">
+<span>D2 · $25</span>
+<span>$1,500</span>
+</div>
+</div>
 
-    <div class="variant danger">
-      <div class="variant-status">À zéro</div>
-      <svg class="variant-icon"><use href="#i-belt"/></svg>
-      <div class="variant-name">Ceinture</div>
-      <div class="variant-item">&nbsp;</div>
-      <div class="variant-size">UNIQUE</div>
-      <div class="variant-qty">
-        <span class="num">0</span>
-        <span class="threshold">/ 5</span>
-      </div>
-      <div class="variant-bar"><div class="variant-bar-fill" style="width: 0%"></div></div>
-      <div class="variant-meta">
-        <span>D2 · $25/u</span>
-        <span>$0</span>
-      </div>
-    </div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-gutter hover:shadow-sm transition-shadow">
+<div class="flex items-start justify-between mb-3">
+<span class="material-symbols-outlined text-[28px] text-on-surface-variant" style="font-variation-settings: 'wght' 200;">styler</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">OK</span>
+</div>
+<div class="text-[13px] text-on-surface-variant">Chandail HV</div>
+<div class="font-body-md font-semibold text-primary mb-2">(MC)</div>
+<div class="inline-block px-2 py-0.5 bg-surface-container rounded font-mono-data text-[11px] mb-3">2XL</div>
+<div class="flex items-baseline gap-1.5 mb-1">
+<span class="font-mono-data text-[36px] font-semibold tabular-nums">8</span>
+<span class="font-mono-data text-[12px] text-on-surface-variant">/ 5</span>
+</div>
+<div class="h-1 bg-surface-variant rounded-full overflow-hidden mb-3">
+<div class="h-full bg-primary" style="width: 100%"></div>
+</div>
+<div class="flex justify-between text-[11px] text-on-surface-variant border-t border-outline-variant pt-3 font-mono-data">
+<span>E2 · $25</span>
+<span>$200</span>
+</div>
+</div>
 
-    <div class="variant warning">
-      <div class="variant-status">Bas</div>
-      <svg class="variant-icon"><use href="#i-shirt"/></svg>
-      <div class="variant-name">Chemise grise</div>
-      <div class="variant-item">(ML)</div>
-      <div class="variant-size">TAILLE L</div>
-      <div class="variant-qty">
-        <span class="num">4</span>
-        <span class="threshold">/ 10</span>
-      </div>
-      <div class="variant-bar"><div class="variant-bar-fill" style="width: 40%"></div></div>
-      <div class="variant-meta">
-        <span>B4 · $40/u</span>
-        <span>$160</span>
-      </div>
-    </div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-gutter hover:shadow-sm transition-shadow">
+<div class="flex items-start justify-between mb-3">
+<span class="material-symbols-outlined text-[28px] text-on-surface-variant" style="font-variation-settings: 'wght' 200;">construction</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">OK</span>
+</div>
+<div class="text-[13px] text-on-surface-variant">Casque</div>
+<div class="font-body-md font-semibold text-primary mb-2">de sécurité</div>
+<div class="inline-block px-2 py-0.5 bg-surface-container rounded font-mono-data text-[11px] mb-3">Unique</div>
+<div class="flex items-baseline gap-1.5 mb-1">
+<span class="font-mono-data text-[36px] font-semibold tabular-nums">17</span>
+<span class="font-mono-data text-[12px] text-on-surface-variant">/ 5</span>
+</div>
+<div class="h-1 bg-surface-variant rounded-full overflow-hidden mb-3">
+<div class="h-full bg-primary" style="width: 100%"></div>
+</div>
+<div class="flex justify-between text-[11px] text-on-surface-variant border-t border-outline-variant pt-3 font-mono-data">
+<span>F1 · $35</span>
+<span>$595</span>
+</div>
+</div>
 
-    <div class="variant warning">
-      <div class="variant-status">Bas</div>
-      <svg class="variant-icon"><use href="#i-shirt"/></svg>
-      <div class="variant-name">Chemise blanche</div>
-      <div class="variant-item">(MC)</div>
-      <div class="variant-size">TAILLE XL</div>
-      <div class="variant-qty">
-        <span class="num">5</span>
-        <span class="threshold">/ 10</span>
-      </div>
-      <div class="variant-bar"><div class="variant-bar-fill" style="width: 50%"></div></div>
-      <div class="variant-meta">
-        <span>B5 · $40/u</span>
-        <span>$200</span>
-      </div>
-    </div>
-
-    <div class="variant warning">
-      <div class="variant-status">Bas</div>
-      <svg class="variant-icon"><use href="#i-pants"/></svg>
-      <div class="variant-name">Pantalon noir</div>
-      <div class="variant-item">militaire</div>
-      <div class="variant-size">TAILLE 38</div>
-      <div class="variant-qty">
-        <span class="num">2</span>
-        <span class="threshold">/ 5</span>
-      </div>
-      <div class="variant-bar"><div class="variant-bar-fill" style="width: 40%"></div></div>
-      <div class="variant-meta">
-        <span>A1 · $65/u</span>
-        <span>$130</span>
-      </div>
-    </div>
-
-    <div class="variant warning">
-      <div class="variant-status">Bas</div>
-      <svg class="variant-icon"><use href="#i-vest"/></svg>
-      <div class="variant-name">Chandail HV</div>
-      <div class="variant-item">(MC)</div>
-      <div class="variant-size">TAILLE 4XL</div>
-      <div class="variant-qty">
-        <span class="num">1</span>
-        <span class="threshold">/ 5</span>
-      </div>
-      <div class="variant-bar"><div class="variant-bar-fill" style="width: 20%"></div></div>
-      <div class="variant-meta">
-        <span>E2 · $25/u</span>
-        <span>$25</span>
-      </div>
-    </div>
-
-    <div class="variant warning">
-      <div class="variant-status">Bas</div>
-      <svg class="variant-icon"><use href="#i-shirt"/></svg>
-      <div class="variant-name">Polo noir</div>
-      <div class="variant-item">&nbsp;</div>
-      <div class="variant-size">TAILLE 3XL</div>
-      <div class="variant-qty">
-        <span class="num">2</span>
-        <span class="threshold">/ 5</span>
-      </div>
-      <div class="variant-bar"><div class="variant-bar-fill" style="width: 40%"></div></div>
-      <div class="variant-meta">
-        <span>A3 · $35/u</span>
-        <span>$70</span>
-      </div>
-    </div>
-
-    <div class="variant ok">
-      <div class="variant-status">OK</div>
-      <svg class="variant-icon"><use href="#i-shirt"/></svg>
-      <div class="variant-name">Chemise grise</div>
-      <div class="variant-item">(ML)</div>
-      <div class="variant-size">TAILLE M</div>
-      <div class="variant-qty">
-        <span class="num">18</span>
-        <span class="threshold">/ 10</span>
-      </div>
-      <div class="variant-bar"><div class="variant-bar-fill" style="width: 100%"></div></div>
-      <div class="variant-meta">
-        <span>B4 · $40/u</span>
-        <span>$720</span>
-      </div>
-    </div>
-
-    <div class="variant ok">
-      <div class="variant-status">OK</div>
-      <svg class="variant-icon"><use href="#i-belt"/></svg>
-      <div class="variant-name">Ceinture</div>
-      <div class="variant-item">&nbsp;</div>
-      <div class="variant-size">TAILLE L</div>
-      <div class="variant-qty">
-        <span class="num">60</span>
-        <span class="threshold">/ 20</span>
-      </div>
-      <div class="variant-bar"><div class="variant-bar-fill" style="width: 100%"></div></div>
-      <div class="variant-meta">
-        <span>D2 · $25/u</span>
-        <span>$1 500</span>
-      </div>
-    </div>
-
-    <div class="variant ok">
-      <div class="variant-status">OK</div>
-      <svg class="variant-icon"><use href="#i-vest"/></svg>
-      <div class="variant-name">Chandail HV</div>
-      <div class="variant-item">(MC)</div>
-      <div class="variant-size">TAILLE 2XL</div>
-      <div class="variant-qty">
-        <span class="num">8</span>
-        <span class="threshold">/ 5</span>
-      </div>
-      <div class="variant-bar"><div class="variant-bar-fill" style="width: 100%"></div></div>
-      <div class="variant-meta">
-        <span>E2 · $25/u</span>
-        <span>$200</span>
-      </div>
-    </div>
-
-    <div class="variant ok">
-      <div class="variant-status">OK</div>
-      <svg class="variant-icon"><use href="#i-helmet"/></svg>
-      <div class="variant-name">Casque</div>
-      <div class="variant-item">de sécurité</div>
-      <div class="variant-size">UNIQUE</div>
-      <div class="variant-qty">
-        <span class="num">17</span>
-        <span class="threshold">/ 5</span>
-      </div>
-      <div class="variant-bar"><div class="variant-bar-fill" style="width: 100%"></div></div>
-      <div class="variant-meta">
-        <span>F1 · $35/u</span>
-        <span>$595</span>
-      </div>
-    </div>
-
-    <div class="variant ok">
-      <div class="variant-status">OK</div>
-      <svg class="variant-icon"><use href="#i-shirt"/></svg>
-      <div class="variant-name">Chemise grise</div>
-      <div class="variant-item">(ML)</div>
-      <div class="variant-size">TAILLE XL</div>
-      <div class="variant-qty">
-        <span class="num">15</span>
-        <span class="threshold">/ 10</span>
-      </div>
-      <div class="variant-bar"><div class="variant-bar-fill" style="width: 100%"></div></div>
-      <div class="variant-meta">
-        <span>B4 · $40/u</span>
-        <span>$600</span>
-      </div>
-    </div>
-
-  </div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-gutter hover:shadow-sm transition-shadow">
+<div class="flex items-start justify-between mb-3">
+<span class="material-symbols-outlined text-[28px] text-on-surface-variant" style="font-variation-settings: 'wght' 200;">checkroom</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">OK</span>
+</div>
+<div class="text-[13px] text-on-surface-variant">Polo noir</div>
+<div class="font-body-md font-semibold text-primary mb-2">&nbsp;</div>
+<div class="inline-block px-2 py-0.5 bg-surface-container rounded font-mono-data text-[11px] mb-3">L</div>
+<div class="flex items-baseline gap-1.5 mb-1">
+<span class="font-mono-data text-[36px] font-semibold tabular-nums">22</span>
+<span class="font-mono-data text-[12px] text-on-surface-variant">/ 10</span>
+</div>
+<div class="h-1 bg-surface-variant rounded-full overflow-hidden mb-3">
+<div class="h-full bg-primary" style="width: 100%"></div>
+</div>
+<div class="flex justify-between text-[11px] text-on-surface-variant border-t border-outline-variant pt-3 font-mono-data">
+<span>A3 · $35</span>
+<span>$770</span>
+</div>
+</div>
 
 </div>
-</body>
-</html>
+
+<!-- Placeholder for original Stitch leftover content -->
+<div class="hidden">
+<!-- Card 1: -->
+<div class="bg-surface-container-lowest border border-outline-variant border-t-amber-500 border-t-2 rounded-xl p-gutter hover:shadow-sm transition-shadow">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-2">
+<h3 class="font-body-lg font-semibold text-primary">Chemise grise (ML)</h3>
+<span class="material-symbols-outlined text-[16px] text-on-surface-variant">push_pin</span>
+</div>
+<div class="text-right">
+<div class="font-mono-data text-[24px] font-semibold tabular-nums">412</div>
+<div class="text-[11px] text-on-surface-variant uppercase">$16,480 total</div>
+</div>
+</div>
+<div class="flex items-center gap-2 text-[12px] text-on-surface-variant mb-4">
+<span class="px-1.5 py-0.5 bg-surface-container rounded font-mono-data">A1</span>
+<span>·</span>
+<span>$40/u</span>
+</div>
+<div class="grid grid-cols-3 gap-2 mb-6">
+<div class="p-2 border border-outline-variant rounded-lg bg-amber-50">
+<div class="text-[10px] text-on-surface-variant font-medium uppercase mb-1">XS</div>
+<div class="font-mono-data text-[17px] font-semibold">4</div>
+<div class="h-0.5 w-full bg-surface-variant mt-1"><div class="h-full bg-amber-500 w-[40%]"></div></div>
+</div>
+<div class="p-2 border border-outline-variant rounded-lg">
+<div class="text-[10px] text-on-surface-variant font-medium uppercase mb-1">S</div>
+<div class="font-mono-data text-[17px] font-semibold">88</div>
+<div class="h-0.5 w-full bg-surface-variant mt-1"><div class="h-full bg-primary w-[88%]"></div></div>
+</div>
+<div class="p-2 border border-outline-variant rounded-lg">
+<div class="text-[10px] text-on-surface-variant font-medium uppercase mb-1">M</div>
+<div class="font-mono-data text-[17px] font-semibold">124</div>
+<div class="h-0.5 w-full bg-surface-variant mt-1"><div class="h-full bg-primary w-[100%]"></div></div>
+</div>
+<div class="p-2 border border-outline-variant rounded-lg bg-amber-50">
+<div class="text-[10px] text-on-surface-variant font-medium uppercase mb-1">L</div>
+<div class="font-mono-data text-[17px] font-semibold">6</div>
+<div class="h-0.5 w-full bg-surface-variant mt-1"><div class="h-full bg-amber-500 w-[60%]"></div></div>
+</div>
+<div class="p-2 border border-outline-variant rounded-lg">
+<div class="text-[10px] text-on-surface-variant font-medium uppercase mb-1">XL</div>
+<div class="font-mono-data text-[17px] font-semibold">95</div>
+<div class="h-0.5 w-full bg-surface-variant mt-1"><div class="h-full bg-primary w-[95%]"></div></div>
+</div>
+<div class="p-2 border border-outline-variant rounded-lg">
+<div class="text-[10px] text-on-surface-variant font-medium uppercase mb-1">2XL</div>
+<div class="font-mono-data text-[17px] font-semibold">95</div>
+<div class="h-0.5 w-full bg-surface-variant mt-1"><div class="h-full bg-primary w-[95%]"></div></div>
+</div>
+</div>
+<div class="flex justify-between items-center pt-4 border-t border-outline-variant">
+<span class="text-[11px] text-on-surface-variant">Last movement 3h ago</span>
+<button class="px-3 py-1 bg-white border border-outline-variant text-[12px] font-semibold rounded-md hover:bg-surface-container transition-colors">Adjust</button>
+</div>
+</div>
+<!-- Card 2: Pantalon noir (militaire) -->
+<div class="bg-surface-container-lowest border border-outline-variant border-t-red-600 border-t-2 rounded-xl p-gutter">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-2">
+<h3 class="font-body-lg font-semibold text-primary">Pantalon noir (militaire)</h3>
+</div>
+<div class="text-right">
+<div class="font-mono-data text-[24px] font-semibold tabular-nums">152</div>
+<div class="text-[11px] text-on-surface-variant uppercase">$6,840 total</div>
+</div>
+</div>
+<div class="flex items-center gap-2 text-[12px] text-on-surface-variant mb-4">
+<span class="px-1.5 py-0.5 bg-surface-container rounded font-mono-data">B4</span>
+<span>·</span>
+<span>$45/u</span>
+</div>
+<div class="grid grid-cols-3 gap-2 mb-6">
+<div class="p-2 border border-outline-variant rounded-lg">
+<div class="text-[10px] font-medium uppercase mb-1">32</div>
+<div class="font-mono-data text-[17px] font-semibold">45</div>
+<div class="h-0.5 w-full bg-surface-variant mt-1"><div class="h-full bg-primary w-[90%]"></div></div>
+</div>
+<div class="p-2 border border-outline-variant rounded-lg">
+<div class="text-[10px] font-medium uppercase mb-1">34</div>
+<div class="font-mono-data text-[17px] font-semibold">38</div>
+<div class="h-0.5 w-full bg-surface-variant mt-1"><div class="h-full bg-primary w-[76%]"></div></div>
+</div>
+<div class="p-2 border border-outline-variant rounded-lg">
+<div class="text-[10px] font-medium uppercase mb-1">36</div>
+<div class="font-mono-data text-[17px] font-semibold">41</div>
+<div class="h-0.5 w-full bg-surface-variant mt-1"><div class="h-full bg-primary w-[82%]"></div></div>
+</div>
+<div class="p-2 border border-outline-variant rounded-lg bg-red-50">
+<div class="text-[10px] font-medium uppercase mb-1">40</div>
+<div class="font-mono-data text-[17px] font-semibold text-red-600">0</div>
+<div class="h-0.5 w-full bg-surface-variant mt-1"><div class="h-full bg-red-600 w-[0%]"></div></div>
+</div>
+<div class="p-2 border border-outline-variant rounded-lg">
+<div class="text-[10px] font-medium uppercase mb-1">42</div>
+<div class="font-mono-data text-[17px] font-semibold">28</div>
+<div class="h-0.5 w-full bg-surface-variant mt-1"><div class="h-full bg-primary w-[56%]"></div></div>
+</div>
+</div>
+<div class="flex justify-between items-center pt-4 border-t border-outline-variant">
+<span class="text-[11px] text-on-surface-variant">Last movement 12h ago</span>
+<button class="px-3 py-1 bg-white border border-outline-variant text-[12px] font-semibold rounded-md hover:bg-surface-container transition-colors">Adjust</button>
+</div>
+</div>
+<!-- Card 3: Polo noir -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-gutter">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-2">
+<h3 class="font-body-lg font-semibold text-primary">Polo noir</h3>
+</div>
+<div class="text-right">
+<div class="font-mono-data text-[24px] font-semibold tabular-nums">840</div>
+<div class="text-[11px] text-on-surface-variant uppercase">$25,200 total</div>
+</div>
+</div>
+<div class="flex items-center gap-2 text-[12px] text-on-surface-variant mb-4">
+<span class="px-1.5 py-0.5 bg-surface-container rounded font-mono-data">C3</span>
+<span>·</span>
+<span>$30/u</span>
+</div>
+<div class="grid grid-cols-3 gap-2 mb-6">
+<div class="p-2 border border-outline-variant rounded-lg">
+<div class="text-[10px] font-medium uppercase mb-1">S</div>
+<div class="font-mono-data text-[17px] font-semibold">120</div>
+</div>
+<div class="p-2 border border-outline-variant rounded-lg">
+<div class="text-[10px] font-medium uppercase mb-1">M</div>
+<div class="font-mono-data text-[17px] font-semibold">250</div>
+</div>
+<div class="p-2 border border-outline-variant rounded-lg">
+<div class="text-[10px] font-medium uppercase mb-1">L</div>
+<div class="font-mono-data text-[17px] font-semibold">310</div>
+</div>
+</div>
+<div class="flex justify-between items-center pt-4 border-t border-outline-variant">
+<span class="text-[11px] text-on-surface-variant">Last movement 45m ago</span>
+<button class="px-3 py-1 bg-white border border-outline-variant text-[12px] font-semibold rounded-md hover:bg-surface-container transition-colors">Adjust</button>
+</div>
+</div>
+<!-- Additional Placeholder Cards for Balance -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-gutter opacity-80">
+<div class="flex justify-between items-start mb-4">
+<h3 class="font-body-lg font-semibold text-primary">Chemise grise (MC)</h3>
+<div class="font-mono-data text-[24px] font-semibold tabular-nums">220</div>
+</div>
+<div class="flex justify-between items-center pt-4 border-t border-outline-variant mt-24">
+<span class="text-[11px] text-on-surface-variant">Last movement 1d ago</span>
+<button class="px-3 py-1 bg-white border border-outline-variant text-[12px] font-semibold rounded-md hover:bg-surface-container transition-colors">Adjust</button>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant border-t-red-600 border-t-2 rounded-xl p-gutter">
+<div class="flex justify-between items-start mb-4">
+<h3 class="font-body-lg font-semibold text-primary">Ceinture</h3>
+<div class="font-mono-data text-[24px] font-semibold tabular-nums text-red-600">0</div>
+</div>
+<div class="mt-4 p-4 bg-red-50 border border-red-100 rounded-lg text-center">
+<p class="text-[12px] text-red-700 font-medium">Critical Stock Alert</p>
+<button class="mt-2 text-[11px] font-bold uppercase tracking-widest text-red-800 underline">Order Now</button>
+</div>
+<div class="flex justify-between items-center pt-4 border-t border-outline-variant mt-12">
+<span class="text-[11px] text-on-surface-variant">Last movement 3d ago</span>
+<button class="px-3 py-1 bg-white border border-outline-variant text-[12px] font-semibold rounded-md hover:bg-surface-container transition-colors">Adjust</button>
+</div>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-gutter">
+<div class="flex justify-between items-start mb-4">
+<h3 class="font-body-lg font-semibold text-primary">Manteau (3 en 1)</h3>
+<div class="font-mono-data text-[24px] font-semibold tabular-nums">84</div>
+</div>
+<div class="grid grid-cols-3 gap-2 mb-6">
+<div class="p-2 border border-outline-variant rounded-lg">
+<div class="text-[10px] font-medium uppercase mb-1">XL</div>
+<div class="font-mono-data text-[17px] font-semibold">12</div>
+</div>
+<div class="p-2 border border-outline-variant rounded-lg bg-red-50">
+<div class="text-[10px] font-medium uppercase mb-1">3XL</div>
+<div class="font-mono-data text-[17px] font-semibold text-red-600">0</div>
+</div>
+</div>
+<div class="flex justify-between items-center pt-4 border-t border-outline-variant">
+<span class="text-[11px] text-on-surface-variant">Last movement 1w ago</span>
+<button class="px-3 py-1 bg-white border border-outline-variant text-[12px] font-semibold rounded-md hover:bg-surface-container transition-colors">Adjust</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<script>
+        // Simple interactivity for demonstration
+        document.querySelectorAll('button').forEach(button => {
+            button.addEventListener('mousedown', () => {
+                button.style.transform = 'scale(0.98)';
+            });
+            button.addEventListener('mouseup', () => {
+                button.style.transform = 'scale(1)';
+            });
+            button.addEventListener('mouseleave', () => {
+                button.style.transform = 'scale(1)';
+            });
+        });
+
+        // Search highlight effect
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('focus', () => {
+            searchInput.parentElement.style.borderColor = '#000000';
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.parentElement.style.borderColor = '#e5e2e1';
+        });
+    </script>
+</body></html>
