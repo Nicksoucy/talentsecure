@@ -9,6 +9,7 @@
  */
 import axios from 'axios';
 import { ApiError } from '../utils/apiError';
+import { lastTenDigits } from '../utils/phone';
 
 const GHL_TOKEN = process.env.GHL_PIT_TOKEN || 'pit-7de455ab-c46e-47a4-af9e-0b07a6c3a1ee';
 const GHL_LOCATION = process.env.GHL_LOCATION_ID || 'dfkLurZY2ADWAUZl4zYc';
@@ -21,8 +22,7 @@ const H = { Authorization: `Bearer ${GHL_TOKEN}`, Version: '2021-07-28' };
  * en "514-916-3269" ou "5149163269" → on essaie plusieurs formats.
  */
 function phoneCandidates(phone: string): string[] {
-  const digits = phone.replace(/\D/g, '');
-  const last10 = digits.slice(-10);
+  const last10 = lastTenDigits(phone);
   const set = new Set<string>([phone.trim()]);
   if (last10.length === 10) {
     set.add(`+1${last10}`);

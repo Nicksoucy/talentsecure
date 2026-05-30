@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import logger from '../config/logger';
-import { getCache, setCache, deleteCache, invalidateCacheByPrefix } from '../config/cache';
+import { getCache, setCache } from '../config/cache';
 import { buildCacheKey } from '../utils/cache';
+import { invalidateCaches } from '../utils/cacheInvalidation';
 import { getStatusFromRating } from '../utils/candidate.utils';
 import { findContactEverywhere } from '../utils/candidateMatch';
 import { Parser } from 'json2csv';
@@ -12,12 +13,11 @@ import { aiExtractionService } from '../services/ai-extraction.service';
 const CANDIDATE_LIST_CACHE_PREFIX = 'candidates:list';
 const CANDIDATE_STATS_CACHE_KEY = 'candidates:stats';
 
-const invalidateCandidateCaches = async () => {
-  await Promise.all([
-    invalidateCacheByPrefix(CANDIDATE_LIST_CACHE_PREFIX),
-    deleteCache(CANDIDATE_STATS_CACHE_KEY),
-  ]);
-};
+const invalidateCandidateCaches = () =>
+  invalidateCaches({
+    listPrefix: CANDIDATE_LIST_CACHE_PREFIX,
+    statKeys: [CANDIDATE_STATS_CACHE_KEY],
+  });
 
 
 

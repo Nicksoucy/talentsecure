@@ -1,19 +1,18 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
-import { getCache, setCache, deleteCache, invalidateCacheByPrefix } from '../config/cache';
+import { getCache, setCache } from '../config/cache';
 import { buildCacheKey } from '../utils/cache';
+import { invalidateCaches } from '../utils/cacheInvalidation';
 
 const CLIENT_LIST_CACHE_PREFIX = 'clients:list';
 const CLIENT_DETAIL_CACHE_PREFIX = 'clients:detail';
 
-const invalidateClientCaches = async (clientId?: string) => {
-  const tasks = [invalidateCacheByPrefix(CLIENT_LIST_CACHE_PREFIX)];
-  if (clientId) {
-    tasks.push(deleteCache(`${CLIENT_DETAIL_CACHE_PREFIX}:${clientId}`));
-  }
-
-  await Promise.all(tasks);
-};
+const invalidateClientCaches = (clientId?: string) =>
+  invalidateCaches({
+    listPrefix: CLIENT_LIST_CACHE_PREFIX,
+    detailPrefix: CLIENT_DETAIL_CACHE_PREFIX,
+    detailId: clientId,
+  });
 
 /**
  * Get all clients with filters

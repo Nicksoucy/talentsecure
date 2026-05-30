@@ -1,20 +1,19 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
-import { getCache, setCache, deleteCache, invalidateCacheByPrefix } from '../config/cache';
+import { getCache, setCache } from '../config/cache';
 import { buildCacheKey } from '../utils/cache';
+import { invalidateCaches } from '../utils/cacheInvalidation';
 import { findContactEverywhere } from '../utils/candidateMatch';
 
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
 const PROSPECT_STATS_CACHE_KEY = 'prospects:stats';
 const PROSPECT_CITY_CACHE_KEY = 'prospects:city-stats';
 
-const invalidateProspectCaches = async () => {
-  await Promise.all([
-    invalidateCacheByPrefix(PROSPECT_LIST_CACHE_PREFIX),
-    deleteCache(PROSPECT_STATS_CACHE_KEY),
-    deleteCache(PROSPECT_CITY_CACHE_KEY),
-  ]);
-};
+const invalidateProspectCaches = () =>
+  invalidateCaches({
+    listPrefix: PROSPECT_LIST_CACHE_PREFIX,
+    statKeys: [PROSPECT_STATS_CACHE_KEY, PROSPECT_CITY_CACHE_KEY],
+  });
 
 /**
  * Get all prospect candidates with filters

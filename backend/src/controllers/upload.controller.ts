@@ -6,17 +6,16 @@ import { deleteFile } from '../middleware/upload';
 import { processCVUpload, deleteCV, getCVSignedUrl, getLocalCVPath } from '../services/cv.service';
 import { useR2 } from '../services/r2.service';
 import { optimizeImage } from '../services/image.service';
-import { invalidateCacheByPrefix, deleteCache } from '../config/cache';
+import { invalidateCaches } from '../utils/cacheInvalidation';
 
 const CANDIDATE_CACHE_PREFIX = 'candidates:list';
 const CANDIDATE_STATS_CACHE_KEY = 'candidates:stats';
 
-const invalidateCandidateCaches = async () => {
-  await Promise.all([
-    invalidateCacheByPrefix(CANDIDATE_CACHE_PREFIX),
-    deleteCache(CANDIDATE_STATS_CACHE_KEY),
-  ]);
-};
+const invalidateCandidateCaches = () =>
+  invalidateCaches({
+    listPrefix: CANDIDATE_CACHE_PREFIX,
+    statKeys: [CANDIDATE_STATS_CACHE_KEY],
+  });
 
 /**
  * Upload CV for a candidate

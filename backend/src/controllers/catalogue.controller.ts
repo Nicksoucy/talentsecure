@@ -5,21 +5,20 @@ import axios from 'axios';
 import { PDFService } from '../services/pdf.service';
 import { useR2, getSignedFileUrl } from '../services/r2.service';
 import { prisma } from '../config/database';
-import { getCache, setCache, deleteCache, invalidateCacheByPrefix } from '../config/cache';
+import { getCache, setCache } from '../config/cache';
 import { buildCacheKey } from '../utils/cache';
+import { invalidateCaches } from '../utils/cacheInvalidation';
 import logger from '../config/logger';
 
 const CATALOGUE_LIST_CACHE_PREFIX = 'catalogues:list';
 const CATALOGUE_DETAIL_CACHE_PREFIX = 'catalogues:detail';
 
-const invalidateCatalogueCaches = async (catalogueId?: string) => {
-  const tasks = [invalidateCacheByPrefix(CATALOGUE_LIST_CACHE_PREFIX)];
-  if (catalogueId) {
-    tasks.push(deleteCache(`${CATALOGUE_DETAIL_CACHE_PREFIX}:${catalogueId}`));
-  }
-
-  await Promise.all(tasks);
-};
+const invalidateCatalogueCaches = (catalogueId?: string) =>
+  invalidateCaches({
+    listPrefix: CATALOGUE_LIST_CACHE_PREFIX,
+    detailPrefix: CATALOGUE_DETAIL_CACHE_PREFIX,
+    detailId: catalogueId,
+  });
 
 /**
  * Get all catalogues with filters

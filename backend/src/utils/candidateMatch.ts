@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { lastTenDigits } from './phone';
 
 export interface MatchedCandidate {
   id: string;
@@ -24,7 +25,7 @@ export async function findMatchingCandidate(
 ): Promise<MatchedCandidate | null> {
   const cleanEmail = (email || '').trim();
   const cleanPhone = (phone || '').trim();
-  const digits = cleanPhone.replace(/\D/g, '').slice(-10);
+  const digits = lastTenDigits(cleanPhone);
 
   const or: any[] = [];
   if (cleanEmail) or.push({ email: { equals: cleanEmail, mode: 'insensitive' as const } });
@@ -47,7 +48,7 @@ export async function findMatchingCandidate(
       select: { id: true, firstName: true, lastName: true, phone: true },
     });
     const match = candidates.find(
-      (c) => (c.phone || '').replace(/\D/g, '').slice(-10) === digits
+      (c) => lastTenDigits(c.phone) === digits
     );
     if (match) {
       return { id: match.id, firstName: match.firstName, lastName: match.lastName };
@@ -78,7 +79,7 @@ export async function findMatchingEmployee(
 ): Promise<MatchedEmployee | null> {
   const cleanEmail = (email || '').trim();
   const cleanPhone = (phone || '').trim();
-  const digits = cleanPhone.replace(/\D/g, '').slice(-10);
+  const digits = lastTenDigits(cleanPhone);
 
   const or: any[] = [];
   if (cleanEmail) or.push({ email: { equals: cleanEmail, mode: 'insensitive' as const } });
@@ -98,7 +99,7 @@ export async function findMatchingEmployee(
       select: { id: true, firstName: true, lastName: true, phone: true },
     });
     const match = employees.find(
-      (e) => (e.phone || '').replace(/\D/g, '').slice(-10) === digits
+      (e) => lastTenDigits(e.phone) === digits
     );
     if (match) {
       return { id: match.id, firstName: match.firstName, lastName: match.lastName };
@@ -125,7 +126,7 @@ export async function findMatchingProspect(
 ): Promise<MatchedProspect | null> {
   const cleanEmail = (email || '').trim();
   const cleanPhone = (phone || '').trim();
-  const digits = cleanPhone.replace(/\D/g, '').slice(-10);
+  const digits = lastTenDigits(cleanPhone);
 
   const or: any[] = [];
   if (cleanEmail) or.push({ email: { equals: cleanEmail, mode: 'insensitive' as const } });
@@ -144,7 +145,7 @@ export async function findMatchingProspect(
       select: { id: true, firstName: true, lastName: true, phone: true },
     });
     const match = prospects.find(
-      (p) => (p.phone || '').replace(/\D/g, '').slice(-10) === digits
+      (p) => lastTenDigits(p.phone) === digits
     );
     if (match) return { id: match.id, firstName: match.firstName, lastName: match.lastName };
   }
