@@ -61,6 +61,7 @@ import ContactConflictDialog from '@/components/ContactConflictDialog';
 import { ContactConflict } from '@/services/contact.service';
 import { useNavigate } from 'react-router-dom';
 import { prospectService } from '@/services/prospect.service';
+import { downloadProspectsCsv } from './prospectsCsv';
 import { employeeService } from '@/services/employee.service';
 import { clientService } from '@/services/client.service';
 import { ProspectCandidate } from '@/types';
@@ -462,67 +463,8 @@ export default function ProspectsPage() {
         );
       }
 
-      // Create CSV content
-      const headers = [
-        'Prénom',
-        'Nom',
-        'Email',
-        'Téléphone',
-        'Ville',
-        'Province',
-        'Code Postal',
-        'Adresse',
-        'CV',
-        'Vidéo',
-        'Date de soumission',
-        'Contacté',
-        'Converti',
-        'Lien fiche TalentSecure',
-        'Notes',
-      ];
-
-      const appOrigin = window.location.origin;
-      const csvRows = [
-        headers.join(','),
-        ...prospectsToExport.map((prospect: any) =>
-          [
-            `"${prospect.firstName || ''}"`,
-            `"${prospect.lastName || ''}"`,
-            `"${prospect.email || ''}"`,
-            `"${prospect.phone || ''}"`,
-            `"${prospect.city || ''}"`,
-            `"${prospect.province || ''}"`,
-            `"${prospect.postalCode || ''}"`,
-            `"${prospect.streetAddress || ''}"`,
-            prospect.cvUrl || prospect.cvStoragePath ? 'Oui' : 'Non',
-            prospect.videoStoragePath ? 'Oui' : 'Non',
-            prospect.submissionDate ? new Date(prospect.submissionDate).toLocaleDateString('fr-CA') : '',
-            prospect.isContacted ? 'Oui' : 'Non',
-            prospect.isConverted ? 'Oui' : 'Non',
-            `"${appOrigin}/prospects/${prospect.id}"`,
-            `"${(prospect.notes || '').replace(/"/g, '""')}"`,
-          ].join(',')
-        ),
-      ];
-
-      const csvContent = csvRows.join('\n');
-
-      // Create and download file
-      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      const date = new Date().toISOString().split('T')[0];
-
-      link.setAttribute('href', url);
-      link.setAttribute('download', `prospects_${date}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      enqueueSnackbar(`${prospectsToExport.length} prospects exportés en CSV`, {
-        variant: 'success',
-      });
+      const count = downloadProspectsCsv(prospectsToExport);
+      enqueueSnackbar(`${count} prospects exportés en CSV`, { variant: 'success' });
     } catch (error) {
       enqueueSnackbar('Erreur lors de l\'export CSV', { variant: 'error' });
     }
