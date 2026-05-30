@@ -38,48 +38,40 @@ export const revertAutoConvertedCandidates = async (
 
     const results = [];
 
-    for (const candidate of autoConvertedCandidates) {
-      logger.info('Admin: reverting candidate', {
-        candidateId: candidate.id,
-        firstName: candidate.firstName,
-        lastName: candidate.lastName,
-      });
+    // O8 — pré-charge les prospects une seule fois (évite un findFirst par
+    // candidat = N+1). On matche en mémoire ; les nouveaux prospects créés sont
+    // ajoutés au cache pour que les candidats suivants les retrouvent (même
+    // comportement que les requêtes live d'origine).
+    const prospectCache = await prisma.prospectCandidate.findMany({
+      where: { isDeleted: false },
+      select: { id: true, convertedToId: true, email: true, phone: true, isConverted: true },
+    });
+    const findExistingProspect = (candidate: { id: string; email: string | null; phone: string }) => {
+      const email = (candidate.email || '').toLowerCase();
+      return (
+        prospectCache.find(
+          (p) =>
+            p.convertedToId === candidate.id ||
+            (email && (p.email || '').toLowerCase() === email) ||
+            p.phone === candidate.phone
+        ) || null
+      );
+    };
 
+    // Mutations regroupées (batch) au lieu d'un update par candidat.
+    const candidatesToDelete: string[] = [];
+    const prospectsToDeconvert: string[] = [];
+
+    for (const candidate of autoConvertedCandidates) {
       try {
-        // 1. Vérifier si un prospect avec cet ID existe déjà
-        const existingProspect = await prisma.prospectCandidate.findFirst({
-          where: {
-            OR: [
-              { convertedToId: candidate.id },
-              { email: candidate.email || undefined },
-              { phone: candidate.phone },
-            ],
-            isDeleted: false,
-          },
-        });
+        const existingProspect = findExistingProspect(candidate);
 
         if (existingProspect) {
-          // Si le prospect était marqué comme converti, le dé-convertir
           if (existingProspect.isConverted) {
-            await prisma.prospectCandidate.update({
-              where: { id: existingProspect.id },
-              data: {
-                isConverted: false,
-                convertedAt: null,
-                convertedToId: null,
-              },
-            });
+            prospectsToDeconvert.push(existingProspect.id);
+            existingProspect.isConverted = false; // reflète le batch à venir
           }
-
-          // Supprimer le candidat (soft delete)
-          await prisma.candidate.update({
-            where: { id: candidate.id },
-            data: {
-              isDeleted: true,
-              deletedAt: new Date(),
-            },
-          });
-
+          candidatesToDelete.push(candidate.id);
           results.push({
             name: `${candidate.firstName} ${candidate.lastName}`,
             action: 'prospect_restored',
@@ -87,7 +79,6 @@ export const revertAutoConvertedCandidates = async (
             candidateId: candidate.id,
           });
         } else {
-          // 2. Créer un nouveau prospect avec les données du candidat
           const newProspect = await prisma.prospectCandidate.create({
             data: {
               firstName: candidate.firstName,
@@ -105,16 +96,15 @@ export const revertAutoConvertedCandidates = async (
               notes: `Re-créé depuis candidat auto-converti (ID original: ${candidate.id})`,
             },
           });
-
-          // 3. Supprimer le candidat (soft delete)
-          await prisma.candidate.update({
-            where: { id: candidate.id },
-            data: {
-              isDeleted: true,
-              deletedAt: new Date(),
-            },
+          // Visible pour les candidats suivants (évite les doublons même contact).
+          prospectCache.push({
+            id: newProspect.id,
+            convertedToId: newProspect.convertedToId,
+            email: newProspect.email,
+            phone: newProspect.phone,
+            isConverted: newProspect.isConverted,
           });
-
+          candidatesToDelete.push(candidate.id);
           results.push({
             name: `${candidate.firstName} ${candidate.lastName}`,
             action: 'prospect_created',
@@ -129,6 +119,20 @@ export const revertAutoConvertedCandidates = async (
           error: error.message,
         });
       }
+    }
+
+    // Applique les mutations en lot (2 requêtes au lieu de ~2N).
+    if (prospectsToDeconvert.length > 0) {
+      await prisma.prospectCandidate.updateMany({
+        where: { id: { in: prospectsToDeconvert } },
+        data: { isConverted: false, convertedAt: null, convertedToId: null },
+      });
+    }
+    if (candidatesToDelete.length > 0) {
+      await prisma.candidate.updateMany({
+        where: { id: { in: candidatesToDelete } },
+        data: { isDeleted: true, deletedAt: new Date() },
+      });
     }
 
     // Log d'audit
