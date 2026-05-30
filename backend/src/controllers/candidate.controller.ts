@@ -12,11 +12,12 @@ import { aiExtractionService } from '../services/ai-extraction.service';
 
 const CANDIDATE_LIST_CACHE_PREFIX = 'candidates:list';
 const CANDIDATE_STATS_CACHE_KEY = 'candidates:stats';
+const CANDIDATE_CITY_CACHE_KEY = 'candidates:city-stats';
 
 const invalidateCandidateCaches = () =>
   invalidateCaches({
     listPrefix: CANDIDATE_LIST_CACHE_PREFIX,
-    statKeys: [CANDIDATE_STATS_CACHE_KEY],
+    statKeys: [CANDIDATE_STATS_CACHE_KEY, CANDIDATE_CITY_CACHE_KEY],
   });
 
 
@@ -566,11 +567,17 @@ export const getCandidatesByCity = async (
   next: NextFunction
 ) => {
   try {
+    // O6 — mise en cache (TTL 300s) : agrégation par ville coûteuse, invalidée
+    // sur create/update via invalidateCandidateCaches().
+    const cached = await getCache<{ success: boolean; data: any }>(CANDIDATE_CITY_CACHE_KEY);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const stats = await candidateService.getByCity();
-    res.json({
-      success: true,
-      data: stats,
-    });
+    const payload = { success: true, data: stats };
+    await setCache(CANDIDATE_CITY_CACHE_KEY, payload, 300);
+    res.json(payload);
   } catch (error) {
     next(error);
   }
