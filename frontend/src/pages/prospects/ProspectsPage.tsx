@@ -62,6 +62,7 @@ import { ContactConflict } from '@/services/contact.service';
 import { useNavigate } from 'react-router-dom';
 import { prospectService } from '@/services/prospect.service';
 import { downloadProspectsCsv } from './prospectsCsv';
+import ProspectsDialogs from './ProspectsDialogs';
 import { employeeService } from '@/services/employee.service';
 import { clientService } from '@/services/client.service';
 import { ProspectCandidate } from '@/types';
@@ -948,202 +949,34 @@ export default function ProspectsPage() {
         </>
       )}
 
-      {/* Contact Dialog */}
-      <Dialog
-        open={contactDialog.open}
-        onClose={() => setContactDialog({ open: false, prospect: null })}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Marquer comme contacté</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ mb: 2 }}>
-            {contactDialog.prospect &&
-              `${contactDialog.prospect.firstName} ${contactDialog.prospect.lastName}`}
-          </Typography>
-          <TextField
-            fullWidth
-            multiline
-            rows={4}
-            label="Notes (optionnel)"
-            value={contactNotes}
-            onChange={(e) => setContactNotes(e.target.value)}
-            placeholder="Ajouter des notes sur le contact..."
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setContactDialog({ open: false, prospect: null })}>
-            Annuler
-          </Button>
-          <Button
-            onClick={handleConfirmContact}
-            variant="contained"
-            disabled={markContactedMutation.isPending}
-          >
-            {markContactedMutation.isPending ? 'En cours...' : 'Confirmer'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* CV Preview Dialog */}
-      <Dialog
-        open={cvPreviewDialog.open}
-        onClose={() => setCvPreviewDialog({ open: false, cvUrl: null, prospectName: '' })}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <DescriptionIcon />
-              <Typography variant="h6">
-                CV - {cvPreviewDialog.prospectName}
-              </Typography>
-            </Box>
-            <IconButton
-              onClick={() => setCvPreviewDialog({ open: false, cvUrl: null, prospectName: '' })}
-              size="small"
-            >
-              <CloseIcon />
-            </IconButton>
-          </Box>
-        </DialogTitle>
-        <DialogContent sx={{ p: 0, height: '80vh' }}>
-          {cvPreviewDialog.cvUrl && (
-            <CVPreview
-              url={cvPreviewDialog.cvUrl}
-              fileName={`CV - ${cvPreviewDialog.prospectName}`}
-            />
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => window.open(cvPreviewDialog.cvUrl!, '_blank')}
-            startIcon={<DownloadIcon />}
-            variant="outlined"
-          >
-            Télécharger
-          </Button>
-          <Button
-            onClick={() => setCvPreviewDialog({ open: false, cvUrl: null, prospectName: '' })}
-            variant="contained"
-          >
-            Fermer
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Video Preview Dialog */}
-      <Dialog
-        open={videoPreviewDialog.open}
-        onClose={() => setVideoPreviewDialog({ open: false, prospectId: null, prospectName: '' })}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <VideoIcon />
-              <Typography variant="h6">Vidéo - {videoPreviewDialog.prospectName}</Typography>
-            </Box>
-            <IconButton
-              onClick={() => setVideoPreviewDialog({ open: false, prospectId: null, prospectName: '' })}
-              size="small"
-            >
-              <CloseIcon />
-            </IconButton>
-          </Box>
-        </DialogTitle>
-        <DialogContent sx={{ p: 2 }}>
-          {videoPreviewDialog.prospectId && (
-            <ProspectVideoPlayer prospectId={videoPreviewDialog.prospectId} height="60vh" />
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => setVideoPreviewDialog({ open: false, prospectId: null, prospectName: '' })}
-            variant="contained"
-          >
-            Fermer
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Ajouter un prospect */}
-      <Dialog open={addProspectOpen} onClose={() => setAddProspectOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Ajouter un candidat potentiel</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <TextField label="Prénom" fullWidth value={prospectForm.firstName}
-              onChange={(e) => setProspectForm({ ...prospectForm, firstName: e.target.value })} />
-            <TextField label="Nom" fullWidth value={prospectForm.lastName}
-              onChange={(e) => setProspectForm({ ...prospectForm, lastName: e.target.value })} />
-          </Box>
-          <TextField label="Courriel" fullWidth value={prospectForm.email}
-            onChange={(e) => setProspectForm({ ...prospectForm, email: e.target.value })} />
-          <TextField label="Téléphone" fullWidth value={prospectForm.phone}
-            onChange={(e) => setProspectForm({ ...prospectForm, phone: e.target.value })} />
-          <TextField label="Ville" fullWidth value={prospectForm.city}
-            onChange={(e) => setProspectForm({ ...prospectForm, city: e.target.value })} />
-          <TextField label="Adresse" fullWidth value={prospectForm.streetAddress}
-            onChange={(e) => setProspectForm({ ...prospectForm, streetAddress: e.target.value })} />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddProspectOpen(false)}>Annuler</Button>
-          <Button
-            variant="contained"
-            onClick={() => createProspectMutation.mutate()}
-            disabled={createProspectMutation.isPending || !prospectForm.firstName || !prospectForm.phone}
-          >
-            {createProspectMutation.isPending ? 'Création…' : 'Créer'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <ContactConflictDialog
-        conflict={contactConflict}
-        creatingIn="prospect"
-        onClose={() => setContactConflict(null)}
+      <ProspectsDialogs
+        contactDialog={contactDialog}
+        setContactDialog={setContactDialog}
+        contactNotes={contactNotes}
+        setContactNotes={setContactNotes}
+        onConfirmContact={handleConfirmContact}
+        contactPending={markContactedMutation.isPending}
+        cvPreviewDialog={cvPreviewDialog}
+        setCvPreviewDialog={setCvPreviewDialog}
+        videoPreviewDialog={videoPreviewDialog}
+        setVideoPreviewDialog={setVideoPreviewDialog}
+        addProspectOpen={addProspectOpen}
+        setAddProspectOpen={setAddProspectOpen}
+        prospectForm={prospectForm}
+        setProspectForm={setProspectForm}
+        onCreateProspect={() => createProspectMutation.mutate()}
+        createPending={createProspectMutation.isPending}
+        contactConflict={contactConflict}
+        setContactConflict={setContactConflict}
+        assignClientDialogOpen={assignClientDialogOpen}
+        setAssignClientDialogOpen={setAssignClientDialogOpen}
+        assignClientId={assignClientId}
+        setAssignClientId={setAssignClientId}
+        clients={clientsData?.data || []}
+        onAssignToClient={() => assignToClientMutation.mutate()}
+        assignPending={assignToClientMutation.isPending}
+        selectedCount={selectedProspects.size}
       />
-
-      {/* Dialog : transférer prospects vers un client (assignation interne gratuite) */}
-      <Dialog
-        open={assignClientDialogOpen}
-        onClose={() => setAssignClientDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Transférer vers un client</DialogTitle>
-        <DialogContent sx={{ pt: 1 }}>
-          <Alert severity="info" sx={{ mb: 2 }}>
-            <strong>{selectedProspects.size}</strong> prospect{selectedProspects.size > 1 ? 's' : ''} seront assigné{selectedProspects.size > 1 ? 's' : ''} au client choisi (assignation interne, gratuit). Le client ne voit pas l'assignation tant qu'elle n'est pas confirmée comme achat.
-          </Alert>
-          <FormControl fullWidth>
-            <InputLabel>Client</InputLabel>
-            <Select
-              label="Client"
-              value={assignClientId}
-              onChange={(e) => setAssignClientId(e.target.value)}
-            >
-              {(clientsData?.data || []).map((c: any) => (
-                <MenuItem key={c.id} value={c.id}>
-                  {c.name}{c.companyName ? ` — ${c.companyName}` : ''}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAssignClientDialogOpen(false)}>Annuler</Button>
-          <Button
-            variant="contained"
-            onClick={() => assignToClientMutation.mutate()}
-            disabled={!assignClientId || assignToClientMutation.isPending}
-          >
-            {assignToClientMutation.isPending ? 'Transfert…' : 'Transférer'}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }
