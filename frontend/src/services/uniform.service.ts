@@ -18,6 +18,8 @@ export interface IssuanceLineInput {
   customItemName?: string;
   quantity: number;
   unitCost?: number;
+  /** Emplacement d'où la pièce sort (du QR scanné). Sinon défaut de la remise. */
+  sourceLocation?: UniformStockLocation;
 }
 export interface ReturnLineInput {
   variantId?: string;
@@ -65,7 +67,8 @@ export const uniformService = {
   },
   async getByBarcode(barcode: string) {
     const r = await api.get(`/api/uniforms/variants/by-barcode/${encodeURIComponent(barcode)}`);
-    return r.data as { data: UniformVariant };
+    // `location` = emplacement encodé dans le QR scanné (-F/-B), ou null.
+    return r.data as { data: UniformVariant; location?: UniformStockLocation | null };
   },
   labelUrl(variantId: string) {
     return `${api.defaults.baseURL}/api/uniforms/variants/${variantId}/label`;

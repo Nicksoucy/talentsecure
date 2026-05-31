@@ -27,7 +27,14 @@ const locLabel: Record<UniformStockLocation, string> = {
 interface LineState {
   variant: UniformVariant;
   qty: number;
+  /** Emplacement d'où CETTE ligne sort (du QR scanné, ou défaut sélectionné). */
+  sourceLocation: UniformStockLocation;
 }
+
+/** Clé d'une ligne = variante + emplacement (front et back = 2 lignes distinctes). */
+const lineKey = (variantId: string, loc: UniformStockLocation) => `${variantId}::${loc}`;
+const otherLoc = (loc: UniformStockLocation): UniformStockLocation =>
+  loc === 'FRONT_OFFICE' ? 'BACK_OFFICE' : 'FRONT_OFFICE';
 
 interface Props {
   open: boolean;
@@ -52,6 +59,8 @@ export default function MobileIssuanceSheet({ open, onClose, employeeId, onDone 
   const { enqueueSnackbar } = useSnackbar();
 
   const [division, setDivision] = useState<UniformDivision>('SECURITE');
+  // Emplacement PAR DÉFAUT : utilisé pour la saisie manuelle ou un code sans suffixe.
+  // Un QR « casier » (-F) ou « bac » (-B) fixe l'emplacement de la ligne lui-même.
   const [sourceLocation, setSourceLocation] = useState<UniformStockLocation>('FRONT_OFFICE');
   const [dueReturnAt, setDueReturnAt] = useState('');
   const [lines, setLines] = useState<Record<string, LineState>>({});
@@ -62,8 +71,6 @@ export default function MobileIssuanceSheet({ open, onClose, employeeId, onDone 
   const [signToken, setSignToken] = useState<string | null>(null);
   const [emprSig, setEmprSig] = useState<string | null>(null);
   const [employerSigned, setEmployerSigned] = useState(false);
-
-  const otherLocation: UniformStockLocation = sourceLocation === 'FRONT_OFFICE' ? 'BACK_OFFICE' : 'FRONT_OFFICE';
 
   const lineArr = useMemo(() => Object.values(lines).filter((l) => l.qty > 0), [lines]);
   const grandTotal = lineArr.reduce((s, l) => s + l.qty * Number(l.variant.replacementCost), 0);
@@ -87,35 +94,37 @@ export default function MobileIssuanceSheet({ open, onClose, employeeId, onDone 
     if (created) onDone?.();
   };
 
-  const addVariant = (variant: UniformVariant) => {
+  const addVariant = (variant: UniformVariant, loc: UniformStockLocation) => {
     if (variant.item && variant.item.division !== division) {
       enqueueSnackbar(
         `« ${variant.item.name} » est en division ${variant.item.division === 'SECURITE' ? 'Sécurité' : 'Signalisation'} — vérifiez la division`,
         { variant: 'warning' }
       );
     }
+    const key = lineKey(variant.id, loc);
     setLines((p) => {
-      const cur = p[variant.id];
-      return { ...p, [variant.id]: { variant, qty: (cur?.qty || 0) + 1 } };
+      const cur = p[key];
+      return { ...p, [key]: { variant, qty: (cur?.qty || 0) + 1, sourceLocation: loc } };
     });
-    enqueueSnackbar(`+1 ${variant.item?.name || 'pièce'} (${variant.size})`, { variant: 'success' });
+    enqueueSnackbar(`+1 ${variant.item?.name || 'pièce'} (${variant.size}) · ${locLabel[loc]}`, { variant: 'success' });
   };
 
   const handleScan = async (code: string) => {
     try {
-      const { data } = await uniformService.getByBarcode(code);
-      addVariant(data);
+      const { data, location } = await uniformService.getByBarcode(code);
+      // L'emplacement vient du QR (-F/-B) ; sinon on retombe sur le défaut sélectionné.
+      addVariant(data, location ?? sourceLocation);
     } catch {
       enqueueSnackbar('Code-barres inconnu', { variant: 'error' });
     }
   };
 
-  const setQty = (variantId: string, qty: number) =>
-    setLines((p) => ({ ...p, [variantId]: { ...p[variantId], qty: Math.max(0, qty) } }));
-  const removeLine = (variantId: string) =>
+  const setQty = (key: string, qty: number) =>
+    setLines((p) => ({ ...p, [key]: { ...p[key], qty: Math.max(0, qty) } }));
+  const removeLine = (key: string) =>
     setLines((p) => {
       const next = { ...p };
-      delete next[variantId];
+      delete next[key];
       return next;
     });
 
@@ -126,11 +135,12 @@ export default function MobileIssuanceSheet({ open, onClose, employeeId, onDone 
         variantId: l.variant.id,
         quantity: l.qty,
         unitCost: Number(l.variant.replacementCost),
+        sourceLocation: l.sourceLocation,
       }));
       const created = await uniformService.createIssuance({
         employeeId,
         division,
-        sourceLocation,
+        sourceLocation, // défaut de la remise (pour les lignes sans emplacement)
         dueReturnAt: dueReturnAt || undefined,
         lines: payload,
       });
@@ -142,7 +152,7 @@ export default function MobileIssuanceSheet({ open, onClose, employeeId, onDone 
     onSuccess: ({ id, token }) => {
       setIssuanceId(id);
       setSignToken(token);
-      enqueueSnackbar(`Remise finalisée — ${locLabel[sourceLocation]} décrémenté`, { variant: 'success' });
+      enqueueSnackbar('Remise finalisée — stock décrémenté par emplacement', { variant: 'success' });
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || e?.message || 'Erreur', { variant: 'error' }),
   });
@@ -195,11 +205,12 @@ export default function MobileIssuanceSheet({ open, onClose, employeeId, onDone 
                 <MenuItem value="SIGNALISATION">Signalisation</MenuItem>
               </TextField>
               <TextField
-                select size="small" label="Emplacement source" value={sourceLocation} fullWidth
+                select size="small" label="Emplacement par défaut" value={sourceLocation} fullWidth
                 onChange={(e) => setSourceLocation(e.target.value as UniformStockLocation)}
+                helperText="Utilisé si le code scanné n'indique pas l'emplacement"
               >
-                <MenuItem value="FRONT_OFFICE">Front office</MenuItem>
-                <MenuItem value="BACK_OFFICE">Back office</MenuItem>
+                <MenuItem value="FRONT_OFFICE">Front office (casier)</MenuItem>
+                <MenuItem value="BACK_OFFICE">Back office (bac)</MenuItem>
               </TextField>
             </Stack>
             <TextField
@@ -218,7 +229,8 @@ export default function MobileIssuanceSheet({ open, onClose, employeeId, onDone 
             )}
             <BarcodeScannerInput onScan={handleScan} />
             <Typography variant="caption" color="text.secondary">
-              Scannez le QR/code-barres d'une pièce : elle s'ajoute à la liste (+1 par scan).
+              Scannez le QR d'un <b>casier</b> (front) ou d'un <b>bac</b> (back) : la pièce s'ajoute
+              avec son emplacement (+1 par scan). Front et back forment deux lignes distinctes.
             </Typography>
 
             {/* Liste en cartes */}
@@ -228,43 +240,51 @@ export default function MobileIssuanceSheet({ open, onClose, employeeId, onDone 
             )}
             <Stack spacing={1.5}>
               {lineArr.map((l) => {
-                const avail = locQty(l.variant, sourceLocation);
-                const otherAvail = locQty(l.variant, otherLocation);
+                const loc = l.sourceLocation;
+                const key = lineKey(l.variant.id, loc);
+                const avail = locQty(l.variant, loc);
+                const otherAvail = locQty(l.variant, otherLoc(loc));
                 const insufficient = l.qty > avail;
                 return (
-                  <Card key={l.variant.id} variant="outlined" sx={insufficient ? { borderColor: 'error.main' } : undefined}>
+                  <Card key={key} variant="outlined" sx={insufficient ? { borderColor: 'error.main' } : undefined}>
                     <CardContent sx={{ pb: 1.5, '&:last-child': { pb: 1.5 } }}>
                       <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
                         <Box>
                           <Typography variant="subtitle2">{l.variant.item?.name || 'Pièce'}</Typography>
-                          <Stack direction="row" spacing={1} mt={0.5} alignItems="center">
+                          <Stack direction="row" spacing={1} mt={0.5} alignItems="center" flexWrap="wrap" useFlexGap>
                             <Chip size="small" label={l.variant.size} />
+                            <Chip
+                              size="small"
+                              color={loc === 'FRONT_OFFICE' ? 'info' : 'warning'}
+                              variant="outlined"
+                              label={loc === 'FRONT_OFFICE' ? 'Front · casier' : 'Back · bac'}
+                            />
                             <Typography variant="caption" color={insufficient ? 'error' : 'text.secondary'}>
-                              Dispo {locLabel[sourceLocation]} : {avail}
+                              Dispo : {avail}
                             </Typography>
                           </Stack>
                         </Box>
-                        <IconButton size="small" onClick={() => removeLine(l.variant.id)}>
+                        <IconButton size="small" onClick={() => removeLine(key)}>
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Stack>
                       <Stack direction="row" justifyContent="space-between" alignItems="center" mt={1}>
                         <Stack direction="row" alignItems="center" spacing={0.5}>
-                          <IconButton size="small" onClick={() => setQty(l.variant.id, l.qty - 1)}><RemoveIcon fontSize="small" /></IconButton>
+                          <IconButton size="small" onClick={() => setQty(key, l.qty - 1)}><RemoveIcon fontSize="small" /></IconButton>
                           <TextField
                             size="small" type="number" value={l.qty}
-                            onChange={(e) => setQty(l.variant.id, Number(e.target.value))}
+                            onChange={(e) => setQty(key, Number(e.target.value))}
                             inputProps={{ style: { textAlign: 'center', width: 44 }, min: 0 }}
                             error={insufficient}
                           />
-                          <IconButton size="small" onClick={() => setQty(l.variant.id, l.qty + 1)}><AddIcon fontSize="small" /></IconButton>
+                          <IconButton size="small" onClick={() => setQty(key, l.qty + 1)}><AddIcon fontSize="small" /></IconButton>
                         </Stack>
                         <Typography variant="body2"><b>{money(l.qty * Number(l.variant.replacementCost))}</b></Typography>
                       </Stack>
                       {insufficient && (
                         <Typography variant="caption" color="error" display="block" mt={0.5}>
-                          Stock insuffisant à {locLabel[sourceLocation]}
-                          {otherAvail > 0 ? ` — ${otherAvail} dispo à ${locLabel[otherLocation]}` : ''}.
+                          Stock insuffisant à {locLabel[loc]}
+                          {otherAvail > 0 ? ` — ${otherAvail} dispo à ${locLabel[otherLoc(loc)]}` : ''}.
                         </Typography>
                       )}
                     </CardContent>

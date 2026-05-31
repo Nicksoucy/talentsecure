@@ -5,10 +5,28 @@
 import bwipjs from 'bwip-js';
 import PDFDocument from 'pdfkit';
 import crypto from 'crypto';
+import type { UniformStockLocation } from '@prisma/client';
 import { prisma } from '../config/database';
 
 // Alphabet sans caractères ambigus (pas de I, O, 0, 1) — lisible sur étiquette.
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+// Suffixe d'emplacement encodé dans le QR/Code128 de l'étiquette.
+//   <code>-F = casier FRONT_OFFICE · <code>-B = bac BACK_OFFICE
+// Le code de base (UNI…) ne contient jamais de tiret, donc le split est sûr.
+const LOC_SUFFIX: Record<UniformStockLocation, string> = { FRONT_OFFICE: '-F', BACK_OFFICE: '-B' };
+
+/**
+ * Sépare un code scanné en (code-barres de base, emplacement).
+ * Rétro-compatible : un code sans suffixe -> location null (l'appelant retombe
+ * sur l'emplacement par défaut / sélectionné).
+ */
+export function parseScannedCode(code: string): { barcode: string; location: UniformStockLocation | null } {
+  const v = (code || '').trim();
+  if (v.endsWith('-F')) return { barcode: v.slice(0, -2), location: 'FRONT_OFFICE' };
+  if (v.endsWith('-B')) return { barcode: v.slice(0, -2), location: 'BACK_OFFICE' };
+  return { barcode: v, location: null };
+}
 
 export function randomBarcodeValue(): string {
   const bytes = crypto.randomBytes(9);
@@ -58,11 +76,24 @@ export interface LabelData {
   itemName: string;
   size: string;
   barcode: string;
+  /** Si défini : encode -F/-B dans le code et affiche la légende casier/bac. */
+  location?: UniformStockLocation;
 }
+
+const LOC_CAPTION: Record<UniformStockLocation, string> = {
+  FRONT_OFFICE: 'FRONT • casier',
+  BACK_OFFICE: 'BACK • bac',
+};
+const LOC_COLOR: Record<UniformStockLocation, string> = {
+  FRONT_OFFICE: '#1565c0', // bleu
+  BACK_OFFICE: '#b26a00', // ambre
+};
 
 /**
  * Rend une feuille A4 d'étiquettes (3 colonnes), chaque étiquette portant le
- * nom du morceau, la grandeur, le Code128 et un petit QR.
+ * nom du morceau, la grandeur, l'emplacement (casier/bac), le Code128 et un QR.
+ * Le code encodé porte le suffixe d'emplacement (-F/-B) pour que le scan fixe
+ * automatiquement la source de la remise.
  */
 export async function renderLabelsPdf(labels: LabelData[]): Promise<Buffer> {
   const doc = new PDFDocument({ size: 'A4', margin: 24 });
@@ -77,16 +108,22 @@ export async function renderLabelsPdf(labels: LabelData[]): Promise<Buffer> {
 
   for (let i = 0; i < labels.length; i++) {
     const label = labels[i];
-    const code128 = await renderCode128Png(label.barcode);
-    const qr = await renderQrPng(label.barcode);
+    const payload = label.barcode + (label.location ? LOC_SUFFIX[label.location] : '');
+    const code128 = await renderCode128Png(payload);
+    const qr = await renderQrPng(payload);
 
     // Cadre
     doc.rect(x, y, cellW - 6, cellH - 6).stroke('#cccccc');
 
     doc.fontSize(8).fillColor('#000000').font('Helvetica-Bold')
-      .text(label.itemName, x + 6, y + 6, { width: cellW - 18, height: 22, ellipsis: true });
+      .text(label.itemName, x + 6, y + 6, { width: cellW - 18, height: 20, ellipsis: true });
     doc.font('Helvetica').fontSize(8).fillColor('#444444')
-      .text(`Taille : ${label.size}`, x + 6, y + 26, { width: cellW - 18 });
+      .text(`Taille : ${label.size}`, x + 6, y + 24, { width: cellW - 60 });
+    // Légende d'emplacement (en couleur, alignée à droite)
+    if (label.location) {
+      doc.font('Helvetica-Bold').fontSize(8).fillColor(LOC_COLOR[label.location])
+        .text(LOC_CAPTION[label.location], x + 6, y + 24, { width: cellW - 14, align: 'right' });
+    }
 
     // Code128
     doc.image(code128, x + 6, y + 42, { width: cellW - 40, height: 36 });
@@ -94,7 +131,7 @@ export async function renderLabelsPdf(labels: LabelData[]): Promise<Buffer> {
     doc.image(qr, x + cellW - 34, y + 42, { width: 28, height: 28 });
 
     doc.font('Helvetica').fontSize(7).fillColor('#000000')
-      .text(label.barcode, x + 6, y + 84, { width: cellW - 18 });
+      .text(payload, x + 6, y + 84, { width: cellW - 18 });
 
     // Avance la grille
     x += cellW;

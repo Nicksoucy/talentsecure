@@ -15,40 +15,56 @@ import { computeAmountOwed } from '../services/uniform-stock.service';
 const userId = (req: Request): string | undefined => (req.user as any)?.id;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
+type SourceLoc = 'BACK_OFFICE' | 'FRONT_OFFICE';
 interface LineInput {
   variantId?: string;
   customItemName?: string;
   quantity: number;
   unitCost?: number;
+  /** Emplacement d'où CETTE pièce sort (du QR scanné). null = défaut de la remise. */
+  sourceLocation?: SourceLoc;
 }
 
-/** Normalise + fusionne les lignes (variantes identiques additionnées). */
-async function buildLines(lines: LineInput[]) {
+interface BuiltLine {
+  variantId: string | null;
+  customItemName: string | null;
+  quantity: number;
+  unitCostSnapshot: number;
+  sourceLocation: SourceLoc | null;
+}
+
+/**
+ * Normalise + fusionne les lignes. Fusion par (variante + emplacement source) :
+ * une même variante sortie du front ET du back donne DEUX lignes distinctes.
+ */
+async function buildLines(lines: LineInput[]): Promise<BuiltLine[]> {
   const merged = new Map<string, LineInput>();
   const customs: LineInput[] = [];
   for (const l of lines) {
     if (!l.quantity || l.quantity <= 0) continue;
     if (l.variantId) {
-      const cur = merged.get(l.variantId);
+      const key = `${l.variantId}::${l.sourceLocation ?? ''}`;
+      const cur = merged.get(key);
       if (cur) cur.quantity += l.quantity;
-      else merged.set(l.variantId, { ...l });
+      else merged.set(key, { ...l });
     } else {
       customs.push(l);
     }
   }
-  const variantIds = [...merged.keys()];
+  const variantIds = [...new Set([...merged.values()].map((l) => l.variantId!))];
   const variants = await prisma.uniformVariant.findMany({ where: { id: { in: variantIds } } });
   const vMap = new Map(variants.map((v) => [v.id, v]));
 
-  const data = [] as { variantId: string | null; customItemName: string | null; quantity: number; unitCostSnapshot: number }[];
-  for (const [variantId, l] of merged) {
-    const v = vMap.get(variantId);
-    if (!v) throw new ApiError(404, `Variante ${variantId} introuvable`);
+  const data: BuiltLine[] = [];
+  for (const l of merged.values()) {
+    const v = vMap.get(l.variantId!);
+    if (!v) throw new ApiError(404, `Variante ${l.variantId} introuvable`);
     data.push({
-      variantId,
+      variantId: l.variantId!,
       customItemName: null,
       quantity: l.quantity,
       unitCostSnapshot: l.unitCost ?? Number(v.replacementCost),
+      sourceLocation: l.sourceLocation ?? null,
     });
   }
   for (const c of customs) {
@@ -57,6 +73,7 @@ async function buildLines(lines: LineInput[]) {
       customItemName: c.customItemName || 'Autre',
       quantity: c.quantity,
       unitCostSnapshot: c.unitCost ?? 0,
+      sourceLocation: null,
     });
   }
   return data;
@@ -222,7 +239,8 @@ export const finalizeIssuance = async (req: Request, res: Response, next: NextFu
             variantId: line.variantId,
             type: 'OUT',
             quantity: line.quantity,
-            location: existing.sourceLocation,
+            // Emplacement par ligne (du QR scanné) ; sinon défaut de la remise.
+            location: line.sourceLocation ?? existing.sourceLocation,
             reason: `Remise ${existing.id}`,
             issuanceId: existing.id,
             createdById: userId(req),
@@ -419,7 +437,8 @@ export const cancelIssuance = async (req: Request, res: Response, next: NextFunc
             variantId: line.variantId,
             type: 'IN',
             quantity: line.quantity,
-            location: issuance.sourceLocation, // ré-incrémente là où c'était sorti
+            // ré-incrémente là où c'était sorti (par ligne ; sinon défaut de la remise)
+            location: line.sourceLocation ?? issuance.sourceLocation,
             reason: `Annulation remise ${issuance.id}`,
             issuanceId: issuance.id,
             createdById: userId(req),

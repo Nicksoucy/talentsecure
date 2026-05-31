@@ -74,6 +74,7 @@ export interface UniformIssuanceLine {
   customItemName?: string | null;
   quantity: number;
   unitCostSnapshot: string | number;
+  sourceLocation?: UniformStockLocation | null;
   variant?: UniformVariant;
 }
 
