@@ -56,6 +56,7 @@ router.get('/variants/by-barcode/:barcode', ctrl.getVariantByBarcode);
 router.get('/variants/:variantId/label', ctrl.variantLabel);
 router.post('/variants/:variantId/replenish', ctrl.replenishVariant);
 router.post('/variants/:variantId/adjust', ctrl.adjustVariant);
+router.post('/variants/:variantId/transfer', ctrl.transferVariant);
 router.put('/variants/:variantId', ctrl.updateVariant);
 router.delete('/variants/:variantId', ctrl.deleteVariant);
 

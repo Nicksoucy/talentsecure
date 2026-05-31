@@ -116,9 +116,12 @@ export const getIssuance = async (req: Request, res: Response, next: NextFunctio
 
 export const createIssuance = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { employeeId, division, dueReturnAt, notes, lines } = req.body;
+    const { employeeId, division, dueReturnAt, notes, lines, sourceLocation } = req.body;
     if (!employeeId) throw new ApiError(400, 'employeeId requis');
     if (!division) throw new ApiError(400, 'division requise');
+    if (sourceLocation && sourceLocation !== 'BACK_OFFICE' && sourceLocation !== 'FRONT_OFFICE') {
+      throw new ApiError(400, 'sourceLocation invalide');
+    }
 
     const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
     if (!employee || employee.isDeleted) throw new ApiError(404, 'Agent introuvable');
@@ -130,6 +133,8 @@ export const createIssuance = async (req: Request, res: Response, next: NextFunc
         division,
         dueReturnAt: dueReturnAt ? new Date(dueReturnAt) : null,
         notes: notes ?? null,
+        // Défaut DB = FRONT_OFFICE si non fourni (comptoir de remise).
+        ...(sourceLocation ? { sourceLocation } : {}),
         createdById: userId(req),
         lines: { create: lineData },
       },
@@ -217,6 +222,7 @@ export const finalizeIssuance = async (req: Request, res: Response, next: NextFu
             variantId: line.variantId,
             type: 'OUT',
             quantity: line.quantity,
+            location: existing.sourceLocation,
             reason: `Remise ${existing.id}`,
             issuanceId: existing.id,
             createdById: userId(req),
@@ -413,6 +419,7 @@ export const cancelIssuance = async (req: Request, res: Response, next: NextFunc
             variantId: line.variantId,
             type: 'IN',
             quantity: line.quantity,
+            location: issuance.sourceLocation, // ré-incrémente là où c'était sorti
             reason: `Annulation remise ${issuance.id}`,
             issuanceId: issuance.id,
             createdById: userId(req),

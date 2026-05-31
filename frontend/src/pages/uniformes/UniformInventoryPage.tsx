@@ -3,14 +3,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Stack, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
   Button, TextField, Tabs, Tab, Tooltip, MenuItem, InputAdornment, Table, TableHead, TableRow,
-  TableCell, TableBody,
+  TableCell, TableBody, Autocomplete,
 } from '@mui/material';
 import TuneIcon from '@mui/icons-material/Tune';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import SearchIcon from '@mui/icons-material/Search';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import QrCode2Icon from '@mui/icons-material/QrCode2';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
+import type { UniformStockLocation } from '@/types/uniform';
 
 // ---------- Design B (heatmap) tokens ----------
 const T = {
@@ -38,8 +41,10 @@ const T = {
 const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
 const moveLabel: Record<string, string> = {
   IN: 'Entrée', OUT: 'Sortie', ADJUST: 'Ajustement', LOST: 'Perdu', DAMAGED: 'Endommagé',
-  WASH_IN: 'Au lavage', WASH_OUT_GOOD: 'Retour de lavage', WASH_OUT_DAMAGED: 'Lavage → poubelle', DISPOSAL: 'Disposition',
+  WASH_IN: 'Au lavage', WASH_OUT_GOOD: 'Retour de lavage', WASH_OUT_DAMAGED: 'Lavage → poubelle',
+  DISPOSAL: 'Disposition', TRANSFER: 'Transfert',
 };
+const locShort: Record<string, string> = { BACK_OFFICE: 'Back', FRONT_OFFICE: 'Front' };
 
 // ---------- Bucket detection ----------
 const LETTER_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
@@ -244,19 +249,20 @@ function HeatmapTable({
                     }
                     const s = cellStyle(v.quantityOnHand, v.reorderThreshold);
                     return (
-                      <Box
-                        key={col}
-                        component="td"
-                        onClick={() => onCellClick(v, g)}
-                        sx={{
-                          px: 1, py: 1.5, textAlign: 'center', cursor: 'pointer',
-                          bgcolor: s.bg, color: s.color, fontWeight: s.weight,
-                          transition: 'filter .12s',
-                          '&:hover': { filter: 'brightness(0.96)' },
-                        }}
-                      >
-                        {v.quantityOnHand}
-                      </Box>
+                      <Tooltip key={col} title={`Back ${v.backOffice ?? 0} · Front ${v.frontOffice ?? 0}`} arrow>
+                        <Box
+                          component="td"
+                          onClick={() => onCellClick(v, g)}
+                          sx={{
+                            px: 1, py: 1.5, textAlign: 'center', cursor: 'pointer',
+                            bgcolor: s.bg, color: s.color, fontWeight: s.weight,
+                            transition: 'filter .12s',
+                            '&:hover': { filter: 'brightness(0.96)' },
+                          }}
+                        >
+                          {v.quantityOnHand}
+                        </Box>
+                      </Tooltip>
                     );
                   })}
                   <Box component="td" sx={{ px: 2, py: 1.5, textAlign: 'right', borderLeft: `1px solid ${T.outline}`, fontWeight: 600 }}>
@@ -312,7 +318,9 @@ function OneSizeTable({ groups, onAdjust }: { groups: Group[]; onAdjust: (varian
                   {g.division === 'SIGNALISATION' ? 'Signalisation' : 'Sécurité'}
                 </Box>
                 <Box component="td" sx={{ px: 2, py: 1.5, color: T.onSurfaceVariant }}>{g.emplacement || '—'}</Box>
-                <Box component="td" sx={{ px: 2, py: 1.5, textAlign: 'right', bgcolor: s.bg, color: s.color, fontWeight: s.weight }}>{v.quantityOnHand}</Box>
+                <Tooltip title={`Back ${v.backOffice ?? 0} · Front ${v.frontOffice ?? 0}`} arrow>
+                  <Box component="td" sx={{ px: 2, py: 1.5, textAlign: 'right', bgcolor: s.bg, color: s.color, fontWeight: s.weight }}>{v.quantityOnHand}</Box>
+                </Tooltip>
                 <Box component="td" sx={{ px: 2, py: 1.5, textAlign: 'right' }}>{money(v.replacementCost)}</Box>
                 <Box component="td" sx={{ px: 2, py: 1.5, textAlign: 'right', borderLeft: `1px solid ${T.outline}`, fontWeight: 600 }}>{money(v.value)}</Box>
                 <Box component="td" sx={{ px: 2, py: 1.5, textAlign: 'right' }}>
@@ -335,8 +343,13 @@ export default function UniformInventoryPage() {
   const { enqueueSnackbar } = useSnackbar();
   const [tab, setTab] = useState(0);
 
+  const [moveType, setMoveType] = useState('');
+
   const stock = useQuery({ queryKey: ['uniform-stock'], queryFn: () => uniformService.reportStock() });
-  const movements = useQuery({ queryKey: ['uniform-movements'], queryFn: () => uniformService.listMovements({ limit: 100 }) });
+  const movements = useQuery({
+    queryKey: ['uniform-movements', moveType],
+    queryFn: () => uniformService.listMovements({ limit: 100, type: moveType || undefined }),
+  });
 
   const [adjust, setAdjust] = useState<{ variantId: string; label: string } | null>(null);
   const [qty, setQty] = useState('');
@@ -350,6 +363,42 @@ export default function UniformInventoryPage() {
       qc.invalidateQueries({ queryKey: ['uniform-movements'] });
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
+  });
+
+  // Transfert back ↔ front
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferRow, setTransferRow] = useState<Row | null>(null);
+  const [transferQty, setTransferQty] = useState('');
+  const [transferFrom, setTransferFrom] = useState<UniformStockLocation>('BACK_OFFICE');
+  const transferTo: UniformStockLocation = transferFrom === 'BACK_OFFICE' ? 'FRONT_OFFICE' : 'BACK_OFFICE';
+  const closeTransfer = () => { setTransferOpen(false); setTransferRow(null); setTransferQty(''); setTransferFrom('BACK_OFFICE'); };
+  const doTransfer = useMutation({
+    mutationFn: () => uniformService.transfer(transferRow!.variantId, {
+      quantity: Number(transferQty), from: transferFrom, to: transferTo,
+    }),
+    onSuccess: () => {
+      enqueueSnackbar('Transfert effectué', { variant: 'success' });
+      closeTransfer();
+      qc.invalidateQueries({ queryKey: ['uniform-stock'] });
+      qc.invalidateQueries({ queryKey: ['uniform-movements'] });
+    },
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
+  });
+  const transferAvail = transferRow ? (transferFrom === 'BACK_OFFICE' ? transferRow.backOffice : transferRow.frontOffice) ?? 0 : 0;
+
+  // Impression de toutes les étiquettes QR
+  const printLabels = useMutation({
+    mutationFn: async () => {
+      const ids = rawRows.map((r) => r.variantId);
+      if (ids.length === 0) throw new Error('Aucune variante à imprimer');
+      return uniformService.labelsSheet(ids);
+    },
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    },
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || e?.message || 'Erreur', { variant: 'error' }),
   });
 
   // Filters
@@ -441,18 +490,45 @@ export default function UniformInventoryPage() {
             Vue d'ensemble par morceau et par taille. Cliquez sur une cellule pour ajuster.
           </Typography>
         </Box>
-        <Button
-          variant="outlined"
-          startIcon={<FileDownloadIcon />}
-          onClick={handleExport}
-          sx={{
-            textTransform: 'none', fontFamily: T.fontSans, fontWeight: 500,
-            color: T.primary, borderColor: T.outline, bgcolor: T.surface,
-            '&:hover': { borderColor: T.outlineStrong, bgcolor: T.surface },
-          }}
-        >
-          Exporter Excel
-        </Button>
+        <Stack direction="row" spacing={1.5}>
+          <Button
+            variant="outlined"
+            startIcon={<SwapHorizIcon />}
+            onClick={() => { setTransferRow(null); setTransferOpen(true); }}
+            sx={{
+              textTransform: 'none', fontFamily: T.fontSans, fontWeight: 500,
+              color: T.primary, borderColor: T.outline, bgcolor: T.surface,
+              '&:hover': { borderColor: T.outlineStrong, bgcolor: T.surface },
+            }}
+          >
+            Transférer
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<QrCode2Icon />}
+            onClick={() => printLabels.mutate()}
+            disabled={printLabels.isPending || rawRows.length === 0}
+            sx={{
+              textTransform: 'none', fontFamily: T.fontSans, fontWeight: 500,
+              color: T.primary, borderColor: T.outline, bgcolor: T.surface,
+              '&:hover': { borderColor: T.outlineStrong, bgcolor: T.surface },
+            }}
+          >
+            {printLabels.isPending ? 'Génération…' : 'Étiquettes QR'}
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<FileDownloadIcon />}
+            onClick={handleExport}
+            sx={{
+              textTransform: 'none', fontFamily: T.fontSans, fontWeight: 500,
+              color: T.primary, borderColor: T.outline, bgcolor: T.surface,
+              '&:hover': { borderColor: T.outlineStrong, bgcolor: T.surface },
+            }}
+          >
+            Exporter Excel
+          </Button>
+        </Stack>
       </Stack>
 
       <Tabs
@@ -474,6 +550,8 @@ export default function UniformInventoryPage() {
           {/* KPI strip */}
           <Box sx={{ display: 'flex', bgcolor: T.surface, border: `1px solid ${T.outline}`, borderRadius: 2, mb: 4, overflow: 'hidden' }}>
             <KpiCell label="Unités en stock" value={totalUnits.toLocaleString('fr-CA')} hint="tous morceaux confondus" />
+            <KpiCell label="Back office" value={(totals?.totalBackOffice ?? 0).toLocaleString('fr-CA')} hint="entrepôt principal" />
+            <KpiCell label="Front office" value={(totals?.totalFrontOffice ?? 0).toLocaleString('fr-CA')} hint="comptoir de remise" />
             <KpiCell label="Valeur totale" value={`$${Math.round(totalValue).toLocaleString('fr-CA')}`} hint="coût de remplacement" />
             <KpiCell
               label="Stock bas"
@@ -639,38 +717,59 @@ export default function UniformInventoryPage() {
       )}
 
       {tab === 1 && (
-        <Box sx={{ bgcolor: T.surface, border: `1px solid ${T.outline}`, borderRadius: 2, overflow: 'hidden' }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ bgcolor: T.surfaceLow }}>
-                <TableCell sx={{ fontFamily: T.fontSans, fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: T.onSurfaceVariant }}>Date</TableCell>
-                <TableCell sx={{ fontFamily: T.fontSans, fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: T.onSurfaceVariant }}>Morceau</TableCell>
-                <TableCell sx={{ fontFamily: T.fontSans, fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: T.onSurfaceVariant }}>Type</TableCell>
-                <TableCell align="right" sx={{ fontFamily: T.fontSans, fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: T.onSurfaceVariant }}>Δ Qté</TableCell>
-                <TableCell sx={{ fontFamily: T.fontSans, fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: T.onSurfaceVariant }}>Raison</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {(movements.data?.data || []).map((m: any) => (
-                <TableRow key={m.id} sx={{ '& td': { fontFamily: T.fontSans, fontSize: 13 } }}>
-                  <TableCell sx={{ fontFamily: `${T.fontMono} !important`, fontVariantNumeric: 'tabular-nums', color: T.onSurfaceVariant }}>
-                    {new Date(m.createdAt).toLocaleString('fr-CA')}
-                  </TableCell>
-                  <TableCell>{m.variant ? `${m.variant.item?.name} — ${m.variant.size}` : m.variantId}</TableCell>
-                  <TableCell>
-                    <Chip size="small" label={moveLabel[m.type] || m.type}
-                      sx={{ fontFamily: T.fontSans, fontSize: 11, height: 20, bgcolor: T.surfaceContainer, borderRadius: 1 }} />
-                  </TableCell>
-                  <TableCell align="right"
-                    sx={{ fontFamily: `${T.fontMono} !important`, fontVariantNumeric: 'tabular-nums', color: m.quantity < 0 ? T.errorText : '#15803d', fontWeight: 600 }}>
-                    {m.quantity > 0 ? `+${m.quantity}` : m.quantity}
-                  </TableCell>
-                  <TableCell sx={{ color: T.onSurfaceVariant }}>{m.reason}</TableCell>
+        <>
+          <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+            <TextField
+              select size="small" value={moveType} onChange={(e) => setMoveType(e.target.value)}
+              sx={{ minWidth: 200, '& .MuiOutlinedInput-root': { bgcolor: T.surface, fontFamily: T.fontSans, fontSize: 14, '& fieldset': { borderColor: T.outline } } }}
+            >
+              <MenuItem value="">Type : Tous</MenuItem>
+              <MenuItem value="TRANSFER">Transferts (back ↔ front)</MenuItem>
+              <MenuItem value="IN">Entrées</MenuItem>
+              <MenuItem value="OUT">Sorties</MenuItem>
+              <MenuItem value="ADJUST">Ajustements</MenuItem>
+              <MenuItem value="WASH_IN">Au lavage</MenuItem>
+              <MenuItem value="WASH_OUT_GOOD">Retours de lavage</MenuItem>
+            </TextField>
+          </Stack>
+          <Box sx={{ bgcolor: T.surface, border: `1px solid ${T.outline}`, borderRadius: 2, overflow: 'hidden' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: T.surfaceLow }}>
+                  <TableCell sx={{ fontFamily: T.fontSans, fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: T.onSurfaceVariant }}>Date</TableCell>
+                  <TableCell sx={{ fontFamily: T.fontSans, fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: T.onSurfaceVariant }}>Morceau</TableCell>
+                  <TableCell sx={{ fontFamily: T.fontSans, fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: T.onSurfaceVariant }}>Type</TableCell>
+                  <TableCell sx={{ fontFamily: T.fontSans, fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: T.onSurfaceVariant }}>Empl.</TableCell>
+                  <TableCell align="right" sx={{ fontFamily: T.fontSans, fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: T.onSurfaceVariant }}>Δ Qté</TableCell>
+                  <TableCell sx={{ fontFamily: T.fontSans, fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em', color: T.onSurfaceVariant }}>Raison</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Box>
+              </TableHead>
+              <TableBody>
+                {(movements.data?.data || []).map((m: any) => (
+                  <TableRow key={m.id} sx={{ '& td': { fontFamily: T.fontSans, fontSize: 13 } }}>
+                    <TableCell sx={{ fontFamily: `${T.fontMono} !important`, fontVariantNumeric: 'tabular-nums', color: T.onSurfaceVariant }}>
+                      {new Date(m.createdAt).toLocaleString('fr-CA')}
+                    </TableCell>
+                    <TableCell>{m.variant ? `${m.variant.item?.name} — ${m.variant.size}` : m.variantId}</TableCell>
+                    <TableCell>
+                      <Chip size="small" label={moveLabel[m.type] || m.type}
+                        sx={{ fontFamily: T.fontSans, fontSize: 11, height: 20, bgcolor: T.surfaceContainer, borderRadius: 1 }} />
+                    </TableCell>
+                    <TableCell sx={{ fontFamily: `${T.fontMono} !important`, color: T.onSurfaceVariant }}>{m.location ? locShort[m.location] || m.location : '—'}</TableCell>
+                    <TableCell align="right"
+                      sx={{ fontFamily: `${T.fontMono} !important`, fontVariantNumeric: 'tabular-nums', color: m.quantity < 0 ? T.errorText : '#15803d', fontWeight: 600 }}>
+                      {m.quantity > 0 ? `+${m.quantity}` : m.quantity}
+                    </TableCell>
+                    <TableCell sx={{ color: T.onSurfaceVariant }}>{m.reason}</TableCell>
+                  </TableRow>
+                ))}
+                {(movements.data?.data || []).length === 0 && (
+                  <TableRow><TableCell colSpan={6}><Typography variant="body2" sx={{ color: T.onSurfaceVariant, py: 1 }}>Aucun mouvement.</Typography></TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </Box>
+        </>
       )}
 
       {/* Adjust dialog */}
@@ -692,6 +791,59 @@ export default function UniformInventoryPage() {
             sx={{ textTransform: 'none', bgcolor: T.primary, '&:hover': { bgcolor: '#1c1b1b' } }}
           >
             Ajuster
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Transfer dialog */}
+      <Dialog open={transferOpen} onClose={closeTransfer} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontFamily: T.fontSans, fontWeight: 600 }}>Transférer du stock</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} mt={1}>
+            <Autocomplete
+              options={rawRows}
+              value={transferRow}
+              onChange={(_, v) => setTransferRow(v)}
+              getOptionLabel={(r: Row) => `${r.itemName} — ${r.size}`}
+              isOptionEqualToValue={(a: Row, b: Row) => a.variantId === b?.variantId}
+              renderOption={(props, r: Row) => (
+                <li {...props} key={r.variantId}>
+                  <Box>
+                    <Typography variant="body2">{r.itemName} — {r.size}</Typography>
+                    <Typography variant="caption" color="text.secondary">Back {r.backOffice ?? 0} · Front {r.frontOffice ?? 0}</Typography>
+                  </Box>
+                </li>
+              )}
+              renderInput={(params) => <TextField {...params} label="Pièce (type + taille)" size="small" />}
+            />
+            <TextField
+              select size="small" label="De" value={transferFrom}
+              onChange={(e) => setTransferFrom(e.target.value as UniformStockLocation)}
+            >
+              <MenuItem value="BACK_OFFICE">Back office</MenuItem>
+              <MenuItem value="FRONT_OFFICE">Front office</MenuItem>
+            </TextField>
+            <Typography variant="body2" color="text.secondary">
+              Vers <b>{locShort[transferTo]} office</b>{transferRow ? ` · disponible à ${locShort[transferFrom]} : ${transferAvail}` : ''}
+            </Typography>
+            <TextField
+              type="number" size="small" label="Quantité" value={transferQty}
+              onChange={(e) => setTransferQty(e.target.value)}
+              error={!!transferQty && Number(transferQty) > transferAvail}
+              helperText={!!transferQty && Number(transferQty) > transferAvail ? 'Dépasse le stock disponible' : ' '}
+              inputProps={{ min: 1 }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeTransfer} sx={{ textTransform: 'none' }}>Annuler</Button>
+          <Button
+            variant="contained"
+            disabled={!transferRow || !transferQty || Number(transferQty) <= 0 || Number(transferQty) > transferAvail || doTransfer.isPending}
+            onClick={() => doTransfer.mutate()}
+            sx={{ textTransform: 'none', bgcolor: T.primary, '&:hover': { bgcolor: '#1c1b1b' } }}
+          >
+            Transférer
           </Button>
         </DialogActions>
       </Dialog>

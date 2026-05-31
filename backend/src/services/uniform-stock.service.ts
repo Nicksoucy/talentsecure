@@ -7,7 +7,7 @@
  *   IN/ADJUST(+) → positif ; OUT/LOST/DAMAGED → négatif ; ADJUST peut être négatif.
  * Ainsi quantityOnHand == somme des deltas (réconciliable).
  */
-import { Prisma, UniformMovementType } from '@prisma/client';
+import { Prisma, UniformMovementType, UniformStockLocation } from '@prisma/client';
 import { prisma } from '../config/database';
 import { ApiError } from '../utils/apiError';
 
@@ -16,8 +16,10 @@ type Tx = Prisma.TransactionClient;
 export interface MovementInput {
   variantId: string;
   type: UniformMovementType;
-  /** Magnitude pour IN/OUT/LOST/DAMAGED ; delta signé pour ADJUST. */
+  /** Magnitude pour IN/OUT/LOST/DAMAGED ; delta signé pour ADJUST/TRANSFER. */
   quantity: number;
+  /** Emplacement physique affecté par ce mouvement. */
+  location: UniformStockLocation;
   reason?: string | null;
   issuanceId?: string | null;
   returnId?: string | null;
@@ -44,7 +46,8 @@ function signedDelta(type: UniformMovementType, quantity: number): number {
     case 'WASH_IN':
       return -Math.abs(quantity);
     case 'ADJUST':
-      return quantity; // signé tel quel
+    case 'TRANSFER':
+      return quantity; // signé tel quel (TRANSFER : - à la source, + à la destination)
     case 'WASH_OUT_DAMAGED':
     case 'DISPOSAL':
       return 0; // déjà sorti du stock (WASH_IN ou OUT précédent), événement audit
@@ -54,8 +57,11 @@ function signedDelta(type: UniformMovementType, quantity: number): number {
 }
 
 /**
- * Applique un mouvement de stock + met à jour le cache quantityOnHand, le tout
- * dans la transaction fournie. Rejette si le stock deviendrait négatif.
+ * Applique un mouvement de stock à un EMPLACEMENT donné + met à jour le bucket
+ * de cet emplacement ET le cache du TOTAL (UniformVariant.quantityOnHand), le
+ * tout dans la transaction fournie. La borne « stock non négatif » s'applique
+ * désormais à l'emplacement (le bucket le plus contraignant) : on ne peut pas
+ * sortir plus que ce qu'il y a à cet emplacement précis.
  */
 export async function applyMovement(tx: Tx, input: MovementInput) {
   const delta = signedDelta(input.type, input.quantity);
@@ -63,14 +69,33 @@ export async function applyMovement(tx: Tx, input: MovementInput) {
   const variant = await tx.uniformVariant.findUnique({ where: { id: input.variantId } });
   if (!variant) throw new ApiError(404, 'Variante introuvable');
 
-  const newQty = variant.quantityOnHand + delta;
-  if (newQty < 0) {
-    throw new ApiError(400, `Stock insuffisant pour la variante ${input.variantId} (disponible: ${variant.quantityOnHand})`);
+  // Bucket de l'emplacement (créé à la volée s'il n'existe pas encore).
+  const bucket = await tx.uniformVariantStock.findUnique({
+    where: { variantId_location: { variantId: input.variantId, location: input.location } },
+  });
+  const currentLocQty = bucket?.quantityOnHand ?? 0;
+  const newLocQty = currentLocQty + delta;
+  if (newLocQty < 0) {
+    throw new ApiError(
+      400,
+      `Stock insuffisant pour la variante ${input.variantId} à l'emplacement ${input.location} (disponible: ${currentLocQty})`,
+    );
   }
+
+  const newTotal = variant.quantityOnHand + delta;
+  if (newTotal < 0) {
+    throw new ApiError(400, `Stock total insuffisant pour la variante ${input.variantId} (disponible: ${variant.quantityOnHand})`);
+  }
+
+  await tx.uniformVariantStock.upsert({
+    where: { variantId_location: { variantId: input.variantId, location: input.location } },
+    create: { variantId: input.variantId, location: input.location, quantityOnHand: newLocQty },
+    update: { quantityOnHand: newLocQty },
+  });
 
   await tx.uniformVariant.update({
     where: { id: input.variantId },
-    data: { quantityOnHand: newQty },
+    data: { quantityOnHand: newTotal },
   });
 
   return tx.uniformStockMovement.create({
@@ -78,12 +103,57 @@ export async function applyMovement(tx: Tx, input: MovementInput) {
       variantId: input.variantId,
       type: input.type,
       quantity: delta,
+      location: input.location,
       reason: input.reason ?? null,
       issuanceId: input.issuanceId ?? null,
       returnId: input.returnId ?? null,
       createdById: input.createdById ?? null,
     },
   });
+}
+
+/**
+ * Transfert d'une variante d'un emplacement à un autre : deux mouvements
+ * TRANSFER (− à la source, + à la destination) qui s'annulent sur le TOTAL.
+ * « Mêmes quantités, juste déplacées » : le cache total reste inchangé tandis
+ * que les buckets bougent. La garde par emplacement empêche de sur-transférer.
+ */
+export async function transferStock(
+  tx: Tx,
+  params: {
+    variantId: string;
+    quantity: number;
+    from: UniformStockLocation;
+    to: UniformStockLocation;
+    reason?: string | null;
+    createdById?: string | null;
+  },
+) {
+  const qty = Math.abs(params.quantity);
+  if (qty <= 0) throw new ApiError(400, 'Quantité de transfert invalide');
+  if (params.from === params.to) throw new ApiError(400, 'Emplacements source et destination identiques');
+
+  const reason = params.reason ?? `Transfert ${params.from} → ${params.to}`;
+
+  const out = await applyMovement(tx, {
+    variantId: params.variantId,
+    type: 'TRANSFER',
+    quantity: -qty, // sortie de la source
+    location: params.from,
+    reason,
+    createdById: params.createdById ?? null,
+  });
+
+  const into = await applyMovement(tx, {
+    variantId: params.variantId,
+    type: 'TRANSFER',
+    quantity: qty, // entrée à la destination
+    location: params.to,
+    reason,
+    createdById: params.createdById ?? null,
+  });
+
+  return { out, into };
 }
 
 export interface Holding {
@@ -222,8 +292,17 @@ export async function auditVariantStock(variantId: string): Promise<{
   cache: number;
   computedFromLedger: number;
   drift: number;
+  byLocation: Array<{
+    location: UniformStockLocation;
+    cache: number;
+    computedFromLedger: number;
+    drift: number;
+  }>;
 }> {
-  const variant = await prisma.uniformVariant.findUnique({ where: { id: variantId } });
+  const variant = await prisma.uniformVariant.findUnique({
+    where: { id: variantId },
+    include: { stockByLocation: true },
+  });
   if (!variant) throw new ApiError(404, 'Variante introuvable');
 
   const agg = await prisma.uniformStockMovement.aggregate({
@@ -231,9 +310,33 @@ export async function auditVariantStock(variantId: string): Promise<{
     _sum: { quantity: true },
   });
   const computedFromLedger = Number(agg._sum.quantity ?? 0);
+
+  // Réconciliation par emplacement : on-hand(loc) == Σ mouvements(loc).
+  const perLoc = await prisma.uniformStockMovement.groupBy({
+    by: ['location'],
+    where: { variantId },
+    _sum: { quantity: true },
+  });
+  const ledgerByLoc = new Map<UniformStockLocation, number>();
+  for (const g of perLoc) ledgerByLoc.set(g.location, Number(g._sum.quantity ?? 0));
+
+  const cacheByLoc = new Map<UniformStockLocation, number>();
+  for (const s of variant.stockByLocation) cacheByLoc.set(s.location, s.quantityOnHand);
+
+  const locations = new Set<UniformStockLocation>([
+    ...ledgerByLoc.keys(),
+    ...cacheByLoc.keys(),
+  ]);
+  const byLocation = Array.from(locations).map((location) => {
+    const cache = cacheByLoc.get(location) ?? 0;
+    const led = ledgerByLoc.get(location) ?? 0;
+    return { location, cache, computedFromLedger: led, drift: cache - led };
+  });
+
   return {
     cache: variant.quantityOnHand,
     computedFromLedger,
     drift: variant.quantityOnHand - computedFromLedger,
+    byLocation,
   };
 }

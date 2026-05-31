@@ -11,9 +11,11 @@ import PrintIcon from '@mui/icons-material/Print';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
-import type { UniformDivision, UniformItem } from '@/types/uniform';
+import type { UniformDivision, UniformItem, UniformStockLocation, UniformVariant } from '@/types/uniform';
 
 const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
+const locQty = (v: UniformVariant, loc: UniformStockLocation) =>
+  v.stockByLocation?.find((s) => s.location === loc)?.quantityOnHand ?? 0;
 
 export default function UniformsCataloguePage() {
   const qc = useQueryClient();
@@ -63,12 +65,14 @@ export default function UniformsCataloguePage() {
   // ---- Dialog: réappro ----
   const [replenish, setReplenish] = useState<{ variantId: string; label: string } | null>(null);
   const [replenishQty, setReplenishQty] = useState('');
+  const [replenishLoc, setReplenishLoc] = useState<UniformStockLocation>('BACK_OFFICE');
   const doReplenish = useMutation({
-    mutationFn: () => uniformService.replenish(replenish!.variantId, Number(replenishQty)),
+    mutationFn: () => uniformService.replenish(replenish!.variantId, Number(replenishQty), undefined, replenishLoc),
     onSuccess: () => {
       enqueueSnackbar('Stock ajouté', { variant: 'success' });
       setReplenish(null);
       setReplenishQty('');
+      setReplenishLoc('BACK_OFFICE');
       qc.invalidateQueries({ queryKey: ['uniform-items'] });
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
@@ -133,7 +137,14 @@ export default function UniformsCataloguePage() {
                     <TableCell>{v.emplacement || '—'}</TableCell>
                     <TableCell align="right">{money(v.replacementCost)}</TableCell>
                     <TableCell align="right">
-                      <Chip size="small" color={v.quantityOnHand > 0 ? 'success' : 'default'} label={v.quantityOnHand} />
+                      <Tooltip title={`Back ${locQty(v, 'BACK_OFFICE')} · Front ${locQty(v, 'FRONT_OFFICE')}`} arrow>
+                        <Stack direction="row" spacing={0.5} justifyContent="flex-end" alignItems="center">
+                          <Chip size="small" color={v.quantityOnHand > 0 ? 'success' : 'default'} label={v.quantityOnHand} />
+                          <Typography variant="caption" color="text.secondary">
+                            (B{locQty(v, 'BACK_OFFICE')}/F{locQty(v, 'FRONT_OFFICE')})
+                          </Typography>
+                        </Stack>
+                      </Tooltip>
                     </TableCell>
                     <TableCell align="right">
                       <Tooltip title="Réapprovisionner">
@@ -207,7 +218,13 @@ export default function UniformsCataloguePage() {
         <DialogTitle>Réapprovisionner</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" mb={2}>{replenish?.label}</Typography>
-          <TextField type="number" fullWidth label="Quantité à ajouter" value={replenishQty} onChange={(e) => setReplenishQty(e.target.value)} />
+          <Stack spacing={2}>
+            <TextField type="number" fullWidth label="Quantité à ajouter" value={replenishQty} onChange={(e) => setReplenishQty(e.target.value)} />
+            <TextField select fullWidth label="Emplacement" value={replenishLoc} onChange={(e) => setReplenishLoc(e.target.value as UniformStockLocation)}>
+              <MenuItem value="BACK_OFFICE">Back office (entrepôt)</MenuItem>
+              <MenuItem value="FRONT_OFFICE">Front office (comptoir)</MenuItem>
+            </TextField>
+          </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setReplenish(null)}>Annuler</Button>

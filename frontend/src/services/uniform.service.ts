@@ -10,6 +10,7 @@ import type {
   UniformDivision,
   UniformPieceType,
   UniformItemCondition,
+  UniformStockLocation,
 } from '@/types/uniform';
 
 export interface IssuanceLineInput {
@@ -79,12 +80,16 @@ export const uniformService = {
     const r = await api.get('/api/uniforms/movements', { params });
     return r.data as { data: UniformMovement[]; pagination: any };
   },
-  async replenish(variantId: string, quantity: number, reason?: string) {
-    const r = await api.post(`/api/uniforms/variants/${variantId}/replenish`, { quantity, reason });
+  async replenish(variantId: string, quantity: number, reason?: string, location?: UniformStockLocation) {
+    const r = await api.post(`/api/uniforms/variants/${variantId}/replenish`, { quantity, reason, location });
     return r.data;
   },
-  async adjust(variantId: string, quantity: number, reason?: string) {
-    const r = await api.post(`/api/uniforms/variants/${variantId}/adjust`, { quantity, reason });
+  async adjust(variantId: string, quantity: number, reason?: string, location?: UniformStockLocation) {
+    const r = await api.post(`/api/uniforms/variants/${variantId}/adjust`, { quantity, reason, location });
+    return r.data;
+  },
+  async transfer(variantId: string, data: { quantity: number; from: UniformStockLocation; to: UniformStockLocation; reason?: string }) {
+    const r = await api.post(`/api/uniforms/variants/${variantId}/transfer`, data);
     return r.data;
   },
 
@@ -97,7 +102,7 @@ export const uniformService = {
     const r = await api.get(`/api/uniforms/issuances/${id}`);
     return r.data as { data: UniformIssuance };
   },
-  async createIssuance(data: { employeeId: string; division: UniformDivision; dueReturnAt?: string; notes?: string; lines: IssuanceLineInput[] }) {
+  async createIssuance(data: { employeeId: string; division: UniformDivision; dueReturnAt?: string; notes?: string; lines: IssuanceLineInput[]; sourceLocation?: UniformStockLocation }) {
     const r = await api.post('/api/uniforms/issuances', data);
     return r.data as { data: UniformIssuance };
   },
@@ -181,7 +186,12 @@ export const uniformService = {
   // Rapports
   async reportStock() {
     const r = await api.get('/api/uniforms/reports/stock');
-    return r.data as { data: { rows: any[]; totals: { totalUnits: number; totalValue: number } } };
+    return r.data as {
+      data: {
+        rows: any[];
+        totals: { totalUnits: number; totalValue: number; totalBackOffice?: number; totalFrontOffice?: number };
+      };
+    };
   },
   async reportOverdue() {
     const r = await api.get('/api/uniforms/reports/overdue');

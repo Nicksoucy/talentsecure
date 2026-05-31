@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
+import { UniformStockLocation } from '@prisma/client';
 import * as XLSX from 'xlsx';
 import { prisma } from '../config/database';
 import { ApiError } from '../utils/apiError';
-import { applyMovement, computeHoldings, computeAmountOwed } from '../services/uniform-stock.service';
+import { applyMovement, transferStock, computeHoldings, computeAmountOwed } from '../services/uniform-stock.service';
 import { generateUniqueBarcode, renderLabelsPdf, LabelData } from '../services/uniform-barcode.service';
 import { generateIssuancePdf, generateReturnPdf } from '../services/uniform-pdf.service';
 import { uploadBufferToR2, getSignedFileUrl } from '../services/r2.service';
@@ -31,7 +32,7 @@ export const listItems = async (req: Request, res: Response, next: NextFunction)
 
     const items = await prisma.uniformItem.findMany({
       where,
-      include: { variants: { orderBy: { size: 'asc' } } },
+      include: { variants: { orderBy: { size: 'asc' }, include: { stockByLocation: true } } },
       orderBy: [{ division: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
     });
     res.json({ data: items });
@@ -64,7 +65,7 @@ export const getItem = async (req: Request, res: Response, next: NextFunction) =
   try {
     const item = await prisma.uniformItem.findUnique({
       where: { id: req.params.id },
-      include: { variants: { orderBy: { size: 'asc' } } },
+      include: { variants: { orderBy: { size: 'asc' }, include: { stockByLocation: true } } },
     });
     if (!item) throw new ApiError(404, 'Morceau introuvable');
     res.json({ data: item });
@@ -118,7 +119,7 @@ export const listVariants = async (req: Request, res: Response, next: NextFuncti
     }
     let variants = await prisma.uniformVariant.findMany({
       where,
-      include: { item: true },
+      include: { item: true, stockByLocation: true },
       orderBy: [{ item: { name: 'asc' } }, { size: 'asc' }],
     });
     if (lowStock === 'true') {
@@ -193,7 +194,7 @@ export const getVariantByBarcode = async (req: Request, res: Response, next: Nex
   try {
     const variant = await prisma.uniformVariant.findUnique({
       where: { barcode: req.params.barcode },
-      include: { item: true },
+      include: { item: true, stockByLocation: true },
     });
     if (!variant) throw new ApiError(404, 'Aucune variante pour ce code-barres');
     res.json({ data: variant });
@@ -278,15 +279,25 @@ export const listMovements = async (req: Request, res: Response, next: NextFunct
   }
 };
 
+/** Valide un emplacement venant du body ; défaut BACK_OFFICE (réappro/achat
+ * arrive à la réserve). */
+function parseLocation(value: unknown): UniformStockLocation {
+  if (value === 'FRONT_OFFICE' || value === 'BACK_OFFICE') return value;
+  if (value === undefined || value === null) return 'BACK_OFFICE';
+  throw new ApiError(400, 'location invalide (BACK_OFFICE | FRONT_OFFICE)');
+}
+
 export const replenishVariant = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { quantity, reason } = req.body;
+    const { quantity, reason, location } = req.body;
     if (!quantity || quantity <= 0) throw new ApiError(400, 'Quantité positive requise');
+    const loc = parseLocation(location);
     const result = await prisma.$transaction((tx) =>
       applyMovement(tx, {
         variantId: req.params.variantId,
         type: 'IN',
         quantity,
+        location: loc,
         reason: reason ?? 'Réapprovisionnement',
         createdById: userId(req),
       })
@@ -299,18 +310,44 @@ export const replenishVariant = async (req: Request, res: Response, next: NextFu
 
 export const adjustVariant = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { quantity, reason } = req.body;
+    const { quantity, reason, location } = req.body;
     if (quantity === undefined || quantity === 0) throw new ApiError(400, 'Quantité (signée) requise');
+    const loc = parseLocation(location);
     const result = await prisma.$transaction((tx) =>
       applyMovement(tx, {
         variantId: req.params.variantId,
         type: 'ADJUST',
         quantity,
+        location: loc,
         reason: reason ?? 'Ajustement inventaire',
         createdById: userId(req),
       })
     );
     res.status(201).json({ message: 'Inventaire ajusté', data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** Transfert de stock entre emplacements (back ↔ front). « Mêmes quantités,
+ * juste déplacées » : le total reste inchangé, les buckets bougent. */
+export const transferVariant = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { quantity, from, to, reason } = req.body;
+    if (!quantity || quantity <= 0) throw new ApiError(400, 'Quantité positive requise');
+    const fromLoc = parseLocation(from);
+    const toLoc = parseLocation(to);
+    const result = await prisma.$transaction((tx) =>
+      transferStock(tx, {
+        variantId: req.params.variantId,
+        quantity,
+        from: fromLoc,
+        to: toLoc,
+        reason: reason ?? null,
+        createdById: userId(req),
+      })
+    );
+    res.status(201).json({ message: 'Transfert effectué', data: result });
   } catch (error) {
     next(error);
   }
@@ -372,15 +409,21 @@ export const reportStock = async (_req: Request, res: Response, next: NextFuncti
   try {
     const variants = await prisma.uniformVariant.findMany({
       where: { isActive: true },
-      include: { item: true },
+      include: { item: true, stockByLocation: true },
       orderBy: [{ item: { name: 'asc' } }, { size: 'asc' }],
     });
     let totalUnits = 0;
     let totalValue = 0;
+    let totalBackOffice = 0;
+    let totalFrontOffice = 0;
     const rows = variants.map((v) => {
       const value = v.quantityOnHand * Number(v.replacementCost);
+      const backOffice = v.stockByLocation.find((s) => s.location === 'BACK_OFFICE')?.quantityOnHand ?? 0;
+      const frontOffice = v.stockByLocation.find((s) => s.location === 'FRONT_OFFICE')?.quantityOnHand ?? 0;
       totalUnits += v.quantityOnHand;
       totalValue += value;
+      totalBackOffice += backOffice;
+      totalFrontOffice += frontOffice;
       return {
         variantId: v.id,
         itemId: v.itemId,
@@ -392,6 +435,8 @@ export const reportStock = async (_req: Request, res: Response, next: NextFuncti
         barcode: v.barcode,
         emplacement: v.emplacement,
         quantityOnHand: v.quantityOnHand,
+        backOffice,
+        frontOffice,
         replacementCost: Number(v.replacementCost),
         reorderThreshold: v.reorderThreshold,
         value,
@@ -399,7 +444,7 @@ export const reportStock = async (_req: Request, res: Response, next: NextFuncti
         outOfStock: v.quantityOnHand === 0,
       };
     });
-    res.json({ data: { rows, totals: { totalUnits, totalValue } } });
+    res.json({ data: { rows, totals: { totalUnits, totalValue, totalBackOffice, totalFrontOffice } } });
   } catch (error) {
     next(error);
   }
@@ -476,9 +521,11 @@ export const exportInventoryXlsx = async (_req: Request, res: Response, next: Ne
     const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
     const variants = await prisma.uniformVariant.findMany({
       where: { isActive: true },
-      include: { item: true },
+      include: { item: true, stockByLocation: true },
       orderBy: [{ item: { division: 'asc' } }, { item: { sortOrder: 'asc' } }, { item: { name: 'asc' } }, { size: 'asc' }],
     });
+    const locQty = (v: { stockByLocation: { location: string; quantityOnHand: number }[] }, loc: string) =>
+      v.stockByLocation.find((s) => s.location === loc)?.quantityOnHand ?? 0;
 
     type Row = { item: any; variants: any[] };
     const grouped = { SECURITE: new Map<string, Row>(), SIGNALISATION: new Map<string, Row>() };
@@ -491,16 +538,18 @@ export const exportInventoryXlsx = async (_req: Request, res: Response, next: Ne
 
     const buildSheet = (groups: Map<string, Row>) => {
       const aoa: any[][] = [];
-      const header: any[] = ["Pièce d'uniforme", 'Type', 'QT'];
+      const header: any[] = ["Pièce d'uniforme", 'Type', 'QT', 'QT Back', 'QT Front'];
       for (const s of SIZES) header.push(s, `Empl. ${s}`);
       header.push('Coût unit.', 'Valeur totale');
       aoa.push(header);
 
       for (const { item, variants } of groups.values()) {
         const totalQty = variants.reduce((s, v) => s + v.quantityOnHand, 0);
+        const totalBack = variants.reduce((s, v) => s + locQty(v, 'BACK_OFFICE'), 0);
+        const totalFront = variants.reduce((s, v) => s + locQty(v, 'FRONT_OFFICE'), 0);
         const totalVal = variants.reduce((s, v) => s + v.quantityOnHand * Number(v.replacementCost), 0);
         const bySize = new Map(variants.map((v) => [v.size, v]));
-        const row: any[] = [item.name, item.type === 'EQUIPEMENT' ? 'Équipement' : 'Uniforme', totalQty];
+        const row: any[] = [item.name, item.type === 'EQUIPEMENT' ? 'Équipement' : 'Uniforme', totalQty, totalBack, totalFront];
         if (item.isOneSize) {
           const uniq = bySize.get('Unique');
           row.push(uniq?.quantityOnHand ?? '', 'Taille unique');
@@ -517,7 +566,7 @@ export const exportInventoryXlsx = async (_req: Request, res: Response, next: Ne
 
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       // Largeurs de colonnes
-      ws['!cols'] = [{ wch: 38 }, { wch: 11 }, { wch: 6 }, ...Array(SIZES.length * 2).fill({ wch: 6 }), { wch: 11 }, { wch: 13 }];
+      ws['!cols'] = [{ wch: 38 }, { wch: 11 }, { wch: 6 }, { wch: 8 }, { wch: 8 }, ...Array(SIZES.length * 2).fill({ wch: 6 }), { wch: 11 }, { wch: 13 }];
       return ws;
     };
 

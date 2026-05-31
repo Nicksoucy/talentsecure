@@ -1,6 +1,17 @@
 export type UniformDivision = 'SECURITE' | 'SIGNALISATION';
 export type UniformPieceType = 'UNIFORME' | 'EQUIPEMENT';
-export type UniformMovementType = 'IN' | 'OUT' | 'ADJUST' | 'LOST' | 'DAMAGED';
+export type UniformStockLocation = 'BACK_OFFICE' | 'FRONT_OFFICE';
+export type UniformMovementType =
+  | 'IN'
+  | 'OUT'
+  | 'ADJUST'
+  | 'LOST'
+  | 'DAMAGED'
+  | 'WASH_IN'
+  | 'WASH_OUT_GOOD'
+  | 'WASH_OUT_DAMAGED'
+  | 'DISPOSAL'
+  | 'TRANSFER';
 export type UniformItemCondition = 'GOOD' | 'DAMAGED' | 'LOST' | 'NOT_RETURNED';
 export type UniformIssuanceStatus =
   | 'DRAFT'
@@ -12,6 +23,13 @@ export type UniformIssuanceStatus =
 export type UniformSignatureStatus = 'PENDING' | 'SENT' | 'SIGNED' | 'SKIPPED';
 export type UniformSignatureMethod = 'REMOTE_SMS' | 'COUNTER';
 
+export interface UniformVariantStock {
+  id: string;
+  variantId: string;
+  location: UniformStockLocation;
+  quantityOnHand: number;
+}
+
 export interface UniformVariant {
   id: string;
   itemId: string;
@@ -20,10 +38,11 @@ export interface UniformVariant {
   emplacement?: string | null;
   barcode: string;
   replacementCost: string | number;
-  quantityOnHand: number;
+  quantityOnHand: number; // total (= Σ emplacements)
   reorderThreshold?: number | null;
   isActive: boolean;
   item?: UniformItem;
+  stockByLocation?: UniformVariantStock[];
 }
 
 export interface UniformItem {
@@ -43,6 +62,7 @@ export interface UniformMovement {
   variantId: string;
   type: UniformMovementType;
   quantity: number;
+  location?: UniformStockLocation;
   reason?: string | null;
   createdAt: string;
   variant?: UniformVariant;
@@ -67,10 +87,12 @@ export interface UniformIssuance {
   issuedAt?: string | null;
   dueReturnAt?: string | null;
   totalLoanCost: string | number;
+  sourceLocation?: UniformStockLocation;
   signatureStatus: UniformSignatureStatus;
   signatureMethod?: UniformSignatureMethod | null;
   signedAt?: string | null;
   smsSentAt?: string | null;
+  signToken?: string | null;
   employeeSignatureStoragePath?: string | null;
   employerSignatureStoragePath?: string | null;
   formPdfStoragePath?: string | null;

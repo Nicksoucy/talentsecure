@@ -1108,6 +1108,15 @@ enum UniformMovementType {
   WASH_OUT_GOOD // pièce sortie du lot vers stock (delta +)
   WASH_OUT_DAMAGED // pièce sortie du lot vers poubelle (delta 0, audit seul)
   DISPOSAL // sortie définitive explicite (delta 0, audit seul)
+  TRANSFER // déplacement entre emplacements (quantity signé ; total inchangé sur la paire)
+}
+
+// Emplacements physiques du stock. BACK_OFFICE = entrepôt principal (gros stock) ;
+// FRONT_OFFICE = comptoir de remise (petit stock). Un transfert déplace des pièces
+// de l'un à l'autre sans changer la quantité totale.
+enum UniformStockLocation {
+  BACK_OFFICE
+  FRONT_OFFICE
 }
 
 enum UniformItemCondition {
@@ -1225,17 +1234,18 @@ model UniformVariant {
   emplacement      String? // localisation physique (ex. "B4", "A1-A2", "Étagère")
   barcode          String   @unique // valeur Code128 générée par le système
   replacementCost  Decimal  @default(0) @db.Decimal(10, 2)
-  quantityOnHand   Int      @default(0) // cache — voir registre des mouvements
+  quantityOnHand   Int      @default(0) // cache du TOTAL (= Σ emplacements) — voir registre des mouvements
   reorderThreshold Int?
   isActive         Boolean  @default(true)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  item           UniformItem            @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  movements      UniformStockMovement[]
-  issuanceLines  UniformIssuanceLine[]
-  returnLines    UniformReturnLine[]
-  washBatchItems UniformWashBatchItem[]
+  item            UniformItem            @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  movements       UniformStockMovement[]
+  issuanceLines   UniformIssuanceLine[]
+  returnLines     UniformReturnLine[]
+  washBatchItems  UniformWashBatchItem[]
+  stockByLocation UniformVariantStock[]
 
   @@unique([itemId, size])
   @@index([itemId])
@@ -1244,21 +1254,40 @@ model UniformVariant {
   @@map("uniform_variants")
 }
 
+// Stock par emplacement physique. Le total (UniformVariant.quantityOnHand) reste
+// le cache global ; cette table ventile ce total entre BACK_OFFICE et FRONT_OFFICE.
+// Réconciliation : quantityOnHand(loc) == Σ(mouvements de cette variante & loc).
+model UniformVariantStock {
+  id             String               @id @default(uuid())
+  variantId      String
+  location       UniformStockLocation
+  quantityOnHand Int                  @default(0)
+  updatedAt      DateTime             @updatedAt
+
+  variant UniformVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([variantId, location])
+  @@index([variantId])
+  @@map("uniform_variant_stock")
+}
+
 model UniformStockMovement {
-  id          String              @id @default(uuid())
+  id          String               @id @default(uuid())
   variantId   String
   type        UniformMovementType
-  quantity    Int // magnitude positive (ADJUST peut être signé)
-  reason      String?             @db.Text
+  quantity    Int // delta signé sur le stock
+  location    UniformStockLocation @default(BACK_OFFICE) // emplacement affecté par ce mouvement
+  reason      String?              @db.Text
   issuanceId  String? // back-ref si généré par une remise
   returnId    String? // back-ref si généré par un retour
   createdById String?
-  createdAt   DateTime            @default(now())
+  createdAt   DateTime             @default(now())
 
   variant UniformVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
 
   @@index([variantId])
   @@index([type])
+  @@index([location])
   @@index([issuanceId])
   @@index([returnId])
   @@index([createdAt])
@@ -1266,14 +1295,15 @@ model UniformStockMovement {
 }
 
 model UniformIssuance {
-  id            String                @id @default(uuid())
-  employeeId    String // lien lâche vers employees.id (pas de FK)
-  division      UniformDivision
-  status        UniformIssuanceStatus @default(DRAFT)
-  notes         String?               @db.Text
-  issuedAt      DateTime? // remise physique = décrément du stock
-  dueReturnAt   DateTime?
-  totalLoanCost Decimal               @default(0) @db.Decimal(10, 2) // "Coût total du prêt"
+  id             String                @id @default(uuid())
+  employeeId     String // lien lâche vers employees.id (pas de FK)
+  division       UniformDivision
+  status         UniformIssuanceStatus @default(DRAFT)
+  notes          String?               @db.Text
+  issuedAt       DateTime? // remise physique = décrément du stock
+  dueReturnAt    DateTime?
+  totalLoanCost  Decimal               @default(0) @db.Decimal(10, 2) // "Coût total du prêt"
+  sourceLocation UniformStockLocation  @default(FRONT_OFFICE) // d'où le stock est décrémenté
 
   // Consentements du formulaire
   payrollConsentAccepted       Boolean @default(false) // prélèvement dernière paie

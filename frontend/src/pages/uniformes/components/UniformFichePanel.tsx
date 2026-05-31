@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Stack, Paper, Table, TableHead, TableRow, TableCell, TableBody, Chip, Button,
-  Dialog, DialogTitle, DialogContent, DialogActions, TextField,
+  Dialog, DialogTitle, DialogContent, DialogActions, TextField, Card, CardContent, Divider,
+  useTheme, useMediaQuery,
 } from '@mui/material';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
@@ -12,6 +13,7 @@ import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import SignaturePad from './SignaturePad';
 import IssuanceLinesEditor from './IssuanceLinesEditor';
+import MobileIssuanceSheet from './MobileIssuanceSheet';
 import type { UniformIssuance, UniformIssuanceLine } from '@/types/uniform';
 
 const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
@@ -43,6 +45,8 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const { data, isLoading } = useQuery({
     queryKey: ['uniform-fiche', employeeId],
@@ -87,6 +91,9 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
   // Édition des lignes d'une remise (DRAFT ou historique sans impact stock).
   const [editLinesFor, setEditLinesFor] = useState<UniformIssuance | null>(null);
 
+  // Panneau de remise mobile (scan + signature) ouvert depuis la fiche.
+  const [issueOpen, setIssueOpen] = useState(false);
+
   // Téléversement du PDF original (utile pour les remises historiques).
   const [uploadingFor, setUploadingFor] = useState<string | null>(null);
   const handleUploadPdf = async (issuanceId: string, file: File) => {
@@ -102,6 +109,37 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
     }
   };
 
+  // Boutons d'action d'une remise — réutilisés en tableau (desktop) et en carte (mobile).
+  const issuanceActions = (i: UniformIssuance) => (
+    <>
+      <Button size="small" startIcon={<PictureAsPdfIcon />} onClick={() => openPdf('issuance', i.id)}>PDF</Button>
+      <Button size="small" component="label" startIcon={<UploadFileIcon />} disabled={uploadingFor === i.id}>
+        {uploadingFor === i.id ? '…' : (i.formPdfStoragePath ? 'Remplacer PDF' : 'Téléverser PDF')}
+        <input
+          type="file"
+          accept="application/pdf"
+          hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) handleUploadPdf(i.id, f);
+            (e.target as HTMLInputElement).value = '';
+          }}
+        />
+      </Button>
+      {(i.status === 'DRAFT' || (i.status === 'ISSUED' && i.signatureMethod === 'COUNTER')) && (
+        <Button size="small" startIcon={<EditIcon />} onClick={() => setEditLinesFor(i)}>
+          Modifier les pièces
+        </Button>
+      )}
+      {!i.employerSignatureStoragePath && i.status !== 'DRAFT' && i.status !== 'CANCELLED' && (
+        <Button size="small" color="primary" onClick={() => setSignEmployerFor(i.id)}>Signer employeur</Button>
+      )}
+      {['ISSUED', 'PARTIALLY_RETURNED'].includes(i.status) && (
+        <Button size="small" color="error" onClick={() => closeTerm.mutate(i.id)}>Clôturer fin d'emploi</Button>
+      )}
+    </>
+  );
+
   if (isLoading) return <Typography>Chargement…</Typography>;
   const fiche = data?.data;
   if (!fiche) return <Typography color="text.secondary">Aucune donnée uniforme.</Typography>;
@@ -115,113 +153,117 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
         <Chip variant="outlined" label={`Facturé : ${money(owed.charged)} • Réglé : ${money(owed.settled)}`} />
       </Stack>
 
-      <Stack direction="row" spacing={2} mb={2} flexWrap="wrap">
-        <Button variant="contained" onClick={() => navigate(`/uniformes/remises/nouvelle?employeeId=${employeeId}`)}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} mb={2} flexWrap="wrap">
+        <Button variant="contained" fullWidth={isMobile} onClick={() => setIssueOpen(true)}>
           Remettre des uniformes
         </Button>
-        <Button variant="outlined" onClick={() => navigate(`/uniformes/retours?employeeId=${employeeId}`)}>
+        <Button variant="outlined" fullWidth={isMobile} onClick={() => navigate(`/uniformes/retours?employeeId=${employeeId}`)}>
           Retourner des uniformes
         </Button>
-        <Button size="small" variant="text" onClick={() => setSettleDlg(true)}>Enregistrer un règlement</Button>
+        <Button variant="text" fullWidth={isMobile} onClick={() => setSettleDlg(true)}>Enregistrer un règlement</Button>
       </Stack>
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle1" mb={1}>Détentions actuelles</Typography>
-        <Table size="small">
-          <TableHead><TableRow><TableCell>Pièce</TableCell><TableCell>Grandeur</TableCell><TableCell align="right">Qté</TableCell><TableCell align="right">Coût unit.</TableCell></TableRow></TableHead>
-          <TableBody>
-            {holdings.map((h) => (
-              <TableRow key={h.variantId}><TableCell>{h.itemName}</TableCell><TableCell>{h.size}</TableCell><TableCell align="right">{h.quantity}</TableCell><TableCell align="right">{money(h.replacementCost)}</TableCell></TableRow>
-            ))}
-            {holdings.length === 0 && <TableRow><TableCell colSpan={4}><Typography variant="body2" color="text.secondary">Aucune pièce détenue.</Typography></TableCell></TableRow>}
-          </TableBody>
-        </Table>
+        <Box sx={{ overflowX: 'auto' }}>
+          <Table size="small">
+            <TableHead><TableRow><TableCell>Pièce</TableCell><TableCell>Grandeur</TableCell><TableCell align="right">Qté</TableCell><TableCell align="right">Coût unit.</TableCell></TableRow></TableHead>
+            <TableBody>
+              {holdings.map((h) => (
+                <TableRow key={h.variantId}><TableCell>{h.itemName}</TableCell><TableCell>{h.size}</TableCell><TableCell align="right">{h.quantity}</TableCell><TableCell align="right">{money(h.replacementCost)}</TableCell></TableRow>
+              ))}
+              {holdings.length === 0 && <TableRow><TableCell colSpan={4}><Typography variant="body2" color="text.secondary">Aucune pièce détenue.</Typography></TableCell></TableRow>}
+            </TableBody>
+          </Table>
+        </Box>
       </Paper>
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle1" mb={1}>Historique des remises</Typography>
-        <Table size="small">
-          <TableHead><TableRow><TableCell>Date</TableCell><TableCell>Division</TableCell><TableCell>Statut</TableCell><TableCell>Pièces</TableCell><TableCell align="right">Coût</TableCell><TableCell align="right">Actions</TableCell></TableRow></TableHead>
-          <TableBody>
+        {isMobile ? (
+          <Stack spacing={1.5}>
             {issuances.map((i) => (
-              <TableRow key={i.id}>
-                <TableCell>{new Date(i.issuedAt || i.createdAt).toLocaleDateString('fr-CA')}</TableCell>
-                <TableCell>{i.division === 'SIGNALISATION' ? 'Signalisation' : 'Sécurité'}</TableCell>
-                <TableCell><Chip size="small" label={statusLabel[i.status] || i.status} /></TableCell>
-                <TableCell sx={{ maxWidth: 360, fontSize: '0.85rem' }}>
-                  <Typography variant="body2" sx={{ whiteSpace: 'normal', lineHeight: 1.3 }}>
+              <Card key={i.id} variant="outlined">
+                <CardContent sx={{ pb: 1.5 }}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
+                    <Typography variant="body2" fontWeight={600}>
+                      {new Date(i.issuedAt || i.createdAt).toLocaleDateString('fr-CA')}
+                    </Typography>
+                    <Chip size="small" label={statusLabel[i.status] || i.status} />
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary">
+                    {i.division === 'SIGNALISATION' ? 'Signalisation' : 'Sécurité'} · {money(i.totalLoanCost)}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'normal', lineHeight: 1.3 }}>
                     {summarizeLines(i.lines)}
                   </Typography>
-                </TableCell>
-                <TableCell align="right">{money(i.totalLoanCost)}</TableCell>
-                <TableCell align="right">
-                  <Button size="small" startIcon={<PictureAsPdfIcon />} onClick={() => openPdf('issuance', i.id)}>PDF</Button>
-                  <Button
-                    size="small"
-                    component="label"
-                    startIcon={<UploadFileIcon />}
-                    disabled={uploadingFor === i.id}
-                  >
-                    {uploadingFor === i.id ? '…' : (i.formPdfStoragePath ? 'Remplacer PDF' : 'Téléverser PDF')}
-                    <input
-                      type="file"
-                      accept="application/pdf"
-                      hidden
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) handleUploadPdf(i.id, f);
-                        (e.target as HTMLInputElement).value = '';
-                      }}
-                    />
-                  </Button>
-                  {/* "Modifier les pièces" : DRAFT, ou ISSUED historique (papier, sans mouvement stock) */}
-                  {(i.status === 'DRAFT' || (i.status === 'ISSUED' && i.signatureMethod === 'COUNTER')) && (
-                    <Button size="small" startIcon={<EditIcon />} onClick={() => setEditLinesFor(i as UniformIssuance)}>
-                      Modifier les pièces
-                    </Button>
-                  )}
-                  {!i.employerSignatureStoragePath && i.status !== 'DRAFT' && i.status !== 'CANCELLED' && (
-                    <Button size="small" color="primary" onClick={() => setSignEmployerFor(i.id)}>Signer employeur</Button>
-                  )}
-                  {['ISSUED', 'PARTIALLY_RETURNED'].includes(i.status) && (
-                    <Button size="small" color="error" onClick={() => closeTerm.mutate(i.id)}>Clôturer fin d'emploi</Button>
-                  )}
-                </TableCell>
-              </TableRow>
+                  <Divider sx={{ my: 1 }} />
+                  <Stack direction="row" flexWrap="wrap" useFlexGap spacing={0.5}>
+                    {issuanceActions(i as UniformIssuance)}
+                  </Stack>
+                </CardContent>
+              </Card>
             ))}
-            {issuances.length === 0 && <TableRow><TableCell colSpan={6}><Typography variant="body2" color="text.secondary">Aucune remise.</Typography></TableCell></TableRow>}
-          </TableBody>
-        </Table>
+            {issuances.length === 0 && <Typography variant="body2" color="text.secondary">Aucune remise.</Typography>}
+          </Stack>
+        ) : (
+          <Box sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead><TableRow><TableCell>Date</TableCell><TableCell>Division</TableCell><TableCell>Statut</TableCell><TableCell>Pièces</TableCell><TableCell align="right">Coût</TableCell><TableCell align="right">Actions</TableCell></TableRow></TableHead>
+              <TableBody>
+                {issuances.map((i) => (
+                  <TableRow key={i.id}>
+                    <TableCell>{new Date(i.issuedAt || i.createdAt).toLocaleDateString('fr-CA')}</TableCell>
+                    <TableCell>{i.division === 'SIGNALISATION' ? 'Signalisation' : 'Sécurité'}</TableCell>
+                    <TableCell><Chip size="small" label={statusLabel[i.status] || i.status} /></TableCell>
+                    <TableCell sx={{ maxWidth: 360, fontSize: '0.85rem' }}>
+                      <Typography variant="body2" sx={{ whiteSpace: 'normal', lineHeight: 1.3 }}>
+                        {summarizeLines(i.lines)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">{money(i.totalLoanCost)}</TableCell>
+                    <TableCell align="right">{issuanceActions(i as UniformIssuance)}</TableCell>
+                  </TableRow>
+                ))}
+                {issuances.length === 0 && <TableRow><TableCell colSpan={6}><Typography variant="body2" color="text.secondary">Aucune remise.</Typography></TableCell></TableRow>}
+              </TableBody>
+            </Table>
+          </Box>
+        )}
       </Paper>
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle1" mb={1}>Historique des retours</Typography>
-        <Table size="small">
-          <TableHead><TableRow><TableCell>Date</TableCell><TableCell>Statut</TableCell><TableCell align="right">PDF</TableCell></TableRow></TableHead>
-          <TableBody>
-            {returns.map((r) => (
-              <TableRow key={r.id}>
-                <TableCell>{new Date(r.returnedAt || r.createdAt).toLocaleDateString('fr-CA')}</TableCell>
-                <TableCell><Chip size="small" label={statusLabel[r.status] || r.status} /></TableCell>
-                <TableCell align="right"><Button size="small" startIcon={<PictureAsPdfIcon />} onClick={() => openPdf('return', r.id)}>PDF</Button></TableCell>
-              </TableRow>
-            ))}
-            {returns.length === 0 && <TableRow><TableCell colSpan={3}><Typography variant="body2" color="text.secondary">Aucun retour.</Typography></TableCell></TableRow>}
-          </TableBody>
-        </Table>
+        <Box sx={{ overflowX: 'auto' }}>
+          <Table size="small">
+            <TableHead><TableRow><TableCell>Date</TableCell><TableCell>Statut</TableCell><TableCell align="right">PDF</TableCell></TableRow></TableHead>
+            <TableBody>
+              {returns.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell>{new Date(r.returnedAt || r.createdAt).toLocaleDateString('fr-CA')}</TableCell>
+                  <TableCell><Chip size="small" label={statusLabel[r.status] || r.status} /></TableCell>
+                  <TableCell align="right"><Button size="small" startIcon={<PictureAsPdfIcon />} onClick={() => openPdf('return', r.id)}>PDF</Button></TableCell>
+                </TableRow>
+              ))}
+              {returns.length === 0 && <TableRow><TableCell colSpan={3}><Typography variant="body2" color="text.secondary">Aucun retour.</Typography></TableCell></TableRow>}
+            </TableBody>
+          </Table>
+        </Box>
       </Paper>
 
       {settlements.length > 0 && (
         <Paper sx={{ p: 2 }}>
           <Typography variant="subtitle1" mb={1}>Règlements</Typography>
-          <Table size="small">
-            <TableHead><TableRow><TableCell>Date</TableCell><TableCell>Méthode</TableCell><TableCell>Note</TableCell><TableCell align="right">Montant</TableCell></TableRow></TableHead>
-            <TableBody>
-              {settlements.map((s: any) => (
-                <TableRow key={s.id}><TableCell>{new Date(s.createdAt).toLocaleDateString('fr-CA')}</TableCell><TableCell>{s.method}</TableCell><TableCell>{s.notes}</TableCell><TableCell align="right">{money(s.amount)}</TableCell></TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <Box sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead><TableRow><TableCell>Date</TableCell><TableCell>Méthode</TableCell><TableCell>Note</TableCell><TableCell align="right">Montant</TableCell></TableRow></TableHead>
+              <TableBody>
+                {settlements.map((s: any) => (
+                  <TableRow key={s.id}><TableCell>{new Date(s.createdAt).toLocaleDateString('fr-CA')}</TableCell><TableCell>{s.method}</TableCell><TableCell>{s.notes}</TableCell><TableCell align="right">{money(s.amount)}</TableCell></TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
         </Paper>
       )}
 
@@ -234,7 +276,14 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
         />
       )}
 
-      <Dialog open={!!signEmployerFor} onClose={closeEmployerDlg} maxWidth="sm" fullWidth>
+      <MobileIssuanceSheet
+        open={issueOpen}
+        onClose={() => setIssueOpen(false)}
+        employeeId={employeeId}
+        onDone={() => qc.invalidateQueries({ queryKey: ['uniform-fiche', employeeId] })}
+      />
+
+      <Dialog open={!!signEmployerFor} onClose={closeEmployerDlg} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>Signature de l'employeur</DialogTitle>
         <DialogContent>
           <SignaturePad label="Signature" onChange={setEmployerSig} />
@@ -245,7 +294,7 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
         </DialogActions>
       </Dialog>
 
-      <Dialog open={settleDlg} onClose={() => setSettleDlg(false)} maxWidth="xs" fullWidth>
+      <Dialog open={settleDlg} onClose={() => setSettleDlg(false)} maxWidth="xs" fullWidth fullScreen={isMobile}>
         <DialogTitle>Enregistrer un règlement</DialogTitle>
         <DialogContent>
           <Stack spacing={2} mt={1}>

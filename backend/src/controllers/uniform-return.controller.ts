@@ -166,11 +166,15 @@ export const finalizeReturn = async (req: Request, res: Response, next: NextFunc
             items.push({ batchId: washBatchId, variantId: line.variantId, quantity: 1, returnLineId: line.id });
           }
           await tx.uniformWashBatchItem.createMany({ data: items });
-          // Mouvement WASH_IN (delta - sur quantityOnHand)
+          // Mouvement WASH_IN (delta - sur quantityOnHand). Débit pris sur le
+          // BACK_OFFICE (la réserve qui porte le stock) : sûr même quand le
+          // front office est à 0. Les pièces propres ré-entreront au FRONT_OFFICE
+          // à l'inspection (WASH_OUT_GOOD), ce qui les "ramène au comptoir".
           await applyMovement(tx, {
             variantId: line.variantId,
             type: 'WASH_IN',
             quantity: line.quantity,
+            location: 'BACK_OFFICE',
             reason: `Retour ${ret.id} → lot ${washBatchId}`,
             returnId: ret.id,
             createdById: userId(req),
@@ -183,6 +187,7 @@ export const finalizeReturn = async (req: Request, res: Response, next: NextFunc
             variantId: line.variantId,
             type: 'DAMAGED',
             quantity: line.quantity,
+            location: 'BACK_OFFICE', // débit de perte sur la réserve (sûr)
             reason: `Retour ${ret.id} (poubelle directe)`,
             returnId: ret.id,
             createdById: userId(req),

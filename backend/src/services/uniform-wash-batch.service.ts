@@ -58,6 +58,7 @@ export async function createBatch(input: CreateBatchInput) {
             variantId: it.variantId,
             type: 'WASH_IN',
             quantity: qty,
+            location: 'BACK_OFFICE', // débit de mise en lavage sur la réserve
             reason: `Lot lavage ${batch.id} (manuel)`,
             createdById: input.createdById,
           });
@@ -102,6 +103,7 @@ export async function addToBatch(
           variantId: it.variantId,
           type: 'WASH_IN',
           quantity: qty,
+          location: 'BACK_OFFICE', // débit de mise en lavage sur la réserve
           reason: `Lot lavage ${batchId} (ajout)`,
           createdById: opts?.createdById,
         });
@@ -248,6 +250,7 @@ export async function inspectBatch(
           variantId: item.variantId,
           type: 'WASH_OUT_GOOD',
           quantity: 1,
+          location: 'FRONT_OFFICE', // pièce propre ré-intégrée au comptoir de remise
           reason: `Inspection lot ${batchId} → réintégré au stock`,
           createdById: inspectedById,
         });
@@ -257,6 +260,7 @@ export async function inspectBatch(
           variantId: item.variantId,
           type: 'WASH_OUT_DAMAGED',
           quantity: 1,
+          location: 'FRONT_OFFICE', // delta 0 (audit) — étiqueté côté comptoir
           reason: `Inspection lot ${batchId} → ${inspection.postWashCondition} (poubelle)`,
           createdById: inspectedById,
         });
@@ -307,10 +311,13 @@ export async function cancelBatch(batchId: string, opts?: { createdById?: string
 
     for (const item of batch.items) {
       if (item.postWashCondition !== null) continue; // déjà traité
+      // Annulation = REVERSAL du WASH_IN (qui a débité le BACK_OFFICE) → on
+      // recrédite le BACK_OFFICE pour garder les buckets cohérents.
       await applyMovement(tx, {
         variantId: item.variantId,
         type: 'WASH_OUT_GOOD',
         quantity: 1,
+        location: 'BACK_OFFICE',
         reason: `Annulation lot ${batchId} → retour stock`,
         createdById: opts?.createdById,
       });
