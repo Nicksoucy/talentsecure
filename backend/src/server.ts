@@ -50,19 +50,19 @@ const PORT = parseInt(process.env.PORT || '8080', 10);
 app.use(helmet());
 
 // CORS configuration
+// S8 — liste blanche d'origines exactes (ports dev usuels + FRONTEND_URL).
+// On retire l'ancien joker dev `localhost:*` qui acceptait n'importe quel port.
+// Pour un autre port de dev, l'ajouter ici (dev-only, aucun impact prod).
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
+  'http://localhost:3000',
   process.env.FRONTEND_URL,
 ].filter(Boolean) as string[];
 
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-
-    if (process.env.NODE_ENV === 'development' && origin.startsWith('http://localhost:')) {
-      return callback(null, true);
-    }
 
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);

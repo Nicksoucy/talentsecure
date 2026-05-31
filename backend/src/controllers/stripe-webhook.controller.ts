@@ -27,7 +27,11 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
       const clientId = md.clientId;
       const candidateId = md.candidateId;
       const city = md.city || '';
-      const price = Number(md.price) || 0;
+      // S5 — source de vérité = montant réellement encaissé (amount_total, en cents).
+      // On retombe sur metadata.price seulement si amount_total est absent.
+      const price = typeof session.amount_total === 'number'
+        ? session.amount_total / 100
+        : (Number(md.price) || 0);
 
       if (clientId && candidateId) {
         await prisma.clientPurchase.upsert({

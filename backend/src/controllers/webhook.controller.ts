@@ -60,7 +60,9 @@ function normalizeCity(city: string | null | undefined): string | null {
  */
 export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
   try {
-    console.log('📥 Webhook GoHighLevel reçu:', JSON.stringify(req.body, null, 2));
+    // S7 — ne pas logger le body complet (contient nom/email/tél/adresse = PII).
+    // On logge seulement la structure (clés présentes) pour le debug.
+    console.log('📥 Webhook GoHighLevel reçu', { keys: Object.keys(req.body || {}) });
 
     // Vérifier la clé secrète (sécurité)
     const webhookSecret = req.headers['x-webhook-secret'];
@@ -95,7 +97,8 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
 
     // Valider les champs requis
     if (!firstName || !phone) {
-      console.error('❌ Champs requis manquants:', { firstName, phone });
+      // S7 — pas de PII : on logge la présence, pas les valeurs.
+      console.error('❌ Champs requis manquants:', { hasFirstName: !!firstName, hasPhone: !!phone });
       return res.status(400).json({
         error: 'Missing required fields',
         required: ['first_name', 'phone'],
