@@ -74,6 +74,7 @@ router.delete('/variants/:variantId', ctrl.deleteVariant);
 // Catalogue — morceaux
 router.get('/items', ctrl.listItems);
 router.post('/items', ctrl.createItem);
+router.post('/items/reorder', ctrl.reorderItems);
 router.get('/items/:id', ctrl.getItem);
 router.post('/items/:id/image', imageUpload.single('image'), ctrl.uploadItemImage);
 router.put('/items/:id', ctrl.updateItem);

@@ -48,7 +48,9 @@ export const listItems = async (req: Request, res: Response, next: NextFunction)
     const items = await prisma.uniformItem.findMany({
       where,
       include: { variants: { orderBy: { size: 'asc' }, include: { stockByLocation: true } } },
-      orderBy: [{ division: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+      // Ordre manuel (sortOrder) d'abord ; division/nom en départage tant que
+      // l'utilisateur n'a pas réordonné (sortOrder tous égaux au départ).
+      orderBy: [{ sortOrder: 'asc' }, { division: 'asc' }, { name: 'asc' }],
     });
     const data = await Promise.all(items.map(withImageUrl));
     res.json({ data });
@@ -72,6 +74,20 @@ export const createItem = async (req: Request, res: Response, next: NextFunction
       },
     });
     res.status(201).json({ message: 'Morceau créé', data: item });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** Réordonne les morceaux : sortOrder = position dans la liste reçue. */
+export const reorderItems = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { ids } = req.body as { ids: string[] };
+    if (!Array.isArray(ids) || ids.length === 0) throw new ApiError(400, 'ids requis');
+    await prisma.$transaction(
+      ids.map((id, idx) => prisma.uniformItem.update({ where: { id }, data: { sortOrder: idx } }))
+    );
+    res.json({ message: 'Ordre mis à jour' });
   } catch (error) {
     next(error);
   }

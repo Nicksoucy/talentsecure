@@ -47,6 +47,10 @@ export const uniformService = {
     const r = await api.delete(`/api/uniforms/items/${id}`);
     return r.data;
   },
+  async reorderItems(ids: string[]) {
+    const r = await api.post('/api/uniforms/items/reorder', { ids });
+    return r.data;
+  },
   async uploadItemImage(id: string, file: File) {
     const fd = new FormData();
     fd.append('image', file);

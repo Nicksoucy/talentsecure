@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Button, Stack, TextField, MenuItem, Table, TableHead, TableRow, TableCell,
@@ -12,6 +12,7 @@ import QrCode2Icon from '@mui/icons-material/QrCode2';
 import AddAPhotoIcon from '@mui/icons-material/AddAPhoto';
 import CheckroomIcon from '@mui/icons-material/Checkroom';
 import StraightenIcon from '@mui/icons-material/Straighten';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import type { UniformDivision, UniformItem, UniformStockLocation, UniformVariant } from '@/types/uniform';
@@ -197,6 +198,40 @@ export default function UniformsCataloguePage() {
     catch { enqueueSnackbar('Erreur étiquette', { variant: 'error' }); }
   };
 
+  // ---- Réordonnancement par glisser-déposer (sortOrder) ----
+  // Copie locale ordonnée, resynchronisée quand la liste serveur change.
+  const [ordered, setOrdered] = useState<UniformItem[]>([]);
+  useEffect(() => { setOrdered(items); }, [items]);
+  const dragId = useRef<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const reorder = useMutation({
+    mutationFn: (ids: string[]) => uniformService.reorderItems(ids),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['uniform-items'] }),
+    onError: () => {
+      enqueueSnackbar('Erreur lors du réordonnancement', { variant: 'error' });
+      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+    },
+  });
+  const onCardDragOver = (e: React.DragEvent, overId: string) => {
+    e.preventDefault();
+    const from = dragId.current;
+    if (!from || from === overId) return;
+    setOrdered((prev) => {
+      const a = [...prev];
+      const fi = a.findIndex((i) => i.id === from);
+      const oi = a.findIndex((i) => i.id === overId);
+      if (fi < 0 || oi < 0) return prev;
+      const [moved] = a.splice(fi, 1);
+      a.splice(oi, 0, moved);
+      return a;
+    });
+  };
+  const onDragEnd = () => {
+    if (dragId.current) reorder.mutate(ordered.map((i) => i.id));
+    dragId.current = null;
+    setDraggingId(null);
+  };
+
   return (
     <Box>
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1.5} mb={2}>
@@ -218,6 +253,15 @@ export default function UniformsCataloguePage() {
       {isLoading && <Typography>Chargement…</Typography>}
       {!isLoading && items.length === 0 && <Typography color="text.secondary">Aucun morceau. Lancez le seed ou créez-en un.</Typography>}
 
+      {!isLoading && ordered.length > 0 && (
+        <Stack direction="row" alignItems="center" spacing={0.5} mb={1.5} color="text.secondary">
+          <DragIndicatorIcon fontSize="small" />
+          <Typography variant="caption">
+            Glissez les cartes par la poignée (coin haut-gauche) pour les réordonner — du plus utilisé au moins utilisé.
+          </Typography>
+        </Stack>
+      )}
+
       {/* Grille de cartes */}
       <Box
         sx={{
@@ -226,14 +270,39 @@ export default function UniformsCataloguePage() {
           gap: 2,
         }}
       >
-        {items.map((item) => {
+        {ordered.map((item) => {
           const nbSizes = item.variants?.length || 0;
           const frontSum = sumLoc(item.variants, 'FRONT_OFFICE');
           const backSum = sumLoc(item.variants, 'BACK_OFFICE');
           const emplacements = [...new Set((item.variants || []).map((v) => v.emplacement).filter(Boolean))] as string[];
           const isUploading = uploadingId === item.id;
           return (
-            <Card key={item.id} variant="outlined" sx={{ display: 'flex', flexDirection: 'column' }}>
+            <Card
+              key={item.id}
+              variant="outlined"
+              onDragOver={(e) => onCardDragOver(e, item.id)}
+              sx={{
+                display: 'flex', flexDirection: 'column', position: 'relative',
+                opacity: draggingId === item.id ? 0.4 : 1,
+                outline: draggingId && draggingId !== item.id ? '1px dashed' : 'none',
+                outlineColor: 'primary.light',
+              }}
+            >
+              {/* Poignée de glisser-déposer */}
+              <Box
+                draggable
+                onDragStart={(e) => { dragId.current = item.id; setDraggingId(item.id); e.dataTransfer.effectAllowed = 'move'; }}
+                onDragEnd={onDragEnd}
+                title="Glisser pour réordonner"
+                sx={{
+                  position: 'absolute', top: 4, left: 4, zIndex: 3, cursor: 'grab',
+                  display: 'flex', p: 0.25, borderRadius: 1, bgcolor: 'rgba(255,255,255,0.85)',
+                  '&:active': { cursor: 'grabbing' },
+                }}
+              >
+                <DragIndicatorIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+              </Box>
+
               {/* Zone photo (cliquable pour téléverser) */}
               <Box
                 component="label"
