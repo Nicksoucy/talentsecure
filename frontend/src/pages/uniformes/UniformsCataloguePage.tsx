@@ -13,6 +13,7 @@ import AddAPhotoIcon from '@mui/icons-material/AddAPhoto';
 import CheckroomIcon from '@mui/icons-material/Checkroom';
 import StraightenIcon from '@mui/icons-material/Straighten';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import type { UniformDivision, UniformItem, UniformStockLocation, UniformVariant } from '@/types/uniform';
@@ -191,6 +192,18 @@ export default function UniformsCataloguePage() {
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const detailsItem = useMemo(() => items.find((i) => i.id === detailsId) || null, [items, detailsId]);
 
+  // ---- Archiver un morceau (suppression douce) ----
+  const [archiveItem, setArchiveItem] = useState<UniformItem | null>(null);
+  const archive = useMutation({
+    mutationFn: (id: string) => uniformService.deleteItem(id),
+    onSuccess: () => {
+      enqueueSnackbar('Morceau archivé', { variant: 'success' });
+      setArchiveItem(null);
+      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+    },
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
+  });
+
   // ---- Aperçu QR par grandeur + emplacement ----
   const [qrPreview, setQrPreview] = useState<QrPreviewState | null>(null);
   const printVariantBoth = async (variantId: string) => {
@@ -302,6 +315,20 @@ export default function UniformsCataloguePage() {
               >
                 <DragIndicatorIcon fontSize="small" sx={{ color: 'text.secondary' }} />
               </Box>
+
+              {/* Archiver (coin haut-droit) */}
+              <Tooltip title="Archiver ce morceau">
+                <IconButton
+                  size="small"
+                  onClick={() => setArchiveItem(item)}
+                  sx={{
+                    position: 'absolute', top: 4, right: 4, zIndex: 3, p: 0.25,
+                    bgcolor: 'rgba(255,255,255,0.85)', '&:hover': { bgcolor: 'rgba(255,255,255,0.95)' },
+                  }}
+                >
+                  <ArchiveOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                </IconButton>
+              </Tooltip>
 
               {/* Zone photo (cliquable pour téléverser) */}
               <Box
@@ -527,6 +554,23 @@ export default function UniformsCataloguePage() {
 
       {/* Aperçu / impression QR par emplacement */}
       <QrPreviewDialog state={qrPreview} onClose={() => setQrPreview(null)} />
+
+      {/* Archiver un morceau */}
+      <Dialog open={!!archiveItem} onClose={() => setArchiveItem(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Archiver le morceau ?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            « {archiveItem?.name} » ({archiveItem?.division === 'SIGNALISATION' ? 'Signalisation' : 'Sécurité'})
+            sera retiré du catalogue. Rien n'est supprimé — c'est réversible.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setArchiveItem(null)}>Annuler</Button>
+          <Button color="error" variant="contained" disabled={archive.isPending} onClick={() => archive.mutate(archiveItem!.id)}>
+            Archiver
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
