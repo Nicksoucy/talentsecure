@@ -21,6 +21,21 @@ const userId = (req: Request): string | undefined => (req.user as any)?.id;
 // CATALOGUE — Items
 // ===========================================================================
 
+/** Ajoute une URL signée (1 h) pour la photo du morceau, si elle existe. */
+async function withImageUrl<T extends { imageStoragePath?: string | null }>(
+  item: T
+): Promise<T & { imageUrl: string | null }> {
+  let imageUrl: string | null = null;
+  if (item.imageStoragePath) {
+    try {
+      imageUrl = await getSignedFileUrl(item.imageStoragePath, 3600);
+    } catch {
+      imageUrl = null;
+    }
+  }
+  return { ...item, imageUrl };
+}
+
 export const listItems = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { division, type, search, includeInactive } = req.query;
@@ -35,7 +50,8 @@ export const listItems = async (req: Request, res: Response, next: NextFunction)
       include: { variants: { orderBy: { size: 'asc' }, include: { stockByLocation: true } } },
       orderBy: [{ division: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
     });
-    res.json({ data: items });
+    const data = await Promise.all(items.map(withImageUrl));
+    res.json({ data });
   } catch (error) {
     next(error);
   }
@@ -68,7 +84,25 @@ export const getItem = async (req: Request, res: Response, next: NextFunction) =
       include: { variants: { orderBy: { size: 'asc' }, include: { stockByLocation: true } } },
     });
     if (!item) throw new ApiError(404, 'Morceau introuvable');
-    res.json({ data: item });
+    res.json({ data: await withImageUrl(item) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** Téléverse / remplace la photo d'un morceau (vers R2). */
+export const uploadItemImage = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const file = (req as any).file;
+    if (!file) throw new ApiError(400, 'Image requise (champ "image")');
+    const item = await prisma.uniformItem.findUnique({ where: { id } });
+    if (!item) throw new ApiError(404, 'Morceau introuvable');
+    // Clé fixe par morceau : un nouvel upload remplace l'ancienne photo.
+    const { key } = await uploadBufferToR2(file.buffer, `uniforms/items/${id}`, file.mimetype || 'image/jpeg');
+    await prisma.uniformItem.update({ where: { id }, data: { imageStoragePath: key } });
+    const imageUrl = await getSignedFileUrl(key, 3600);
+    res.json({ message: 'Photo enregistrée', data: { imageStoragePath: key, imageUrl } });
   } catch (error) {
     next(error);
   }

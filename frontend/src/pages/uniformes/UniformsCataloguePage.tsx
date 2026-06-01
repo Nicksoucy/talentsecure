@@ -1,14 +1,17 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Box, Typography, Button, Stack, TextField, MenuItem, Accordion, AccordionSummary,
-  AccordionDetails, Table, TableHead, TableRow, TableCell, TableBody, Chip, IconButton,
-  Dialog, DialogTitle, DialogContent, DialogActions, Tooltip,
+  Box, Typography, Button, Stack, TextField, MenuItem, Table, TableHead, TableRow, TableCell,
+  TableBody, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Tooltip,
+  Card, CardContent, CardActions, CircularProgress, Divider,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddIcon from '@mui/icons-material/Add';
 import PrintIcon from '@mui/icons-material/Print';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
+import QrCode2Icon from '@mui/icons-material/QrCode2';
+import AddAPhotoIcon from '@mui/icons-material/AddAPhoto';
+import CheckroomIcon from '@mui/icons-material/Checkroom';
+import StraightenIcon from '@mui/icons-material/Straighten';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import type { UniformDivision, UniformItem, UniformStockLocation, UniformVariant } from '@/types/uniform';
@@ -16,6 +19,8 @@ import type { UniformDivision, UniformItem, UniformStockLocation, UniformVariant
 const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
 const locQty = (v: UniformVariant, loc: UniformStockLocation) =>
   v.stockByLocation?.find((s) => s.location === loc)?.quantityOnHand ?? 0;
+const sumLoc = (vs: UniformVariant[] | undefined, loc: UniformStockLocation) =>
+  (vs || []).reduce((s, v) => s + locQty(v, loc), 0);
 
 export default function UniformsCataloguePage() {
   const qc = useQueryClient();
@@ -78,96 +83,158 @@ export default function UniformsCataloguePage() {
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
 
-  const grouped = useMemo(() => items, [items]);
+  // ---- Photo par morceau ----
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const uploadImage = useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) => uniformService.uploadItemImage(id, file),
+    onMutate: ({ id }) => setUploadingId(id),
+    onSuccess: () => {
+      enqueueSnackbar('Photo enregistrée', { variant: 'success' });
+      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+    },
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Échec photo', { variant: 'error' }),
+    onSettled: () => setUploadingId(null),
+  });
+
+  // ---- Impression QR d'un morceau (front + back par grandeur) ----
+  const printItemLabels = useMutation({
+    mutationFn: (item: UniformItem) => {
+      const ids = (item.variants || []).map((v) => v.id);
+      if (ids.length === 0) throw new Error('Aucune grandeur à imprimer');
+      return uniformService.labelsSheet(ids);
+    },
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    },
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || e?.message || 'Erreur', { variant: 'error' }),
+  });
+
+  // ---- Dialog: détails / grandeurs d'un morceau ----
+  const [detailsId, setDetailsId] = useState<string | null>(null);
+  const detailsItem = useMemo(() => items.find((i) => i.id === detailsId) || null, [items, detailsId]);
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1.5} mb={2}>
         <Typography variant="h5">Catalogue des uniformes</Typography>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => setItemDlg(true)}>
           Nouveau morceau
         </Button>
       </Stack>
 
-      <Stack direction="row" spacing={2} mb={2}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} mb={3}>
         <TextField select size="small" label="Division" value={division} onChange={(e) => setDivision(e.target.value as any)} sx={{ minWidth: 180 }}>
           <MenuItem value="">Toutes</MenuItem>
           <MenuItem value="SECURITE">Sécurité</MenuItem>
           <MenuItem value="SIGNALISATION">Signalisation</MenuItem>
         </TextField>
-        <TextField size="small" label="Recherche" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <TextField size="small" label="Recherche" value={search} onChange={(e) => setSearch(e.target.value)} fullWidth sx={{ maxWidth: 320 }} />
       </Stack>
 
       {isLoading && <Typography>Chargement…</Typography>}
-      {!isLoading && grouped.length === 0 && <Typography color="text.secondary">Aucun morceau. Lancez le seed ou créez-en un.</Typography>}
+      {!isLoading && items.length === 0 && <Typography color="text.secondary">Aucun morceau. Lancez le seed ou créez-en un.</Typography>}
 
-      {grouped.map((item) => (
-        <Accordion key={item.id}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Stack direction="row" spacing={1} alignItems="center" width="100%">
-              <Typography sx={{ flex: 1 }}>{item.name}</Typography>
-              <Chip size="small" label={item.division === 'SIGNALISATION' ? 'Signalisation' : 'Sécurité'} />
-              <Chip size="small" variant="outlined" label={item.type === 'EQUIPEMENT' ? 'Équipement' : 'Uniforme'} />
-              <Chip size="small" color="default" label={`${item.variants?.length || 0} grandeur(s)`} />
-              <Typography variant="body2" color="text.secondary">{money(item.defaultReplacementCost)}</Typography>
-            </Stack>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Stack direction="row" justifyContent="flex-end" mb={1}>
-              <Button size="small" startIcon={<AddIcon />} onClick={() => setVariantDlg(item)}>
-                Ajouter une grandeur
-              </Button>
-            </Stack>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Grandeur</TableCell>
-                  <TableCell>Code-barres</TableCell>
-                  <TableCell>Emplacement</TableCell>
-                  <TableCell align="right">Coût</TableCell>
-                  <TableCell align="right">En stock</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {(item.variants || []).map((v) => (
-                  <TableRow key={v.id}>
-                    <TableCell>{v.size}</TableCell>
-                    <TableCell><code>{v.barcode}</code></TableCell>
-                    <TableCell>{v.emplacement || '—'}</TableCell>
-                    <TableCell align="right">{money(v.replacementCost)}</TableCell>
-                    <TableCell align="right">
-                      <Tooltip title={`Back ${locQty(v, 'BACK_OFFICE')} · Front ${locQty(v, 'FRONT_OFFICE')}`} arrow>
-                        <Stack direction="row" spacing={0.5} justifyContent="flex-end" alignItems="center">
-                          <Chip size="small" color={v.quantityOnHand > 0 ? 'success' : 'default'} label={v.quantityOnHand} />
-                          <Typography variant="caption" color="text.secondary">
-                            (B{locQty(v, 'BACK_OFFICE')}/F{locQty(v, 'FRONT_OFFICE')})
-                          </Typography>
-                        </Stack>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell align="right">
-                      <Tooltip title="Réapprovisionner">
-                        <IconButton size="small" onClick={() => setReplenish({ variantId: v.id, label: `${item.name} — ${v.size}` })}>
-                          <Inventory2Icon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Imprimer l'étiquette">
-                        <IconButton size="small" component="a" href={uniformService.labelUrl(v.id)} target="_blank">
-                          <PrintIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {(item.variants || []).length === 0 && (
-                  <TableRow><TableCell colSpan={6}><Typography variant="body2" color="text.secondary">Aucune grandeur.</Typography></TableCell></TableRow>
+      {/* Grille de cartes */}
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+          gap: 2,
+        }}
+      >
+        {items.map((item) => {
+          const nbSizes = item.variants?.length || 0;
+          const frontSum = sumLoc(item.variants, 'FRONT_OFFICE');
+          const backSum = sumLoc(item.variants, 'BACK_OFFICE');
+          const emplacements = [...new Set((item.variants || []).map((v) => v.emplacement).filter(Boolean))] as string[];
+          const isUploading = uploadingId === item.id;
+          return (
+            <Card key={item.id} variant="outlined" sx={{ display: 'flex', flexDirection: 'column' }}>
+              {/* Zone photo (cliquable pour téléverser) */}
+              <Box
+                component="label"
+                sx={{
+                  position: 'relative', height: 150, bgcolor: 'grey.100', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+                  borderBottom: '1px solid', borderColor: 'divider',
+                  '&:hover .photo-overlay': { opacity: 1 },
+                }}
+              >
+                <input
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadImage.mutate({ id: item.id, file: f });
+                    (e.target as HTMLInputElement).value = '';
+                  }}
+                />
+                {item.imageUrl ? (
+                  <Box component="img" src={item.imageUrl} alt={item.name} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <Stack alignItems="center" spacing={0.5} sx={{ color: 'text.disabled' }}>
+                    <CheckroomIcon sx={{ fontSize: 40 }} />
+                    <Typography variant="caption">Ajouter une photo</Typography>
+                  </Stack>
                 )}
-              </TableBody>
-            </Table>
-          </AccordionDetails>
-        </Accordion>
-      ))}
+                {/* Overlay au survol / pendant l'upload */}
+                <Box
+                  className="photo-overlay"
+                  sx={{
+                    position: 'absolute', inset: 0, bgcolor: 'rgba(0,0,0,0.45)', color: '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    opacity: isUploading ? 1 : 0, transition: 'opacity 0.2s',
+                  }}
+                >
+                  {isUploading ? <CircularProgress size={28} sx={{ color: '#fff' }} /> : <AddAPhotoIcon />}
+                </Box>
+              </Box>
+
+              <CardContent sx={{ flexGrow: 1, pb: 1 }}>
+                <Typography variant="subtitle1" fontWeight={600} sx={{ lineHeight: 1.2 }}>{item.name}</Typography>
+                <Stack direction="row" spacing={0.5} mt={1} flexWrap="wrap" useFlexGap>
+                  <Chip size="small" label={item.division === 'SIGNALISATION' ? 'Signalisation' : 'Sécurité'} />
+                  <Chip size="small" variant="outlined" label={item.type === 'EQUIPEMENT' ? 'Équipement' : 'Uniforme'} />
+                </Stack>
+                <Typography variant="body2" color="text.secondary" mt={1}>
+                  {money(item.defaultReplacementCost)} · {nbSizes} grandeur{nbSizes > 1 ? 's' : ''}
+                </Typography>
+                <Divider sx={{ my: 1 }} />
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  <Chip size="small" color="info" variant="outlined" label={`Front ${frontSum}`} />
+                  <Chip size="small" color="warning" variant="outlined" label={`Back ${backSum}`} />
+                </Stack>
+                {emplacements.length > 0 && (
+                  <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
+                    Emplacement : {emplacements.join(', ')}
+                  </Typography>
+                )}
+              </CardContent>
+
+              <CardActions sx={{ px: 2, pb: 1.5, pt: 0, justifyContent: 'space-between' }}>
+                <Button size="small" startIcon={<StraightenIcon />} onClick={() => setDetailsId(item.id)}>
+                  Grandeurs
+                </Button>
+                <Tooltip title="Imprimer les étiquettes QR (front + back)">
+                  <span>
+                    <Button
+                      size="small"
+                      startIcon={<QrCode2Icon />}
+                      disabled={nbSizes === 0 || printItemLabels.isPending}
+                      onClick={() => printItemLabels.mutate(item)}
+                    >
+                      QR
+                    </Button>
+                  </span>
+                </Tooltip>
+              </CardActions>
+            </Card>
+          );
+        })}
+      </Box>
 
       {/* Nouveau morceau */}
       <Dialog open={itemDlg} onClose={() => setItemDlg(false)} maxWidth="sm" fullWidth>
@@ -188,11 +255,76 @@ export default function UniformsCataloguePage() {
               <MenuItem value="oui">Oui (taille unique)</MenuItem>
             </TextField>
             <TextField type="number" label="Coût unitaire ($)" value={itemForm.defaultReplacementCost} onChange={(e) => setItemForm({ ...itemForm, defaultReplacementCost: Number(e.target.value) })} />
+            <Typography variant="caption" color="text.secondary">
+              La photo s'ajoute ensuite directement sur la carte du morceau.
+            </Typography>
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setItemDlg(false)}>Annuler</Button>
           <Button variant="contained" disabled={!itemForm.name || createItem.isPending} onClick={() => createItem.mutate()}>Créer</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Détails / grandeurs */}
+      <Dialog open={!!detailsItem} onClose={() => setDetailsId(null)} maxWidth="md" fullWidth>
+        <DialogTitle>{detailsItem?.name} — grandeurs</DialogTitle>
+        <DialogContent dividers>
+          <Stack direction="row" justifyContent="flex-end" mb={1}>
+            <Button size="small" startIcon={<AddIcon />} onClick={() => detailsItem && setVariantDlg(detailsItem)}>
+              Ajouter une grandeur
+            </Button>
+          </Stack>
+          <Box sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Grandeur</TableCell>
+                  <TableCell>Code-barres</TableCell>
+                  <TableCell>Emplacement</TableCell>
+                  <TableCell align="right">Coût</TableCell>
+                  <TableCell align="right">Front / Back</TableCell>
+                  <TableCell align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(detailsItem?.variants || []).map((v) => (
+                  <TableRow key={v.id}>
+                    <TableCell>{v.size}</TableCell>
+                    <TableCell><code>{v.barcode}</code></TableCell>
+                    <TableCell>{v.emplacement || '—'}</TableCell>
+                    <TableCell align="right">{money(v.replacementCost)}</TableCell>
+                    <TableCell align="right">
+                      <Tooltip title={`Front ${locQty(v, 'FRONT_OFFICE')} · Back ${locQty(v, 'BACK_OFFICE')}`} arrow>
+                        <Stack direction="row" spacing={0.5} justifyContent="flex-end" alignItems="center">
+                          <Chip size="small" color="info" variant="outlined" label={locQty(v, 'FRONT_OFFICE')} />
+                          <Chip size="small" color="warning" variant="outlined" label={locQty(v, 'BACK_OFFICE')} />
+                        </Stack>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Tooltip title="Réapprovisionner">
+                        <IconButton size="small" onClick={() => setReplenish({ variantId: v.id, label: `${detailsItem?.name} — ${v.size}` })}>
+                          <Inventory2Icon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Imprimer l'étiquette (front + back)">
+                        <IconButton size="small" component="a" href={uniformService.labelUrl(v.id)} target="_blank">
+                          <PrintIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {(detailsItem?.variants || []).length === 0 && (
+                  <TableRow><TableCell colSpan={6}><Typography variant="body2" color="text.secondary">Aucune grandeur.</Typography></TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDetailsId(null)}>Fermer</Button>
         </DialogActions>
       </Dialog>
 

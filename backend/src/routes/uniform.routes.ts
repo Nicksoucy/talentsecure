@@ -22,6 +22,16 @@ const pdfUpload = multer({
   },
 });
 
+// Upload image (photo de morceau) — mémoire, relayé vers R2.
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Seules les images sont acceptées'));
+  },
+});
+
 // -------------------------------------------------------------------------
 // Signature publique (sans auth) — DOIT précéder authenticateJWT.
 // Gère prêt ET retour via le token.
@@ -64,6 +74,7 @@ router.delete('/variants/:variantId', ctrl.deleteVariant);
 router.get('/items', ctrl.listItems);
 router.post('/items', ctrl.createItem);
 router.get('/items/:id', ctrl.getItem);
+router.post('/items/:id/image', imageUpload.single('image'), ctrl.uploadItemImage);
 router.put('/items/:id', ctrl.updateItem);
 router.delete('/items/:id', ctrl.deleteItem);
 router.get('/items/:id/variants', (req, res, next) => {

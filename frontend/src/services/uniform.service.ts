@@ -47,6 +47,14 @@ export const uniformService = {
     const r = await api.delete(`/api/uniforms/items/${id}`);
     return r.data;
   },
+  async uploadItemImage(id: string, file: File) {
+    const fd = new FormData();
+    fd.append('image', file);
+    const r = await api.post(`/api/uniforms/items/${id}/image`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return r.data as { data: { imageStoragePath: string; imageUrl: string } };
+  },
 
   // Variants
   async listVariants(params?: { itemId?: string; search?: string; lowStock?: boolean; includeInactive?: boolean }) {

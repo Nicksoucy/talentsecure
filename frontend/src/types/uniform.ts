@@ -52,6 +52,8 @@ export interface UniformItem {
   name: string;
   isOneSize: boolean;
   defaultReplacementCost: string | number;
+  imageStoragePath?: string | null;
+  imageUrl?: string | null; // URL signée renvoyée par l'API pour l'affichage
   sortOrder: number;
   isActive: boolean;
   variants?: UniformVariant[];
