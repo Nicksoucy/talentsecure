@@ -81,6 +81,22 @@ export const uniformService = {
   labelUrl(variantId: string) {
     return `${api.defaults.baseURL}/api/uniforms/variants/${variantId}/label`;
   },
+  /** PDF d'étiquette d'une variante. location défini = 1 seule (casier/bac) ; sinon les 2. */
+  async variantLabelPdf(variantId: string, location?: UniformStockLocation): Promise<Blob> {
+    const r = await api.get(`/api/uniforms/variants/${variantId}/label`, {
+      params: location ? { location } : {},
+      responseType: 'blob',
+    });
+    return r.data as Blob;
+  },
+  /** Image PNG du QR d'une variante pour un emplacement (aperçu). */
+  async variantQrPng(variantId: string, location?: UniformStockLocation): Promise<Blob> {
+    const r = await api.get(`/api/uniforms/variants/${variantId}/qr`, {
+      params: location ? { location } : {},
+      responseType: 'blob',
+    });
+    return r.data as Blob;
+  },
   async labelsSheet(variantIds: string[]) {
     const r = await api.post('/api/uniforms/labels', { variantIds }, { responseType: 'blob' });
     return r.data as Blob;

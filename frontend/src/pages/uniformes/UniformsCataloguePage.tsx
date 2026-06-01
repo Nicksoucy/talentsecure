@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Button, Stack, TextField, MenuItem, Table, TableHead, TableRow, TableCell,
@@ -21,6 +21,81 @@ const locQty = (v: UniformVariant, loc: UniformStockLocation) =>
   v.stockByLocation?.find((s) => s.location === loc)?.quantityOnHand ?? 0;
 const sumLoc = (vs: UniformVariant[] | undefined, loc: UniformStockLocation) =>
   (vs || []).reduce((s, v) => s + locQty(v, loc), 0);
+
+/** Ouvre un Blob (PDF) dans un nouvel onglet puis libère l'URL. */
+function openBlob(blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+interface QrPreviewState {
+  variant: UniformVariant;
+  location: UniformStockLocation;
+  itemName: string;
+}
+
+/** Aperçu + impression du QR d'une grandeur pour un emplacement (casier/bac). */
+function QrPreviewDialog({ state, onClose }: { state: QrPreviewState | null; onClose: () => void }) {
+  const { enqueueSnackbar } = useSnackbar();
+  const [imgUrl, setImgUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [printing, setPrinting] = useState(false);
+
+  useEffect(() => {
+    if (!state) { setImgUrl(null); return; }
+    let active = true;
+    let url: string | null = null;
+    setLoading(true);
+    uniformService.variantQrPng(state.variant.id, state.location)
+      .then((blob) => { if (!active) return; url = URL.createObjectURL(blob); setImgUrl(url); })
+      .catch(() => { if (active) setImgUrl(null); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; if (url) URL.revokeObjectURL(url); };
+  }, [state?.variant.id, state?.location]);
+
+  const isFront = state?.location === 'FRONT_OFFICE';
+  const locLabel = isFront ? 'Front · casier' : 'Back · bac';
+  const code = state ? `${state.variant.barcode}-${isFront ? 'F' : 'B'}` : '';
+
+  const print = async () => {
+    if (!state) return;
+    setPrinting(true);
+    try { openBlob(await uniformService.variantLabelPdf(state.variant.id, state.location)); }
+    catch { enqueueSnackbar('Erreur impression', { variant: 'error' }); }
+    finally { setPrinting(false); }
+  };
+
+  return (
+    <Dialog open={!!state} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>
+        QR — {state?.itemName} {state?.variant.size}
+        <Typography variant="body2" color="text.secondary">{locLabel}</Typography>
+      </DialogTitle>
+      <DialogContent dividers>
+        <Stack alignItems="center" spacing={1.5} py={1}>
+          {loading ? (
+            <CircularProgress />
+          ) : imgUrl ? (
+            <Box component="img" src={imgUrl} alt="QR" sx={{ width: 220, height: 220, imageRendering: 'pixelated' }} />
+          ) : (
+            <Typography color="error">QR indisponible</Typography>
+          )}
+          <Chip label={code} sx={{ fontFamily: 'monospace' }} />
+          <Typography variant="caption" color="text.secondary" textAlign="center">
+            À coller sur {isFront ? 'le casier (front office)' : 'le bac (back office)'}.
+          </Typography>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Fermer</Button>
+        <Button variant="contained" startIcon={<PrintIcon />} disabled={printing} onClick={print}>
+          Imprimer cette étiquette
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
 
 export default function UniformsCataloguePage() {
   const qc = useQueryClient();
@@ -114,6 +189,13 @@ export default function UniformsCataloguePage() {
   // ---- Dialog: détails / grandeurs d'un morceau ----
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const detailsItem = useMemo(() => items.find((i) => i.id === detailsId) || null, [items, detailsId]);
+
+  // ---- Aperçu QR par grandeur + emplacement ----
+  const [qrPreview, setQrPreview] = useState<QrPreviewState | null>(null);
+  const printVariantBoth = async (variantId: string) => {
+    try { openBlob(await uniformService.variantLabelPdf(variantId)); }
+    catch { enqueueSnackbar('Erreur étiquette', { variant: 'error' }); }
+  };
 
   return (
     <Box>
@@ -295,12 +377,22 @@ export default function UniformsCataloguePage() {
                     <TableCell>{v.emplacement || '—'}</TableCell>
                     <TableCell align="right">{money(v.replacementCost)}</TableCell>
                     <TableCell align="right">
-                      <Tooltip title={`Front ${locQty(v, 'FRONT_OFFICE')} · Back ${locQty(v, 'BACK_OFFICE')}`} arrow>
-                        <Stack direction="row" spacing={0.5} justifyContent="flex-end" alignItems="center">
-                          <Chip size="small" color="info" variant="outlined" label={locQty(v, 'FRONT_OFFICE')} />
-                          <Chip size="small" color="warning" variant="outlined" label={locQty(v, 'BACK_OFFICE')} />
-                        </Stack>
-                      </Tooltip>
+                      <Stack direction="row" spacing={0.5} justifyContent="flex-end" alignItems="center">
+                        <Tooltip title="Voir / imprimer le QR Front (casier)" arrow>
+                          <Chip
+                            size="small" color="info" variant="outlined" clickable
+                            icon={<QrCode2Icon />} label={locQty(v, 'FRONT_OFFICE')}
+                            onClick={() => setQrPreview({ variant: v, location: 'FRONT_OFFICE', itemName: detailsItem?.name || '' })}
+                          />
+                        </Tooltip>
+                        <Tooltip title="Voir / imprimer le QR Back (bac)" arrow>
+                          <Chip
+                            size="small" color="warning" variant="outlined" clickable
+                            icon={<QrCode2Icon />} label={locQty(v, 'BACK_OFFICE')}
+                            onClick={() => setQrPreview({ variant: v, location: 'BACK_OFFICE', itemName: detailsItem?.name || '' })}
+                          />
+                        </Tooltip>
+                      </Stack>
                     </TableCell>
                     <TableCell align="right">
                       <Tooltip title="Réapprovisionner">
@@ -308,8 +400,8 @@ export default function UniformsCataloguePage() {
                           <Inventory2Icon fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Imprimer l'étiquette (front + back)">
-                        <IconButton size="small" component="a" href={uniformService.labelUrl(v.id)} target="_blank">
+                      <Tooltip title="Imprimer les 2 étiquettes (front + back)">
+                        <IconButton size="small" onClick={() => printVariantBoth(v.id)}>
                           <PrintIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
@@ -363,6 +455,9 @@ export default function UniformsCataloguePage() {
           <Button variant="contained" disabled={!replenishQty || doReplenish.isPending} onClick={() => doReplenish.mutate()}>Ajouter au stock</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Aperçu / impression QR par emplacement */}
+      <QrPreviewDialog state={qrPreview} onClose={() => setQrPreview(null)} />
     </Box>
   );
 }

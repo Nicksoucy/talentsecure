@@ -64,6 +64,7 @@ router.post('/labels', ctrl.labelsSheet);
 router.get('/variants', ctrl.listVariants);
 router.get('/variants/by-barcode/:barcode', ctrl.getVariantByBarcode);
 router.get('/variants/:variantId/label', ctrl.variantLabel);
+router.get('/variants/:variantId/qr', ctrl.variantQr);
 router.post('/variants/:variantId/replenish', ctrl.replenishVariant);
 router.post('/variants/:variantId/adjust', ctrl.adjustVariant);
 router.post('/variants/:variantId/transfer', ctrl.transferVariant);

@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import { prisma } from '../config/database';
 import { ApiError } from '../utils/apiError';
 import { applyMovement, transferStock, computeHoldings, computeAmountOwed } from '../services/uniform-stock.service';
-import { generateUniqueBarcode, renderLabelsPdf, LabelData, parseScannedCode } from '../services/uniform-barcode.service';
+import { generateUniqueBarcode, renderLabelsPdf, LabelData, parseScannedCode, renderQrPng, labelPayload } from '../services/uniform-barcode.service';
 import { generateIssuancePdf, generateReturnPdf } from '../services/uniform-pdf.service';
 import { uploadBufferToR2, getSignedFileUrl } from '../services/r2.service';
 import { uploadSignaturePng } from '../utils/signature';
@@ -245,19 +245,38 @@ export const getVariantByBarcode = async (req: Request, res: Response, next: Nex
 
 export const variantLabel = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const loc = req.query.location as 'FRONT_OFFICE' | 'BACK_OFFICE' | undefined;
+    if (loc && loc !== 'FRONT_OFFICE' && loc !== 'BACK_OFFICE') throw new ApiError(400, 'location invalide');
     const variant = await prisma.uniformVariant.findUnique({
       where: { id: req.params.variantId },
       include: { item: true },
     });
     if (!variant) throw new ApiError(404, 'Variante introuvable');
-    // Deux étiquettes : une FRONT (casier) et une BACK (bac).
-    const pdf = await renderLabelsPdf([
-      { itemName: variant.item.name, size: variant.size, barcode: variant.barcode, location: 'FRONT_OFFICE' },
-      { itemName: variant.item.name, size: variant.size, barcode: variant.barcode, location: 'BACK_OFFICE' },
-    ]);
+    const base = { itemName: variant.item.name, size: variant.size, barcode: variant.barcode };
+    // ?location=… -> une seule étiquette (casier OU bac) ; sinon les deux.
+    const labels: LabelData[] = loc
+      ? [{ ...base, location: loc }]
+      : [{ ...base, location: 'FRONT_OFFICE' }, { ...base, location: 'BACK_OFFICE' }];
+    const pdf = await renderLabelsPdf(labels);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="etiquette-${variant.barcode}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="etiquette-${variant.barcode}${loc ? '-' + loc : ''}.pdf"`);
     res.send(pdf);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** Image PNG du QR d'une variante pour un emplacement (aperçu à l'écran). */
+export const variantQr = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const loc = req.query.location as 'FRONT_OFFICE' | 'BACK_OFFICE' | undefined;
+    if (loc && loc !== 'FRONT_OFFICE' && loc !== 'BACK_OFFICE') throw new ApiError(400, 'location invalide');
+    const variant = await prisma.uniformVariant.findUnique({ where: { id: req.params.variantId } });
+    if (!variant) throw new ApiError(404, 'Variante introuvable');
+    const png = await renderQrPng(labelPayload(variant.barcode, loc));
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(png);
   } catch (error) {
     next(error);
   }

@@ -28,6 +28,11 @@ export function parseScannedCode(code: string): { barcode: string; location: Uni
   return { barcode: v, location: null };
 }
 
+/** Code encodé dans l'étiquette : base + suffixe d'emplacement (-F/-B), ou base seule. */
+export function labelPayload(barcode: string, location?: UniformStockLocation | null): string {
+  return barcode + (location ? LOC_SUFFIX[location] : '');
+}
+
 export function randomBarcodeValue(): string {
   const bytes = crypto.randomBytes(9);
   let out = '';
