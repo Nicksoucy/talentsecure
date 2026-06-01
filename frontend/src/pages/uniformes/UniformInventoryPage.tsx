@@ -3,12 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Stack, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
   Button, TextField, Tabs, Tab, Tooltip, MenuItem, InputAdornment, Table, TableHead, TableRow,
-  TableCell, TableBody, Autocomplete,
+  TableCell, TableBody, Autocomplete, Collapse,
 } from '@mui/material';
 import TuneIcon from '@mui/icons-material/Tune';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import SearchIcon from '@mui/icons-material/Search';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import { useSnackbar } from 'notistack';
@@ -405,6 +406,8 @@ export default function UniformInventoryPage() {
   const [search, setSearch] = useState('');
   const [divFilter, setDivFilter] = useState<'ALL' | 'SECURITE' | 'SIGNALISATION'>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'OUT' | 'LOW' | 'OK'>('ALL');
+  // « Action requise » repliable (par défaut replié : la liste peut être longue).
+  const [actionOpen, setActionOpen] = useState(false);
 
   const rawRows: Row[] = stock.data?.data.rows || [];
   const totals = stock.data?.data.totals;
@@ -580,7 +583,14 @@ export default function UniformInventoryPage() {
                 borderRadius: 2, overflow: 'hidden',
               }}
             >
-              <Box sx={{ px: 2, py: 1.75, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${T.outline}` }}>
+              <Box
+                onClick={() => setActionOpen((v) => !v)}
+                sx={{
+                  px: 2, py: 1.75, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  borderBottom: actionOpen ? `1px solid ${T.outline}` : 'none', cursor: 'pointer',
+                  userSelect: 'none', '&:hover': { bgcolor: T.surfaceLow },
+                }}
+              >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                   <ErrorOutlineIcon sx={{ color: T.error, fontSize: 22 }} />
                   <Typography sx={{ fontFamily: T.fontSans, fontSize: 18, fontWeight: 600, color: T.primary }}>Action requise</Typography>
@@ -593,7 +603,20 @@ export default function UniformInventoryPage() {
                     }}
                   />
                 </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Typography sx={{ fontFamily: T.fontSans, fontSize: 13, color: T.onSurfaceVariant }}>
+                    {actionOpen ? 'Réduire' : 'Afficher'}
+                  </Typography>
+                  <ExpandMoreIcon
+                    sx={{
+                      color: T.onSurfaceVariant,
+                      transform: actionOpen ? 'rotate(180deg)' : 'none',
+                      transition: 'transform 0.2s',
+                    }}
+                  />
+                </Box>
               </Box>
+              <Collapse in={actionOpen} unmountOnExit>
               <Box sx={{ p: 2 }}>
                 {outRows.length > 0 && (
                   <Box sx={{ mb: lowRows.length > 0 ? 3 : 0 }}>
@@ -622,6 +645,7 @@ export default function UniformInventoryPage() {
                   </Box>
                 )}
               </Box>
+              </Collapse>
             </Box>
           )}
 
