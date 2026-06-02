@@ -492,7 +492,8 @@ export const createSettlement = async (req: Request, res: Response, next: NextFu
 export const reportStock = async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const variants = await prisma.uniformVariant.findMany({
-      where: { isActive: true },
+      // Exclut aussi les variantes des morceaux archivés (item.isActive = false).
+      where: { isActive: true, item: { isActive: true } },
       include: { item: true, stockByLocation: true },
       orderBy: [{ item: { sortOrder: 'asc' } }, { item: { name: 'asc' } }, { size: 'asc' }],
     });
@@ -605,7 +606,7 @@ export const exportInventoryXlsx = async (_req: Request, res: Response, next: Ne
   try {
     const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
     const variants = await prisma.uniformVariant.findMany({
-      where: { isActive: true },
+      where: { isActive: true, item: { isActive: true } },
       include: { item: true, stockByLocation: true },
       orderBy: [{ item: { division: 'asc' } }, { item: { sortOrder: 'asc' } }, { item: { name: 'asc' } }, { size: 'asc' }],
     });
