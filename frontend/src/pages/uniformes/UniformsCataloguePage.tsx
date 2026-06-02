@@ -249,6 +249,19 @@ export default function UniformsCataloguePage() {
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
 
+  // ---- Modifier l'emplacement physique d'une grandeur ----
+  const [emplVar, setEmplVar] = useState<{ variant: UniformVariant; itemName: string } | null>(null);
+  const [emplVal, setEmplVal] = useState('');
+  const saveEmpl = useMutation({
+    mutationFn: () => uniformService.updateVariant(emplVar!.variant.id, { emplacement: emplVal } as any),
+    onSuccess: () => {
+      enqueueSnackbar('Emplacement mis à jour', { variant: 'success' });
+      setEmplVar(null);
+      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+    },
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
+  });
+
   // ---- Retirer une grandeur (non tenue) : suppression douce ----
   const [archiveVar, setArchiveVar] = useState<{ variant: UniformVariant; itemName: string } | null>(null);
   const doArchiveVar = useMutation({
@@ -542,7 +555,20 @@ export default function UniformsCataloguePage() {
                   <TableRow key={v.id}>
                     <TableCell>{v.size}</TableCell>
                     <TableCell><code>{v.barcode}</code></TableCell>
-                    <TableCell>{v.emplacement || '—'}</TableCell>
+                    <TableCell>
+                      <Tooltip title="Modifier l'emplacement">
+                        <Box
+                          component="span"
+                          onClick={() => { setEmplVar({ variant: v, itemName: detailsItem?.name || '' }); setEmplVal(v.emplacement || ''); }}
+                          sx={{
+                            cursor: 'pointer', textDecoration: 'underline dotted',
+                            color: v.emplacement ? 'inherit' : 'primary.main',
+                          }}
+                        >
+                          {v.emplacement || '+ Ajouter'}
+                        </Box>
+                      </Tooltip>
+                    </TableCell>
                     <TableCell align="right">{money(v.replacementCost)}</TableCell>
                     <TableCell align="right">
                       <Stack direction="row" spacing={0.5} justifyContent="flex-end" alignItems="center">
@@ -641,6 +667,26 @@ export default function UniformsCataloguePage() {
 
       {/* Aperçu / impression QR par emplacement */}
       <QrPreviewDialog state={qrPreview} onClose={() => setQrPreview(null)} />
+
+      {/* Emplacement physique d'une grandeur */}
+      <Dialog open={!!emplVar} onClose={() => setEmplVar(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Emplacement physique</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">{emplVar?.itemName} — {emplVar?.variant.size}</Typography>
+          <TextField
+            autoFocus fullWidth label="Emplacement (ex. A3, B4, Étagère 2)"
+            value={emplVal} onChange={(e) => setEmplVal(e.target.value)} sx={{ mt: 2 }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !saveEmpl.isPending) saveEmpl.mutate(); }}
+          />
+          <Typography variant="caption" color="text.secondary">
+            Où la pièce est rangée. S'affiche dans le catalogue et l'inventaire. Laisse vide pour effacer.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEmplVar(null)}>Annuler</Button>
+          <Button variant="contained" disabled={saveEmpl.isPending} onClick={() => saveEmpl.mutate()}>Enregistrer</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Ajuster une grandeur (emplacement + delta + raison) */}
       <Dialog open={!!adjustVar} onClose={() => setAdjustVar(null)} maxWidth="xs" fullWidth>
