@@ -494,7 +494,7 @@ export const reportStock = async (_req: Request, res: Response, next: NextFuncti
     const variants = await prisma.uniformVariant.findMany({
       where: { isActive: true },
       include: { item: true, stockByLocation: true },
-      orderBy: [{ item: { name: 'asc' } }, { size: 'asc' }],
+      orderBy: [{ item: { sortOrder: 'asc' } }, { item: { name: 'asc' } }, { size: 'asc' }],
     });
     let totalUnits = 0;
     let totalValue = 0;
@@ -515,6 +515,7 @@ export const reportStock = async (_req: Request, res: Response, next: NextFuncti
         division: v.item.division,
         type: v.item.type,
         isOneSize: v.item.isOneSize,
+        sortOrder: v.item.sortOrder,
         size: v.size,
         barcode: v.barcode,
         emplacement: v.emplacement,

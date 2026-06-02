@@ -10,6 +10,8 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import SearchIcon from '@mui/icons-material/Search';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import { useSnackbar } from 'notistack';
@@ -90,6 +92,7 @@ type Group = {
   isOneSize: boolean;
   emplacement: string | null;
   replacementCost: number;
+  sortOrder: number;
   variants: Row[];
   total: number;
   bucket: Bucket;
@@ -107,6 +110,7 @@ function groupByItem(rows: Row[]): Group[] {
         isOneSize: !!r.isOneSize,
         emplacement: r.emplacement,
         replacementCost: r.replacementCost,
+        sortOrder: r.sortOrder ?? 0,
         variants: [],
         total: 0,
         bucket: 'one-size',
@@ -119,7 +123,30 @@ function groupByItem(rows: Row[]): Group[] {
   for (const g of map.values()) {
     g.bucket = detectBucket(g.variants.map((v) => v.size), g.isOneSize);
   }
-  return Array.from(map.values()).sort((a, b) => a.itemName.localeCompare(b.itemName, 'fr'));
+  // Ordre manuel (sortOrder) puis nom — c'est l'ordre que l'utilisateur règle ici/au catalogue.
+  return Array.from(map.values()).sort(
+    (a, b) => a.sortOrder - b.sortOrder || a.itemName.localeCompare(b.itemName, 'fr'),
+  );
+}
+
+// Ordre visuel à plat (= ordre d'affichage) des morceaux, pour persister le réordonnancement.
+const BUCKET_ORDER: Bucket[] = ['tops', 'pants', 'one-size'];
+function flatVisualOrder(groups: Group[]): string[] {
+  const ids: string[] = [];
+  for (const b of BUCKET_ORDER) {
+    const bg = groups.filter((g) => g.bucket === b);
+    if (b === 'one-size') {
+      for (const g of bg) ids.push(g.itemId);
+      continue;
+    }
+    const byDiv = new Map<string, Group[]>();
+    for (const g of bg) {
+      if (!byDiv.has(g.division)) byDiv.set(g.division, []);
+      byDiv.get(g.division)!.push(g);
+    }
+    for (const arr of byDiv.values()) for (const g of arr) ids.push(g.itemId);
+  }
+  return ids;
 }
 
 // ---------- Components ----------
@@ -183,14 +210,29 @@ function ActionRow({ r, onAdjust }: { r: Row; onAdjust: (r: Row) => void }) {
   );
 }
 
+function MoveControls({ disabledUp, disabledDown, onUp, onDown }: { disabledUp: boolean; disabledDown: boolean; onUp: () => void; onDown: () => void }) {
+  return (
+    <Stack sx={{ mr: 0.5 }}>
+      <IconButton size="small" disabled={disabledUp} onClick={onUp} sx={{ p: 0.1 }} title="Monter">
+        <ArrowUpwardIcon sx={{ fontSize: 15 }} />
+      </IconButton>
+      <IconButton size="small" disabled={disabledDown} onClick={onDown} sx={{ p: 0.1 }} title="Descendre">
+        <ArrowDownwardIcon sx={{ fontSize: 15 }} />
+      </IconButton>
+    </Stack>
+  );
+}
+
 function HeatmapTable({
-  title, subtitle, columns, groups, onCellClick,
+  title, subtitle, columns, groups, onCellClick, onMove, canReorder,
 }: {
   title: string;
   subtitle: string;
   columns: string[];
   groups: Group[];
   onCellClick: (variant: Row | null, item: Group) => void;
+  onMove?: (sectionItems: Group[], index: number, dir: number) => void;
+  canReorder?: boolean;
 }) {
   if (groups.length === 0) return null;
   // Group by division
@@ -231,12 +273,24 @@ function HeatmapTable({
                   {divLabel}
                 </Box>
               </Box>,
-              ...items.map((g) => (
+              ...items.map((g, ii) => (
                 <Box key={g.itemId} component="tr" sx={{ borderBottom: `1px solid ${T.outline}`, '&:hover': { bgcolor: `${T.surfaceLow}80` } }}>
                   <Box component="td" sx={{ px: 2, py: 1.5 }}>
-                    <Box sx={{ fontFamily: T.fontSans, fontSize: 14, fontWeight: 500, color: T.primary }}>{g.itemName}</Box>
-                    <Box sx={{ fontFamily: T.fontSans, fontSize: 11, color: T.onSurfaceVariant }}>
-                      {g.emplacement || '—'} · {money(g.replacementCost)}/u
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      {canReorder && onMove && (
+                        <MoveControls
+                          disabledUp={ii === 0}
+                          disabledDown={ii === items.length - 1}
+                          onUp={() => onMove(items, ii, -1)}
+                          onDown={() => onMove(items, ii, 1)}
+                        />
+                      )}
+                      <Box>
+                        <Box sx={{ fontFamily: T.fontSans, fontSize: 14, fontWeight: 500, color: T.primary }}>{g.itemName}</Box>
+                        <Box sx={{ fontFamily: T.fontSans, fontSize: 11, color: T.onSurfaceVariant }}>
+                          {g.emplacement || '—'} · {money(g.replacementCost)}/u
+                        </Box>
+                      </Box>
                     </Box>
                   </Box>
                   {columns.map((col) => {
@@ -279,7 +333,7 @@ function HeatmapTable({
   );
 }
 
-function OneSizeTable({ groups, onAdjust }: { groups: Group[]; onAdjust: (variant: Row) => void }) {
+function OneSizeTable({ groups, onAdjust, onMove, canReorder }: { groups: Group[]; onAdjust: (variant: Row) => void; onMove?: (sectionItems: Group[], index: number, dir: number) => void; canReorder?: boolean }) {
   if (groups.length === 0) return null;
   return (
     <Box sx={{ bgcolor: T.surface, border: `1px solid ${T.outline}`, borderRadius: 2, overflow: 'hidden', mb: 4 }}>
@@ -309,12 +363,24 @@ function OneSizeTable({ groups, onAdjust }: { groups: Group[]; onAdjust: (varian
           </Box>
         </Box>
         <Box component="tbody" sx={{ fontFamily: T.fontMono, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
-          {groups.map((g) => {
+          {groups.map((g, ii) => {
             const v = g.variants[0];
             const s = cellStyle(v.quantityOnHand, v.reorderThreshold);
             return (
               <Box key={g.itemId} component="tr" sx={{ borderBottom: `1px solid ${T.outline}`, '&:hover': { bgcolor: `${T.surfaceLow}80` } }}>
-                <Box component="td" sx={{ px: 2, py: 1.5, fontFamily: T.fontSans, fontSize: 14, fontWeight: 500, color: T.primary }}>{g.itemName}</Box>
+                <Box component="td" sx={{ px: 2, py: 1.5, fontFamily: T.fontSans, fontSize: 14, fontWeight: 500, color: T.primary }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    {canReorder && onMove && (
+                      <MoveControls
+                        disabledUp={ii === 0}
+                        disabledDown={ii === groups.length - 1}
+                        onUp={() => onMove(groups, ii, -1)}
+                        onDown={() => onMove(groups, ii, 1)}
+                      />
+                    )}
+                    {g.itemName}
+                  </Box>
+                </Box>
                 <Box component="td" sx={{ px: 2, py: 1.5, fontFamily: T.fontSans, fontSize: 12, color: T.onSurfaceVariant }}>
                   {g.division === 'SIGNALISATION' ? 'Signalisation' : 'Sécurité'}
                 </Box>
@@ -445,6 +511,27 @@ export default function UniformInventoryPage() {
   const tops = groups.filter((g) => g.bucket === 'tops');
   const pants = groups.filter((g) => g.bucket === 'pants');
   const oneSize = groups.filter((g) => g.bucket === 'one-size');
+
+  // Réordonnancement des morceaux (▲▼) — uniquement sans filtre (sinon l'ordre serait partiel).
+  const canReorder = divFilter === 'ALL' && statusFilter === 'ALL' && !search.trim();
+  const reorderMut = useMutation({
+    mutationFn: (ids: string[]) => uniformService.reorderItems(ids),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['uniform-stock'] }),
+    onError: () => {
+      enqueueSnackbar('Erreur lors du réordonnancement', { variant: 'error' });
+      qc.invalidateQueries({ queryKey: ['uniform-stock'] });
+    },
+  });
+  const moveItem = (sectionItems: Group[], index: number, dir: number) => {
+    const t = index + dir;
+    if (t < 0 || t >= sectionItems.length) return;
+    const order = flatVisualOrder(groups);
+    const i1 = order.indexOf(sectionItems[index].itemId);
+    const i2 = order.indexOf(sectionItems[t].itemId);
+    if (i1 < 0 || i2 < 0) return;
+    [order[i1], order[i2]] = [order[i2], order[i1]];
+    reorderMut.mutate(order);
+  };
 
   // Compute columns from actual data
   const topsSizes = useMemo(() => {
@@ -748,6 +835,15 @@ export default function UniformInventoryPage() {
             </Box>
           )}
 
+          {/* Aide réordonnancement */}
+          {!stock.isLoading && filteredRows.length > 0 && (
+            <Typography sx={{ fontFamily: T.fontSans, fontSize: 12, color: T.onSurfaceVariant, mb: 1.5 }}>
+              {canReorder
+                ? '↕ Utilisez les flèches ▲▼ à gauche d’un morceau pour le déplacer de haut en bas (l’ordre est mémorisé).'
+                : '↕ Retirez les filtres (Division, État, recherche) pour pouvoir réordonner les morceaux.'}
+            </Typography>
+          )}
+
           {/* Heatmap tables */}
           <HeatmapTable
             title="Hauts — chemises, polos, chandails"
@@ -755,6 +851,8 @@ export default function UniformInventoryPage() {
             columns={topsSizes}
             groups={tops}
             onCellClick={(v) => v && openAdjust(v)}
+            onMove={moveItem}
+            canReorder={canReorder}
           />
           <HeatmapTable
             title="Pantalons — par tour de taille"
@@ -762,8 +860,10 @@ export default function UniformInventoryPage() {
             columns={pantsSizes}
             groups={pants}
             onCellClick={(v) => v && openAdjust(v)}
+            onMove={moveItem}
+            canReorder={canReorder}
           />
-          <OneSizeTable groups={oneSize} onAdjust={openAdjust} />
+          <OneSizeTable groups={oneSize} onAdjust={openAdjust} onMove={moveItem} canReorder={canReorder} />
         </>
       )}
 
