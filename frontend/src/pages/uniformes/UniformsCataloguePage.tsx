@@ -18,6 +18,7 @@ import TuneIcon from '@mui/icons-material/Tune';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import EditIcon from '@mui/icons-material/Edit';
+import FitScreenIcon from '@mui/icons-material/FitScreen';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import type { UniformDivision, UniformItem, UniformStockLocation, UniformVariant } from '@/types/uniform';
@@ -198,6 +199,14 @@ export default function UniformsCataloguePage() {
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const detailsItem = useMemo(() => items.find((i) => i.id === detailsId) || null, [items, detailsId]);
 
+  // ---- Affichage de la photo (remplir / entière) par morceau ----
+  const setFit = useMutation({
+    mutationFn: ({ id, fit }: { id: string; fit: 'cover' | 'contain' }) =>
+      uniformService.updateItem(id, { imageFit: fit } as any),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['uniform-items'] }),
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
+  });
+
   // ---- Renommer / modifier un morceau ----
   const [editItem, setEditItem] = useState<UniformItem | null>(null);
   const [editForm, setEditForm] = useState({ name: '', type: 'UNIFORME', defaultReplacementCost: 0 });
@@ -367,6 +376,7 @@ export default function UniformsCataloguePage() {
           const backSum = sumLoc(item.variants, 'BACK_OFFICE');
           const emplacements = [...new Set((item.variants || []).map((v) => v.emplacement).filter(Boolean))] as string[];
           const isUploading = uploadingId === item.id;
+          const fit: 'cover' | 'contain' = item.imageFit === 'contain' ? 'contain' : 'cover';
           return (
             <Card
               key={item.id}
@@ -408,6 +418,22 @@ export default function UniformsCataloguePage() {
                 </IconButton>
               </Tooltip>
 
+              {/* Basculer l'affichage de la photo (remplir / entière) */}
+              {item.imageUrl && (
+                <Tooltip title={fit === 'contain' ? 'Photo entière — cliquer pour remplir' : 'Remplir — cliquer pour photo entière'}>
+                  <IconButton
+                    size="small"
+                    onClick={() => setFit.mutate({ id: item.id, fit: fit === 'contain' ? 'cover' : 'contain' })}
+                    sx={{
+                      position: 'absolute', top: 118, right: 4, zIndex: 3, p: 0.25,
+                      bgcolor: 'rgba(255,255,255,0.85)', '&:hover': { bgcolor: 'rgba(255,255,255,0.95)' },
+                    }}
+                  >
+                    <FitScreenIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                  </IconButton>
+                </Tooltip>
+              )}
+
               {/* Zone photo (cliquable pour téléverser) */}
               <Box
                 component="label"
@@ -429,7 +455,7 @@ export default function UniformsCataloguePage() {
                   }}
                 />
                 {item.imageUrl ? (
-                  <Box component="img" src={item.imageUrl} alt={item.name} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <Box component="img" src={item.imageUrl} alt={item.name} sx={{ width: '100%', height: '100%', objectFit: fit, bgcolor: fit === 'contain' ? 'grey.50' : undefined }} />
                 ) : (
                   <Stack alignItems="center" spacing={0.5} sx={{ color: 'text.disabled' }}>
                     <CheckroomIcon sx={{ fontSize: 40 }} />

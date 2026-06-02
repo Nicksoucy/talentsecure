@@ -54,6 +54,7 @@ export interface UniformItem {
   defaultReplacementCost: string | number;
   imageStoragePath?: string | null;
   imageUrl?: string | null; // URL signée renvoyée par l'API pour l'affichage
+  imageFit?: string | null; // 'cover' (remplir) | 'contain' (photo entière)
   sortOrder: number;
   isActive: boolean;
   variants?: UniformVariant[];
