@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Box, Stack, Typography, Button, IconButton,
-  TextField, MenuItem, Card, CardContent, Chip, Divider, Alert, useMediaQuery, useTheme,
+  TextField, MenuItem, Card, CardContent, Chip, Divider, Alert, Autocomplete, useMediaQuery, useTheme,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import AddIcon from '@mui/icons-material/Add';
@@ -74,6 +74,24 @@ export default function MobileIssuanceSheet({ open, onClose, employeeId, onDone 
 
   const lineArr = useMemo(() => Object.values(lines).filter((l) => l.qty > 0), [lines]);
   const grandTotal = lineArr.reduce((s, l) => s + l.qty * Number(l.variant.replacementCost), 0);
+
+  // Catalogue pour l'AJOUT MANUEL (sans scanner) — utile sur ordinateur.
+  const itemsQuery = useQuery({
+    queryKey: ['uniform-items-issue'],
+    queryFn: () => uniformService.listItems(),
+    enabled: open,
+  });
+  const variantOptions = useMemo(() => {
+    const out: { variant: UniformVariant; label: string }[] = [];
+    for (const it of itemsQuery.data?.data || []) {
+      if (it.division !== division) continue;
+      for (const v of it.variants || []) {
+        if (v.isActive === false) continue;
+        out.push({ variant: { ...v, item: it }, label: `${it.name} — ${v.size}` });
+      }
+    }
+    return out;
+  }, [itemsQuery.data, division]);
 
   const reset = () => {
     setDivision('SECURITE');
@@ -231,6 +249,35 @@ export default function MobileIssuanceSheet({ open, onClose, employeeId, onDone 
             <Typography variant="caption" color="text.secondary">
               Scannez le QR d'un <b>casier</b> (front) ou d'un <b>bac</b> (back) : la pièce s'ajoute
               avec son emplacement (+1 par scan). Front et back forment deux lignes distinctes.
+            </Typography>
+
+            {/* Ajout manuel (ordinateur / sans scanner) */}
+            <Divider>ou ajout manuel</Divider>
+            <Autocomplete
+              options={variantOptions}
+              getOptionLabel={(o) => o.label}
+              value={null}
+              blurOnSelect
+              loading={itemsQuery.isLoading}
+              isOptionEqualToValue={(o, v) => o.variant.id === v.variant.id}
+              onChange={(_e, val) => { if (val) addVariant(val.variant, sourceLocation); }}
+              noOptionsText="Aucune pièce pour cette division"
+              renderOption={(props, o) => (
+                <li {...props} key={o.variant.id}>
+                  <Box>
+                    <Typography variant="body2">{o.label}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Front {locQty(o.variant, 'FRONT_OFFICE')} · Back {locQty(o.variant, 'BACK_OFFICE')}
+                    </Typography>
+                  </Box>
+                </li>
+              )}
+              renderInput={(params) => (
+                <TextField {...params} size="small" label="Ajouter une pièce (nom / taille)" placeholder="Chercher…" />
+              )}
+            />
+            <Typography variant="caption" color="text.secondary">
+              Sur ordinateur : choisissez la pièce ici — elle s'ajoute à l'emplacement «&nbsp;{locLabel[sourceLocation]}&nbsp;» (sélecteur en haut).
             </Typography>
 
             {/* Liste en cartes */}
