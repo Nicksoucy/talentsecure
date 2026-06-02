@@ -154,7 +154,13 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
       </Stack>
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} mb={2} flexWrap="wrap">
-        <Button variant="contained" fullWidth={isMobile} onClick={() => setIssueOpen(true)}>
+        <Button
+          variant="contained"
+          fullWidth={isMobile}
+          onClick={() =>
+            isMobile ? setIssueOpen(true) : navigate(`/uniformes/remises/nouvelle?employeeId=${employeeId}`)
+          }
+        >
           Remettre des uniformes
         </Button>
         <Button variant="outlined" fullWidth={isMobile} onClick={() => navigate(`/uniformes/retours?employeeId=${employeeId}`)}>

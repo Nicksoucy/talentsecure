@@ -12,11 +12,15 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import { employeeService } from '@/services/employee.service';
-import type { UniformDivision, UniformItem } from '@/types/uniform';
+import type { UniformDivision, UniformItem, UniformStockLocation, UniformVariant } from '@/types/uniform';
 import BarcodeScannerInput from './components/BarcodeScannerInput';
 import SignaturePad from './components/SignaturePad';
 
 const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
+const locLabel: Record<UniformStockLocation, string> = { FRONT_OFFICE: 'Front office', BACK_OFFICE: 'Back office' };
+/** Stock d'une variante à un emplacement (0 si inconnu). */
+const locQty = (v: UniformVariant | undefined, loc: UniformStockLocation) =>
+  v?.stockByLocation?.find((s) => s.location === loc)?.quantityOnHand ?? 0;
 
 interface RowState {
   variantId: string; // variante sélectionnée (= grandeur)
@@ -35,6 +39,7 @@ export default function UniformIssuanceWizardPage() {
   const [employee, setEmployee] = useState<any>(null);
   const [empSearch, setEmpSearch] = useState('');
   const [division, setDivision] = useState<UniformDivision>('SECURITE');
+  const [sourceLocation, setSourceLocation] = useState<UniformStockLocation>('FRONT_OFFICE');
   const [dueReturnAt, setDueReturnAt] = useState('');
   const [rowState, setRowState] = useState<Record<string, RowState>>({});
   const [customs, setCustoms] = useState<CustomLine[]>([]);
@@ -105,6 +110,8 @@ export default function UniformIssuanceWizardPage() {
     items.reduce((s, it) => s + (rowState[it.id]?.qty || 0) * rowCost(it), 0) +
     customs.reduce((s, c) => s + c.qty * c.cost, 0);
   const anyPicked = items.some((it) => (rowState[it.id]?.qty || 0) > 0) || customs.some((c) => c.name && c.qty > 0);
+  // Aucun stock à l'emplacement source choisi (ex. front office vide) → guide l'utilisateur.
+  const sourceEmpty = items.length > 0 && items.every((it) => (it.variants || []).every((v) => locQty(v, sourceLocation) === 0));
 
   // ---- Finalisation ----
   const [issuanceId, setIssuanceId] = useState<string | null>(null);
@@ -126,6 +133,7 @@ export default function UniformIssuanceWizardPage() {
       const created = await uniformService.createIssuance({
         employeeId: employee.id,
         division,
+        sourceLocation,
         dueReturnAt: dueReturnAt || undefined,
         lines,
       });
@@ -205,7 +213,8 @@ export default function UniformIssuanceWizardPage() {
               const st = rowState[it.id] || { variantId: '', qty: 0 };
               const v = effectiveVariant(it);
               const sized = !it.isOneSize && it.type !== 'EQUIPEMENT';
-              const overStock = !!v && st.qty > v.quantityOnHand;
+              const availAtSource = locQty(v, sourceLocation);
+              const overStock = !!v && st.qty > availAtSource;
               const lineTotal = st.qty * rowCost(it);
               return (
                 <TableRow key={it.id} sx={st.qty > 0 ? { bgcolor: '#f5faf5' } : undefined}>
@@ -220,13 +229,13 @@ export default function UniformIssuanceWizardPage() {
                         <MenuItem value=""><em>— choisir —</em></MenuItem>
                         {(it.variants || []).map((variant) => (
                           <MenuItem key={variant.id} value={variant.id}>
-                            {variant.size} ({variant.quantityOnHand})
+                            {variant.size} ({locQty(variant, sourceLocation)})
                           </MenuItem>
                         ))}
                       </TextField>
                     ) : (
                       <Typography variant="body2" color="text.secondary">
-                        {it.isOneSize ? 'Taille unique' : '—'}{v ? ` (${v.quantityOnHand})` : ''}
+                        {it.isOneSize ? 'Taille unique' : '—'}{v ? ` (${locQty(v, sourceLocation)})` : ''}
                       </Typography>
                     )}
                   </TableCell>
@@ -241,7 +250,7 @@ export default function UniformIssuanceWizardPage() {
                       />
                       <IconButton size="small" onClick={() => setQty(it.id, (st.qty || 0) + 1)}><AddIcon fontSize="small" /></IconButton>
                     </Stack>
-                    {overStock && <Typography variant="caption" color="error">stock: {v?.quantityOnHand}</Typography>}
+                    {overStock && <Typography variant="caption" color="error">stock {locLabel[sourceLocation]} : {availAtSource}</Typography>}
                   </TableCell>
                   <TableCell align="right">{money(rowCost(it))}</TableCell>
                   <TableCell align="right">{lineTotal > 0 ? money(lineTotal) : '—'}</TableCell>
@@ -277,6 +286,15 @@ export default function UniformIssuanceWizardPage() {
           <TextField select size="small" label="Division" value={division} onChange={(e) => setDivision(e.target.value as UniformDivision)} sx={{ minWidth: 170 }} disabled={!!issuanceId}>
             <MenuItem value="SECURITE">Sécurité</MenuItem>
             <MenuItem value="SIGNALISATION">Signalisation</MenuItem>
+          </TextField>
+          <TextField
+            select size="small" label="Sortir du stock" value={sourceLocation}
+            onChange={(e) => setSourceLocation(e.target.value as UniformStockLocation)}
+            sx={{ minWidth: 160 }} disabled={!!issuanceId}
+            helperText="Emplacement décrémenté"
+          >
+            <MenuItem value="FRONT_OFFICE">Front office</MenuItem>
+            <MenuItem value="BACK_OFFICE">Back office</MenuItem>
           </TextField>
           <TextField type="date" size="small" label="Retour prévu" InputLabelProps={{ shrink: true }} value={dueReturnAt} onChange={(e) => setDueReturnAt(e.target.value)} disabled={!!issuanceId} />
         </Stack>
@@ -315,6 +333,12 @@ export default function UniformIssuanceWizardPage() {
 
           <Paper sx={{ p: 2, mb: 2 }}>
             {itemsQ.isLoading && <Typography>Chargement du catalogue…</Typography>}
+            {!historical && sourceEmpty && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Aucun stock à <b>{locLabel[sourceLocation]}</b>. Transférez du stock (Inventaire → Transférer)
+                ou choisissez « Back office » comme source ci-dessus.
+              </Alert>
+            )}
             {renderSection('Uniforme', uniformeItems)}
             {renderSection('Équipement', equipItems)}
 
