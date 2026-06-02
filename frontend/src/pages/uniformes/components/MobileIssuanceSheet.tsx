@@ -65,6 +65,9 @@ export default function MobileIssuanceSheet({ open, onClose, employeeId, onDone 
   const [dueReturnAt, setDueReturnAt] = useState('');
   const [lines, setLines] = useState<Record<string, LineState>>({});
   const [showCamera, setShowCamera] = useState(false);
+  // Pop-up de quantité après un scan : « combien donner ? »
+  const [scanPrompt, setScanPrompt] = useState<{ variant: UniformVariant; location: UniformStockLocation } | null>(null);
+  const [scanQty, setScanQty] = useState('1');
 
   // Après finalisation : on passe à l'étape signature.
   const [issuanceId, setIssuanceId] = useState<string | null>(null);
@@ -112,7 +115,7 @@ export default function MobileIssuanceSheet({ open, onClose, employeeId, onDone 
     if (created) onDone?.();
   };
 
-  const addVariant = (variant: UniformVariant, loc: UniformStockLocation) => {
+  const addVariant = (variant: UniformVariant, loc: UniformStockLocation, qty = 1) => {
     if (variant.item && variant.item.division !== division) {
       enqueueSnackbar(
         `« ${variant.item.name} » est en division ${variant.item.division === 'SECURITE' ? 'Sécurité' : 'Signalisation'} — vérifiez la division`,
@@ -122,19 +125,29 @@ export default function MobileIssuanceSheet({ open, onClose, employeeId, onDone 
     const key = lineKey(variant.id, loc);
     setLines((p) => {
       const cur = p[key];
-      return { ...p, [key]: { variant, qty: (cur?.qty || 0) + 1, sourceLocation: loc } };
+      return { ...p, [key]: { variant, qty: (cur?.qty || 0) + qty, sourceLocation: loc } };
     });
-    enqueueSnackbar(`+1 ${variant.item?.name || 'pièce'} (${variant.size}) · ${locLabel[loc]}`, { variant: 'success' });
+    enqueueSnackbar(`+${qty} ${variant.item?.name || 'pièce'} (${variant.size}) · ${locLabel[loc]}`, { variant: 'success' });
   };
 
   const handleScan = async (code: string) => {
+    if (scanPrompt) return; // ignore les scans tant que le pop-up est ouvert
     try {
       const { data, location } = await uniformService.getByBarcode(code);
       // L'emplacement vient du QR (-F/-B) ; sinon on retombe sur le défaut sélectionné.
-      addVariant(data, location ?? sourceLocation);
+      setScanQty('1');
+      setScanPrompt({ variant: data, location: location ?? sourceLocation });
     } catch {
       enqueueSnackbar('Code-barres inconnu', { variant: 'error' });
     }
+  };
+
+  const confirmScan = () => {
+    if (!scanPrompt) return;
+    const n = Number(scanQty);
+    if (!(n > 0)) return;
+    addVariant(scanPrompt.variant, scanPrompt.location, n);
+    setScanPrompt(null);
   };
 
   const setQty = (key: string, qty: number) =>
@@ -201,7 +214,13 @@ export default function MobileIssuanceSheet({ open, onClose, employeeId, onDone 
 
   const composing = !issuanceId;
 
+  // Pop-up de quantité (après scan)
+  const promptAvail = scanPrompt ? locQty(scanPrompt.variant, scanPrompt.location) : 0;
+  const promptN = Number(scanQty) || 0;
+  const promptInsufficient = promptN > promptAvail;
+
   return (
+    <>
     <Dialog open={open} onClose={handleClose} fullScreen={fullScreen} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ pr: 6 }}>
         {composing ? "Remettre des uniformes" : "Signature de la remise"}
@@ -419,5 +438,49 @@ export default function MobileIssuanceSheet({ open, onClose, employeeId, onDone 
         )}
       </DialogActions>
     </Dialog>
+
+    {/* Pop-up : quantité à donner après un scan */}
+    <Dialog open={!!scanPrompt} onClose={() => setScanPrompt(null)} maxWidth="xs" fullWidth>
+      <DialogTitle>Combien donner ?</DialogTitle>
+      <DialogContent>
+        {scanPrompt && (
+          <Stack spacing={1.5} alignItems="center">
+            <Typography variant="subtitle1" textAlign="center">{scanPrompt.variant.item?.name || 'Pièce'}</Typography>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" justifyContent="center" useFlexGap>
+              <Chip size="small" label={scanPrompt.variant.size} />
+              <Chip
+                size="small"
+                color={scanPrompt.location === 'FRONT_OFFICE' ? 'info' : 'warning'}
+                variant="outlined"
+                label={scanPrompt.location === 'FRONT_OFFICE' ? 'Front · casier' : 'Back · bac'}
+              />
+              <Typography variant="caption" color={promptInsufficient ? 'error' : 'text.secondary'}>
+                Dispo : {promptAvail}
+              </Typography>
+            </Stack>
+            <Stack direction="row" alignItems="center" spacing={1.5}>
+              <IconButton onClick={() => setScanQty(String(Math.max(1, promptN - 1)))}><RemoveIcon /></IconButton>
+              <TextField
+                type="number" size="small" value={scanQty} autoFocus error={promptInsufficient}
+                onChange={(e) => setScanQty(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && promptN > 0) confirmScan(); }}
+                inputProps={{ style: { textAlign: 'center', width: 72, fontSize: '1.4rem' }, min: 1 }}
+              />
+              <IconButton onClick={() => setScanQty(String(promptN + 1))}><AddIcon /></IconButton>
+            </Stack>
+            {promptInsufficient && (
+              <Typography variant="caption" color="error" textAlign="center">
+                Stock insuffisant à cet emplacement (tu peux quand même l'ajouter).
+              </Typography>
+            )}
+          </Stack>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setScanPrompt(null)}>Annuler</Button>
+        <Button variant="contained" disabled={!(promptN > 0)} onClick={confirmScan}>Ajouter</Button>
+      </DialogActions>
+    </Dialog>
+    </>
   );
 }

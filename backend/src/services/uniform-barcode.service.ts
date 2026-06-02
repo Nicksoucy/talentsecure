@@ -65,7 +65,15 @@ export async function renderCode128Png(text: string): Promise<Buffer> {
 }
 
 export async function renderQrPng(text: string): Promise<Buffer> {
-  return bwipjs.toBuffer({ bcid: 'qrcode', text, scale: 3 });
+  // Optimisé pour la lecture caméra (légère courbure / flou) :
+  //  - eclevel Q : 25 % de correction d'erreur ;
+  //  - le code reste court (≤ 14 car.) -> QR version 1 (21×21), donc les plus
+  //    gros modules possibles, plus faciles à scanner ;
+  //  - scale 6 : haute résolution d'impression ;
+  //  - padding 2 : zone de silence (marge blanche) autour, requise par le std.
+  // eclevel/padding sont des options bwip-js valides à l'exécution mais absentes
+  // de ses types TS -> cast.
+  return bwipjs.toBuffer({ bcid: 'qrcode', text, eclevel: 'Q', scale: 6, padding: 2 } as any);
 }
 
 function pdfToBuffer(doc: PDFKit.PDFDocument): Promise<Buffer> {
@@ -191,32 +199,32 @@ async function renderBoxLabelsPdf(labels: LabelData[]): Promise<Buffer> {
     // Cadre (repère de découpe)
     doc.lineWidth(0.5).rect(x + 4, y + 4, cellW - 8, cellH - 8).stroke('#cccccc');
 
-    const pad = 16;
-    // Nom du morceau (gros)
-    doc.font('Helvetica-Bold').fontSize(16).fillColor('#000000')
-      .text(label.itemName, x + pad, y + pad, { width: cellW - pad * 2, height: 38, ellipsis: true });
-    // Taille
-    doc.font('Helvetica').fontSize(13).fillColor('#333333')
-      .text(`Taille : ${label.size}`, x + pad, y + pad + 38, { width: cellW - pad * 2 });
-    // Légende d'emplacement (couleur)
+    const pad = 18;
+    // DESCRIPTION en priorité (se lit à l'œil sur la boîte) : nom bien gros
+    doc.font('Helvetica-Bold').fontSize(22).fillColor('#000000')
+      .text(label.itemName, x + pad, y + pad, { width: cellW - pad * 2, height: 54, ellipsis: true });
+    // Taille (grosse)
+    doc.font('Helvetica-Bold').fontSize(18).fillColor('#111111')
+      .text(`Taille : ${label.size}`, x + pad, y + pad + 56, { width: cellW - pad * 2 });
+    // Emplacement (couleur)
     if (label.location) {
-      doc.font('Helvetica-Bold').fontSize(13).fillColor(LOC_COLOR[label.location])
-        .text(LOC_CAPTION[label.location], x + pad, y + pad + 56, { width: cellW - pad * 2 });
+      doc.font('Helvetica-Bold').fontSize(15).fillColor(LOC_COLOR[label.location])
+        .text(LOC_CAPTION[label.location], x + pad, y + pad + 80, { width: cellW - pad * 2 });
     }
 
-    // Gros QR centré
-    const qrSize = 168;
+    // QR plus petit (le contenu se repère surtout à la description ci-dessus)
+    const qrSize = 120;
     const qrX = x + (cellW - qrSize) / 2;
-    const qrY = y + 108;
+    const qrY = y + 128;
     doc.image(qr, qrX, qrY, { width: qrSize, height: qrSize });
 
     // Code128 sous le QR
-    const barW = 200;
-    doc.image(code128, x + (cellW - barW) / 2, qrY + qrSize + 8, { width: barW, height: 32 });
+    const barW = 170;
+    doc.image(code128, x + (cellW - barW) / 2, qrY + qrSize + 8, { width: barW, height: 28 });
 
     // Code en texte
     doc.font('Helvetica').fontSize(10).fillColor('#000000')
-      .text(payload, x + pad, qrY + qrSize + 44, { width: cellW - pad * 2, align: 'center' });
+      .text(payload, x + pad, qrY + qrSize + 40, { width: cellW - pad * 2, align: 'center' });
   }
 
   doc.end();
