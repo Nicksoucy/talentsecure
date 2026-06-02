@@ -47,7 +47,7 @@ export const listItems = async (req: Request, res: Response, next: NextFunction)
 
     const items = await prisma.uniformItem.findMany({
       where,
-      include: { variants: { orderBy: { size: 'asc' }, include: { stockByLocation: true } } },
+      include: { variants: { where: { isActive: true }, orderBy: { size: 'asc' }, include: { stockByLocation: true } } },
       // Ordre manuel (sortOrder) d'abord ; division/nom en départage tant que
       // l'utilisateur n'a pas réordonné (sortOrder tous égaux au départ).
       orderBy: [{ sortOrder: 'asc' }, { division: 'asc' }, { name: 'asc' }],
@@ -97,7 +97,7 @@ export const getItem = async (req: Request, res: Response, next: NextFunction) =
   try {
     const item = await prisma.uniformItem.findUnique({
       where: { id: req.params.id },
-      include: { variants: { orderBy: { size: 'asc' }, include: { stockByLocation: true } } },
+      include: { variants: { where: { isActive: true }, orderBy: { size: 'asc' }, include: { stockByLocation: true } } },
     });
     if (!item) throw new ApiError(404, 'Morceau introuvable');
     res.json({ data: await withImageUrl(item) });

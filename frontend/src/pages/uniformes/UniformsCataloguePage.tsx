@@ -16,6 +16,7 @@ import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import TuneIcon from '@mui/icons-material/Tune';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
+import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import type { UniformDivision, UniformItem, UniformStockLocation, UniformVariant } from '@/types/uniform';
@@ -225,6 +226,18 @@ export default function UniformsCataloguePage() {
     onSuccess: () => {
       enqueueSnackbar('Inventaire ajusté', { variant: 'success' });
       setAdjustVar(null); setAdjQty(''); setAdjReason(''); setAdjLoc('BACK_OFFICE');
+      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+    },
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
+  });
+
+  // ---- Retirer une grandeur (non tenue) : suppression douce ----
+  const [archiveVar, setArchiveVar] = useState<{ variant: UniformVariant; itemName: string } | null>(null);
+  const doArchiveVar = useMutation({
+    mutationFn: () => uniformService.deleteVariant(archiveVar!.variant.id),
+    onSuccess: () => {
+      enqueueSnackbar('Grandeur retirée', { variant: 'success' });
+      setArchiveVar(null);
       qc.invalidateQueries({ queryKey: ['uniform-items'] });
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
@@ -545,6 +558,11 @@ export default function UniformsCataloguePage() {
                           <PrintIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
+                      <Tooltip title="Retirer cette grandeur (non tenue)">
+                        <IconButton size="small" color="error" onClick={() => setArchiveVar({ variant: v, itemName: detailsItem?.name || '' })}>
+                          <RemoveCircleOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -646,6 +664,28 @@ export default function UniformsCataloguePage() {
         <DialogActions>
           <Button onClick={() => setTransferVar(null)}>Annuler</Button>
           <Button variant="contained" disabled={!tQty || doTransferVar.isPending} onClick={() => doTransferVar.mutate()}>Transférer</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Retirer une grandeur (non tenue) */}
+      <Dialog open={!!archiveVar} onClose={() => setArchiveVar(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Retirer la grandeur ?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            « {archiveVar?.itemName} — {archiveVar?.variant.size} » sera retirée du catalogue, de l'inventaire et des remises
+            (plus de fausse rupture à 0). Rien n'est supprimé — réversible.
+          </Typography>
+          {archiveVar && (archiveVar.variant.quantityOnHand ?? 0) > 0 && (
+            <Typography variant="caption" color="error" display="block" mt={1}>
+              ⚠ Cette grandeur a encore {archiveVar.variant.quantityOnHand} en stock — il disparaîtra des totaux.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setArchiveVar(null)}>Annuler</Button>
+          <Button color="error" variant="contained" disabled={doArchiveVar.isPending} onClick={() => doArchiveVar.mutate()}>
+            Retirer
+          </Button>
         </DialogActions>
       </Dialog>
 
