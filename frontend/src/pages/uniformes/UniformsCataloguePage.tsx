@@ -14,6 +14,8 @@ import CheckroomIcon from '@mui/icons-material/Checkroom';
 import StraightenIcon from '@mui/icons-material/Straighten';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
+import TuneIcon from '@mui/icons-material/Tune';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import type { UniformDivision, UniformItem, UniformStockLocation, UniformVariant } from '@/types/uniform';
@@ -212,6 +214,36 @@ export default function UniformsCataloguePage() {
     try { openBlob(await uniformService.variantLabelPdf(variantId)); }
     catch { enqueueSnackbar('Erreur étiquette', { variant: 'error' }); }
   };
+
+  // ---- Ajuster une grandeur (emplacement + delta signé + raison) ----
+  const [adjustVar, setAdjustVar] = useState<{ variant: UniformVariant; itemName: string } | null>(null);
+  const [adjQty, setAdjQty] = useState('');
+  const [adjReason, setAdjReason] = useState('');
+  const [adjLoc, setAdjLoc] = useState<UniformStockLocation>('BACK_OFFICE');
+  const doAdjustVar = useMutation({
+    mutationFn: () => uniformService.adjust(adjustVar!.variant.id, Number(adjQty), adjReason || undefined, adjLoc),
+    onSuccess: () => {
+      enqueueSnackbar('Inventaire ajusté', { variant: 'success' });
+      setAdjustVar(null); setAdjQty(''); setAdjReason(''); setAdjLoc('BACK_OFFICE');
+      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+    },
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
+  });
+
+  // ---- Transférer une grandeur back <-> front ----
+  const [transferVar, setTransferVar] = useState<{ variant: UniformVariant; itemName: string } | null>(null);
+  const [tQty, setTQty] = useState('');
+  const [tFrom, setTFrom] = useState<UniformStockLocation>('BACK_OFFICE');
+  const tTo: UniformStockLocation = tFrom === 'BACK_OFFICE' ? 'FRONT_OFFICE' : 'BACK_OFFICE';
+  const doTransferVar = useMutation({
+    mutationFn: () => uniformService.transfer(transferVar!.variant.id, { quantity: Number(tQty), from: tFrom, to: tTo }),
+    onSuccess: () => {
+      enqueueSnackbar('Stock transféré', { variant: 'success' });
+      setTransferVar(null); setTQty(''); setTFrom('BACK_OFFICE');
+      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+    },
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
+  });
 
   // ---- Réordonnancement par glisser-déposer (sortOrder) ----
   // Copie locale ordonnée, resynchronisée quand la liste serveur change.
@@ -493,9 +525,19 @@ export default function UniformsCataloguePage() {
                       </Stack>
                     </TableCell>
                     <TableCell align="right">
-                      <Tooltip title="Réapprovisionner">
+                      <Tooltip title="Réapprovisionner (ajouter du stock)">
                         <IconButton size="small" onClick={() => setReplenish({ variantId: v.id, label: `${detailsItem?.name} — ${v.size}` })}>
                           <Inventory2Icon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Ajuster (corriger +/- avec raison)">
+                        <IconButton size="small" onClick={() => setAdjustVar({ variant: v, itemName: detailsItem?.name || '' })}>
+                          <TuneIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Transférer back ↔ front">
+                        <IconButton size="small" onClick={() => setTransferVar({ variant: v, itemName: detailsItem?.name || '' })}>
+                          <SwapHorizIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Imprimer les 2 étiquettes (front + back)">
@@ -556,6 +598,56 @@ export default function UniformsCataloguePage() {
 
       {/* Aperçu / impression QR par emplacement */}
       <QrPreviewDialog state={qrPreview} onClose={() => setQrPreview(null)} />
+
+      {/* Ajuster une grandeur (emplacement + delta + raison) */}
+      <Dialog open={!!adjustVar} onClose={() => setAdjustVar(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Ajuster l'inventaire</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">{adjustVar?.itemName} — {adjustVar?.variant.size}</Typography>
+          {adjustVar && (
+            <Typography variant="caption" color="text.secondary">
+              Actuel — Front {locQty(adjustVar.variant, 'FRONT_OFFICE')} · Back {locQty(adjustVar.variant, 'BACK_OFFICE')}
+            </Typography>
+          )}
+          <Stack spacing={2} mt={1.5}>
+            <TextField select fullWidth label="Emplacement" value={adjLoc} onChange={(e) => setAdjLoc(e.target.value as UniformStockLocation)}>
+              <MenuItem value="BACK_OFFICE">Back office (entrepôt)</MenuItem>
+              <MenuItem value="FRONT_OFFICE">Front office (comptoir)</MenuItem>
+            </TextField>
+            <TextField type="number" fullWidth label="Delta (ex. +5 ou -3)" value={adjQty} onChange={(e) => setAdjQty(e.target.value)} />
+            <TextField fullWidth label="Raison" value={adjReason} onChange={(e) => setAdjReason(e.target.value)} />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAdjustVar(null)}>Annuler</Button>
+          <Button variant="contained" disabled={!adjQty || doAdjustVar.isPending} onClick={() => doAdjustVar.mutate()}>Ajuster</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Transférer une grandeur back <-> front */}
+      <Dialog open={!!transferVar} onClose={() => setTransferVar(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Transférer du stock</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">{transferVar?.itemName} — {transferVar?.variant.size}</Typography>
+          {transferVar && (
+            <Typography variant="caption" color="text.secondary">
+              Actuel — Front {locQty(transferVar.variant, 'FRONT_OFFICE')} · Back {locQty(transferVar.variant, 'BACK_OFFICE')}
+            </Typography>
+          )}
+          <Stack spacing={2} mt={1.5}>
+            <TextField select fullWidth label="De" value={tFrom} onChange={(e) => setTFrom(e.target.value as UniformStockLocation)}>
+              <MenuItem value="BACK_OFFICE">Back office</MenuItem>
+              <MenuItem value="FRONT_OFFICE">Front office</MenuItem>
+            </TextField>
+            <Typography variant="body2" color="text.secondary">→ vers <b>{tTo === 'BACK_OFFICE' ? 'Back office' : 'Front office'}</b></Typography>
+            <TextField type="number" fullWidth label="Quantité à transférer" value={tQty} onChange={(e) => setTQty(e.target.value)} />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTransferVar(null)}>Annuler</Button>
+          <Button variant="contained" disabled={!tQty || doTransferVar.isPending} onClick={() => doTransferVar.mutate()}>Transférer</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Archiver un morceau */}
       <Dialog open={!!archiveItem} onClose={() => setArchiveItem(null)} maxWidth="xs" fullWidth>

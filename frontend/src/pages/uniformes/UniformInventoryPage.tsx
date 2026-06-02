@@ -418,14 +418,15 @@ export default function UniformInventoryPage() {
     queryFn: () => uniformService.listMovements({ limit: 100, type: moveType || undefined }),
   });
 
-  const [adjust, setAdjust] = useState<{ variantId: string; label: string } | null>(null);
+  const [adjust, setAdjust] = useState<{ variantId: string; label: string; back?: number; front?: number } | null>(null);
   const [qty, setQty] = useState('');
   const [reason, setReason] = useState('');
+  const [adjustLoc, setAdjustLoc] = useState<UniformStockLocation>('BACK_OFFICE');
   const doAdjust = useMutation({
-    mutationFn: () => uniformService.adjust(adjust!.variantId, Number(qty), reason),
+    mutationFn: () => uniformService.adjust(adjust!.variantId, Number(qty), reason, adjustLoc),
     onSuccess: () => {
       enqueueSnackbar('Inventaire ajusté', { variant: 'success' });
-      setAdjust(null); setQty(''); setReason('');
+      setAdjust(null); setQty(''); setReason(''); setAdjustLoc('BACK_OFFICE');
       qc.invalidateQueries({ queryKey: ['uniform-stock'] });
       qc.invalidateQueries({ queryKey: ['uniform-movements'] });
     },
@@ -576,7 +577,7 @@ export default function UniformInventoryPage() {
     }
   };
 
-  const openAdjust = (r: Row) => setAdjust({ variantId: r.variantId, label: `${r.itemName} — ${r.size}` });
+  const openAdjust = (r: Row) => setAdjust({ variantId: r.variantId, label: `${r.itemName} — ${r.size}`, back: r.backOffice, front: r.frontOffice });
 
   return (
     <Box sx={{ bgcolor: T.bg, mx: -3, mt: -3, mb: -3, px: 3, py: 3, minHeight: 'calc(100vh - 100px)', fontFamily: T.fontSans }}>
@@ -927,8 +928,17 @@ export default function UniformInventoryPage() {
       <Dialog open={!!adjust} onClose={() => setAdjust(null)} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ fontFamily: T.fontSans, fontWeight: 600 }}>Ajuster l'inventaire</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" color="text.secondary" mb={2} sx={{ fontFamily: T.fontSans }}>{adjust?.label}</Typography>
-          <Stack spacing={2}>
+          <Typography variant="body2" color="text.secondary" mb={0.5} sx={{ fontFamily: T.fontSans }}>{adjust?.label}</Typography>
+          {(adjust?.front !== undefined || adjust?.back !== undefined) && (
+            <Typography variant="caption" color="text.secondary" sx={{ fontFamily: T.fontSans }}>
+              Actuel — Front {adjust?.front ?? 0} · Back {adjust?.back ?? 0}
+            </Typography>
+          )}
+          <Stack spacing={2} mt={1.5}>
+            <TextField select fullWidth label="Emplacement" value={adjustLoc} onChange={(e) => setAdjustLoc(e.target.value as UniformStockLocation)}>
+              <MenuItem value="BACK_OFFICE">Back office (entrepôt)</MenuItem>
+              <MenuItem value="FRONT_OFFICE">Front office (comptoir)</MenuItem>
+            </TextField>
             <TextField type="number" fullWidth label="Delta (ex. +5 ou -3)" value={qty} onChange={(e) => setQty(e.target.value)} />
             <TextField fullWidth label="Raison" value={reason} onChange={(e) => setReason(e.target.value)} />
           </Stack>
