@@ -4,8 +4,18 @@ import { Box, CircularProgress, Typography } from '@mui/material';
 import MainLayout from './layouts/MainLayout';
 import AuthLayout from './layouts/AuthLayout';
 import ErrorBoundary from './components/ErrorBoundary';
+import RequireRole from './components/RequireRole';
 import { useAuthStore } from './store/authStore';
 import { useClientAuthStore } from './store/clientAuthStore';
+
+// Atterrissage selon le rôle : MAGASIN ne peut pas voir /dashboard.
+function HomeRedirect() {
+  const role = useAuthStore((s) => s.user?.role);
+  return <Navigate to={role === 'MAGASIN' ? '/uniformes' : '/dashboard'} replace />;
+}
+
+// Rôles staff hors MAGASIN (sections que le magasin ne doit pas voir).
+const STAFF_NO_MAGASIN: Array<'ADMIN' | 'RH_RECRUITER' | 'SALES'> = ['ADMIN', 'RH_RECRUITER', 'SALES'];
 
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
@@ -39,6 +49,7 @@ const ClientDashboardPage = lazy(() => import('./pages/client/ClientDashboardPag
 const TalentMarketplacePage = lazy(() => import('./pages/client/TalentMarketplacePage'));
 const ClientPurchasesPage = lazy(() => import('./pages/client/ClientPurchasesPage'));
 const ClientCatalogueDetailPage = lazy(() => import('./pages/client/ClientCatalogueDetailPage'));
+const UsersAdminPage = lazy(() => import('./pages/users/UsersAdminPage'));
 
 function App() {
   // Les stores s'initialisent SYNCHRONIQUEMENT depuis localStorage à leur création
@@ -50,7 +61,7 @@ function App() {
   // Defense in depth: even if a client token somehow ended up in the admin
   // store (token swap, manual localStorage tampering, etc.), block access
   // to the admin panel unless the role is one of the staff roles.
-  const ADMIN_ROLES = ['ADMIN', 'RH_RECRUITER', 'SALES'];
+  const ADMIN_ROLES = ['ADMIN', 'RH_RECRUITER', 'SALES', 'MAGASIN'];
   const canAccessAdminPanel = isAuthenticated && !!user?.role && ADMIN_ROLES.includes(user.role);
 
   const LoadingScreen = () => (
@@ -111,22 +122,29 @@ function App() {
               canAccessAdminPanel ? <MainLayout /> : <Navigate to="/login" replace />
             }
           >
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/candidates" element={<CandidatesListPage />} />
-            <Route path="/candidates/:id" element={<CandidateDetailPage />} />
+            <Route path="/" element={<HomeRedirect />} />
+            <Route path="/dashboard" element={<RequireRole roles={STAFF_NO_MAGASIN}><DashboardPage /></RequireRole>} />
+            <Route path="/candidates" element={<RequireRole roles={STAFF_NO_MAGASIN}><CandidatesListPage /></RequireRole>} />
+            <Route path="/candidates/:id" element={<RequireRole roles={STAFF_NO_MAGASIN}><CandidateDetailPage /></RequireRole>} />
+            {/* Employés : visibles aussi par MAGASIN (lecture seule) */}
             <Route path="/employees" element={<EmployeesPage />} />
             <Route path="/employees/:id" element={<EmployeeDetailPage />} />
-            <Route path="/prospects" element={<ProspectsPage />} />
-            <Route path="/prospects/:id" element={<ProspectDetailPage />} />
-            <Route path="/prospects/:id/convert" element={<ProspectConvertPage />} />
-            <Route path="/catalogues" element={<CataloguesPage />} />
-            <Route path="/clients" element={<ClientsPage />} />
-            <Route path="/clients/:id" element={<ClientDetailPage />} />
-            <Route path="/autres-competances" element={<AutresCompetancesPage />} />
-            <Route path="/wishlists" element={<WishlistsPage />} />
-            <Route path="/exports" element={<ExportPage />} />
-            <Route path="/uniformes" element={<UniformsHubPage />}>
+            <Route path="/prospects" element={<RequireRole roles={STAFF_NO_MAGASIN}><ProspectsPage /></RequireRole>} />
+            <Route path="/prospects/:id" element={<RequireRole roles={STAFF_NO_MAGASIN}><ProspectDetailPage /></RequireRole>} />
+            <Route path="/prospects/:id/convert" element={<RequireRole roles={STAFF_NO_MAGASIN}><ProspectConvertPage /></RequireRole>} />
+            <Route path="/catalogues" element={<RequireRole roles={STAFF_NO_MAGASIN}><CataloguesPage /></RequireRole>} />
+            <Route path="/clients" element={<RequireRole roles={STAFF_NO_MAGASIN}><ClientsPage /></RequireRole>} />
+            <Route path="/clients/:id" element={<RequireRole roles={STAFF_NO_MAGASIN}><ClientDetailPage /></RequireRole>} />
+            <Route path="/autres-competances" element={<RequireRole roles={STAFF_NO_MAGASIN}><AutresCompetancesPage /></RequireRole>} />
+            <Route path="/wishlists" element={<RequireRole roles={STAFF_NO_MAGASIN}><WishlistsPage /></RequireRole>} />
+            <Route path="/exports" element={<RequireRole roles={STAFF_NO_MAGASIN}><ExportPage /></RequireRole>} />
+            {/* Gestion des comptes : ADMIN uniquement */}
+            <Route path="/users" element={<RequireRole roles={['ADMIN']}><UsersAdminPage /></RequireRole>} />
+            {/* Uniformes : ADMIN, RH, MAGASIN (lecture seule) */}
+            <Route
+              path="/uniformes"
+              element={<RequireRole roles={['ADMIN', 'RH_RECRUITER', 'MAGASIN']}><UniformsHubPage /></RequireRole>}
+            >
               <Route index element={<UniformsCataloguePage />} />
               <Route path="inventaire" element={<UniformInventoryPage />} />
               <Route path="remises/nouvelle" element={<UniformIssuanceWizardPage />} />
@@ -138,7 +156,7 @@ function App() {
           </Route>
 
           {/* 404 */}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<HomeRedirect />} />
         </Routes>
       </Suspense>
     </ErrorBoundary>

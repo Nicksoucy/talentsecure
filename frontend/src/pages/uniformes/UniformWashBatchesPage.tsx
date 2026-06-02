@@ -13,6 +13,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import { useSnackbar } from 'notistack';
 import { washBatchService, type WashBatch, type WashBatchStatus } from '@/services/uniform-wash-batch.service';
+import { usePerms } from '@/hooks/usePerms';
 import WashBatchInspectionDialog from './components/WashBatchInspectionDialog';
 
 const STATUS_LABELS: Record<WashBatchStatus, string> = {
@@ -120,6 +121,7 @@ export default function UniformWashBatchesPage() {
 function WashBatchDialog({ batchId, onClose }: { batchId: string; onClose: () => void }) {
   const { enqueueSnackbar } = useSnackbar();
   const qc = useQueryClient();
+  const { canWriteUniforms } = usePerms();
   const [showSend, setShowSend] = useState(false);
   const [showInspect, setShowInspect] = useState(false);
   const [vendor, setVendor] = useState('');
@@ -227,7 +229,7 @@ function WashBatchDialog({ batchId, onClose }: { batchId: string; onClose: () =>
         )}
       </DialogContent>
       <DialogActions>
-        {batch?.status === 'CREATED' && (
+        {canWriteUniforms && batch?.status === 'CREATED' && (
           <>
             <Button color="error" onClick={() => cancelMutation.mutate()}>Annuler le lot</Button>
             <Button variant="contained" startIcon={<LocalShippingIcon />} onClick={() => setShowSend(true)}>
@@ -235,12 +237,12 @@ function WashBatchDialog({ batchId, onClose }: { batchId: string; onClose: () =>
             </Button>
           </>
         )}
-        {batch?.status === 'SENT_TO_LAUNDRY' && (
+        {canWriteUniforms && batch?.status === 'SENT_TO_LAUNDRY' && (
           <Button variant="contained" startIcon={<InventoryIcon />} onClick={() => returnMutation.mutate()}>
             Marquer comme revenu
           </Button>
         )}
-        {batch?.status === 'RETURNED_FROM_LAUNDRY' && (
+        {canWriteUniforms && batch?.status === 'RETURNED_FROM_LAUNDRY' && (
           <>
             <Button
               variant="contained"

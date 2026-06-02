@@ -11,6 +11,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import EditIcon from '@mui/icons-material/Edit';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
+import { usePerms } from '@/hooks/usePerms';
 import SignaturePad from './SignaturePad';
 import IssuanceLinesEditor from './IssuanceLinesEditor';
 import MobileIssuanceSheet from './MobileIssuanceSheet';
@@ -47,6 +48,7 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
   const { enqueueSnackbar } = useSnackbar();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { canWriteUniforms } = usePerms();
 
   const { data, isLoading } = useQuery({
     queryKey: ['uniform-fiche', employeeId],
@@ -113,6 +115,7 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
   const issuanceActions = (i: UniformIssuance) => (
     <>
       <Button size="small" startIcon={<PictureAsPdfIcon />} onClick={() => openPdf('issuance', i.id)}>PDF</Button>
+      {canWriteUniforms && (<>
       <Button size="small" component="label" startIcon={<UploadFileIcon />} disabled={uploadingFor === i.id}>
         {uploadingFor === i.id ? '…' : (i.formPdfStoragePath ? 'Remplacer PDF' : 'Téléverser PDF')}
         <input
@@ -137,6 +140,7 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
       {['ISSUED', 'PARTIALLY_RETURNED'].includes(i.status) && (
         <Button size="small" color="error" onClick={() => closeTerm.mutate(i.id)}>Clôturer fin d'emploi</Button>
       )}
+      </>)}
     </>
   );
 
@@ -153,21 +157,23 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
         <Chip variant="outlined" label={`Facturé : ${money(owed.charged)} • Réglé : ${money(owed.settled)}`} />
       </Stack>
 
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} mb={2} flexWrap="wrap">
-        <Button
-          variant="contained"
-          fullWidth={isMobile}
-          onClick={() =>
-            isMobile ? setIssueOpen(true) : navigate(`/uniformes/remises/nouvelle?employeeId=${employeeId}`)
-          }
-        >
-          Remettre des uniformes
-        </Button>
-        <Button variant="outlined" fullWidth={isMobile} onClick={() => navigate(`/uniformes/retours?employeeId=${employeeId}`)}>
-          Retourner des uniformes
-        </Button>
-        <Button variant="text" fullWidth={isMobile} onClick={() => setSettleDlg(true)}>Enregistrer un règlement</Button>
-      </Stack>
+      {canWriteUniforms && (
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} mb={2} flexWrap="wrap">
+          <Button
+            variant="contained"
+            fullWidth={isMobile}
+            onClick={() =>
+              isMobile ? setIssueOpen(true) : navigate(`/uniformes/remises/nouvelle?employeeId=${employeeId}`)
+            }
+          >
+            Remettre des uniformes
+          </Button>
+          <Button variant="outlined" fullWidth={isMobile} onClick={() => navigate(`/uniformes/retours?employeeId=${employeeId}`)}>
+            Retourner des uniformes
+          </Button>
+          <Button variant="text" fullWidth={isMobile} onClick={() => setSettleDlg(true)}>Enregistrer un règlement</Button>
+        </Stack>
+      )}
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle1" mb={1}>Détentions actuelles</Typography>

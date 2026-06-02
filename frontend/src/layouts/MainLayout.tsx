@@ -24,15 +24,15 @@ import {
   PersonSearch as PersonSearchIcon,
   Description as DescriptionIcon,
   Business as BusinessIcon,
-  Settings as SettingsIcon,
   Logout as LogoutIcon,
   WorkOutline as WorkIcon,
   ShoppingCart as ShoppingCartIcon,
-  Download as DownloadIcon,
   Badge as BadgeIcon,
   Checkroom as CheckroomIcon,
+  ManageAccounts as ManageAccountsIcon,
 } from '@mui/icons-material';
 import { useAuthStore } from '@/store/authStore';
+import { usePerms } from '@/hooks/usePerms';
 import NotificationBell from './components/NotificationBell';
 import { authService } from '@/services/auth.service';
 
@@ -68,21 +68,21 @@ const MainLayout = () => {
     }
   };
 
-  const isUniformStaff = user?.role === 'ADMIN' || user?.role === 'RH_RECRUITER';
+  const { canViewUniforms, canManageUsers, isMagasin } = usePerms();
 
+  // Menu filtré par rôle. MAGASIN ne voit que Employés + Uniformes.
   const menuItems = [
-    { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
-    { text: 'Candidats', icon: <PeopleIcon />, path: '/candidates' },
-    { text: 'Employés', icon: <BadgeIcon />, path: '/employees' },
-    { text: 'Candidats Potentiels', icon: <PersonSearchIcon />, path: '/prospects' },
-    { text: 'Catalogues', icon: <DescriptionIcon />, path: '/catalogues' },
-    { text: 'Clients', icon: <BusinessIcon />, path: '/clients' },
-    { text: 'Demandes Clients', icon: <ShoppingCartIcon />, path: '/wishlists' },
-    { text: 'Autre Compétence', icon: <WorkIcon />, path: '/autres-competances' },
-    ...(isUniformStaff
-      ? [{ text: 'Uniformes', icon: <CheckroomIcon />, path: '/uniformes' }]
-      : []),
-  ];
+    { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard', show: !isMagasin },
+    { text: 'Candidats', icon: <PeopleIcon />, path: '/candidates', show: !isMagasin },
+    { text: 'Employés', icon: <BadgeIcon />, path: '/employees', show: true },
+    { text: 'Candidats Potentiels', icon: <PersonSearchIcon />, path: '/prospects', show: !isMagasin },
+    { text: 'Catalogues', icon: <DescriptionIcon />, path: '/catalogues', show: !isMagasin },
+    { text: 'Clients', icon: <BusinessIcon />, path: '/clients', show: !isMagasin },
+    { text: 'Demandes Clients', icon: <ShoppingCartIcon />, path: '/wishlists', show: !isMagasin },
+    { text: 'Autre Compétence', icon: <WorkIcon />, path: '/autres-competances', show: !isMagasin },
+    { text: 'Uniformes', icon: <CheckroomIcon />, path: '/uniformes', show: canViewUniforms },
+    { text: 'Utilisateurs', icon: <ManageAccountsIcon />, path: '/users', show: canManageUsers },
+  ].filter((item) => item.show);
 
   const drawer = (
     <Box>
@@ -159,17 +159,6 @@ const MainLayout = () => {
               </Typography>
             </MenuItem>
             <Divider />
-            <MenuItem
-              onClick={() => {
-                navigate('/settings');
-                handleMenuClose();
-              }}
-            >
-              <ListItemIcon>
-                <SettingsIcon fontSize="small" />
-              </ListItemIcon>
-              Paramètres
-            </MenuItem>
             <MenuItem onClick={handleLogout}>
               <ListItemIcon>
                 <LogoutIcon fontSize="small" />

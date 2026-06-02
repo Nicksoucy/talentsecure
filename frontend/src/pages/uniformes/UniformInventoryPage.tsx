@@ -16,6 +16,7 @@ import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
+import { usePerms } from '@/hooks/usePerms';
 import type { UniformStockLocation } from '@/types/uniform';
 
 // ---------- Design B (heatmap) tokens ----------
@@ -166,7 +167,7 @@ function KpiCell({ label, value, hint, mono = true, accent }: { label: string; v
   );
 }
 
-function ActionRow({ r, onAdjust }: { r: Row; onAdjust: (r: Row) => void }) {
+function ActionRow({ r, onAdjust }: { r: Row; onAdjust?: (r: Row) => void }) {
   const isOut = r.quantityOnHand === 0;
   const pct = r.reorderThreshold ? Math.min(100, Math.round((r.quantityOnHand / r.reorderThreshold) * 100)) : 0;
   return (
@@ -194,18 +195,20 @@ function ActionRow({ r, onAdjust }: { r: Row; onAdjust: (r: Row) => void }) {
         <Box sx={{ width: 50, fontFamily: T.fontMono, fontSize: 12, color: T.onSurfaceVariant }}>{r.emplacement || '—'}</Box>
         <Box sx={{ fontFamily: T.fontMono, fontSize: 13, color: T.onSurfaceVariant }}>{money(r.replacementCost)}/u</Box>
       </Box>
-      <Button
-        size="small"
-        className="action-btn"
-        onClick={() => onAdjust(r)}
-        sx={{
-          opacity: 0, transition: 'opacity .15s', textTransform: 'none', fontFamily: T.fontSans, fontWeight: 600, fontSize: 12,
-          color: T.primary, border: `1px solid ${T.outline}`, borderRadius: 1, px: 1.5, py: 0.5,
-          '&:hover': { bgcolor: T.surface, borderColor: T.outlineStrong },
-        }}
-      >
-        {isOut ? 'Réapprovisionner' : 'Ajuster'}
-      </Button>
+      {onAdjust && (
+        <Button
+          size="small"
+          className="action-btn"
+          onClick={() => onAdjust(r)}
+          sx={{
+            opacity: 0, transition: 'opacity .15s', textTransform: 'none', fontFamily: T.fontSans, fontWeight: 600, fontSize: 12,
+            color: T.primary, border: `1px solid ${T.outline}`, borderRadius: 1, px: 1.5, py: 0.5,
+            '&:hover': { bgcolor: T.surface, borderColor: T.outlineStrong },
+          }}
+        >
+          {isOut ? 'Réapprovisionner' : 'Ajuster'}
+        </Button>
+      )}
     </Box>
   );
 }
@@ -230,7 +233,7 @@ function HeatmapTable({
   subtitle: string;
   columns: string[];
   groups: Group[];
-  onCellClick: (variant: Row | null, item: Group) => void;
+  onCellClick?: (variant: Row | null, item: Group) => void;
   onMove?: (sectionItems: Group[], index: number, dir: number) => void;
   canReorder?: boolean;
 }) {
@@ -307,9 +310,9 @@ function HeatmapTable({
                       <Tooltip key={col} title={`Back ${v.backOffice ?? 0} · Front ${v.frontOffice ?? 0}`} arrow>
                         <Box
                           component="td"
-                          onClick={() => onCellClick(v, g)}
+                          onClick={onCellClick ? () => onCellClick(v, g) : undefined}
                           sx={{
-                            px: 1, py: 1.5, textAlign: 'center', cursor: 'pointer',
+                            px: 1, py: 1.5, textAlign: 'center', cursor: onCellClick ? 'pointer' : 'default',
                             bgcolor: s.bg, color: s.color, fontWeight: s.weight,
                             transition: 'filter .12s',
                             '&:hover': { filter: 'brightness(0.96)' },
@@ -333,7 +336,7 @@ function HeatmapTable({
   );
 }
 
-function OneSizeTable({ groups, onAdjust, onMove, canReorder }: { groups: Group[]; onAdjust: (variant: Row) => void; onMove?: (sectionItems: Group[], index: number, dir: number) => void; canReorder?: boolean }) {
+function OneSizeTable({ groups, onAdjust, onMove, canReorder }: { groups: Group[]; onAdjust?: (variant: Row) => void; onMove?: (sectionItems: Group[], index: number, dir: number) => void; canReorder?: boolean }) {
   if (groups.length === 0) return null;
   return (
     <Box sx={{ bgcolor: T.surface, border: `1px solid ${T.outline}`, borderRadius: 2, overflow: 'hidden', mb: 4 }}>
@@ -391,9 +394,11 @@ function OneSizeTable({ groups, onAdjust, onMove, canReorder }: { groups: Group[
                 <Box component="td" sx={{ px: 2, py: 1.5, textAlign: 'right' }}>{money(v.replacementCost)}</Box>
                 <Box component="td" sx={{ px: 2, py: 1.5, textAlign: 'right', borderLeft: `1px solid ${T.outline}`, fontWeight: 600 }}>{money(v.value)}</Box>
                 <Box component="td" sx={{ px: 2, py: 1.5, textAlign: 'right' }}>
+                  {onAdjust && (
                   <Tooltip title="Ajuster l'inventaire">
                     <IconButton size="small" onClick={() => onAdjust(v)}><TuneIcon fontSize="small" /></IconButton>
                   </Tooltip>
+                  )}
                 </Box>
               </Box>
             );
@@ -408,6 +413,7 @@ function OneSizeTable({ groups, onAdjust, onMove, canReorder }: { groups: Group[
 export default function UniformInventoryPage() {
   const qc = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
+  const { canWriteUniforms } = usePerms();
   const [tab, setTab] = useState(0);
 
   const [moveType, setMoveType] = useState('');
@@ -513,8 +519,8 @@ export default function UniformInventoryPage() {
   const pants = groups.filter((g) => g.bucket === 'pants');
   const oneSize = groups.filter((g) => g.bucket === 'one-size');
 
-  // Réordonnancement des morceaux (▲▼) — uniquement sans filtre (sinon l'ordre serait partiel).
-  const canReorder = divFilter === 'ALL' && statusFilter === 'ALL' && !search.trim();
+  // Réordonnancement des morceaux (▲▼) — uniquement sans filtre (sinon l'ordre serait partiel) et si écriture autorisée.
+  const canReorder = canWriteUniforms && divFilter === 'ALL' && statusFilter === 'ALL' && !search.trim();
   const reorderMut = useMutation({
     mutationFn: (ids: string[]) => uniformService.reorderItems(ids),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['uniform-stock'] }),
@@ -595,6 +601,7 @@ export default function UniformInventoryPage() {
           </Typography>
         </Box>
         <Stack direction="row" spacing={1.5}>
+          {canWriteUniforms && (<>
           <Button
             variant="outlined"
             startIcon={<SwapHorizIcon />}
@@ -634,6 +641,7 @@ export default function UniformInventoryPage() {
           >
             {printBoxLabels.isPending ? 'Génération…' : 'Étiquettes boîtes (back)'}
           </Button>
+          </>)}
           <Button
             variant="outlined"
             startIcon={<FileDownloadIcon />}
@@ -742,7 +750,7 @@ export default function UniformInventoryPage() {
                       </Typography>
                     </Box>
                     <Stack spacing={0.5}>
-                      {outRows.map((r) => <ActionRow key={r.variantId} r={r} onAdjust={openAdjust} />)}
+                      {outRows.map((r) => <ActionRow key={r.variantId} r={r} onAdjust={canWriteUniforms ? openAdjust : undefined} />)}
                     </Stack>
                   </Box>
                 )}
@@ -755,7 +763,7 @@ export default function UniformInventoryPage() {
                       </Typography>
                     </Box>
                     <Stack spacing={0.5}>
-                      {lowRows.map((r) => <ActionRow key={r.variantId} r={r} onAdjust={openAdjust} />)}
+                      {lowRows.map((r) => <ActionRow key={r.variantId} r={r} onAdjust={canWriteUniforms ? openAdjust : undefined} />)}
                     </Stack>
                   </Box>
                 )}
@@ -851,7 +859,7 @@ export default function UniformInventoryPage() {
             subtitle="Tailles lettrées"
             columns={topsSizes}
             groups={tops}
-            onCellClick={(v) => v && openAdjust(v)}
+            onCellClick={canWriteUniforms ? (v) => v && openAdjust(v) : undefined}
             onMove={moveItem}
             canReorder={canReorder}
           />
@@ -860,11 +868,11 @@ export default function UniformInventoryPage() {
             subtitle="Tailles numériques"
             columns={pantsSizes}
             groups={pants}
-            onCellClick={(v) => v && openAdjust(v)}
+            onCellClick={canWriteUniforms ? (v) => v && openAdjust(v) : undefined}
             onMove={moveItem}
             canReorder={canReorder}
           />
-          <OneSizeTable groups={oneSize} onAdjust={openAdjust} onMove={moveItem} canReorder={canReorder} />
+          <OneSizeTable groups={oneSize} onAdjust={canWriteUniforms ? openAdjust : undefined} onMove={moveItem} canReorder={canReorder} />
         </>
       )}
 

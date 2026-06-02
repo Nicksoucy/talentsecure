@@ -41,6 +41,7 @@ import marketplaceRoutes from './routes/talent-marketplace.routes';
 import uniformRoutes from './routes/uniform.routes';
 import notificationRoutes from './routes/notification.routes';
 import dashboardRoutes from './routes/dashboard.routes';
+import userRoutes from './routes/user.routes';
 import { startScheduler } from './jobs/scheduler';
 
 const app: Application = express();
@@ -136,7 +137,7 @@ app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/uniforms', uniformRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-// app.use('/api/users', userRoutes);
+app.use('/api/users', userRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response, next: NextFunction) => {

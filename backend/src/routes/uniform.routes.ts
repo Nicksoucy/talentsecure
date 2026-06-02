@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { authenticateJWT, authorizeRoles } from '../middleware/auth';
+import { authenticateJWT, authorizeReadWrite } from '../middleware/auth';
 import { publicShareLimiter } from '../middleware/rate-limit.middleware';
 import * as ctrl from '../controllers/uniform.controller';
 import * as iss from '../controllers/uniform-issuance.controller';
@@ -43,7 +43,10 @@ router.post('/sign/:token', publicShareLimiter, ctrl.submitSign);
 // Tout le reste : staff ADMIN + RH_RECRUITER.
 // -------------------------------------------------------------------------
 router.use(authenticateJWT);
-router.use(authorizeRoles('ADMIN', 'RH_RECRUITER'));
+// Lecture (GET) : ADMIN, RH, MAGASIN (lecture seule). Écriture : ADMIN, RH.
+// Invariant : toutes les lectures du module sont des GET, toutes les mutations
+// sont POST/PUT/DELETE (cf. authorizeReadWrite).
+router.use(authorizeReadWrite(['ADMIN', 'RH_RECRUITER', 'MAGASIN'], ['ADMIN', 'RH_RECRUITER']));
 
 // Stats & rapports
 router.get('/stats/summary', ctrl.statsSummary);

@@ -12,6 +12,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import { employeeService } from '@/services/employee.service';
+import { usePerms } from '@/hooks/usePerms';
 import type { UniformDivision, UniformItem, UniformStockLocation, UniformVariant } from '@/types/uniform';
 import BarcodeScannerInput from './components/BarcodeScannerInput';
 import SignaturePad from './components/SignaturePad';
@@ -35,6 +36,7 @@ interface CustomLine {
 export default function UniformIssuanceWizardPage() {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
+  const { canWriteUniforms } = usePerms();
 
   const [employee, setEmployee] = useState<any>(null);
   const [empSearch, setEmpSearch] = useState('');
@@ -265,6 +267,10 @@ export default function UniformIssuanceWizardPage() {
       </Box>
     );
   };
+
+  if (!canWriteUniforms) {
+    return <Alert severity="info">Accès en lecture seule — la remise d'uniformes n'est pas disponible pour votre profil.</Alert>;
+  }
 
   return (
     <Box>

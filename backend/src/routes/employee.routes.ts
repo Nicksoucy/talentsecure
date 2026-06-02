@@ -10,7 +10,7 @@ import {
   promoteCandidateToEmployee,
   promoteProspectToEmployee,
 } from '../controllers/employee.controller';
-import { authenticateJWT } from '../middleware/auth';
+import { authenticateJWT, authorizeReadWrite } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
 
 const uuidParam = z.object({ id: z.string().uuid('ID invalide') });
@@ -19,8 +19,11 @@ const prospectIdParam = z.object({ prospectId: z.string().uuid('ID invalide') })
 
 const router = Router();
 
-// Toutes les routes employés requièrent l'authentification
+// Toutes les routes employés requièrent l'authentification.
+// Lecture (GET) : ADMIN, RH, SALES, MAGASIN. Écriture (POST/PUT/DELETE, dont
+// les promotions) : ADMIN, RH seulement (verrouille l'ancienne ouverture totale).
 router.use(authenticateJWT);
+router.use(authorizeReadWrite(['ADMIN', 'RH_RECRUITER', 'SALES', 'MAGASIN'], ['ADMIN', 'RH_RECRUITER']));
 
 router.get('/', getEmployees);
 router.get('/stats/summary', getEmployeesStats);

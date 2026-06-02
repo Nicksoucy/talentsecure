@@ -113,9 +113,11 @@ export default function EmployeesPage() {
             Employés
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
-          Ajouter un employé
-        </Button>
+        {isUniformStaff && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
+            Ajouter un employé
+          </Button>
+        )}
       </Box>
 
       {/* Stats */}

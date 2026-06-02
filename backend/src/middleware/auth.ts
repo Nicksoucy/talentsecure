@@ -57,6 +57,30 @@ export const authorizeRoles = (...roles: UserRole[]) => {
 };
 
 /**
+ * Garde par MÉTHODE : autorise des rôles différents en lecture (GET/HEAD) et en
+ * écriture (POST/PUT/PATCH/DELETE).
+ *
+ * INVARIANT IMPORTANT : aucune route GET/HEAD ne doit muter l'état. Sinon un
+ * rôle « lecture seule » (ex. MAGASIN) pourrait écrire via une telle route.
+ */
+export const authorizeReadWrite = (
+  readRoles: UserRole[],
+  writeRoles: UserRole[]
+) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Non authentifié' });
+    }
+    const isRead = req.method === 'GET' || req.method === 'HEAD';
+    const allowed = isRead ? readRoles : writeRoles;
+    if (!allowed.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Accès refusé - permissions insuffisantes' });
+    }
+    next();
+  };
+};
+
+/**
  * Middleware optionnel JWT (ne rejette pas si pas authentifié)
  */
 export const optionalJWT = (

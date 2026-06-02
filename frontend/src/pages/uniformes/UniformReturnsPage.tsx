@@ -13,6 +13,7 @@ import LocalLaundryServiceIcon from '@mui/icons-material/LocalLaundryService';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import { employeeService } from '@/services/employee.service';
+import { usePerms } from '@/hooks/usePerms';
 import type { UniformItemCondition } from '@/types/uniform';
 import SignaturePad from './components/SignaturePad';
 
@@ -34,6 +35,7 @@ interface Piece {
 export default function UniformReturnsPage() {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
+  const { canWriteUniforms } = usePerms();
   const [employee, setEmployee] = useState<any>(null);
   const [empSearch, setEmpSearch] = useState('');
   const [issuanceId, setIssuanceId] = useState('');
@@ -165,6 +167,10 @@ export default function UniformReturnsPage() {
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
+
+  if (!canWriteUniforms) {
+    return <Alert severity="info">Accès en lecture seule — le retour d'uniformes n'est pas disponible pour votre profil.</Alert>;
+  }
 
   return (
     <Box>

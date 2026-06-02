@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { employeeService } from '@/services/employee.service';
-import { useAuthStore } from '@/store/authStore';
+import { usePerms } from '@/hooks/usePerms';
 import UniformFichePanel from '../uniformes/components/UniformFichePanel';
 
 function Info({ label, value }: { label: string; value?: any }) {
@@ -22,8 +22,7 @@ const fmtDate = (d?: string) => (d ? new Date(d).toLocaleDateString('fr-CA') : '
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
-  const isUniformStaff = user?.role === 'ADMIN' || user?.role === 'RH_RECRUITER';
+  const { canViewUniforms } = usePerms();
 
   const { data, isLoading } = useQuery({
     queryKey: ['employee', id],
@@ -69,10 +68,10 @@ export default function EmployeeDetailPage() {
       <Divider sx={{ mb: 2 }}>
         <Typography variant="overline" color="text.secondary">Gestion des uniformes</Typography>
       </Divider>
-      {isUniformStaff ? (
+      {canViewUniforms ? (
         <UniformFichePanel employeeId={id!} />
       ) : (
-        <Typography color="text.secondary">Accès à la gestion des uniformes réservé (ADMIN / RH).</Typography>
+        <Typography color="text.secondary">Accès à la gestion des uniformes réservé.</Typography>
       )}
     </Box>
   );

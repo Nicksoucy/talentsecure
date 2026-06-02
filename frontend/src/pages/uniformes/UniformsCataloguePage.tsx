@@ -21,6 +21,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import FitScreenIcon from '@mui/icons-material/FitScreen';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
+import { usePerms } from '@/hooks/usePerms';
 import type { UniformDivision, UniformItem, UniformStockLocation, UniformVariant } from '@/types/uniform';
 
 const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
@@ -109,6 +110,7 @@ function QrPreviewDialog({ state, onClose }: { state: QrPreviewState | null; onC
 export default function UniformsCataloguePage() {
   const qc = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
+  const { canWriteUniforms } = usePerms();
   const [division, setDivision] = useState<UniformDivision | ''>('');
   const [search, setSearch] = useState('');
 
@@ -336,9 +338,11 @@ export default function UniformsCataloguePage() {
     <Box>
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={1.5} mb={2}>
         <Typography variant="h5">Catalogue des uniformes</Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setItemDlg(true)}>
-          Nouveau morceau
-        </Button>
+        {canWriteUniforms && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setItemDlg(true)}>
+            Nouveau morceau
+          </Button>
+        )}
       </Stack>
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} mb={3}>
@@ -353,7 +357,7 @@ export default function UniformsCataloguePage() {
       {isLoading && <Typography>Chargement…</Typography>}
       {!isLoading && items.length === 0 && <Typography color="text.secondary">Aucun morceau. Lancez le seed ou créez-en un.</Typography>}
 
-      {!isLoading && ordered.length > 0 && (
+      {!isLoading && ordered.length > 0 && canWriteUniforms && (
         <Stack direction="row" alignItems="center" spacing={0.5} mb={1.5} color="text.secondary">
           <DragIndicatorIcon fontSize="small" />
           <Typography variant="caption">
@@ -390,6 +394,7 @@ export default function UniformsCataloguePage() {
               }}
             >
               {/* Poignée de glisser-déposer */}
+              {canWriteUniforms && (
               <Box
                 draggable
                 onDragStart={(e) => { dragId.current = item.id; setDraggingId(item.id); e.dataTransfer.effectAllowed = 'move'; }}
@@ -403,8 +408,10 @@ export default function UniformsCataloguePage() {
               >
                 <DragIndicatorIcon fontSize="small" sx={{ color: 'text.secondary' }} />
               </Box>
+              )}
 
               {/* Archiver (coin haut-droit) */}
+              {canWriteUniforms && (
               <Tooltip title="Archiver ce morceau">
                 <IconButton
                   size="small"
@@ -417,9 +424,10 @@ export default function UniformsCataloguePage() {
                   <ArchiveOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                 </IconButton>
               </Tooltip>
+              )}
 
               {/* Basculer l'affichage de la photo (remplir / entière) */}
-              {item.imageUrl && (
+              {canWriteUniforms && item.imageUrl && (
                 <Tooltip title={fit === 'contain' ? 'Photo entière — cliquer pour remplir' : 'Remplir — cliquer pour photo entière'}>
                   <IconButton
                     size="small"
@@ -434,55 +442,61 @@ export default function UniformsCataloguePage() {
                 </Tooltip>
               )}
 
-              {/* Zone photo (cliquable pour téléverser) */}
+              {/* Zone photo (cliquable pour téléverser si écriture autorisée) */}
               <Box
-                component="label"
+                component={canWriteUniforms ? 'label' : 'div'}
                 sx={{
-                  position: 'relative', height: 150, bgcolor: 'grey.100', cursor: 'pointer',
+                  position: 'relative', height: 150, bgcolor: 'grey.100', cursor: canWriteUniforms ? 'pointer' : 'default',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
                   borderBottom: '1px solid', borderColor: 'divider',
                   '&:hover .photo-overlay': { opacity: 1 },
                 }}
               >
-                <input
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) uploadImage.mutate({ id: item.id, file: f });
-                    (e.target as HTMLInputElement).value = '';
-                  }}
-                />
+                {canWriteUniforms && (
+                  <input
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) uploadImage.mutate({ id: item.id, file: f });
+                      (e.target as HTMLInputElement).value = '';
+                    }}
+                  />
+                )}
                 {item.imageUrl ? (
                   <Box component="img" src={item.imageUrl} alt={item.name} sx={{ width: '100%', height: '100%', objectFit: fit, bgcolor: fit === 'contain' ? 'grey.50' : undefined }} />
                 ) : (
                   <Stack alignItems="center" spacing={0.5} sx={{ color: 'text.disabled' }}>
                     <CheckroomIcon sx={{ fontSize: 40 }} />
-                    <Typography variant="caption">Ajouter une photo</Typography>
+                    <Typography variant="caption">{canWriteUniforms ? 'Ajouter une photo' : 'Aucune photo'}</Typography>
                   </Stack>
                 )}
                 {/* Overlay au survol / pendant l'upload */}
-                <Box
-                  className="photo-overlay"
-                  sx={{
-                    position: 'absolute', inset: 0, bgcolor: 'rgba(0,0,0,0.45)', color: '#fff',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    opacity: isUploading ? 1 : 0, transition: 'opacity 0.2s',
-                  }}
-                >
-                  {isUploading ? <CircularProgress size={28} sx={{ color: '#fff' }} /> : <AddAPhotoIcon />}
-                </Box>
+                {canWriteUniforms && (
+                  <Box
+                    className="photo-overlay"
+                    sx={{
+                      position: 'absolute', inset: 0, bgcolor: 'rgba(0,0,0,0.45)', color: '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      opacity: isUploading ? 1 : 0, transition: 'opacity 0.2s',
+                    }}
+                  >
+                    {isUploading ? <CircularProgress size={28} sx={{ color: '#fff' }} /> : <AddAPhotoIcon />}
+                  </Box>
+                )}
               </Box>
 
               <CardContent sx={{ flexGrow: 1, pb: 1 }}>
                 <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={0.5}>
                   <Typography variant="subtitle1" fontWeight={600} sx={{ lineHeight: 1.2 }}>{item.name}</Typography>
-                  <Tooltip title="Renommer / modifier">
-                    <IconButton size="small" sx={{ mt: -0.5, mr: -0.5 }} onClick={() => openEdit(item)}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
+                  {canWriteUniforms && (
+                    <Tooltip title="Renommer / modifier">
+                      <IconButton size="small" sx={{ mt: -0.5, mr: -0.5 }} onClick={() => openEdit(item)}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                 </Stack>
                 <Stack direction="row" spacing={0.5} mt={1} flexWrap="wrap" useFlexGap>
                   <Chip size="small" label={item.division === 'SIGNALISATION' ? 'Signalisation' : 'Sécurité'} />
@@ -559,11 +573,13 @@ export default function UniformsCataloguePage() {
       <Dialog open={!!detailsItem} onClose={() => setDetailsId(null)} maxWidth="md" fullWidth>
         <DialogTitle>{detailsItem?.name} — grandeurs</DialogTitle>
         <DialogContent dividers>
-          <Stack direction="row" justifyContent="flex-end" mb={1}>
-            <Button size="small" startIcon={<AddIcon />} onClick={() => detailsItem && setVariantDlg(detailsItem)}>
-              Ajouter une grandeur
-            </Button>
-          </Stack>
+          {canWriteUniforms && (
+            <Stack direction="row" justifyContent="flex-end" mb={1}>
+              <Button size="small" startIcon={<AddIcon />} onClick={() => detailsItem && setVariantDlg(detailsItem)}>
+                Ajouter une grandeur
+              </Button>
+            </Stack>
+          )}
           <Box sx={{ overflowX: 'auto' }}>
             <Table size="small">
               <TableHead>
@@ -582,18 +598,22 @@ export default function UniformsCataloguePage() {
                     <TableCell>{v.size}</TableCell>
                     <TableCell><code>{v.barcode}</code></TableCell>
                     <TableCell>
-                      <Tooltip title="Modifier l'emplacement">
-                        <Box
-                          component="span"
-                          onClick={() => { setEmplVar({ variant: v, itemName: detailsItem?.name || '' }); setEmplVal(v.emplacement || ''); }}
-                          sx={{
-                            cursor: 'pointer', textDecoration: 'underline dotted',
-                            color: v.emplacement ? 'inherit' : 'primary.main',
-                          }}
-                        >
-                          {v.emplacement || '+ Ajouter'}
-                        </Box>
-                      </Tooltip>
+                      {canWriteUniforms ? (
+                        <Tooltip title="Modifier l'emplacement">
+                          <Box
+                            component="span"
+                            onClick={() => { setEmplVar({ variant: v, itemName: detailsItem?.name || '' }); setEmplVal(v.emplacement || ''); }}
+                            sx={{
+                              cursor: 'pointer', textDecoration: 'underline dotted',
+                              color: v.emplacement ? 'inherit' : 'primary.main',
+                            }}
+                          >
+                            {v.emplacement || '+ Ajouter'}
+                          </Box>
+                        </Tooltip>
+                      ) : (
+                        v.emplacement || '—'
+                      )}
                     </TableCell>
                     <TableCell align="right">{money(v.replacementCost)}</TableCell>
                     <TableCell align="right">
@@ -615,6 +635,7 @@ export default function UniformsCataloguePage() {
                       </Stack>
                     </TableCell>
                     <TableCell align="right">
+                      {canWriteUniforms && (<>
                       <Tooltip title="Réapprovisionner (ajouter du stock)">
                         <IconButton size="small" onClick={() => setReplenish({ variantId: v.id, label: `${detailsItem?.name} — ${v.size}` })}>
                           <Inventory2Icon fontSize="small" />
@@ -630,16 +651,19 @@ export default function UniformsCataloguePage() {
                           <SwapHorizIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
+                      </>)}
                       <Tooltip title="Imprimer les 2 étiquettes (front + back)">
                         <IconButton size="small" onClick={() => printVariantBoth(v.id)}>
                           <PrintIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
+                      {canWriteUniforms && (
                       <Tooltip title="Retirer cette grandeur (non tenue)">
                         <IconButton size="small" color="error" onClick={() => setArchiveVar({ variant: v, itemName: detailsItem?.name || '' })}>
                           <RemoveCircleOutlineIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
