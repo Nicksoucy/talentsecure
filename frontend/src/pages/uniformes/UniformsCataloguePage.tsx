@@ -17,6 +17,7 @@ import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import TuneIcon from '@mui/icons-material/Tune';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
+import EditIcon from '@mui/icons-material/Edit';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import type { UniformDivision, UniformItem, UniformStockLocation, UniformVariant } from '@/types/uniform';
@@ -196,6 +197,23 @@ export default function UniformsCataloguePage() {
   // ---- Dialog: détails / grandeurs d'un morceau ----
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const detailsItem = useMemo(() => items.find((i) => i.id === detailsId) || null, [items, detailsId]);
+
+  // ---- Renommer / modifier un morceau ----
+  const [editItem, setEditItem] = useState<UniformItem | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', type: 'UNIFORME', defaultReplacementCost: 0 });
+  const openEdit = (it: UniformItem) => {
+    setEditItem(it);
+    setEditForm({ name: it.name, type: it.type, defaultReplacementCost: Number(it.defaultReplacementCost) });
+  };
+  const saveEdit = useMutation({
+    mutationFn: () => uniformService.updateItem(editItem!.id, editForm as any),
+    onSuccess: () => {
+      enqueueSnackbar('Morceau mis à jour', { variant: 'success' });
+      setEditItem(null);
+      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+    },
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
+  });
 
   // ---- Archiver un morceau (suppression douce) ----
   const [archiveItem, setArchiveItem] = useState<UniformItem | null>(null);
@@ -419,7 +437,14 @@ export default function UniformsCataloguePage() {
               </Box>
 
               <CardContent sx={{ flexGrow: 1, pb: 1 }}>
-                <Typography variant="subtitle1" fontWeight={600} sx={{ lineHeight: 1.2 }}>{item.name}</Typography>
+                <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={0.5}>
+                  <Typography variant="subtitle1" fontWeight={600} sx={{ lineHeight: 1.2 }}>{item.name}</Typography>
+                  <Tooltip title="Renommer / modifier">
+                    <IconButton size="small" sx={{ mt: -0.5, mr: -0.5 }} onClick={() => openEdit(item)}>
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
                 <Stack direction="row" spacing={0.5} mt={1} flexWrap="wrap" useFlexGap>
                   <Chip size="small" label={item.division === 'SIGNALISATION' ? 'Signalisation' : 'Sécurité'} />
                   <Chip size="small" variant="outlined" label={item.type === 'EQUIPEMENT' ? 'Équipement' : 'Uniforme'} />
@@ -686,6 +711,28 @@ export default function UniformsCataloguePage() {
           <Button color="error" variant="contained" disabled={doArchiveVar.isPending} onClick={() => doArchiveVar.mutate()}>
             Retirer
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Renommer / modifier un morceau */}
+      <Dialog open={!!editItem} onClose={() => setEditItem(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Modifier le morceau</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} mt={1}>
+            <TextField label="Nom" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} autoFocus />
+            <TextField select label="Type" value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value })}>
+              <MenuItem value="UNIFORME">Uniforme</MenuItem>
+              <MenuItem value="EQUIPEMENT">Équipement</MenuItem>
+            </TextField>
+            <TextField type="number" label="Coût unitaire ($)" value={editForm.defaultReplacementCost} onChange={(e) => setEditForm({ ...editForm, defaultReplacementCost: Number(e.target.value) })} />
+            <Typography variant="caption" color="text.secondary">
+              Le nom est utilisé partout (catalogue, inventaire, remises). La division ne se change pas ici.
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditItem(null)}>Annuler</Button>
+          <Button variant="contained" disabled={!editForm.name || saveEdit.isPending} onClick={() => saveEdit.mutate()}>Enregistrer</Button>
         </DialogActions>
       </Dialog>
 
