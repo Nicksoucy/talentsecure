@@ -17,6 +17,7 @@ enum UserRole {
   SALES
   CLIENT
   MAGASIN // accès lecture seule : employés + module uniformes
+  MAGASIN_GESTION // gestion complète des uniformes + lecture employés (pas de recrutement)
 }
 
 enum CandidateStatus {

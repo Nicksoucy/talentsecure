@@ -23,7 +23,7 @@ const router = Router();
 // Lecture (GET) : ADMIN, RH, SALES, MAGASIN. Écriture (POST/PUT/DELETE, dont
 // les promotions) : ADMIN, RH seulement (verrouille l'ancienne ouverture totale).
 router.use(authenticateJWT);
-router.use(authorizeReadWrite(['ADMIN', 'RH_RECRUITER', 'SALES', 'MAGASIN'], ['ADMIN', 'RH_RECRUITER']));
+router.use(authorizeReadWrite(['ADMIN', 'RH_RECRUITER', 'SALES', 'MAGASIN', 'MAGASIN_GESTION'], ['ADMIN', 'RH_RECRUITER']));
 
 router.get('/', getEmployees);
 router.get('/stats/summary', getEmployeesStats);

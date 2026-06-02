@@ -46,7 +46,12 @@ router.use(authenticateJWT);
 // Lecture (GET) : ADMIN, RH, MAGASIN (lecture seule). Écriture : ADMIN, RH.
 // Invariant : toutes les lectures du module sont des GET, toutes les mutations
 // sont POST/PUT/DELETE (cf. authorizeReadWrite).
-router.use(authorizeReadWrite(['ADMIN', 'RH_RECRUITER', 'MAGASIN'], ['ADMIN', 'RH_RECRUITER']));
+// Lecture : ADMIN, RH, MAGASIN (lecture seule), MAGASIN_GESTION.
+// Écriture : ADMIN, RH, MAGASIN_GESTION (gestion complète des uniformes).
+router.use(authorizeReadWrite(
+  ['ADMIN', 'RH_RECRUITER', 'MAGASIN', 'MAGASIN_GESTION'],
+  ['ADMIN', 'RH_RECRUITER', 'MAGASIN_GESTION'],
+));
 
 // Stats & rapports
 router.get('/stats/summary', ctrl.statsSummary);

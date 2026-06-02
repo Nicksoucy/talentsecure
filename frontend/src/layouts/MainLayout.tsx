@@ -68,18 +68,19 @@ const MainLayout = () => {
     }
   };
 
-  const { canViewUniforms, canManageUsers, isMagasin } = usePerms();
+  const { canViewUniforms, canManageUsers, isMagasinAny } = usePerms();
 
-  // Menu filtré par rôle. MAGASIN ne voit que Employés + Uniformes.
+  // Menu filtré par rôle. Les profils MAGASIN (lecture seule ET gestion) ne
+  // voient que Employés + Uniformes — pas le côté recrutement.
   const menuItems = [
-    { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard', show: !isMagasin },
-    { text: 'Candidats', icon: <PeopleIcon />, path: '/candidates', show: !isMagasin },
+    { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard', show: !isMagasinAny },
+    { text: 'Candidats', icon: <PeopleIcon />, path: '/candidates', show: !isMagasinAny },
     { text: 'Employés', icon: <BadgeIcon />, path: '/employees', show: true },
-    { text: 'Candidats Potentiels', icon: <PersonSearchIcon />, path: '/prospects', show: !isMagasin },
-    { text: 'Catalogues', icon: <DescriptionIcon />, path: '/catalogues', show: !isMagasin },
-    { text: 'Clients', icon: <BusinessIcon />, path: '/clients', show: !isMagasin },
-    { text: 'Demandes Clients', icon: <ShoppingCartIcon />, path: '/wishlists', show: !isMagasin },
-    { text: 'Autre Compétence', icon: <WorkIcon />, path: '/autres-competances', show: !isMagasin },
+    { text: 'Candidats Potentiels', icon: <PersonSearchIcon />, path: '/prospects', show: !isMagasinAny },
+    { text: 'Catalogues', icon: <DescriptionIcon />, path: '/catalogues', show: !isMagasinAny },
+    { text: 'Clients', icon: <BusinessIcon />, path: '/clients', show: !isMagasinAny },
+    { text: 'Demandes Clients', icon: <ShoppingCartIcon />, path: '/wishlists', show: !isMagasinAny },
+    { text: 'Autre Compétence', icon: <WorkIcon />, path: '/autres-competances', show: !isMagasinAny },
     { text: 'Uniformes', icon: <CheckroomIcon />, path: '/uniformes', show: canViewUniforms },
     { text: 'Utilisateurs', icon: <ManageAccountsIcon />, path: '/users', show: canManageUsers },
   ].filter((item) => item.show);

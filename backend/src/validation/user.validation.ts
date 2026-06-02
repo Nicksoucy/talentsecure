@@ -19,8 +19,8 @@ const nameField = z.string()
   .max(50, 'Ne peut pas dépasser 50 caractères')
   .regex(/^[a-zA-ZÀ-ÿ\s'-]+$/, 'Contient des caractères invalides');
 
-const roleField = z.enum(['ADMIN', 'RH_RECRUITER', 'SALES', 'MAGASIN'], {
-  errorMap: () => ({ message: 'Rôle invalide. Valeurs : ADMIN, RH_RECRUITER, SALES, MAGASIN' }),
+const roleField = z.enum(['ADMIN', 'RH_RECRUITER', 'SALES', 'MAGASIN', 'MAGASIN_GESTION'], {
+  errorMap: () => ({ message: 'Rôle invalide. Valeurs : ADMIN, RH_RECRUITER, SALES, MAGASIN, MAGASIN_GESTION' }),
 });
 
 export const createUserSchema = z.object({

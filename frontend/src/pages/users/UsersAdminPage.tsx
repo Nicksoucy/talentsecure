@@ -17,11 +17,13 @@ const ROLES: { value: UserRole; label: string }[] = [
   { value: 'ADMIN', label: 'Administrateur' },
   { value: 'RH_RECRUITER', label: 'RH / Recruteur' },
   { value: 'SALES', label: 'Ventes' },
+  { value: 'MAGASIN_GESTION', label: 'Magasin (gestion uniformes)' },
   { value: 'MAGASIN', label: 'Magasin (lecture seule)' },
 ];
 const roleLabel = (r: UserRole) => ROLES.find((x) => x.value === r)?.label || r;
-const roleColor = (r: UserRole): 'error' | 'primary' | 'info' | 'warning' | 'default' =>
-  r === 'ADMIN' ? 'error' : r === 'RH_RECRUITER' ? 'primary' : r === 'SALES' ? 'info' : r === 'MAGASIN' ? 'warning' : 'default';
+const roleColor = (r: UserRole): 'error' | 'primary' | 'info' | 'warning' | 'success' | 'default' =>
+  r === 'ADMIN' ? 'error' : r === 'RH_RECRUITER' ? 'primary' : r === 'SALES' ? 'info'
+    : r === 'MAGASIN_GESTION' ? 'success' : r === 'MAGASIN' ? 'warning' : 'default';
 
 const emptyCreate = { firstName: '', lastName: '', email: '', password: '', role: 'MAGASIN' as UserRole };
 

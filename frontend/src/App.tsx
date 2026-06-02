@@ -8,13 +8,14 @@ import RequireRole from './components/RequireRole';
 import { useAuthStore } from './store/authStore';
 import { useClientAuthStore } from './store/clientAuthStore';
 
-// Atterrissage selon le rôle : MAGASIN ne peut pas voir /dashboard.
+// Atterrissage selon le rôle : les profils MAGASIN ne voient pas /dashboard.
 function HomeRedirect() {
   const role = useAuthStore((s) => s.user?.role);
-  return <Navigate to={role === 'MAGASIN' ? '/uniformes' : '/dashboard'} replace />;
+  const isMagasin = role === 'MAGASIN' || role === 'MAGASIN_GESTION';
+  return <Navigate to={isMagasin ? '/uniformes' : '/dashboard'} replace />;
 }
 
-// Rôles staff hors MAGASIN (sections que le magasin ne doit pas voir).
+// Rôles staff hors MAGASIN (sections recrutement que les magasins ne voient pas).
 const STAFF_NO_MAGASIN: Array<'ADMIN' | 'RH_RECRUITER' | 'SALES'> = ['ADMIN', 'RH_RECRUITER', 'SALES'];
 
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
@@ -61,7 +62,7 @@ function App() {
   // Defense in depth: even if a client token somehow ended up in the admin
   // store (token swap, manual localStorage tampering, etc.), block access
   // to the admin panel unless the role is one of the staff roles.
-  const ADMIN_ROLES = ['ADMIN', 'RH_RECRUITER', 'SALES', 'MAGASIN'];
+  const ADMIN_ROLES = ['ADMIN', 'RH_RECRUITER', 'SALES', 'MAGASIN', 'MAGASIN_GESTION'];
   const canAccessAdminPanel = isAuthenticated && !!user?.role && ADMIN_ROLES.includes(user.role);
 
   const LoadingScreen = () => (
@@ -143,7 +144,7 @@ function App() {
             {/* Uniformes : ADMIN, RH, MAGASIN (lecture seule) */}
             <Route
               path="/uniformes"
-              element={<RequireRole roles={['ADMIN', 'RH_RECRUITER', 'MAGASIN']}><UniformsHubPage /></RequireRole>}
+              element={<RequireRole roles={['ADMIN', 'RH_RECRUITER', 'MAGASIN', 'MAGASIN_GESTION']}><UniformsHubPage /></RequireRole>}
             >
               <Route index element={<UniformsCataloguePage />} />
               <Route path="inventaire" element={<UniformInventoryPage />} />

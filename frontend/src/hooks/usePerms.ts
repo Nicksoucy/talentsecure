@@ -9,12 +9,16 @@ export function usePerms() {
   const role = useAuthStore((s) => s.user?.role);
   const isAdmin = role === 'ADMIN';
   const isRh = role === 'RH_RECRUITER';
-  const isMagasin = role === 'MAGASIN';
+  const isMagasin = role === 'MAGASIN'; // magasin lecture seule
+  const isMagasinGestion = role === 'MAGASIN_GESTION'; // gestion complète uniformes
+  const isMagasinAny = isMagasin || isMagasinGestion; // nav restreinte (Employés + Uniformes)
   return {
     role,
     isMagasin,
-    canViewUniforms: isAdmin || isRh || isMagasin,
-    canWriteUniforms: isAdmin || isRh,
+    isMagasinGestion,
+    isMagasinAny,
+    canViewUniforms: isAdmin || isRh || isMagasinAny,
+    canWriteUniforms: isAdmin || isRh || isMagasinGestion,
     canWriteEmployees: isAdmin || isRh,
     canManageUsers: isAdmin,
   };
