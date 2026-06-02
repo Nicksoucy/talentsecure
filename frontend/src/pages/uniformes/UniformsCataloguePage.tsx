@@ -63,7 +63,9 @@ function QrPreviewDialog({ state, onClose }: { state: QrPreviewState | null; onC
   const print = async () => {
     if (!state) return;
     setPrinting(true);
-    try { openBlob(await uniformService.variantLabelPdf(state.variant.id, state.location)); }
+    // Back office = grandes étiquettes « boîte » (4 par page Lettre).
+    const format = isFront ? undefined : 'box';
+    try { openBlob(await uniformService.variantLabelPdf(state.variant.id, state.location, format)); }
     catch { enqueueSnackbar('Erreur impression', { variant: 'error' }); }
     finally { setPrinting(false); }
   };
@@ -85,14 +87,14 @@ function QrPreviewDialog({ state, onClose }: { state: QrPreviewState | null; onC
           )}
           <Chip label={code} sx={{ fontFamily: 'monospace' }} />
           <Typography variant="caption" color="text.secondary" textAlign="center">
-            À coller sur {isFront ? 'le casier (front office)' : 'le bac (back office)'}.
+            À coller sur {isFront ? 'le casier (front office)' : 'la boîte / le bac (back office) — grand format, 4 par page Lettre'}.
           </Typography>
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Fermer</Button>
         <Button variant="contained" startIcon={<PrintIcon />} disabled={printing} onClick={print}>
-          Imprimer cette étiquette
+          {isFront ? 'Imprimer cette étiquette' : 'Imprimer (format boîte)'}
         </Button>
       </DialogActions>
     </Dialog>

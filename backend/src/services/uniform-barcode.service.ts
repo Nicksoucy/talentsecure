@@ -100,7 +100,13 @@ const LOC_COLOR: Record<UniformStockLocation, string> = {
  * Le code encodé porte le suffixe d'emplacement (-F/-B) pour que le scan fixe
  * automatiquement la source de la remise.
  */
-export async function renderLabelsPdf(labels: LabelData[]): Promise<Buffer> {
+export async function renderLabelsPdf(
+  labels: LabelData[],
+  opts: { format?: 'standard' | 'box' } = {}
+): Promise<Buffer> {
+  // Format « boîte » : grandes étiquettes 4 par page Lettre (back office).
+  if (opts.format === 'box') return renderBoxLabelsPdf(labels);
+
   const doc = new PDFDocument({ size: 'A4', margin: 24 });
   const bufferPromise = pdfToBuffer(doc);
 
@@ -148,6 +154,69 @@ export async function renderLabelsPdf(labels: LabelData[]): Promise<Buffer> {
         y = 24;
       }
     }
+  }
+
+  doc.end();
+  return bufferPromise;
+}
+
+/**
+ * Grandes étiquettes pour BOÎTES (back office) : page Lettre (8½×11),
+ * 4 étiquettes par page (2×2), gros QR + description (nom, taille, emplacement).
+ */
+async function renderBoxLabelsPdf(labels: LabelData[]): Promise<Buffer> {
+  const doc = new PDFDocument({ size: 'LETTER', margin: 36 });
+  const bufferPromise = pdfToBuffer(doc);
+
+  const margin = 36;
+  const cols = 2;
+  const rows = 2;
+  const perPage = cols * rows;
+  const cellW = (doc.page.width - margin * 2) / cols; // ~270
+  const cellH = (doc.page.height - margin * 2) / rows; // ~360
+
+  for (let i = 0; i < labels.length; i++) {
+    const onPage = i % perPage;
+    if (i > 0 && onPage === 0) doc.addPage();
+    const col = onPage % cols;
+    const row = Math.floor(onPage / cols);
+    const x = margin + col * cellW;
+    const y = margin + row * cellH;
+
+    const label = labels[i];
+    const payload = label.barcode + (label.location ? LOC_SUFFIX[label.location] : '');
+    const qr = await renderQrPng(payload);
+    const code128 = await renderCode128Png(payload);
+
+    // Cadre (repère de découpe)
+    doc.lineWidth(0.5).rect(x + 4, y + 4, cellW - 8, cellH - 8).stroke('#cccccc');
+
+    const pad = 16;
+    // Nom du morceau (gros)
+    doc.font('Helvetica-Bold').fontSize(16).fillColor('#000000')
+      .text(label.itemName, x + pad, y + pad, { width: cellW - pad * 2, height: 38, ellipsis: true });
+    // Taille
+    doc.font('Helvetica').fontSize(13).fillColor('#333333')
+      .text(`Taille : ${label.size}`, x + pad, y + pad + 38, { width: cellW - pad * 2 });
+    // Légende d'emplacement (couleur)
+    if (label.location) {
+      doc.font('Helvetica-Bold').fontSize(13).fillColor(LOC_COLOR[label.location])
+        .text(LOC_CAPTION[label.location], x + pad, y + pad + 56, { width: cellW - pad * 2 });
+    }
+
+    // Gros QR centré
+    const qrSize = 168;
+    const qrX = x + (cellW - qrSize) / 2;
+    const qrY = y + 108;
+    doc.image(qr, qrX, qrY, { width: qrSize, height: qrSize });
+
+    // Code128 sous le QR
+    const barW = 200;
+    doc.image(code128, x + (cellW - barW) / 2, qrY + qrSize + 8, { width: barW, height: 32 });
+
+    // Code en texte
+    doc.font('Helvetica').fontSize(10).fillColor('#000000')
+      .text(payload, x + pad, qrY + qrSize + 44, { width: cellW - pad * 2, align: 'center' });
   }
 
   doc.end();

@@ -85,10 +85,11 @@ export const uniformService = {
   labelUrl(variantId: string) {
     return `${api.defaults.baseURL}/api/uniforms/variants/${variantId}/label`;
   },
-  /** PDF d'étiquette d'une variante. location défini = 1 seule (casier/bac) ; sinon les 2. */
-  async variantLabelPdf(variantId: string, location?: UniformStockLocation): Promise<Blob> {
+  /** PDF d'étiquette d'une variante. location défini = 1 seule (casier/bac) ; sinon les 2.
+   *  format 'box' = grande étiquette pour boîtes (back office), 4 par page Lettre. */
+  async variantLabelPdf(variantId: string, location?: UniformStockLocation, format?: 'standard' | 'box'): Promise<Blob> {
     const r = await api.get(`/api/uniforms/variants/${variantId}/label`, {
-      params: location ? { location } : {},
+      params: { ...(location ? { location } : {}), ...(format ? { format } : {}) },
       responseType: 'blob',
     });
     return r.data as Blob;
@@ -101,8 +102,11 @@ export const uniformService = {
     });
     return r.data as Blob;
   },
-  async labelsSheet(variantIds: string[]) {
-    const r = await api.post('/api/uniforms/labels', { variantIds }, { responseType: 'blob' });
+  async labelsSheet(
+    variantIds: string[],
+    opts?: { locations?: UniformStockLocation[]; format?: 'standard' | 'box' }
+  ) {
+    const r = await api.post('/api/uniforms/labels', { variantIds, ...opts }, { responseType: 'blob' });
     return r.data as Blob;
   },
 

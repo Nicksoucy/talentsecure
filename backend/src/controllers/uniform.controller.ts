@@ -263,6 +263,7 @@ export const variantLabel = async (req: Request, res: Response, next: NextFuncti
   try {
     const loc = req.query.location as 'FRONT_OFFICE' | 'BACK_OFFICE' | undefined;
     if (loc && loc !== 'FRONT_OFFICE' && loc !== 'BACK_OFFICE') throw new ApiError(400, 'location invalide');
+    const format = req.query.format === 'box' ? 'box' : 'standard';
     const variant = await prisma.uniformVariant.findUnique({
       where: { id: req.params.variantId },
       include: { item: true },
@@ -273,7 +274,7 @@ export const variantLabel = async (req: Request, res: Response, next: NextFuncti
     const labels: LabelData[] = loc
       ? [{ ...base, location: loc }]
       : [{ ...base, location: 'FRONT_OFFICE' }, { ...base, location: 'BACK_OFFICE' }];
-    const pdf = await renderLabelsPdf(labels);
+    const pdf = await renderLabelsPdf(labels, { format });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="etiquette-${variant.barcode}${loc ? '-' + loc : ''}.pdf"`);
     res.send(pdf);
@@ -300,9 +301,10 @@ export const variantQr = async (req: Request, res: Response, next: NextFunction)
 
 export const labelsSheet = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { variantIds, locations } = req.body as {
+    const { variantIds, locations, format } = req.body as {
       variantIds: string[];
       locations?: ('BACK_OFFICE' | 'FRONT_OFFICE')[];
+      format?: 'standard' | 'box';
     };
     if (!Array.isArray(variantIds) || variantIds.length === 0) {
       throw new ApiError(400, 'variantIds requis');
@@ -322,7 +324,7 @@ export const labelsSheet = async (req: Request, res: Response, next: NextFunctio
         location: loc,
       }))
     );
-    const pdf = await renderLabelsPdf(labels);
+    const pdf = await renderLabelsPdf(labels, { format: format === 'box' ? 'box' : 'standard' });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="etiquettes.pdf"');
     res.send(pdf);

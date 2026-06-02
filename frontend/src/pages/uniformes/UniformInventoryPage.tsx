@@ -387,18 +387,31 @@ export default function UniformInventoryPage() {
   });
   const transferAvail = transferRow ? (transferFrom === 'BACK_OFFICE' ? transferRow.backOffice : transferRow.frontOffice) ?? 0 : 0;
 
-  // Impression de toutes les étiquettes QR
+  const openPdfBlob = (blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+
+  // Impression de toutes les étiquettes QR (standard : front + back, A4 3 colonnes)
   const printLabels = useMutation({
     mutationFn: async () => {
       const ids = rawRows.map((r) => r.variantId);
       if (ids.length === 0) throw new Error('Aucune variante à imprimer');
       return uniformService.labelsSheet(ids);
     },
-    onSuccess: (blob) => {
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    onSuccess: openPdfBlob,
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || e?.message || 'Erreur', { variant: 'error' }),
+  });
+
+  // Grandes étiquettes BACK OFFICE pour boîtes (4 par page Lettre, back seulement)
+  const printBoxLabels = useMutation({
+    mutationFn: async () => {
+      const ids = rawRows.map((r) => r.variantId);
+      if (ids.length === 0) throw new Error('Aucune variante à imprimer');
+      return uniformService.labelsSheet(ids, { locations: ['BACK_OFFICE'], format: 'box' });
     },
+    onSuccess: openPdfBlob,
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || e?.message || 'Erreur', { variant: 'error' }),
   });
 
@@ -518,6 +531,20 @@ export default function UniformInventoryPage() {
             }}
           >
             {printLabels.isPending ? 'Génération…' : 'Étiquettes QR'}
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<QrCode2Icon />}
+            onClick={() => printBoxLabels.mutate()}
+            disabled={printBoxLabels.isPending || rawRows.length === 0}
+            title="Grandes étiquettes back office pour boîtes (4 par page Lettre)"
+            sx={{
+              textTransform: 'none', fontFamily: T.fontSans, fontWeight: 500,
+              color: T.primary, borderColor: T.outline, bgcolor: T.surface,
+              '&:hover': { borderColor: T.outlineStrong, bgcolor: T.surface },
+            }}
+          >
+            {printBoxLabels.isPending ? 'Génération…' : 'Étiquettes boîtes (back)'}
           </Button>
           <Button
             variant="outlined"
