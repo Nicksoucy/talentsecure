@@ -73,6 +73,18 @@ export const createItem = async (req: Request, res: Response, next: NextFunction
         createdById: userId(req),
       },
     });
+    // Morceau à taille unique : créer d'emblée la grandeur « Unique » pour qu'il
+    // soit immédiatement stockable (sinon 0 grandeur, invisible à l'inventaire).
+    if (item.isOneSize) {
+      await prisma.uniformVariant.create({
+        data: {
+          itemId: item.id,
+          size: 'Unique',
+          barcode: await generateUniqueBarcode(),
+          replacementCost: item.defaultReplacementCost,
+        },
+      });
+    }
     res.status(201).json({ message: 'Morceau créé', data: item });
   } catch (error) {
     next(error);
