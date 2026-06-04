@@ -128,29 +128,28 @@ export async function renderLabelsPdf(
   for (let i = 0; i < labels.length; i++) {
     const label = labels[i];
     const payload = label.barcode + (label.location ? LOC_SUFFIX[label.location] : '');
-    const code128 = await renderCode128Png(payload);
     const qr = await renderQrPng(payload);
 
     // Cadre
     doc.rect(x, y, cellW - 6, cellH - 6).stroke('#cccccc');
 
-    doc.fontSize(8).fillColor('#000000').font('Helvetica-Bold')
-      .text(label.itemName, x + 6, y + 6, { width: cellW - 18, height: 20, ellipsis: true });
+    doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold')
+      .text(label.itemName, x + 6, y + 5, { width: cellW - 12, height: 14, ellipsis: true });
     doc.font('Helvetica').fontSize(8).fillColor('#444444')
-      .text(`Taille : ${label.size}`, x + 6, y + 24, { width: cellW - 60 });
+      .text(`Taille : ${label.size}`, x + 6, y + 20, { width: cellW - 12 });
     // Légende d'emplacement (en couleur, alignée à droite)
     if (label.location) {
       doc.font('Helvetica-Bold').fontSize(8).fillColor(LOC_COLOR[label.location])
-        .text(LOC_CAPTION[label.location], x + 6, y + 24, { width: cellW - 14, align: 'right' });
+        .text(LOC_CAPTION[label.location], x + 6, y + 20, { width: cellW - 12, align: 'right' });
     }
 
-    // Code128
-    doc.image(code128, x + 6, y + 42, { width: cellW - 40, height: 36 });
-    // QR
-    doc.image(qr, x + cellW - 34, y + 42, { width: 28, height: 28 });
+    // Gros QR centré — PAS de code-barres (focus sur le QR pour le casier)
+    const qrSize = 68;
+    doc.image(qr, x + (cellW - 6 - qrSize) / 2, y + 31, { width: qrSize, height: qrSize });
 
+    // Code lisible en bas
     doc.font('Helvetica').fontSize(7).fillColor('#000000')
-      .text(payload, x + 6, y + 84, { width: cellW - 18 });
+      .text(payload, x + 6, y + 102, { width: cellW - 12, align: 'center' });
 
     // Avance la grille
     x += cellW;
