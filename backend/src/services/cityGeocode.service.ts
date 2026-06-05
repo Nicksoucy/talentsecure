@@ -27,7 +27,7 @@ export interface ResolvedCity {
 const inFlight = new Set<string>();
 let lastNominatimAt = 0;
 const NOMINATIM_MIN_INTERVAL_MS = 1100;
-const MAX_GEOCODE_PER_CYCLE = 8;
+const MAX_GEOCODE_PER_CYCLE = 20;
 
 async function geocodeNominatim(city: string): Promise<{ lat: number; lng: number } | null> {
   const wait = lastNominatimAt + NOMINATIM_MIN_INTERVAL_MS - Date.now();
