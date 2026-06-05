@@ -586,6 +586,24 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+// Cache de géocodage des villes (carte des candidats potentiels).
+// Une ville inconnue est géocodée une seule fois (Nominatim) puis mémorisée ici.
+// found=false : géocodage tenté sans résultat (ex. ville hors-QC / mauvaise donnée)
+// → évite de re-questionner indéfiniment.
+model CityGeocode {
+  id        String   @id @default(uuid())
+  cityKey   String   @unique // normalisé : trim + minuscules + sans accents
+  city      String // échantillon original
+  lat       Float?
+  lng       Float?
+  found     Boolean  @default(false)
+  source    String // 'static' | 'nominatim' | 'manual'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("city_geocodes")
+}
+
 // Model pour les candidats potentiels (pas encore interviewÃ©s)
 model ProspectCandidate {
   id String @id @default(uuid())

@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import MarkerClusterGroup from 'react-leaflet-cluster';
 import { Box, Typography, CircularProgress, Paper, Chip, Button } from '@mui/material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { quebecCitiesCoordinates } from '../../utils/quebecCities';
 import api from '../../services/api';
 
 // Fix for default marker icons in Leaflet
@@ -15,24 +13,43 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// Custom blue icon for prospects
-const blueIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
-
 interface CityStats {
   city: string;
   count: number;
+  lat: number | null;
+  lng: number | null;
 }
 
 interface ProspectsMapClusteredProps {
   onCityClick?: (city: string) => void;
 }
+
+// Pastille ronde par ville : taille + couleur selon le nombre de prospects.
+const makeCityIcon = (count: number) => {
+  let dimension = 36;
+  let color = '#2196f3';
+  if (count >= 100) {
+    dimension = 56;
+    color = '#1565c0';
+  } else if (count >= 50) {
+    dimension = 50;
+    color = '#1976d2';
+  } else if (count >= 20) {
+    dimension = 44;
+    color = '#42a5f5';
+  } else if (count >= 5) {
+    dimension = 40;
+    color = '#64b5f6';
+  }
+
+  return L.divIcon({
+    html: `<div style="background-color:${color};width:${dimension}px;height:${dimension}px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:13px;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">${count}</div>`,
+    className: 'custom-city-icon',
+    iconSize: L.point(dimension, dimension, true),
+    iconAnchor: [dimension / 2, dimension / 2],
+    popupAnchor: [0, -dimension / 2],
+  });
+};
 
 const ProspectsMapClustered: React.FC<ProspectsMapClusteredProps> = ({ onCityClick }) => {
   const [cityStats, setCityStats] = useState<CityStats[]>([]);
@@ -74,112 +91,72 @@ const ProspectsMapClustered: React.FC<ProspectsMapClusteredProps> = ({ onCityCli
   // Quebec center coordinates
   const quebecCenter: [number, number] = [46.8, -71.3];
 
-  // Create markers for each prospect in the city (spread around the city center)
-  const createMarkers = () => {
-    const markers: JSX.Element[] = [];
-
-    cityStats.forEach((stat) => {
-      const coords = quebecCitiesCoordinates[stat.city];
-      if (!coords) return;
-
-      // Create multiple markers for each prospect in the city
-      // Spread them slightly around the city center for better clustering visualization
-      for (let i = 0; i < stat.count; i++) {
-        // Add small random offset (about 0.01 degrees = ~1km)
-        const latOffset = (Math.random() - 0.5) * 0.02;
-        const lngOffset = (Math.random() - 0.5) * 0.02;
-
-        markers.push(
-          <Marker
-            key={`${stat.city}-${i}`}
-            position={[coords.lat + latOffset, coords.lng + lngOffset]}
-            icon={blueIcon}
-          >
-            <Popup>
-              <Box>
-                <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                  {stat.city}
-                </Typography>
-                <Chip
-                  label={`${stat.count} prospect${stat.count > 1 ? 's' : ''}`}
-                  color="primary"
-                  size="small"
-                  sx={{ mb: 1 }}
-                />
-                {onCityClick && (
-                  <Button
-                    variant="contained"
-                    size="small"
-                    fullWidth
-                    onClick={() => onCityClick(stat.city)}
-                  >
-                    Voir ces prospects
-                  </Button>
-                )}
-              </Box>
-            </Popup>
-          </Marker>
-        );
-      }
-    });
-
-    return markers;
-  };
+  // Une ville placée = a des coordonnées ; sinon en attente de géolocalisation.
+  const placed = cityStats.filter((s) => s.lat != null && s.lng != null);
+  const unplaced = cityStats.filter((s) => s.lat == null || s.lng == null);
+  const unplacedProspects = unplaced.reduce((sum, s) => sum + s.count, 0);
 
   return (
-    <Paper elevation={2} sx={{ height: '500px', overflow: 'hidden' }}>
-      <MapContainer
-        center={quebecCenter}
-        zoom={7}
-        style={{ height: '100%', width: '100%' }}
-        scrollWheelZoom={true}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-        />
-
-        <MarkerClusterGroup
-          chunkedLoading
-          maxClusterRadius={60}
-          spiderfyOnMaxZoom={true}
-          showCoverageOnHover={false}
-          zoomToBoundsOnClick={true}
-          iconCreateFunction={(cluster) => {
-            const count = cluster.getChildCount();
-            let size = 'small';
-            let color = '#2196f3';
-
-            if (count >= 100) {
-              size = 'large';
-              color = '#1565c0';
-            } else if (count >= 50) {
-              size = 'medium';
-              color = '#1976d2';
-            } else if (count >= 20) {
-              size = 'medium';
-              color = '#42a5f5';
-            }
-
-            const sizeMap = {
-              small: 40,
-              medium: 50,
-              large: 60,
-            };
-
-            const dimension = sizeMap[size as keyof typeof sizeMap];
-
-            return L.divIcon({
-              html: `<div style="background-color: ${color}; width: ${dimension}px; height: ${dimension}px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">${count}</div>`,
-              className: 'custom-cluster-icon',
-              iconSize: L.point(dimension, dimension, true),
-            });
-          }}
+    <Box>
+      <Paper elevation={2} sx={{ height: '500px', overflow: 'hidden' }}>
+        <MapContainer
+          center={quebecCenter}
+          zoom={6}
+          maxZoom={16}
+          style={{ height: '100%', width: '100%' }}
+          scrollWheelZoom={true}
         >
-          {createMarkers()}
-        </MarkerClusterGroup>
-      </MapContainer>
-    </Paper>
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          />
+
+          {placed.map((stat) => (
+            <Marker
+              key={stat.city}
+              position={[stat.lat as number, stat.lng as number]}
+              icon={makeCityIcon(stat.count)}
+            >
+              <Popup>
+                <Box>
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    {stat.city}
+                  </Typography>
+                  <Chip
+                    label={`${stat.count} prospect${stat.count > 1 ? 's' : ''}`}
+                    color="primary"
+                    size="small"
+                    sx={{ mb: 1 }}
+                  />
+                  {onCityClick && (
+                    <Button
+                      variant="contained"
+                      size="small"
+                      fullWidth
+                      onClick={() => onCityClick(stat.city)}
+                    >
+                      Voir ces prospects
+                    </Button>
+                  )}
+                </Box>
+              </Popup>
+            </Marker>
+          ))}
+        </MapContainer>
+      </Paper>
+
+      {unplaced.length > 0 && (
+        <Box sx={{ mt: 1, px: 1 }}>
+          <Typography variant="caption" color="text.secondary">
+            {unplaced.length} ville{unplaced.length > 1 ? 's' : ''} non encore géolocalisée
+            {unplaced.length > 1 ? 's' : ''} ({unplacedProspects} prospect
+            {unplacedProspects > 1 ? 's' : ''}) — localisation automatique en cours, réessayez
+            dans un instant : {unplaced.slice(0, 15).map((s) => `${s.city} (${s.count})`).join(', ')}
+            {unplaced.length > 15 ? '…' : ''}
+          </Typography>
+        </Box>
+      )}
+    </Box>
   );
 };
 

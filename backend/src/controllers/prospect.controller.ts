@@ -4,6 +4,7 @@ import { getCache, setCache } from '../config/cache';
 import { buildCacheKey } from '../utils/cache';
 import { invalidateCaches } from '../utils/cacheInvalidation';
 import { findContactEverywhere } from '../utils/candidateMatch';
+import { resolveCityCoordinates } from '../services/cityGeocode.service';
 
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
 const PROSPECT_STATS_CACHE_KEY = 'prospects:stats';
@@ -606,7 +607,10 @@ export const getProspectsByCity = async (
   next: NextFunction
 ) => {
   try {
-    const cachedCities = await getCache<{ success: boolean; data: Array<{ city: string; count: number }> }>(PROSPECT_CITY_CACHE_KEY);
+    const cachedCities = await getCache<{
+      success: boolean;
+      data: Array<{ city: string; count: number; lat: number | null; lng: number | null }>;
+    }>(PROSPECT_CITY_CACHE_KEY);
     if (cachedCities) {
       return res.json(cachedCities);
     }
@@ -630,12 +634,18 @@ export const getProspectsByCity = async (
     });
 
     // Convert to array and filter out N/A
-    const stats = Object.entries(cityStats)
-      .filter(([city]) => city !== 'N/A')
-      .map(([city, count]) => ({
-        city,
-        count,
-      }))
+    const cityEntries = Object.entries(cityStats).filter(([city]) => city !== 'N/A');
+
+    // Résout les coordonnées (seed → cache DB → géocodage en arrière-plan).
+    // Non bloquant : les villes inconnues reviennent avec lat/lng null et seront
+    // géolocalisées pour le prochain chargement.
+    const coordsMap = await resolveCityCoordinates(cityEntries.map(([city]) => city));
+
+    const stats = cityEntries
+      .map(([city, count]) => {
+        const coords = coordsMap.get(city);
+        return { city, count, lat: coords?.lat ?? null, lng: coords?.lng ?? null };
+      })
       .sort((a, b) => b.count - a.count);
 
     const payload = {
