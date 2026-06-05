@@ -10,20 +10,12 @@ import axios from 'axios';
 import { prisma } from '../config/database';
 import logger from '../config/logger';
 import { quebecCitiesCoordinates } from '../data/quebecCities';
-
-/** Normalise une ville : trim + minuscules + sans accents. */
-export function normalizeCity(city: string): string {
-  return (city || '')
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '');
-}
+import { normalizeCityKey } from '../utils/cityNormalize';
 
 // Seed normalisé (clé normalisée → coords) construit une fois au chargement.
 const seed = new Map<string, { lat: number; lng: number }>();
 for (const [name, coords] of Object.entries(quebecCitiesCoordinates)) {
-  seed.set(normalizeCity(name), coords);
+  seed.set(normalizeCityKey(name), coords);
 }
 
 export interface ResolvedCity {
@@ -110,7 +102,7 @@ export async function resolveCityCoordinates(
 
   // 1) Seed statique
   for (const city of cities) {
-    const key = normalizeCity(city);
+    const key = normalizeCityKey(city);
     if (!key) {
       result.set(city, { lat: null, lng: null });
       continue;

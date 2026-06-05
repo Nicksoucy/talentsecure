@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { findMatchingCandidate, findMatchingEmployee } from '../utils/candidateMatch';
+import { canonicalCity } from '../utils/cityNormalize';
 
 const prisma = new PrismaClient();
 
@@ -43,16 +44,8 @@ const CITY_MAPPINGS: Record<string, string> = {
  * Normalise le nom d'une ville
  */
 function normalizeCity(city: string | null | undefined): string | null {
-  if (!city) return null;
-
-  const normalized = city
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-
-  return CITY_MAPPINGS[normalized] || city.trim();
+  if (!city || !city.trim()) return null;
+  return canonicalCity(city);
 }
 
 /**

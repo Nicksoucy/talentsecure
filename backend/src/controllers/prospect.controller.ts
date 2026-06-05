@@ -5,6 +5,7 @@ import { buildCacheKey } from '../utils/cache';
 import { invalidateCaches } from '../utils/cacheInvalidation';
 import { findContactEverywhere } from '../utils/candidateMatch';
 import { resolveCityCoordinates } from '../services/cityGeocode.service';
+import { normalizeCityKey, seedCanonicalName, tidyCity, canonicalCity } from '../utils/cityNormalize';
 
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
 const PROSPECT_STATS_CACHE_KEY = 'prospects:stats';
@@ -198,7 +199,7 @@ export const createProspect = async (
       email,
       phone,
       streetAddress,
-      city,
+      city: city ? canonicalCity(city) : city, // normalise la ville à la saisie
       province: province || 'QC',
       postalCode,
       country: country || 'CA',
@@ -626,23 +627,40 @@ export const getProspectsByCity = async (
       },
     });
 
-    // Group by city and count
-    const cityStats: { [key: string]: number } = {};
+    // Regroupement par CLÉ NORMALISÉE (fusionne accents/casse/tirets/variantes) :
+    // une vraie ville = une seule entrée = un seul marqueur. Le nom affiché est
+    // le nom canonique du seed si connu, sinon la variante brute la plus fréquente.
+    const groups = new Map<
+      string,
+      { count: number; canonical: string | null; variants: Map<string, number> }
+    >();
     prospects.forEach((prospect) => {
-      const city = prospect.city || 'N/A';
-      cityStats[city] = (cityStats[city] || 0) + 1;
+      const raw = (prospect.city || '').trim();
+      if (!raw) return; // ignore les villes vides (équivalent N/A)
+      const key = normalizeCityKey(raw);
+      if (!key) return;
+      let g = groups.get(key);
+      if (!g) {
+        g = { count: 0, canonical: seedCanonicalName(key), variants: new Map() };
+        groups.set(key, g);
+      }
+      g.count += 1;
+      g.variants.set(raw, (g.variants.get(raw) || 0) + 1);
     });
 
-    // Convert to array and filter out N/A
-    const cityEntries = Object.entries(cityStats).filter(([city]) => city !== 'N/A');
+    const cityEntries = [...groups.values()].map((g) => {
+      const mostFrequentVariant = [...g.variants.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+      const display = g.canonical || tidyCity(mostFrequentVariant);
+      return { city: display, count: g.count };
+    });
 
     // Résout les coordonnées (seed → cache DB → géocodage en arrière-plan).
     // Non bloquant : les villes inconnues reviennent avec lat/lng null et seront
     // géolocalisées pour le prochain chargement.
-    const coordsMap = await resolveCityCoordinates(cityEntries.map(([city]) => city));
+    const coordsMap = await resolveCityCoordinates(cityEntries.map((e) => e.city));
 
     const stats = cityEntries
-      .map(([city, count]) => {
+      .map(({ city, count }) => {
         const coords = coordsMap.get(city);
         return { city, count, lat: coords?.lat ?? null, lng: coords?.lng ?? null };
       })

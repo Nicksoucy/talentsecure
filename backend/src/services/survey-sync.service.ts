@@ -2,6 +2,7 @@ import { prisma } from '../config/database';
 import { downloadGhlFile, detectExtension, isLikelyVideo } from '../utils/ghlFetch';
 import { uploadBufferToR2 } from '../services/r2.service';
 import { findMatchingEmployee, findMatchingCandidate } from '../utils/candidateMatch';
+import { canonicalCity } from '../utils/cityNormalize';
 import logger from '../config/logger';
 
 /**
@@ -209,7 +210,7 @@ export async function syncOneSubmission(sub: any): Promise<{ status: string; det
     lastName,
     email,
     phone: phone || '',
-    city: others.city || null,
+    city: others.city ? canonicalCity(others.city) : null, // normalise à la saisie
     streetAddress: others.address || null,
     province: others.state || 'QC',
     postalCode: others.postal_code || null,
