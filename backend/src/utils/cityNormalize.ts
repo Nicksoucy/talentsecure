@@ -12,12 +12,13 @@ import { quebecCitiesCoordinates } from '../data/quebecCities';
 
 /**
  * Compresse les espaces et retire DE FAÇON RÉPÉTÉE les suffixes province/pays
- * en fin de chaîne (gère les suffixes empilés : « Montréal, Québec, Canada »
- * et les variantes « Q.C », « QC », « qc. »).
+ * en fin de chaîne (gère les suffixes empilés : « Montréal, Québec, Canada »,
+ * les variantes « Q.C », « QC », « qc. », et le « City » anglais final
+ * « Québec City »/« Quebec City » → « Québec »).
  */
 function stripSuffix(s: string): string {
   let out = (s || '').replace(/\s+/g, ' ').trim();
-  const re = /[,\s]+\(?\s*(q\.?c\.?|québec|quebec|canada)\s*\)?$/i;
+  const re = /[,\s]+\(?\s*(q\.?c\.?|québec|quebec|canada|city)\s*\)?$/i;
   let prev: string;
   do {
     prev = out;
