@@ -29,26 +29,75 @@ let lastNominatimAt = 0;
 const NOMINATIM_MIN_INTERVAL_MS = 1100;
 const MAX_GEOCODE_PER_CYCLE = 20;
 
+// Bornes approximatives du Québec — filet pour rejeter tout résultat hors-QC.
+const QC_BOUNDS = { latMin: 44.9, latMax: 62.7, lngMin: -79.9, lngMax: -57.0 };
+// On n'accepte que de vrais lieux (ville/village/limite admin), pas des rues.
+const PLACE_CLASSES = new Set(['place', 'boundary']);
+
 async function geocodeNominatim(city: string): Promise<{ lat: number; lng: number } | null> {
   const wait = lastNominatimAt + NOMINATIM_MIN_INTERVAL_MS - Date.now();
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastNominatimAt = Date.now();
 
   try {
+    // Requête STRUCTURÉE (city/state/country) : ne renvoie un résultat que s'il
+    // existe une ville de ce nom AU QUÉBEC. Évite les faux-positifs des villes
+    // étrangères (Dakar, Regina, Moknine… → aucun résultat → non placées).
     const res = await axios.get('https://nominatim.openstreetmap.org/search', {
-      params: { q: `${city}, Québec, Canada`, countrycodes: 'ca', format: 'json', limit: 1 },
+      params: {
+        city,
+        state: 'Québec',
+        country: 'Canada',
+        format: 'json',
+        limit: 1,
+        addressdetails: 1,
+      },
       headers: { 'User-Agent': 'TalentSecure/1.0 (nick@darkhorseads.com)' },
       timeout: 8000,
     });
     const hit = Array.isArray(res.data) ? res.data[0] : null;
-    if (hit && hit.lat && hit.lon) {
-      return { lat: parseFloat(hit.lat), lng: parseFloat(hit.lon) };
+    if (!hit || !hit.lat || !hit.lon) return null;
+    // Rejeter les correspondances qui ne sont pas un lieu (ex. une rue).
+    if (hit.class && !PLACE_CLASSES.has(hit.class)) return null;
+    const lat = parseFloat(hit.lat);
+    const lng = parseFloat(hit.lon);
+    // Filet final : hors des bornes du Québec → rejeté.
+    if (lat < QC_BOUNDS.latMin || lat > QC_BOUNDS.latMax || lng < QC_BOUNDS.lngMin || lng > QC_BOUNDS.lngMax) {
+      return null;
     }
-    return null;
+    return { lat, lng };
   } catch (e: any) {
     logger.warn(`[geocode] échec Nominatim pour "${city}": ${e?.message}`);
     return null;
   }
+}
+
+/**
+ * Maintenance : re-évalue toutes les entrées géocodées via Nominatim avec la
+ * logique stricte courante (corrige les anciens faux-positifs hors-QC).
+ * Retourne un récap. À lancer ponctuellement via script.
+ */
+export async function refreshNominatimCache(): Promise<{
+  rechecked: number;
+  found: number;
+  unplaced: number;
+  fixed: string[];
+}> {
+  const rows = await prisma.cityGeocode.findMany({ where: { source: 'nominatim' } });
+  let found = 0;
+  let unplaced = 0;
+  const fixed: string[] = [];
+  for (const row of rows) {
+    const coords = await geocodeNominatim(row.city);
+    if (!coords && row.found) fixed.push(row.city); // était placée à tort
+    await prisma.cityGeocode.update({
+      where: { id: row.id },
+      data: { lat: coords?.lat ?? null, lng: coords?.lng ?? null, found: !!coords },
+    });
+    if (coords) found++;
+    else unplaced++;
+  }
+  return { rechecked: rows.length, found, unplaced, fixed };
 }
 
 /** Géocode (en tâche de fond) les villes inconnues, plafonné par cycle. */

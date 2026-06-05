@@ -69,6 +69,8 @@ export const quebecCitiesCoordinates: { [key: string]: CityCoordinates } = {
   'Thetford Mines': { lat: 46.1000, lng: -71.3000 },
   'Saint-Georges': { lat: 46.1167, lng: -70.6667 },
   'Rivière-du-Loup': { lat: 47.8333, lng: -69.5333 },
+  'Île-Perrot': { lat: 45.3801, lng: -73.9510 },
+  'Île-aux-Noix': { lat: 45.1238, lng: -73.2637 },
   // Arrondissements de Montréal
   'Saint-Léonard': { lat: 45.5833, lng: -73.6000 },
   'Saint-Laurent': { lat: 45.5088, lng: -73.6876 },
