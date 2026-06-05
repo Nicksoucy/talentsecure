@@ -23,7 +23,7 @@ function isSameOrigin(url: string): boolean {
     }
 }
 
-type Kind = 'pdf' | 'docx' | 'doc' | 'unsupported';
+type Kind = 'pdf' | 'docx' | 'doc' | 'image' | 'unsupported';
 
 // Detect by Content-Type first (cheap), then URL extension, then fall back to
 // magic bytes — the only reliable signal when the upstream CDN serves a
@@ -54,12 +54,28 @@ function pickKind(contentType: string, url: string, head: Uint8Array): Kind {
         if (head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0) {
             return 'doc';
         }
+        // Images (très fréquent : CV pris en photo / scanné).
+        //   PNG  : 89 50 4E 47
+        //   JPEG : FF D8 FF
+        //   GIF  : 47 49 46 38 ("GIF8")
+        //   BMP  : 42 4D ("BM")
+        //   WEBP : 52 49 46 46 ("RIFF") … 57 45 42 50 ("WEBP") en octets 8-11
+        if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) return 'image';
+        if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return 'image';
+        if (head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x38) return 'image';
+        if (head[0] === 0x42 && head[1] === 0x4d) return 'image';
+        if (
+            head.length >= 12 &&
+            head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46 &&
+            head[8] === 0x57 && head[9] === 0x45 && head[10] === 0x42 && head[11] === 0x50
+        ) return 'image';
     }
 
     // Magic bytes didn't match — fall back to MIME and URL hints.
     if (ct.includes('pdf') || lowerUrl.endsWith('.pdf')) return 'pdf';
     if (ct.includes('wordprocessingml') || lowerUrl.endsWith('.docx')) return 'docx';
     if (ct.includes('msword') || lowerUrl.endsWith('.doc')) return 'doc';
+    if (ct.includes('image') || /\.(png|jpe?g|gif|webp|bmp)$/.test(lowerUrl)) return 'image';
 
     return 'unsupported';
 }
@@ -70,6 +86,7 @@ export default function CVPreview({ url, fileName }: CVPreviewProps) {
     const [errorMsg, setErrorMsg] = useState<string>('');
     const [kind, setKind] = useState<Kind | null>(null);
     const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+    const [imgUrl, setImgUrl] = useState<string | null>(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -79,6 +96,7 @@ export default function CVPreview({ url, fileName }: CVPreviewProps) {
         setErrorMsg('');
         setKind(null);
         setPdfBlobUrl(null);
+        setImgUrl(null);
 
         (async () => {
             try {
@@ -100,7 +118,7 @@ export default function CVPreview({ url, fileName }: CVPreviewProps) {
                 // Read the first 8 bytes for magic-byte detection. blob.slice
                 // is cheap; arrayBuffer() reads only the slice, not the whole
                 // file again.
-                const headBuf = await blob.slice(0, 8).arrayBuffer();
+                const headBuf = await blob.slice(0, 16).arrayBuffer();
                 if (cancelled) return;
                 const head = new Uint8Array(headBuf);
 
@@ -136,6 +154,17 @@ export default function CVPreview({ url, fileName }: CVPreviewProps) {
                         return;
                     }
                     setPdfBlobUrl(createdBlobUrl);
+                    setStatus('ready');
+                    return;
+                }
+
+                if (detected === 'image') {
+                    createdBlobUrl = URL.createObjectURL(blob);
+                    if (cancelled) {
+                        URL.revokeObjectURL(createdBlobUrl);
+                        return;
+                    }
+                    setImgUrl(createdBlobUrl);
                     setStatus('ready');
                     return;
                 }
@@ -213,6 +242,28 @@ export default function CVPreview({ url, fileName }: CVPreviewProps) {
                 style={{ width: '100%', height: '100%', border: 'none' }}
                 title={fileName || 'CV'}
             />
+        );
+    }
+
+    if (kind === 'image' && imgUrl) {
+        return (
+            <Box
+                sx={{
+                    height: '100%',
+                    overflow: 'auto',
+                    bgcolor: 'grey.100',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'flex-start',
+                    p: 2,
+                }}
+            >
+                <img
+                    src={imgUrl}
+                    alt={fileName || 'CV'}
+                    style={{ maxWidth: '100%', height: 'auto', boxShadow: '0 1px 6px rgba(0,0,0,0.25)' }}
+                />
+            </Box>
         );
     }
 
