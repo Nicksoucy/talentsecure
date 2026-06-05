@@ -1,5 +1,7 @@
 import { prisma } from '../config/database';
 import { Prisma } from '@prisma/client';
+import { normalizeCityKey, seedCanonicalName, tidyCity } from '../utils/cityNormalize';
+import { resolveCityCoordinates } from './cityGeocode.service';
 
 // O1 — plafond du nombre de lignes exportées d'un coup (sécurité mémoire/timeout).
 const EXPORT_ROW_CAP = 5000;
@@ -342,15 +344,40 @@ export class CandidateService {
             select: { city: true, id: true },
         });
 
-        const cityStats: { [key: string]: number } = {};
+        // Regroupement par CLÉ NORMALISÉE (fusionne accents/casse/tirets/variantes)
+        // → une vraie ville = une entrée. Nom affiché = canonique du seed si connu,
+        // sinon la variante brute la plus fréquente.
+        const groups = new Map<
+            string,
+            { count: number; canonical: string | null; variants: Map<string, number> }
+        >();
         candidates.forEach((candidate) => {
-            const city = candidate.city || 'N/A';
-            cityStats[city] = (cityStats[city] || 0) + 1;
+            const raw = (candidate.city || '').trim();
+            if (!raw) return;
+            const key = normalizeCityKey(raw);
+            if (!key) return;
+            let g = groups.get(key);
+            if (!g) {
+                g = { count: 0, canonical: seedCanonicalName(key), variants: new Map() };
+                groups.set(key, g);
+            }
+            g.count += 1;
+            g.variants.set(raw, (g.variants.get(raw) || 0) + 1);
         });
 
-        return Object.entries(cityStats)
-            .filter(([city]) => city !== 'N/A')
-            .map(([city, count]) => ({ city, count }))
+        const cityEntries = [...groups.values()].map((g) => {
+            const mostFrequent = [...g.variants.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+            return { city: g.canonical || tidyCity(mostFrequent), count: g.count };
+        });
+
+        // Coordonnées (seed → cache DB → géocodage en arrière-plan, non bloquant).
+        const coordsMap = await resolveCityCoordinates(cityEntries.map((e) => e.city));
+
+        return cityEntries
+            .map(({ city, count }) => {
+                const coords = coordsMap.get(city);
+                return { city, count, lat: coords?.lat ?? null, lng: coords?.lng ?? null };
+            })
             .sort((a, b) => b.count - a.count);
     }
 

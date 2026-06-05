@@ -5,6 +5,7 @@ import { getCache, setCache } from '../config/cache';
 import { buildCacheKey } from '../utils/cache';
 import { invalidateCaches } from '../utils/cacheInvalidation';
 import { getStatusFromRating } from '../utils/candidate.utils';
+import { canonicalCity } from '../utils/cityNormalize';
 import { findContactEverywhere } from '../utils/candidateMatch';
 import { Parser } from 'json2csv';
 import { candidateService } from '../services/candidate.service';
@@ -249,7 +250,7 @@ export const createCandidate = async (
         email,
         phone,
         address,
-        city: city || 'Non spécifié',
+        city: city ? canonicalCity(city) : 'Non spécifié', // normalise à la saisie
         province: province || 'QC',
         postalCode,
         interviewDate: interviewDate ? new Date(interviewDate) : null,
@@ -368,6 +369,11 @@ export const updateCandidate = async (
     // Convert interviewDate to Date if provided
     if (candidateData.interviewDate) {
       candidateData.interviewDate = new Date(candidateData.interviewDate);
+    }
+
+    // Normalise la ville à la saisie (si fournie et non vide).
+    if (candidateData.city) {
+      candidateData.city = canonicalCity(candidateData.city);
     }
 
     // Prepare update data with nested relations handling

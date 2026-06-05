@@ -1,5 +1,6 @@
 import { prisma } from '../config/database';
 import { ContactSection } from '../utils/candidateMatch';
+import { canonicalCity } from '../utils/cityNormalize';
 
 /**
  * Déplace un contact d'une section à une autre (les 6 sens).
@@ -95,7 +96,7 @@ export async function moveContact(opts: {
           email: n.email,
           phone: n.phone || 'N/A',
           address: n.address,
-          city: n.city || 'Non spécifié',
+          city: n.city ? canonicalCity(n.city) : 'Non spécifié',
           province: n.province,
           postalCode: n.postalCode,
           status: 'EN_ATTENTE',
@@ -121,7 +122,7 @@ export async function moveContact(opts: {
           phone: n.phone,
           streetAddress: n.address,
           fullAddress: n.address,
-          city: n.city,
+          city: n.city ? canonicalCity(n.city) : n.city,
           province: n.province,
           postalCode: n.postalCode,
           cvUrl: n.cvUrl,
@@ -145,7 +146,7 @@ export async function moveContact(opts: {
           email: n.email,
           phone: n.phone,
           address: n.address,
-          city: n.city,
+          city: n.city ? canonicalCity(n.city) : n.city,
           province: n.province,
           postalCode: n.postalCode,
           status: 'ACTIF',

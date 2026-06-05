@@ -3,7 +3,6 @@ import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import { Box, Typography, CircularProgress, Paper, Button, Chip } from '@mui/material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { quebecCitiesCoordinates } from '../../utils/quebecCities';
 import api from '../../services/api';
 
 // Fix for default marker icons in Leaflet
@@ -17,6 +16,8 @@ L.Icon.Default.mergeOptions({
 interface CityStats {
   city: string;
   count: number;
+  lat: number | null;
+  lng: number | null;
 }
 
 interface CandidatesMapProps {
@@ -32,46 +33,7 @@ const CandidatesMap: React.FC<CandidatesMapProps> = ({ onCityClick }) => {
     const fetchCityStats = async () => {
       try {
         const response = await api.get('/api/candidates/stats/by-city');
-        const rawStats: CityStats[] = response.data.data;
-
-        // Aggregate stats by coordinates to avoid overlapping circles
-        const aggregatedStatsMap = new Map<string, CityStats>();
-
-        rawStats.forEach(stat => {
-          // Normalize city name to match keys in quebecCitiesCoordinates
-          // Try exact match first, then case-insensitive, then normalized
-          let coords = quebecCitiesCoordinates[stat.city];
-
-          if (!coords) {
-            // Try to find a match ignoring case and accents
-            const normalizedCity = stat.city.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            const match = Object.keys(quebecCitiesCoordinates).find(key =>
-              key.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === normalizedCity
-            );
-            if (match) {
-              coords = quebecCitiesCoordinates[match];
-            }
-          }
-
-          if (coords) {
-            const key = `${coords.lat},${coords.lng}`;
-            const existing = aggregatedStatsMap.get(key);
-            if (existing) {
-              existing.count += stat.count;
-              // Keep the name that matches the coordinates key if possible, or the longest one
-              if (!quebecCitiesCoordinates[existing.city] && quebecCitiesCoordinates[stat.city]) {
-                existing.city = stat.city;
-              }
-            } else {
-              aggregatedStatsMap.set(key, { ...stat });
-            }
-          } else {
-            // If no coordinates found, keep it as is (it won't be rendered but good for debugging)
-            // Or we could try to map it to "Autre"
-          }
-        });
-
-        setCityStats(Array.from(aggregatedStatsMap.values()));
+        setCityStats(response.data.data);
       } catch (err) {
         console.error('Error fetching city stats:', err);
         setError('Erreur lors du chargement des données');
@@ -118,27 +80,30 @@ const CandidatesMap: React.FC<CandidatesMapProps> = ({ onCityClick }) => {
     return '#388e3c'; // Green
   };
 
+  // Une ville placée = a des coordonnées ; sinon en attente de géolocalisation.
+  const placed = cityStats.filter((s) => s.lat != null && s.lng != null);
+  const unplaced = cityStats.filter((s) => s.lat == null || s.lng == null);
+  const unplacedCandidates = unplaced.reduce((sum, s) => sum + s.count, 0);
+
   return (
-    <Paper elevation={2} sx={{ height: '500px', overflow: 'hidden' }}>
-      <MapContainer
-        center={quebecCenter}
-        zoom={6}
-        style={{ height: '100%', width: '100%' }}
-        scrollWheelZoom={true}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-        />
+    <Box>
+      <Paper elevation={2} sx={{ height: '500px', overflow: 'hidden' }}>
+        <MapContainer
+          center={quebecCenter}
+          zoom={6}
+          maxZoom={16}
+          style={{ height: '100%', width: '100%' }}
+          scrollWheelZoom={true}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          />
 
-        {cityStats.map((stat) => {
-          const coords = quebecCitiesCoordinates[stat.city];
-          if (!coords) return null;
-
-          return (
+          {placed.map((stat) => (
             <CircleMarker
               key={stat.city}
-              center={[coords.lat, coords.lng]}
+              center={[stat.lat as number, stat.lng as number]}
               radius={getMarkerRadius(stat.count)}
               pathOptions={{
                 fillColor: getMarkerColor(stat.count),
@@ -171,10 +136,22 @@ const CandidatesMap: React.FC<CandidatesMapProps> = ({ onCityClick }) => {
                 </Box>
               </Popup>
             </CircleMarker>
-          );
-        })}
-      </MapContainer>
-    </Paper>
+          ))}
+        </MapContainer>
+      </Paper>
+
+      {unplaced.length > 0 && (
+        <Box sx={{ mt: 1, px: 1 }}>
+          <Typography variant="caption" color="text.secondary">
+            {unplaced.length} ville{unplaced.length > 1 ? 's' : ''} non encore géolocalisée
+            {unplaced.length > 1 ? 's' : ''} ({unplacedCandidates} candidat
+            {unplacedCandidates > 1 ? 's' : ''}) — localisation automatique en cours, réessayez
+            dans un instant : {unplaced.slice(0, 15).map((s) => `${s.city} (${s.count})`).join(', ')}
+            {unplaced.length > 15 ? '…' : ''}
+          </Typography>
+        </Box>
+      )}
+    </Box>
   );
 };
 
