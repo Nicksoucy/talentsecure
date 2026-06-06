@@ -29,23 +29,25 @@ let lastNominatimAt = 0;
 const NOMINATIM_MIN_INTERVAL_MS = 1100;
 const MAX_GEOCODE_PER_CYCLE = 20;
 
-// Bornes approximatives du CANADA — filet pour rejeter tout résultat étranger
-// (les villes d'origine étrangères : Abidjan, Conakry, Moknine… → non placées).
-const CA_BOUNDS = { latMin: 41.5, latMax: 83.5, lngMin: -141.5, lngMax: -52.0 };
+// Bornes approximatives du QUÉBEC — filet pour rejeter tout résultat hors-QC
+// (villes étrangères ET villes canadiennes hors-Québec : on reste au Québec).
+const QC_BOUNDS = { latMin: 44.9, latMax: 62.7, lngMin: -79.9, lngMax: -57.0 };
 // On n'accepte que de vrais lieux (ville/village/limite admin), pas des rues.
 const PLACE_CLASSES = new Set(['place', 'boundary']);
 
-/** Une requête structurée Nominatim + validation (lieu + bornes Canada). */
-async function queryNominatim(
-  params: Record<string, string>
-): Promise<{ lat: number; lng: number } | null> {
+/**
+ * Géocode une ville en requête STRUCTURÉE limitée au QUÉBEC (city + state=Québec
+ * + country=Canada). Ne renvoie un résultat que s'il existe une ville de ce nom
+ * AU QUÉBEC ; sinon null (villes étrangères ou hors-QC → non placées).
+ */
+async function geocodeNominatim(city: string): Promise<{ lat: number; lng: number } | null> {
   const wait = lastNominatimAt + NOMINATIM_MIN_INTERVAL_MS - Date.now();
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastNominatimAt = Date.now();
 
   try {
     const res = await axios.get('https://nominatim.openstreetmap.org/search', {
-      params: { ...params, format: 'json', limit: 1, addressdetails: 1 },
+      params: { city, state: 'Québec', country: 'Canada', format: 'json', limit: 1, addressdetails: 1 },
       headers: { 'User-Agent': 'TalentSecure/1.0 (nick@darkhorseads.com)' },
       timeout: 8000,
     });
@@ -54,25 +56,14 @@ async function queryNominatim(
     if (hit.class && !PLACE_CLASSES.has(hit.class)) return null; // pas une rue
     const lat = parseFloat(hit.lat);
     const lng = parseFloat(hit.lon);
-    if (lat < CA_BOUNDS.latMin || lat > CA_BOUNDS.latMax || lng < CA_BOUNDS.lngMin || lng > CA_BOUNDS.lngMax) {
-      return null; // hors Canada → rejeté (ville étrangère)
+    if (lat < QC_BOUNDS.latMin || lat > QC_BOUNDS.latMax || lng < QC_BOUNDS.lngMin || lng > QC_BOUNDS.lngMax) {
+      return null; // hors Québec → rejeté
     }
     return { lat, lng };
   } catch (e: any) {
-    logger.warn(`[geocode] échec Nominatim (${JSON.stringify(params)}): ${e?.message}`);
+    logger.warn(`[geocode] échec Nominatim pour "${city}": ${e?.message}`);
     return null;
   }
-}
-
-/**
- * Géocode une ville en requête STRUCTURÉE : d'abord au Québec (précis), puis
- * dans le reste du Canada (villes hors-QC : Sudbury, Edmonton, Edmundston…).
- * Les villes étrangères ne matchent dans aucun des deux → non placées.
- */
-async function geocodeNominatim(city: string): Promise<{ lat: number; lng: number } | null> {
-  const inQuebec = await queryNominatim({ city, state: 'Québec', country: 'Canada' });
-  if (inQuebec) return inQuebec;
-  return queryNominatim({ city, country: 'Canada' });
 }
 
 /**
