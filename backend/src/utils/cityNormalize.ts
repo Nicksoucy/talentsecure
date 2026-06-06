@@ -72,6 +72,29 @@ for (const name of Object.keys(quebecCitiesCoordinates)) {
   seedCanonicalByKey.set(normalizeCityKey(name), name);
 }
 
+// Alias manuels : variantes mal orthographiées / borough avec suffixe →
+// vraie ville (qui existe dans le seed). La clé est normalisée à la volée.
+const CITY_ALIASES: Record<string, string> = {
+  'Sherbrook': 'Sherbrooke',
+  'Drommundoville': 'Drummondville',
+  'Longueuill': 'Longueuil',
+  'Pointes aux trembles': 'Pointe-aux-Trembles',
+  'Montreal North': 'Montréal-Nord',
+  'Laval Des Rapide': 'Laval',
+  'Laval-des-Rapides': 'Laval',
+  'Abjou': 'Anjou',
+  'Anjou, MONTREAL': 'Anjou',
+  'Hampstead Montreal': 'Hampstead',
+  'Val Bélaire': 'Val-Bélair',
+  'Cantonville': 'Granby',
+  '515 4e Avenue Saint-Jean-Sur-Richelieu': 'Saint-Jean-sur-Richelieu',
+  'Lac Beaupirt': 'Lac-Beauport',
+  'Nepean, Ottawa': 'Ottawa',
+};
+for (const [variant, canonical] of Object.entries(CITY_ALIASES)) {
+  seedCanonicalByKey.set(normalizeCityKey(variant), canonical);
+}
+
 /** Nom canonique d'une clé si elle est dans le seed, sinon null. */
 export function seedCanonicalName(key: string): string | null {
   return seedCanonicalByKey.get(key) || null;

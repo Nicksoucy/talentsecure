@@ -71,6 +71,9 @@ export const quebecCitiesCoordinates: { [key: string]: CityCoordinates } = {
   'Rivière-du-Loup': { lat: 47.8333, lng: -69.5333 },
   'Île-Perrot': { lat: 45.3801, lng: -73.9510 },
   'Île-aux-Noix': { lat: 45.1238, lng: -73.2637 },
+  'Val-Bélair': { lat: 46.8500, lng: -71.5100 },
+  'Hampstead': { lat: 45.4817, lng: -73.6450 },
+  'Lac-Beauport': { lat: 46.9500, lng: -71.2900 },
   // Arrondissements de Montréal
   'Saint-Léonard': { lat: 45.5833, lng: -73.6000 },
   'Saint-Laurent': { lat: 45.5088, lng: -73.6876 },
