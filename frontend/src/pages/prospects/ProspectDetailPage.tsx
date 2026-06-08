@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -11,6 +12,11 @@ import {
   Button,
   Alert,
   Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -19,6 +25,7 @@ import {
   Description as DescriptionIcon,
   VideoLibrary as VideoIcon,
   QuestionAnswer as AnswerIcon,
+  Edit as EditIcon,
 } from '@mui/icons-material';
 import { prospectService } from '@/services/prospect.service';
 import { DetailPageSkeleton } from '@/components/skeletons';
@@ -36,6 +43,47 @@ export default function ProspectDetailPage() {
   });
 
   const prospect = data?.data;
+
+  const queryClient = useQueryClient();
+  const { enqueueSnackbar } = useSnackbar();
+  const [editOpen, setEditOpen] = useState(false);
+  const [form, setForm] = useState({
+    firstName: '', lastName: '', email: '', phone: '',
+    fullAddress: '', streetAddress: '', city: '', province: '', postalCode: '', country: '', notes: '',
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: () => prospectService.updateProspect(id!, form),
+    onSuccess: () => {
+      enqueueSnackbar('Fiche mise à jour', { variant: 'success' });
+      setEditOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['prospect', id] });
+      queryClient.invalidateQueries({ queryKey: ['prospects'] });
+    },
+    onError: (e: any) =>
+      enqueueSnackbar(
+        e?.response?.data?.error || e?.response?.data?.message || 'Erreur lors de la mise à jour',
+        { variant: 'error' }
+      ),
+  });
+
+  const openEdit = () => {
+    if (!prospect) return;
+    setForm({
+      firstName: prospect.firstName || '',
+      lastName: prospect.lastName || '',
+      email: prospect.email || '',
+      phone: prospect.phone || '',
+      fullAddress: prospect.fullAddress || '',
+      streetAddress: (prospect as any).streetAddress || '',
+      city: prospect.city || '',
+      province: prospect.province || '',
+      postalCode: prospect.postalCode || '',
+      country: prospect.country || '',
+      notes: prospect.notes || '',
+    });
+    setEditOpen(true);
+  };
 
   if (isLoading) {
     return <DetailPageSkeleton hasBackButton sections={3} />;
@@ -74,6 +122,13 @@ export default function ProspectDetailPage() {
           {prospect.firstName} {prospect.lastName}
         </Typography>
         <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
+          <Button
+            variant="outlined"
+            startIcon={<EditIcon />}
+            onClick={openEdit}
+          >
+            Modifier
+          </Button>
           {!prospect.isContacted && (
             <Button
               variant="outlined"
@@ -292,6 +347,52 @@ export default function ProspectDetailPage() {
           </Grid>
         )}
       </Grid>
+
+      {/* Dialogue d'édition de la fiche */}
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Modifier la fiche</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField label="Prénom" fullWidth value={form.firstName}
+              onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
+            <TextField label="Nom" fullWidth value={form.lastName}
+              onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
+          </Box>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField label="Courriel" fullWidth value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <TextField label="Téléphone" fullWidth value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </Box>
+          <TextField label="Adresse complète" fullWidth value={form.fullAddress}
+            onChange={(e) => setForm({ ...form, fullAddress: e.target.value })} />
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField label="Ville" fullWidth value={form.city}
+              onChange={(e) => setForm({ ...form, city: e.target.value })}
+              helperText="Normalisée automatiquement (ex. « montreal » → « Montréal »)" />
+            <TextField label="Province" fullWidth value={form.province}
+              onChange={(e) => setForm({ ...form, province: e.target.value })} />
+          </Box>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField label="Code postal" fullWidth value={form.postalCode}
+              onChange={(e) => setForm({ ...form, postalCode: e.target.value })} />
+            <TextField label="Pays" fullWidth value={form.country}
+              onChange={(e) => setForm({ ...form, country: e.target.value })} />
+          </Box>
+          <TextField label="Notes" fullWidth multiline rows={3} value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditOpen(false)}>Annuler</Button>
+          <Button
+            variant="contained"
+            onClick={() => updateMutation.mutate()}
+            disabled={updateMutation.isPending || !form.firstName || !form.phone}
+          >
+            {updateMutation.isPending ? 'Enregistrement…' : 'Enregistrer'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

@@ -244,7 +244,20 @@ export const updateProspect = async (
 ) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+
+    // Whitelist des champs éditables (anti mass-assignment) + normalisation ville.
+    const b = req.body || {};
+    const ALLOWED = [
+      'firstName', 'lastName', 'email', 'phone', 'streetAddress',
+      'city', 'province', 'postalCode', 'country', 'fullAddress', 'notes',
+    ] as const;
+    const updateData: any = {};
+    for (const k of ALLOWED) {
+      if (b[k] !== undefined) updateData[k] = b[k];
+    }
+    if (typeof updateData.city === 'string' && updateData.city.trim()) {
+      updateData.city = canonicalCity(updateData.city);
+    }
 
     // Check if prospect exists
     const existingProspect = await prisma.prospectCandidate.findUnique({
