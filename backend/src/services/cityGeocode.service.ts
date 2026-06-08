@@ -10,7 +10,7 @@ import axios from 'axios';
 import { prisma } from '../config/database';
 import logger from '../config/logger';
 import { quebecCitiesCoordinates } from '../data/quebecCities';
-import { normalizeCityKey } from '../utils/cityNormalize';
+import { normalizeCityKey, seedCanonicalName } from '../utils/cityNormalize';
 
 // Seed normalisé (clé normalisée → coords) construit une fois au chargement.
 const seed = new Map<string, { lat: number; lng: number }>();
@@ -64,6 +64,68 @@ async function geocodeNominatim(city: string): Promise<{ lat: number; lng: numbe
     logger.warn(`[geocode] échec Nominatim pour "${city}": ${e?.message}`);
     return null;
   }
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Classification de province (pour le tri hors-Québec). Indépendant du cache
+// de coordonnées : on lit address.state via addressdetails.
+// ───────────────────────────────────────────────────────────────────────────
+export type ProvinceClass = 'QC' | 'ON' | 'other-CA' | 'foreign' | 'unknown';
+const provinceCache = new Map<string, ProvinceClass>();
+
+function mapState(state: string | undefined): ProvinceClass | null {
+  if (!state) return null;
+  const s = state.toLowerCase();
+  if (s.includes('quebec') || s.includes('québec')) return 'QC';
+  if (s.includes('ontario')) return 'ON';
+  return 'other-CA';
+}
+
+async function nominatimFirstHit(params: Record<string, string>): Promise<any | null> {
+  const wait = lastNominatimAt + NOMINATIM_MIN_INTERVAL_MS - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastNominatimAt = Date.now();
+  try {
+    const res = await axios.get('https://nominatim.openstreetmap.org/search', {
+      params: { ...params, format: 'json', limit: 1, addressdetails: 1 },
+      headers: { 'User-Agent': 'TalentSecure/1.0 (nick@darkhorseads.com)' },
+      timeout: 8000,
+    });
+    return Array.isArray(res.data) ? res.data[0] || null : null;
+  } catch (e: any) {
+    logger.warn(`[classify] échec Nominatim (${JSON.stringify(params)}): ${e?.message}`);
+    return null;
+  }
+}
+
+/**
+ * Classe une ville : QC / ON / other-CA / foreign / unknown.
+ *  - seed connu → QC (les rares limites comme Ottawa sont gardées de toute façon).
+ *  - sinon Canada → address.state ; sinon recherche mondiale → foreign si ça
+ *    résout ailleurs, unknown si rien.
+ * Résultat mémorisé le temps du run.
+ */
+export async function classifyProvince(city: string): Promise<ProvinceClass> {
+  const key = normalizeCityKey(city);
+  if (!key) return 'unknown';
+  const cached = provinceCache.get(key);
+  if (cached) return cached;
+
+  let result: ProvinceClass;
+  if (seedCanonicalName(key)) {
+    result = 'QC';
+  } else {
+    const ca = await nominatimFirstHit({ city, country: 'Canada' });
+    const prov = mapState(ca?.address?.state);
+    if (prov) {
+      result = prov;
+    } else {
+      const world = await nominatimFirstHit({ city });
+      result = world ? 'foreign' : 'unknown';
+    }
+  }
+  provinceCache.set(key, result);
+  return result;
 }
 
 /**
