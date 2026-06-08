@@ -5,7 +5,7 @@ import { buildCacheKey } from '../utils/cache';
 import { invalidateCaches } from '../utils/cacheInvalidation';
 import { findContactEverywhere } from '../utils/candidateMatch';
 import { resolveCityCoordinates } from '../services/cityGeocode.service';
-import { normalizeCityKey, seedCanonicalName, tidyCity, canonicalCity } from '../utils/cityNormalize';
+import { canonicalCity } from '../utils/cityNormalize';
 
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
 const PROSPECT_STATS_CACHE_KEY = 'prospects:stats';
@@ -640,32 +640,19 @@ export const getProspectsByCity = async (
       },
     });
 
-    // Regroupement par CLÉ NORMALISÉE (fusionne accents/casse/tirets/variantes) :
-    // une vraie ville = une seule entrée = un seul marqueur. Le nom affiché est
-    // le nom canonique du seed si connu, sinon la variante brute la plus fréquente.
-    const groups = new Map<
-      string,
-      { count: number; canonical: string | null; variants: Map<string, number> }
-    >();
+    // Regroupement par NOM CANONIQUE (canonicalCity = exact/alias/fuzzy/tidy).
+    // Fusionne accents/casse/tirets/abréviations ET fautes de frappe → une
+    // vraie ville = une seule entrée = un seul marqueur.
+    const groups = new Map<string, number>();
     prospects.forEach((prospect) => {
       const raw = (prospect.city || '').trim();
       if (!raw) return; // ignore les villes vides (équivalent N/A)
-      const key = normalizeCityKey(raw);
-      if (!key) return;
-      let g = groups.get(key);
-      if (!g) {
-        g = { count: 0, canonical: seedCanonicalName(key), variants: new Map() };
-        groups.set(key, g);
-      }
-      g.count += 1;
-      g.variants.set(raw, (g.variants.get(raw) || 0) + 1);
+      const canon = canonicalCity(raw);
+      if (!canon) return;
+      groups.set(canon, (groups.get(canon) || 0) + 1);
     });
 
-    const cityEntries = [...groups.values()].map((g) => {
-      const mostFrequentVariant = [...g.variants.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
-      const display = g.canonical || tidyCity(mostFrequentVariant);
-      return { city: display, count: g.count };
-    });
+    const cityEntries = [...groups.entries()].map(([city, count]) => ({ city, count }));
 
     // Résout les coordonnées (seed → cache DB → géocodage en arrière-plan).
     // Non bloquant : les villes inconnues reviennent avec lat/lng null et seront

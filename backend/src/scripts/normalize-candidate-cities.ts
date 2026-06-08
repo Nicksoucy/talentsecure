@@ -7,7 +7,7 @@
  * Exécuter : npx ts-node src/scripts/normalize-candidate-cities.ts
  */
 import { prisma } from '../config/database';
-import { normalizeCityKey, seedCanonicalName, tidyCity } from '../utils/cityNormalize';
+import { normalizeCityKey, canonicalCity } from '../utils/cityNormalize';
 
 async function run() {
   console.log('🔄 Nettoyage des villes (candidats)...\n');
@@ -33,7 +33,7 @@ async function run() {
 
   for (const [key, variants] of groups) {
     const mostFrequent = [...variants.entries()].sort((a, b) => b[1] - a[1])[0][0];
-    const canonical = seedCanonicalName(key) || tidyCity(mostFrequent);
+    const canonical = canonicalCity(mostFrequent); // exact/alias/fuzzy/tidy
 
     for (const [raw] of variants) {
       if (raw === canonical) continue;

@@ -10,7 +10,7 @@
  * Exécuter : npx ts-node src/scripts/normalize-prospect-cities-v2.ts
  */
 import { prisma } from '../config/database';
-import { normalizeCityKey, seedCanonicalName, tidyCity } from '../utils/cityNormalize';
+import { normalizeCityKey, canonicalCity } from '../utils/cityNormalize';
 
 async function run() {
   console.log('🔄 Nettoyage des villes (candidats potentiels)...\n');
@@ -38,7 +38,7 @@ async function run() {
   for (const [key, variants] of groups) {
     // Nom canonique : seed si connu, sinon variante propre la plus fréquente.
     const mostFrequent = [...variants.entries()].sort((a, b) => b[1] - a[1])[0][0];
-    const canonical = seedCanonicalName(key) || tidyCity(mostFrequent);
+    const canonical = canonicalCity(mostFrequent); // exact/alias/fuzzy/tidy
 
     for (const [raw] of variants) {
       if (raw === canonical) continue;

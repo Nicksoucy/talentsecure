@@ -1,6 +1,6 @@
 import { prisma } from '../config/database';
 import { Prisma } from '@prisma/client';
-import { normalizeCityKey, seedCanonicalName, tidyCity } from '../utils/cityNormalize';
+import { canonicalCity } from '../utils/cityNormalize';
 import { resolveCityCoordinates } from './cityGeocode.service';
 
 // O1 — plafond du nombre de lignes exportées d'un coup (sécurité mémoire/timeout).
@@ -344,31 +344,18 @@ export class CandidateService {
             select: { city: true, id: true },
         });
 
-        // Regroupement par CLÉ NORMALISÉE (fusionne accents/casse/tirets/variantes)
-        // → une vraie ville = une entrée. Nom affiché = canonique du seed si connu,
-        // sinon la variante brute la plus fréquente.
-        const groups = new Map<
-            string,
-            { count: number; canonical: string | null; variants: Map<string, number> }
-        >();
+        // Regroupement par NOM CANONIQUE (canonicalCity = exact/alias/fuzzy/tidy).
+        // Fusionne accents/casse/tirets/abréviations ET fautes de frappe.
+        const groups = new Map<string, number>();
         candidates.forEach((candidate) => {
             const raw = (candidate.city || '').trim();
             if (!raw) return;
-            const key = normalizeCityKey(raw);
-            if (!key) return;
-            let g = groups.get(key);
-            if (!g) {
-                g = { count: 0, canonical: seedCanonicalName(key), variants: new Map() };
-                groups.set(key, g);
-            }
-            g.count += 1;
-            g.variants.set(raw, (g.variants.get(raw) || 0) + 1);
+            const canon = canonicalCity(raw);
+            if (!canon) return;
+            groups.set(canon, (groups.get(canon) || 0) + 1);
         });
 
-        const cityEntries = [...groups.values()].map((g) => {
-            const mostFrequent = [...g.variants.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
-            return { city: g.canonical || tidyCity(mostFrequent), count: g.count };
-        });
+        const cityEntries = [...groups.entries()].map(([city, count]) => ({ city, count }));
 
         // Coordonnées (seed → cache DB → géocodage en arrière-plan, non bloquant).
         const coordsMap = await resolveCityCoordinates(cityEntries.map((e) => e.city));

@@ -52,13 +52,19 @@ function stripSuffix(s: string): string {
   return out;
 }
 
-/** Clé normalisée : minuscules, sans accents, sans suffixe, espaces compressés. */
+/**
+ * Clé normalisée pour le regroupement : minuscules, sans accents, sans suffixe.
+ * + unifie les séparateurs (- ' .) et expand St/Ste → Saint/Sainte, pour que
+ * « Trois Rivieres » = « Trois-Rivières » et « St-Jerome » = « Saint-Jérôme ».
+ */
 export function normalizeCityKey(city?: string | null): string {
-  const base = stripSuffix(city || '');
-  return base
+  let k = stripSuffix(city || '')
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '');
+    .replace(/[̀-ͯ]/g, ''); // accents
+  k = k.replace(/[-'.]/g, ' ').replace(/\s+/g, ' ').trim(); // séparateurs unifiés
+  k = k.replace(/\bste\b/g, 'sainte').replace(/\bst\b/g, 'saint'); // abréviations
+  return k;
 }
 
 /** Version affichable propre (trim + espaces + retrait suffixe), casse/accents gardés. */
@@ -95,18 +101,66 @@ for (const [variant, canonical] of Object.entries(CITY_ALIASES)) {
   seedCanonicalByKey.set(normalizeCityKey(variant), canonical);
 }
 
-/** Nom canonique d'une clé si elle est dans le seed, sinon null. */
+/** Nom canonique si la clé est EXACTEMENT dans le seed/alias, sinon null. */
 export function seedCanonicalName(key: string): string | null {
   return seedCanonicalByKey.get(key) || null;
 }
 
+/** Distance de Levenshtein (bornée — suffisant pour des noms de villes). */
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (Math.abs(m - n) > 2) return 99; // trop différent → on coupe court
+  const dp = Array.from({ length: m + 1 }, (_, i) => i);
+  for (let j = 1; j <= n; j++) {
+    let prev = dp[0];
+    dp[0] = j;
+    for (let i = 1; i <= m; i++) {
+      const tmp = dp[i];
+      dp[i] = a[i - 1] === b[j - 1] ? prev : Math.min(prev, dp[i - 1], dp[i]) + 1;
+      prev = tmp;
+    }
+  }
+  return dp[m];
+}
+
 /**
- * Nom canonique pour une ville saisie : si connue du seed → orthographe
- * canonique (avec accents) ; sinon → version « propre » telle que saisie.
+ * Résout le nom canonique d'une ville : correspondance EXACTE (seed/alias) →
+ * sinon correspondance APPROXIMATIVE sur le seed (faute de frappe) → sinon null.
+ * Gardes anti-faux-match : longueur ≥ 5, même 1ʳᵉ lettre, distance ≤ 1 (noms
+ * courts) / ≤ 2 (noms longs), et match UNIQUE (sinon on ne corrige pas).
+ */
+export function resolveCanonical(city?: string | null): string | null {
+  const key = normalizeCityKey(city);
+  if (!key) return null;
+  const exact = seedCanonicalByKey.get(key);
+  if (exact) return exact;
+
+  if (key.length < 5) return null; // trop court pour un fuzzy sûr
+  const maxDist = key.length >= 8 ? 2 : 1;
+  let best: string | null = null;
+  let bestDist = maxDist + 1;
+  let tie = false;
+  for (const [seedKey, name] of seedCanonicalByKey) {
+    if (seedKey[0] !== key[0]) continue; // même 1ʳᵉ lettre
+    const d = levenshtein(key, seedKey);
+    if (d < bestDist) {
+      bestDist = d;
+      best = name;
+      tie = false;
+    } else if (d === bestDist) {
+      tie = true;
+    }
+  }
+  return best && bestDist <= maxDist && !tie ? best : null;
+}
+
+/**
+ * Nom canonique pour une ville saisie : seed/alias exact OU faute de frappe
+ * corrigée (resolveCanonical) → orthographe canonique ; sinon version « propre ».
  */
 export function canonicalCity(city?: string | null): string {
   const tidy = tidyCity(city);
   if (!tidy) return tidy;
-  const seed = seedCanonicalByKey.get(normalizeCityKey(tidy));
-  return seed || tidy;
+  return resolveCanonical(city) ?? tidy;
 }
