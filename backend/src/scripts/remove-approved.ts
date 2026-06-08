@@ -62,14 +62,23 @@ async function run() {
     removed += r.count;
   }
 
-  await prisma.auditLog.create({
-    data: {
-      userId: 'system',
-      action: 'DELETE',
-      resource: 'OutOfQuebecCleanup',
-      details: `Soft-delete hors-Québec : ${removed} dossiers (${prospectIds.length} prospects, ${candidateIds.length} candidats)`,
-    },
-  });
+  // Audit log best-effort : userId doit référencer un User existant (FK).
+  // On prend un admin si dispo ; si rien, on saute (la suppression a déjà eu lieu).
+  try {
+    const admin = await prisma.user.findFirst({ where: { role: 'ADMIN' }, select: { id: true } });
+    if (admin) {
+      await prisma.auditLog.create({
+        data: {
+          userId: admin.id,
+          action: 'DELETE',
+          resource: 'OutOfQuebecCleanup',
+          details: `Soft-delete hors-Québec : ${removed} dossiers (${prospectIds.length} prospects, ${candidateIds.length} candidats)`,
+        },
+      });
+    }
+  } catch (e: any) {
+    console.warn(`[audit] log non écrit : ${e?.message}`);
+  }
 
   console.log(`\n✅ ${removed} dossiers soft-deleted (réversible).`);
   await prisma.$disconnect();
