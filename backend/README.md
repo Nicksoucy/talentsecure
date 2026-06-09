@@ -1,168 +1,97 @@
-# TalentSecure Backend
+# TalentSecure — Backend
 
-Backend API pour la plateforme TalentSecure - Gestion de candidats agents de sécurité.
+API REST de la plateforme de recrutement XGuard. **Voir le [README racine](../README.md)** pour la vue d'ensemble, les variables d'environnement complètes et le déploiement.
 
-## Stack Technique
+## Stack
 
-- **Node.js 18+** avec TypeScript
-- **Express.js** pour l'API REST
-- **Prisma** comme ORM
-- **PostgreSQL** pour la base de données
-- **Passport.js** pour l'authentification (Local + Google OAuth + Microsoft OAuth)
-- **JWT** pour les tokens
-- **Google Cloud Storage** pour le stockage de fichiers
+- **Node.js 20** + TypeScript, **Express**
+- **Prisma** ORM → **Neon PostgreSQL** (serverless)
+- **Passport** (JWT access 7 j + refresh 30 j) ; portail client séparé (`/api/client-auth`)
+- **Cloudflare R2** (CV, vidéos, PDF — URLs signées)
+- **Stripe** (achat de candidats), **GoHighLevel** (formulaires/SMS/contacts, PIT token)
+- **Nominatim** (géocodage QC), **Redis** optionnel (cache)
 
-## Installation
+## Démarrer en local
 
 ```bash
-# Installer les dépendances
 npm install
-
-# Copier le fichier d'environnement
-cp .env.example .env
-
-# Éditer .env avec vos valeurs
-# DATABASE_URL, JWT_SECRET, GOOGLE_CLIENT_ID, etc.
+cp .env.example .env          # remplir DATABASE_URL, JWT_SECRET, JWT_REFRESH_SECRET (≥32c)…
+npx prisma generate
+npm run dev                   # http://localhost:5000
 ```
 
-## Configuration de la base de données
+> Variables requises au boot (`src/config/env.ts`, fail-fast) : `JWT_SECRET`, `JWT_REFRESH_SECRET` (≥ 32 caractères), `DATABASE_URL`. Liste complète : README racine.
+
+## Scripts npm
+
+| Script | Rôle |
+|---|---|
+| `npm run dev` | Serveur en watch (ts-node-dev) sur :5000 |
+| `npm run build` | Compile TypeScript → `dist/` |
+| `npm start` | Lance `dist/server.js` (production) |
+| `npm run lint` | ESLint |
+| `npm test` / `test:watch` / `test:coverage` | Jest |
+| `npm run test:ci` | Sous-ensemble CI (env, rate-limit, token, skills, AI) |
+| `npm run prisma:generate` | Génère le client Prisma |
+| `npm run prisma:studio` | Prisma Studio |
+
+⚠️ **`npm run prisma:migrate` (= `prisma migrate dev`) ne convient PAS pour Neon** (historique divergent). Voir « Migrations » ci-dessous.
+
+## Structure
+
+```
+src/
+├── config/        # env (fail-fast), database, cache, logger, storage
+├── controllers/   # endpoints (orchestration)
+├── services/      # logique métier
+├── routes/        # routes Express + validation Zod
+├── middleware/    # auth, validation, upload
+├── utils/         # helpers partagés (cityNormalize, phone, ghlFetch, cacheInvalidation…)
+├── data/          # quebecCities.ts (seed de coordonnées QC)
+├── scripts/       # ops à lancer à la main (+ archive/ = jetables)
+└── server.ts      # point d'entrée
+prisma/
+├── schema.prisma
+└── migrations/    # SQL appliqués via `prisma db execute`
+```
+
+## Surface API (préfixes)
+
+`/api/auth`, `/api/client-auth`, `/api/users`, `/api/admin`, `/api/dashboard`,
+`/api/candidates`, `/api/prospects`, `/api/employees`, `/api/contacts`,
+`/api/clients`, `/api/catalogues`, `/api/marketplace`, `/api/wishlist`,
+`/api/skills`, `/api/extraction`, `/api/exports`, `/api/uniforms`,
+`/api/notifications`, `/api/webhooks`. Santé : `GET /health`.
+
+Routes protégées : header `Authorization: Bearer <token>`. Rôles : `ADMIN`, `RH_RECRUITER`, `SALES`.
+
+## Services / utils notables
+
+- `services/cityGeocode.service.ts` — géocodage Nominatim **QC-only** + cache `city_geocodes` + `classifyProvince`.
+- `utils/cityNormalize.ts` — normalisation + **auto-correction** des villes (Levenshtein) ; seed = `data/quebecCities.ts`.
+- `services/survey-sync.service.ts` + `utils/ghlFetch.ts` — capture GHL (CV/vidéo/réponses → R2), gère le **soft-redirect** GHL.
+- `services/stripe.service.ts` — Checkout + webhook (source de vérité, `amount_total`, idempotent).
+- `services/contact-move.service.ts` — unicité de contact (déplacement réversible entre sections).
+
+## Migrations (Neon)
+
+L'historique Prisma est divergent → **ne jamais** utiliser `migrate dev`/`migrate deploy`.
 
 ```bash
-# Générer le client Prisma
-npm run prisma:generate
-
-# Créer la base de données et appliquer les migrations
-npm run prisma:migrate
-
-# (Optionnel) Ouvrir Prisma Studio pour voir les données
-npm run prisma:studio
+# 1. Éditer prisma/schema.prisma
+# 2. Écrire le SQL idempotent (CREATE TABLE/INDEX IF NOT EXISTS) dans prisma/migrations/<nom>.sql
+# 3. Appliquer :
+npx prisma db execute --file prisma/migrations/<nom>.sql --schema prisma/schema.prisma
+# 4. Régénérer :
+npx prisma generate
 ```
 
-## Démarrage
+## Scripts d'opération (`src/scripts/`)
 
-### Mode développement
-```bash
-npm run dev
-```
-
-Le serveur démarre sur `http://localhost:5000`
-
-### Mode production
-```bash
-# Build
-npm run build
-
-# Démarrer
-npm start
-```
-
-## Scripts disponibles
-
-- `npm run dev` - Démarre le serveur en mode développement avec rechargement automatique
-- `npm run build` - Compile TypeScript vers JavaScript
-- `npm start` - Démarre le serveur en production
-- `npm run prisma:generate` - Génère le client Prisma
-- `npm run prisma:migrate` - Crée et applique les migrations
-- `npm run prisma:studio` - Ouvre l'interface Prisma Studio
-- `npm test` - Lance les tests
-- `npm run test:watch` - Lance les tests en mode watch
-- `npm run test:coverage` - Lance les tests avec couverture
-
-## Structure du projet
-
-```
-backend/
-├── src/
-│   ├── config/          # Configuration (database, passport)
-│   ├── controllers/     # Contrôleurs (logique métier)
-│   ├── routes/          # Définition des routes
-│   ├── services/        # Services (PDF, upload, etc.)
-│   ├── middleware/      # Middleware (auth, validation, etc.)
-│   ├── utils/           # Utilitaires (jwt, password, etc.)
-│   ├── validators/      # Schemas de validation
-│   ├── jobs/            # Jobs asynchrones
-│   └── server.ts        # Point d'entrée
-├── prisma/
-│   └── schema.prisma    # Schéma de base de données
-├── tests/               # Tests
-├── uploads/             # Fichiers uploadés localement
-└── package.json
-```
-
-## Endpoints API
-
-### Authentication
-- `POST /api/auth/register` - Créer un utilisateur
-- `POST /api/auth/login` - Se connecter
-- `POST /api/auth/refresh` - Rafraîchir le token
-- `GET /api/auth/profile` - Profil utilisateur
-- `POST /api/auth/logout` - Se déconnecter
-- `GET /api/auth/google` - OAuth Google
-- `GET /api/auth/google/callback` - Callback Google
-
-### Candidates (à venir)
-- `GET /api/candidates` - Liste des candidats
-- `GET /api/candidates/:id` - Détails d'un candidat
-- `POST /api/candidates` - Créer un candidat
-- `PUT /api/candidates/:id` - Modifier un candidat
-- `DELETE /api/candidates/:id` - Supprimer un candidat
-
-### Catalogues (à venir)
-- `GET /api/catalogues` - Liste des catalogues
-- `POST /api/catalogues` - Créer un catalogue
-- `POST /api/catalogues/:id/generate` - Générer le PDF
-
-## Variables d'environnement
-
-Voir `.env.example` pour la liste complète.
-
-Variables essentielles:
-- `DATABASE_URL` - URL de connexion PostgreSQL
-- `JWT_SECRET` - Clé secrète pour les JWT
-- `GOOGLE_CLIENT_ID` - ID client Google OAuth
-- `GOOGLE_CLIENT_SECRET` - Secret client Google OAuth
-- `GCS_PROJECT_ID` - ID du projet Google Cloud
-- `GCS_BUCKET_NAME` - Nom du bucket Cloud Storage
-
-## Authentification
-
-L'API supporte 3 méthodes d'authentification:
-
-1. **Email/Password** - Connexion classique
-2. **Google OAuth** - "Se connecter avec Google"
-3. **Microsoft OAuth** - "Se connecter avec Microsoft" (à configurer)
-
-Toutes les routes protégées nécessitent un JWT dans le header:
-```
-Authorization: Bearer <token>
-```
-
-## Rôles et permissions
-
-- **ADMIN** - Accès complet
-- **RH_RECRUITER** - Peut créer/modifier des candidats
-- **SALES** - Peut voir les candidats et créer des catalogues
-
-## Tests
-
-```bash
-# Lancer tous les tests
-npm test
-
-# Tests avec couverture
-npm run test:coverage
-
-# Mode watch pour développement
-npm run test:watch
-```
+Lancés à la main : `npx ts-node src/scripts/<x>.ts`. Ex. : `create-admin.ts`, `seed-common-skills.ts`,
+`normalize-prospect-cities-v2.ts` / `normalize-candidate-cities.ts` (nettoyage villes),
+`regeocode-cities.ts`, `classify-out-of-quebec.ts`, `remove-approved.ts` (soft-delete hors-QC, `--apply`).
 
 ## Déploiement
 
-Voir la documentation de déploiement sur Google Cloud Run dans le dossier `docs/`.
-
-## Support
-
-Pour toute question, consultez la documentation complète dans:
-- `ARCHITECTURE_TALENTSECURE_MVP.md`
-- `PLAN_DEVELOPPEMENT_MVP.md`
-- `PROMPT_DEVELOPPEUR_COUTS_ROADMAP.md`
+Google Cloud Run (`talentsecure`) via Cloud Build sur push `main`. Secrets (R2, Stripe, GHL) **uniquement** sur Cloud Run. Détails : [README racine](../README.md).

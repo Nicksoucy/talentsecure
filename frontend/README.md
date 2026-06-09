@@ -1,192 +1,77 @@
-# TalentSecure Frontend
+# TalentSecure — Frontend
 
-Frontend de la plateforme TalentSecure - Interface web pour la gestion de candidats agents de sécurité.
+Interface web (backoffice RH/admin + portail client) de la plateforme XGuard. **Voir le [README racine](../README.md)** pour la vue d'ensemble et le déploiement.
 
-## Stack Technique
+## Stack
 
-- **React 18** avec TypeScript
-- **Vite** comme build tool
-- **Material-UI (MUI)** pour les composants UI
-- **React Router** pour la navigation
-- **React Query** pour la gestion de données
-- **Zustand** pour le state management
-- **React Hook Form** + Zod pour les formulaires
+- **React 18** + TypeScript, **Vite**
+- **Material-UI (MUI)**, **React Query**, **Zustand**, **React Router**
+- **Leaflet** / react-leaflet (cartes), **Notistack** (toasts)
+- Aperçu CV : **docx-preview** (DOCX) + iframe (PDF) + `<img>` (images)
 
-## Installation
+## Démarrer en local
 
 ```bash
-# Installer les dépendances
 npm install
-
-# Copier le fichier d'environnement
-cp .env.example .env
-
-# Éditer .env si nécessaire
-# VITE_API_URL=http://localhost:5000
+cp .env.example .env          # VITE_API_URL=http://localhost:5000
+npm run dev                   # http://localhost:5173
 ```
 
-## Démarrage
+## Scripts npm
 
-### Mode développement
-```bash
-npm run dev
-```
+| Script | Rôle |
+|---|---|
+| `npm run dev` | Serveur Vite + HMR sur :5173 |
+| `npm run build` | Build de production → `dist/` |
+| `npm run build:check` | `tsc` (vérif types) **puis** build |
+| `npm run preview` | Sert le build localement |
+| `npm run type-check` | `tsc --noEmit` |
+| `npm run lint` | ESLint |
+| `npm test` / `test:watch` / `test:coverage` | Vitest |
 
-L'application démarre sur `http://localhost:5173`
+> `npm run build` ne bloque pas sur les types ; `type-check` remonte ~23 erreurs **préexistantes** dans des fichiers hérités (tolérées). Ne pas en introduire de nouvelles.
 
-### Mode production
-```bash
-# Build
-npm run build
-
-# Preview du build
-npm run preview
-```
-
-## Scripts disponibles
-
-- `npm run dev` - Démarre le serveur de développement avec Hot Module Replacement
-- `npm run build` - Compile l'application pour la production
-- `npm run preview` - Preview du build de production
-- `npm run lint` - Vérifie le code avec ESLint
-- `npm run type-check` - Vérifie les types TypeScript
-
-## Structure du projet
+## Structure
 
 ```
-frontend/
-├── public/              # Fichiers statiques
-├── src/
-│   ├── components/      # Composants réutilisables
-│   ├── pages/           # Pages de l'application
-│   │   ├── auth/        # Pages d'authentification
-│   │   ├── candidates/  # Pages candidats
-│   │   └── catalogues/  # Pages catalogues
-│   ├── layouts/         # Layouts (Auth, Main)
-│   ├── services/        # Services API
-│   ├── hooks/           # Custom hooks
-│   ├── store/           # Zustand stores
-│   ├── types/           # Types TypeScript
-│   ├── utils/           # Utilitaires
-│   ├── theme/           # Configuration MUI theme
-│   ├── App.tsx          # Composant principal
-│   └── main.tsx         # Point d'entrée
-├── index.html
-├── vite.config.ts
-└── package.json
+src/
+├── components/     # CVPreview (aperçu universel), map/ (cartes), video/, client/…
+├── pages/
+│   ├── auth/           # connexion admin
+│   ├── prospects/      # Candidats Potentiels (liste, fiche éditable, carte + rayon)
+│   ├── candidates/     # candidats actifs
+│   ├── catalogues/     # catalogues PDF
+│   ├── clients/        # gestion clients
+│   ├── client/         # portail client + marketplace (achat Stripe)
+│   ├── uniformes/      # gestion des uniformes
+│   └── autres-competances/  # recherche par compétence
+├── services/       # appels API (axios)
+├── store/          # authStore / clientAuthStore (init synchrone)
+├── types/ • utils/ • theme/
+├── App.tsx         # routes (lazy/Suspense)
+└── main.tsx
 ```
 
-## Routes de l'application
+## Routing & auth
 
-### Routes publiques
-- `/login` - Page de connexion
+- **Backoffice** (protégé) : `/dashboard`, `/prospects`, `/candidates`, `/catalogues`, `/clients`, `/uniformes`, `/autres-competances`… JWT admin.
+- **Portail client** (auth séparée) : connexion client + marketplace + détail catalogue.
+- L'état d'auth est **initialisé de façon synchrone** (`store/authStore.ts`, `clientAuthStore.ts`) → un **rafraîchissement de page ne déconnecte plus** l'utilisateur.
 
-### Routes protégées
-- `/dashboard` - Tableau de bord
-- `/candidates` - Liste des candidats
-- `/candidates/:id` - Détails d'un candidat
-- `/catalogues` - Liste des catalogues
-- `/clients` - Liste des clients (à venir)
-- `/settings` - Paramètres (à venir)
+## Composants clés
 
-## Authentification
-
-L'application supporte plusieurs méthodes d'authentification:
-
-1. **Email/Password** - Connexion classique
-2. **Google OAuth** - "Se connecter avec Google"
-3. **Microsoft OAuth** - "Se connecter avec Microsoft" (à venir)
-
-Les tokens JWT sont stockés dans localStorage et automatiquement ajoutés aux requêtes API.
-
-## State Management
-
-L'application utilise **Zustand** pour la gestion d'état:
-
-- `authStore` - Gestion de l'authentification (utilisateur, tokens)
-- Autres stores à venir selon les besoins
-
-## Gestion des données
-
-**React Query** est utilisé pour:
-- Requêtes API
-- Cache des données
-- Synchronisation
-- Rechargement automatique
-
-## Composants Material-UI
-
-L'application utilise Material-UI v5 avec:
-- Thème personnalisé XGUARD
-- Composants responsive
-- Mode dark (à venir)
-- Localisation française
-
-## Développement
-
-### Ajouter une nouvelle page
-
-1. Créer le fichier dans `src/pages/`
-2. Créer le composant
-3. Ajouter la route dans `App.tsx`
-4. Ajouter l'item dans le menu (si nécessaire) dans `MainLayout.tsx`
-
-### Ajouter un nouveau service API
-
-1. Créer le fichier dans `src/services/`
-2. Utiliser l'instance `api` from `services/api.ts`
-3. Définir les types dans `src/types/`
-
-### Ajouter un custom hook
-
-1. Créer le fichier dans `src/hooks/`
-2. Suivre la convention `use[NomDuHook]`
+- **`components/CVPreview.tsx`** — détecte le type par **octets magiques** (pas l'extension) via le proxy `/api/prospects/cv-proxy` : PDF (iframe), DOCX (docx-preview), images PNG/JPEG/GIF/WEBP/BMP (`<img>`), `.doc` (message + téléchargement).
+- **`components/map/ProspectsMapClustered.tsx` / `CandidatesMap.tsx`** — **1 marqueur par ville** (coords du backend) + **sélection par rayon** (popup → 10/25/50/100 km → coche les prospects de la zone → actions groupées).
+- **Marketplace client** — candidats anonymisés + vidéo ; coordonnées révélées **après achat Stripe**.
 
 ## Configuration Vite
 
-Le fichier `vite.config.ts` configure:
-- Plugin React
-- Alias de chemin (`@/*` → `src/*`)
-- Proxy API (`/api` → `http://localhost:5000`)
-- Port de développement (5173)
+`vite.config.ts` : plugin React, alias `@/*` → `src/*`, proxy `/api` → `http://localhost:5000`, port 5173. Composants lourds (cartes, libs) en **lazy loading**.
 
 ## Variables d'environnement
 
-Voir `.env.example` pour la liste des variables.
-
-Variables disponibles:
-- `VITE_API_URL` - URL de l'API backend
-- `VITE_APP_NAME` - Nom de l'application
-- `VITE_APP_VERSION` - Version
-
-**Note:** Toutes les variables doivent commencer par `VITE_` pour être accessibles dans le code.
-
-## Build de production
-
-```bash
-npm run build
-```
-
-Génère un build optimisé dans le dossier `dist/`:
-- HTML, CSS, JS minifiés
-- Code splitting automatique
-- Optimisation des assets
-- Source maps générés
+`VITE_API_URL` (URL du backend). Toute variable exposée au code doit être préfixée `VITE_`.
 
 ## Déploiement
 
-Le frontend peut être déployé sur:
-- **Google Cloud Storage** + Cloud CDN
-- **Vercel** (recommandé pour Vite)
-- **Netlify**
-- **Firebase Hosting**
-
-Voir la documentation de déploiement dans le dossier `docs/`.
-
-## Support
-
-Pour toute question, consultez:
-- `ARCHITECTURE_TALENTSECURE_MVP.md`
-- `PLAN_DEVELOPPEMENT_MVP.md`
-- Documentation MUI: https://mui.com
-- Documentation Vite: https://vitejs.dev
+Google Cloud Run (`talentsecure-frontend`) via Cloud Build sur push `main`. Détails : [README racine](../README.md).
