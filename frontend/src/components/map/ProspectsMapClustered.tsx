@@ -22,6 +22,20 @@ interface CityStats {
 
 interface ProspectsMapClusteredProps {
   onCityClick?: (city: string) => void;
+  /** Sélection par rayon : toutes les villes à ≤ radiusKm du centre. */
+  onRadiusSelect?: (cities: string[], center: string, radiusKm: number) => void;
+}
+
+/** Distance en km entre deux coords (haversine). */
+function distanceKm(a: [number, number], b: [number, number]): number {
+  const R = 6371;
+  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+  const dLng = ((b[1] - a[1]) * Math.PI) / 180;
+  const lat1 = (a[0] * Math.PI) / 180;
+  const lat2 = (b[0] * Math.PI) / 180;
+  const x =
+    Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
 }
 
 // Pastille ronde par ville : taille + couleur selon le nombre de prospects.
@@ -51,7 +65,7 @@ const makeCityIcon = (count: number) => {
   });
 };
 
-const ProspectsMapClustered: React.FC<ProspectsMapClusteredProps> = ({ onCityClick }) => {
+const ProspectsMapClustered: React.FC<ProspectsMapClusteredProps> = ({ onCityClick, onRadiusSelect }) => {
   const [cityStats, setCityStats] = useState<CityStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +110,15 @@ const ProspectsMapClustered: React.FC<ProspectsMapClusteredProps> = ({ onCityCli
   const unplaced = cityStats.filter((s) => s.lat == null || s.lng == null);
   const unplacedProspects = unplaced.reduce((sum, s) => sum + s.count, 0);
 
+  // Sélectionne toutes les villes placées à ≤ radiusKm du centre (inclus).
+  const handleRadius = (centerStat: CityStats, radiusKm: number) => {
+    const center: [number, number] = [centerStat.lat as number, centerStat.lng as number];
+    const cities = placed
+      .filter((s) => distanceKm(center, [s.lat as number, s.lng as number]) <= radiusKm)
+      .map((s) => s.city);
+    onRadiusSelect?.(cities, centerStat.city, radiusKm);
+  };
+
   return (
     <Box>
       <Paper elevation={2} sx={{ height: '500px', overflow: 'hidden' }}>
@@ -137,6 +160,26 @@ const ProspectsMapClustered: React.FC<ProspectsMapClusteredProps> = ({ onCityCli
                     >
                       Voir ces prospects
                     </Button>
+                  )}
+                  {onRadiusSelect && (
+                    <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid #eee' }}>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                        Sélectionner les villes autour (km) :
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        {[10, 25, 50, 100].map((km) => (
+                          <Button
+                            key={km}
+                            size="small"
+                            variant="outlined"
+                            sx={{ minWidth: 0, px: 1 }}
+                            onClick={() => handleRadius(stat, km)}
+                          >
+                            {km}
+                          </Button>
+                        ))}
+                      </Box>
+                    </Box>
                   )}
                 </Box>
               </Popup>

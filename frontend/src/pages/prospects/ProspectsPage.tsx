@@ -86,6 +86,7 @@ export default function ProspectsPage() {
   const [showMap, setShowMap] = useState(false);
   const [filters, setFilters] = useState({
     city: '',
+    cities: [] as string[], // sélection par rayon sur la carte (multi-villes)
     isContacted: '',
     isConverted: '',
     hasVideo: '',
@@ -203,6 +204,7 @@ export default function ProspectsPage() {
         limit: pageSize,
         search: search || undefined,
         city: filters.city || undefined,
+        cities: filters.cities.length > 0 ? filters.cities : undefined,
         isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
         isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
         hasVideo: filters.hasVideo === '' ? undefined : filters.hasVideo === 'true',
@@ -306,9 +308,32 @@ export default function ProspectsPage() {
 
   // Selection handlers
   const handleCityClick = (city: string) => {
-    setFilters({ ...filters, city });
+    setFilters({ ...filters, city, cities: [] });
     setShowMap(false); // Hide map after filtering
     enqueueSnackbar(`Filtré par ville: ${city}`, { variant: 'info' });
+  };
+
+  // Sélection par rayon sur la carte : filtre la liste sur ces villes ET coche
+  // tous leurs prospects (pour réutiliser les actions groupées existantes).
+  const handleRadiusSelect = async (cities: string[], center: string, radiusKm: number) => {
+    if (cities.length === 0) {
+      enqueueSnackbar('Aucune ville dans ce rayon', { variant: 'warning' });
+      return;
+    }
+    setFilters({ ...filters, city: '', cities });
+    setShowMap(false);
+    try {
+      const response = await prospectService.getProspects({ page: 1, limit: 10000, cities });
+      const ids = response.data.map((p: ProspectCandidate) => p.id);
+      setSelectedProspects(new Set(ids));
+      setSelectAllPages(false);
+      enqueueSnackbar(
+        `${ids.length} prospect${ids.length > 1 ? 's' : ''} sélectionné${ids.length > 1 ? 's' : ''} (${cities.length} ville${cities.length > 1 ? 's' : ''}, ${radiusKm} km autour de ${center})`,
+        { variant: 'success', autoHideDuration: 8000 },
+      );
+    } catch {
+      enqueueSnackbar('Erreur lors de la sélection par rayon', { variant: 'error' });
+    }
   };
 
   const handleSelectProspect = (id: string) => {
@@ -340,6 +365,7 @@ export default function ProspectsPage() {
         limit: 10000, // Large limit to get all
         search: search || undefined,
         city: filters.city || undefined,
+        cities: filters.cities.length > 0 ? filters.cities : undefined,
         isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
         isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
       });
@@ -369,6 +395,7 @@ export default function ProspectsPage() {
           limit: 10000,
           search: search || undefined,
           city: filters.city || undefined,
+          cities: filters.cities.length > 0 ? filters.cities : undefined,
           isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
           isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
         });
@@ -453,6 +480,7 @@ export default function ProspectsPage() {
           limit: 10000,
           search: search || undefined,
           city: filters.city || undefined,
+          cities: filters.cities.length > 0 ? filters.cities : undefined,
           isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
           isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
         });
@@ -582,7 +610,7 @@ export default function ProspectsPage() {
       <Collapse in={showMap}>
         <Box sx={{ mb: 3 }}>
           <Suspense fallback={renderLazyFallback(200)}>
-            <ProspectsMapClustered onCityClick={handleCityClick} />
+            <ProspectsMapClustered onCityClick={handleCityClick} onRadiusSelect={handleRadiusSelect} />
           </Suspense>
         </Box>
       </Collapse>
@@ -694,6 +722,7 @@ export default function ProspectsPage() {
                     {selectAllPages
                       ? `Tous les ${selectedProspects.size} prospects sélectionnés`
                       : `${selectedProspects.size} prospect${selectedProspects.size > 1 ? 's' : ''} sélectionné${selectedProspects.size > 1 ? 's' : ''}`}
+                    {filters.cities.length > 0 && ` · zone : ${filters.cities.length} ville${filters.cities.length > 1 ? 's' : ''}`}
                   </Typography>
                   <Button
                     variant="contained"
@@ -734,6 +763,7 @@ export default function ProspectsPage() {
                     onClick={() => {
                       setSelectedProspects(new Set());
                       setSelectAllPages(false);
+                      if (filters.cities.length > 0) setFilters({ ...filters, cities: [] });
                     }}
                   >
                     Annuler la sélection

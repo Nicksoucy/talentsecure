@@ -29,6 +29,7 @@ export const getProspects = async (
     const {
       search,
       city,
+      cities, // NOUVEAU : filtre multi-villes (sélection par rayon sur la carte)
       isContacted,
       isConverted,
       hasVideo,
@@ -63,7 +64,17 @@ export const getProspects = async (
       ];
     }
 
-    if (city) {
+    // Filtre multi-villes (sélection par rayon) : liste CSV → city IN [...].
+    // Prioritaire sur `city` (filtre simple). Villes normalisées (canonicalCity).
+    if (cities) {
+      const list = String(cities)
+        .split(',')
+        .map((c) => canonicalCity(c.trim()))
+        .filter(Boolean);
+      if (list.length > 0) {
+        where.city = { in: list };
+      }
+    } else if (city) {
       where.city = { contains: city as string, mode: 'insensitive' };
     }
 

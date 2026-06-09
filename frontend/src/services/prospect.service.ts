@@ -4,6 +4,7 @@ import { ProspectCandidate } from '@/types';
 interface GetProspectsParams {
   search?: string;
   city?: string;
+  cities?: string[]; // sélection par rayon (multi-villes) → envoyé en CSV
   isContacted?: boolean;
   isConverted?: boolean;
   hasVideo?: boolean;
@@ -31,7 +32,11 @@ export const prospectService = {
    * Get all prospects with filters
    */
   async getProspects(params?: GetProspectsParams): Promise<ProspectsResponse> {
-    const response = await api.get('/api/prospects', { params });
+    // `cities` (tableau) → CSV pour l'API.
+    const { cities, ...rest } = params || {};
+    const query: any = { ...rest };
+    if (cities && cities.length > 0) query.cities = cities.join(',');
+    const response = await api.get('/api/prospects', { params: query });
     return response.data;
   },
 

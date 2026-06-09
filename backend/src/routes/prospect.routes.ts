@@ -34,6 +34,7 @@ const uuidParam = z.object({
 const prospectQueryFilters = z.object({
   search: z.string().max(200).optional(),
   city: z.string().max(100).optional(),
+  cities: z.string().max(2000).optional(), // CSV de villes (sélection par rayon)
   isContacted: z.string().optional(),
   isConverted: z.string().optional(),
   hasVideo: z.string().optional(),
