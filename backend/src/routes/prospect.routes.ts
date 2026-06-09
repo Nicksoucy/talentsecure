@@ -9,6 +9,7 @@ import {
   markAsContacted,
   convertToCandidate,
   getProspectsByCity,
+  getProspectsMapPoints,
   getCitiesSuggestions,
   getProspectsSuggestions,
   getProspectsStats,
@@ -75,6 +76,14 @@ router.get('/stats/summary', getProspectsStats);
  * @access  Private (All authenticated users)
  */
 router.get('/stats/by-city', getProspectsByCity);
+
+/**
+ * @route   GET /api/prospects/stats/map-points
+ * @desc    Points carte individuels (groupés par secteur postal FSA, repli
+ *          centre-ville pour les prospects sans code postal)
+ * @access  Private (All authenticated users)
+ */
+router.get('/stats/map-points', getProspectsMapPoints);
 
 /**
  * @route   GET /api/prospects/stats/extraction

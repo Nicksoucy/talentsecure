@@ -8,6 +8,7 @@ import {
   useMap,
   useMapEvents,
 } from 'react-leaflet';
+import MarkerClusterGroup from 'react-leaflet-cluster';
 import {
   Box,
   Typography,
@@ -32,35 +33,34 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-interface CityStats {
-  city: string;
+/**
+ * Un point = tous les prospects partageant les mêmes coordonnées : centroïde du
+ * secteur postal (FSA, source 'postal') ou centre-ville (source 'city' = pas de
+ * code postal, position approximative).
+ */
+interface MapPoint {
+  lat: number;
+  lng: number;
   count: number;
-  lat: number | null;
-  lng: number | null;
+  source: string; // 'postal' | 'city'
+  label: string;
 }
 
 interface ProspectsMapClusteredProps {
-  onCityClick?: (city: string) => void;
-  /** Sélection par rayon-VILLE : toutes les villes à ≤ radiusKm du centre. */
-  onRadiusSelect?: (cities: string[], center: string, radiusKm: number) => void;
-  /** Recherche par rayon autour d'un POINT déposé/recherché sur la carte. */
-  onNearbySelect?: (center: { lat: number; lng: number }, radiusKm: number) => void;
+  /**
+   * Recherche par rayon autour d'un POINT (déposé, recherché, ou un point de la
+   * carte via « Voir ces prospects »). `label` décrit le point pour le message.
+   */
+  onNearbySelect?: (
+    center: { lat: number; lng: number },
+    radiusKm: number,
+    label?: string
+  ) => void;
 }
 
-/** Distance en km entre deux coords (haversine). */
-function distanceKm(a: [number, number], b: [number, number]): number {
-  const R = 6371;
-  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
-  const dLng = ((b[1] - a[1]) * Math.PI) / 180;
-  const lat1 = (a[0] * Math.PI) / 180;
-  const lat2 = (b[0] * Math.PI) / 180;
-  const x =
-    Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(x));
-}
-
-// Pastille ronde par ville : taille + couleur selon le nombre de prospects.
-const makeCityIcon = (count: number) => {
+// Pastille ronde : taille + couleur selon le nombre de CV. Les points
+// « centre-ville approx. » (sans code postal) sont orange pour les distinguer.
+const makeCountIcon = (count: number, source: string = 'postal') => {
   let dimension = 36;
   let color = '#2196f3';
   if (count >= 100) {
@@ -76,6 +76,7 @@ const makeCityIcon = (count: number) => {
     dimension = 40;
     color = '#64b5f6';
   }
+  if (source === 'city') color = '#fb8c00'; // position approximative (centre-ville)
 
   return L.divIcon({
     html: `<div style="background-color:${color};width:${dimension}px;height:${dimension}px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:13px;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">${count}</div>`,
@@ -86,6 +87,15 @@ const makeCityIcon = (count: number) => {
   });
 };
 
+// Icône d'un cluster : somme des CV des points regroupés (pas le nombre de
+// points). Le count de chaque marqueur voyage via l'option `prospectCount`.
+const clusterIcon = (cluster: any) => {
+  const total = cluster
+    .getAllChildMarkers()
+    .reduce((sum: number, m: any) => sum + (Number(m.options?.prospectCount) || 1), 0);
+  return makeCountIcon(total);
+};
+
 // Pastille distincte du point déposé/recherché (centre du rayon).
 const dropIcon = L.divIcon({
   html: `<div style="width:20px;height:20px;border-radius:50%;background:#e53935;border:3px solid white;box-shadow:0 0 0 2px #e53935,0 2px 6px rgba(0,0,0,0.4);"></div>`,
@@ -93,6 +103,9 @@ const dropIcon = L.divIcon({
   iconSize: [20, 20],
   iconAnchor: [10, 10],
 });
+
+/** Rayon « point exact » pour Voir ces prospects (les CV du secteur cliqué). */
+const SECTOR_RADIUS_KM = 0.05;
 
 /** Capte les clics sur la carte pour déposer/déplacer le point. */
 function ClickToPlace({ onPlace }: { onPlace: (p: [number, number]) => void }) {
@@ -115,12 +128,9 @@ function MapRefSetter({ mapRef }: { mapRef: React.MutableRefObject<L.Map | null>
 
 const RADIUS_PRESETS = [5, 10, 25, 50, 100];
 
-const ProspectsMapClustered: React.FC<ProspectsMapClusteredProps> = ({
-  onCityClick,
-  onRadiusSelect,
-  onNearbySelect,
-}) => {
-  const [cityStats, setCityStats] = useState<CityStats[]>([]);
+const ProspectsMapClustered: React.FC<ProspectsMapClusteredProps> = ({ onNearbySelect }) => {
+  const [points, setPoints] = useState<MapPoint[]>([]);
+  const [unplaced, setUnplaced] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -135,19 +145,20 @@ const ProspectsMapClustered: React.FC<ProspectsMapClusteredProps> = ({
   const [countLoading, setCountLoading] = useState(false);
 
   useEffect(() => {
-    const fetchCityStats = async () => {
+    const fetchPoints = async () => {
       try {
-        const response = await api.get('/api/prospects/stats/by-city');
-        setCityStats(response.data.data);
+        const response = await api.get('/api/prospects/stats/map-points');
+        setPoints(response.data.data.points);
+        setUnplaced(response.data.data.unplaced ?? 0);
       } catch (err) {
-        console.error('Error fetching prospect city stats:', err);
+        console.error('Error fetching prospect map points:', err);
         setError('Erreur lors du chargement des données');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchCityStats();
+    fetchPoints();
   }, []);
 
   // Compteur de CV dans le rayon (aperçu) : recalculé au changement point/rayon.
@@ -217,20 +228,6 @@ const ProspectsMapClustered: React.FC<ProspectsMapClusteredProps> = ({
 
   // Quebec center coordinates
   const quebecCenter: [number, number] = [46.8, -71.3];
-
-  // Une ville placée = a des coordonnées ; sinon en attente de géolocalisation.
-  const placed = cityStats.filter((s) => s.lat != null && s.lng != null);
-  const unplaced = cityStats.filter((s) => s.lat == null || s.lng == null);
-  const unplacedProspects = unplaced.reduce((sum, s) => sum + s.count, 0);
-
-  // Sélectionne toutes les villes placées à ≤ radiusKm du centre (inclus).
-  const handleRadius = (centerStat: CityStats, km: number) => {
-    const center: [number, number] = [centerStat.lat as number, centerStat.lng as number];
-    const cities = placed
-      .filter((s) => distanceKm(center, [s.lat as number, s.lng as number]) <= km)
-      .map((s) => s.city);
-    onRadiusSelect?.(cities, centerStat.city, km);
-  };
 
   return (
     <Box>
@@ -362,71 +359,65 @@ const ProspectsMapClustered: React.FC<ProspectsMapClusteredProps> = ({
             </>
           )}
 
-          {placed.map((stat) => (
-            <Marker
-              key={stat.city}
-              position={[stat.lat as number, stat.lng as number]}
-              icon={makeCityIcon(stat.count)}
-            >
-              <Popup>
-                <Box>
-                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
-                    {stat.city}
-                  </Typography>
-                  <Chip
-                    label={`${stat.count} prospect${stat.count > 1 ? 's' : ''}`}
-                    color="primary"
-                    size="small"
-                    sx={{ mb: 1 }}
-                  />
-                  {onCityClick && (
-                    <Button
-                      variant="contained"
+          {/* Points par secteur postal (FSA) — regroupés en clusters au dézoom,
+              dont l'icône AFFICHE LA SOMME des CV (pas le nombre de points). */}
+          <MarkerClusterGroup
+            chunkedLoading
+            showCoverageOnHover={false}
+            maxClusterRadius={60}
+            disableClusteringAtZoom={12}
+            iconCreateFunction={clusterIcon}
+          >
+            {points.map((p) => (
+              <Marker
+                key={`${p.lat}|${p.lng}`}
+                position={[p.lat, p.lng]}
+                icon={makeCountIcon(p.count, p.source)}
+                {...({ prospectCount: p.count } as any)}
+              >
+                <Popup>
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                      {p.label}
+                    </Typography>
+                    <Chip
+                      label={`${p.count} CV`}
+                      color="primary"
                       size="small"
-                      fullWidth
-                      onClick={() => onCityClick(stat.city)}
-                    >
-                      Voir ces prospects
-                    </Button>
-                  )}
-                  {onRadiusSelect && (
-                    <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid #eee' }}>
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                        Sélectionner les villes autour (km) :
-                      </Typography>
-                      <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        {[10, 25, 50, 100].map((km) => (
-                          <Button
-                            key={km}
-                            size="small"
-                            variant="outlined"
-                            sx={{ minWidth: 0, px: 1 }}
-                            onClick={() => handleRadius(stat, km)}
-                          >
-                            {km}
-                          </Button>
-                        ))}
-                      </Box>
-                    </Box>
-                  )}
-                </Box>
-              </Popup>
-            </Marker>
-          ))}
+                      sx={{ mb: 1 }}
+                    />
+                    {onNearbySelect && (
+                      <Button
+                        variant="contained"
+                        size="small"
+                        fullWidth
+                        onClick={() =>
+                          onNearbySelect({ lat: p.lat, lng: p.lng }, SECTOR_RADIUS_KM, p.label)
+                        }
+                      >
+                        Voir ces prospects
+                      </Button>
+                    )}
+                  </Box>
+                </Popup>
+              </Marker>
+            ))}
+          </MarkerClusterGroup>
         </MapContainer>
       </Paper>
 
-      {unplaced.length > 0 && (
-        <Box sx={{ mt: 1, px: 1 }}>
+      <Box sx={{ mt: 1, px: 1, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+        <Typography variant="caption" color="text.secondary">
+          Pastille bleue = position au code postal (secteur) · orange = centre-ville
+          approximatif (CV sans code postal)
+        </Typography>
+        {unplaced > 0 && (
           <Typography variant="caption" color="text.secondary">
-            {unplaced.length} ville{unplaced.length > 1 ? 's' : ''} non encore géolocalisée
-            {unplaced.length > 1 ? 's' : ''} ({unplacedProspects} prospect
-            {unplacedProspects > 1 ? 's' : ''}) — localisation automatique en cours, réessayez
-            dans un instant : {unplaced.slice(0, 15).map((s) => `${s.city} (${s.count})`).join(', ')}
-            {unplaced.length > 15 ? '…' : ''}
+            {unplaced} CV non géolocalisé{unplaced > 1 ? 's' : ''} (adresse manquante ou non
+            reconnue)
           </Typography>
-        </Box>
-      )}
+        )}
+      </Box>
     </Box>
   );
 };

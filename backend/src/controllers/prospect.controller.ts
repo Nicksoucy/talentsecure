@@ -11,11 +11,12 @@ import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
 const PROSPECT_STATS_CACHE_KEY = 'prospects:stats';
 const PROSPECT_CITY_CACHE_KEY = 'prospects:city-stats';
+const PROSPECT_MAPPOINTS_CACHE_KEY = 'prospects:map-points';
 
 const invalidateProspectCaches = () =>
   invalidateCaches({
     listPrefix: PROSPECT_LIST_CACHE_PREFIX,
-    statKeys: [PROSPECT_STATS_CACHE_KEY, PROSPECT_CITY_CACHE_KEY],
+    statKeys: [PROSPECT_STATS_CACHE_KEY, PROSPECT_CITY_CACHE_KEY, PROSPECT_MAPPOINTS_CACHE_KEY],
   });
 
 /**
@@ -743,6 +744,96 @@ export const getProspectsByCity = async (
     };
 
     await setCache(PROSPECT_CITY_CACHE_KEY, payload, 300);
+
+    res.json(payload);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Points carte « réels » : prospects regroupés par coordonnées individuelles —
+ * centroïde du secteur postal (FSA, source 'postal') ou centre-ville pour ceux
+ * sans code postal (source 'city'). Un point = tous les prospects partageant
+ * exactement ces coordonnées. Remplace l'agrégat par ville sur la carte admin.
+ */
+export const getProspectsMapPoints = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const cached = await getCache<{ success: boolean; data: any }>(
+      PROSPECT_MAPPOINTS_CACHE_KEY
+    );
+    if (cached) {
+      return res.json(cached);
+    }
+
+    const prospects = await prisma.prospectCandidate.findMany({
+      where: { isDeleted: false, isConverted: false },
+      select: { lat: true, lng: true, geocodeSource: true, postalCode: true, city: true },
+    });
+
+    interface PointGroup {
+      lat: number;
+      lng: number;
+      count: number;
+      source: string;
+      fsa: string | null;
+      cities: Map<string, number>;
+    }
+    const groups = new Map<string, PointGroup>();
+    let unplaced = 0;
+
+    for (const p of prospects) {
+      if (p.lat == null || p.lng == null) {
+        unplaced++;
+        continue;
+      }
+      const key = `${p.lat}|${p.lng}`;
+      let g = groups.get(key);
+      if (!g) {
+        g = {
+          lat: p.lat,
+          lng: p.lng,
+          count: 0,
+          source: p.geocodeSource || 'city',
+          fsa: null,
+          cities: new Map(),
+        };
+        groups.set(key, g);
+      }
+      g.count++;
+      const ville = canonicalCity(p.city || '');
+      if (ville) g.cities.set(ville, (g.cities.get(ville) || 0) + 1);
+      if (!g.fsa && p.postalCode) {
+        const f = p.postalCode.trim().toUpperCase().slice(0, 3);
+        if (/^[A-Z]\d[A-Z]$/.test(f)) g.fsa = f;
+      }
+    }
+
+    const points = [...groups.values()]
+      .map((g) => {
+        // Ville dominante du groupe → libellé lisible du point.
+        let topCity = '';
+        let topN = 0;
+        for (const [c, n] of g.cities) {
+          if (n > topN) {
+            topCity = c;
+            topN = n;
+          }
+        }
+        const label =
+          g.source === 'postal'
+            ? `Secteur ${g.fsa ?? '?'}${topCity ? ` · ${topCity}` : ''}`
+            : `${topCity || 'Ville inconnue'} (centre-ville approx.)`;
+        return { lat: g.lat, lng: g.lng, count: g.count, source: g.source, label };
+      })
+      .sort((a, b) => b.count - a.count);
+
+    const payload = { success: true, data: { points, unplaced } };
+    await setCache(PROSPECT_MAPPOINTS_CACHE_KEY, payload, 300);
 
     res.json(payload);
   } catch (error) {

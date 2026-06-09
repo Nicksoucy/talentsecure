@@ -308,39 +308,14 @@ export default function ProspectsPage() {
     }
   };
 
-  // Selection handlers
-  const handleCityClick = (city: string) => {
-    setFilters({ ...filters, city, cities: [], near: null });
-    setShowMap(false); // Hide map after filtering
-    enqueueSnackbar(`Filtré par ville: ${city}`, { variant: 'info' });
-  };
-
-  // Sélection par rayon sur la carte : filtre la liste sur ces villes ET coche
-  // tous leurs prospects (pour réutiliser les actions groupées existantes).
-  const handleRadiusSelect = async (cities: string[], center: string, radiusKm: number) => {
-    if (cities.length === 0) {
-      enqueueSnackbar('Aucune ville dans ce rayon', { variant: 'warning' });
-      return;
-    }
-    setFilters({ ...filters, city: '', cities, near: null });
-    setShowMap(false);
-    try {
-      const response = await prospectService.getProspects({ page: 1, limit: 10000, cities });
-      const ids = response.data.map((p: ProspectCandidate) => p.id);
-      setSelectedProspects(new Set(ids));
-      setSelectAllPages(false);
-      enqueueSnackbar(
-        `${ids.length} prospect${ids.length > 1 ? 's' : ''} sélectionné${ids.length > 1 ? 's' : ''} (${cities.length} ville${cities.length > 1 ? 's' : ''}, ${radiusKm} km autour de ${center})`,
-        { variant: 'success', autoHideDuration: 8000 },
-      );
-    } catch {
-      enqueueSnackbar('Erreur lors de la sélection par rayon', { variant: 'error' });
-    }
-  };
-
-  // Recherche par rayon autour d'un POINT déposé/recherché sur la carte : filtre
-  // la liste sur ce rayon ET coche tous les CV trouvés (actions groupées).
-  const handleNearbySelect = async (center: { lat: number; lng: number }, radiusKm: number) => {
+  // Recherche par rayon autour d'un POINT de la carte (déposé, recherché, ou
+  // « Voir ces prospects » d'un secteur) : filtre la liste sur ce rayon ET
+  // coche tous les CV trouvés (actions groupées). `label` décrit le point.
+  const handleNearbySelect = async (
+    center: { lat: number; lng: number },
+    radiusKm: number,
+    label?: string,
+  ) => {
     const near = { lat: center.lat, lng: center.lng, radiusKm };
     setFilters({ ...filters, city: '', cities: [], near });
     setShowMap(false);
@@ -350,8 +325,11 @@ export default function ProspectsPage() {
       const ids = response.data.map((p: ProspectCandidate) => p.id);
       setSelectedProspects(new Set(ids));
       setSelectAllPages(false);
+      const s = ids.length > 1 ? 's' : '';
       enqueueSnackbar(
-        `${ids.length} CV sélectionné${ids.length > 1 ? 's' : ''} dans un rayon de ${radiusKm} km`,
+        label
+          ? `${ids.length} CV sélectionné${s} — ${label}`
+          : `${ids.length} CV sélectionné${s} dans un rayon de ${radiusKm} km`,
         { variant: 'success', autoHideDuration: 8000 },
       );
     } catch {
@@ -636,7 +614,7 @@ export default function ProspectsPage() {
       <Collapse in={showMap}>
         <Box sx={{ mb: 3 }}>
           <Suspense fallback={renderLazyFallback(200)}>
-            <ProspectsMapClustered onCityClick={handleCityClick} onRadiusSelect={handleRadiusSelect} onNearbySelect={handleNearbySelect} />
+            <ProspectsMapClustered onNearbySelect={handleNearbySelect} />
           </Suspense>
         </Box>
       </Collapse>
@@ -749,6 +727,9 @@ export default function ProspectsPage() {
                       ? `Tous les ${selectedProspects.size} prospects sélectionnés`
                       : `${selectedProspects.size} prospect${selectedProspects.size > 1 ? 's' : ''} sélectionné${selectedProspects.size > 1 ? 's' : ''}`}
                     {filters.cities.length > 0 && ` · zone : ${filters.cities.length} ville${filters.cities.length > 1 ? 's' : ''}`}
+                    {filters.near && (filters.near.radiusKm >= 1
+                      ? ` · zone : rayon ${filters.near.radiusKm} km`
+                      : ' · zone : un secteur de la carte')}
                   </Typography>
                   <Button
                     variant="contained"
