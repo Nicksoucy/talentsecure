@@ -1,684 +1,247 @@
-﻿# TalentSecure Platform
+# TalentSecure
 
-Plateforme complÃ¨te de gestion et distribution de candidats agents de sÃ©curitÃ© avec portail client intÃ©grÃ©.
+Plateforme full-stack de recrutement et de distribution d'agents de sécurité pour **XGuard**, avec backoffice (RH/admin), portail client et marketplace de candidats.
 
-## Vue d'ensemble
+> Recrutement : capture de candidatures (formulaire GHL + CV + vidéo), qualification, conversion en candidats, catalogues partagés aux clients, achat de candidats par Stripe, gestion des uniformes, et visualisation géographique du bassin de talents.
 
-TalentSecure est une solution full-stack qui permet de:
-- GÃ©rer une banque de talents (candidats et prospects)
-- CrÃ©er des catalogues personnalisÃ©s pour les clients
-- Partager les catalogues via un portail client sÃ©curisÃ©
-- Visualiser la distribution gÃ©ographique des candidats en temps rÃ©el
-- GÃ©rer les demandes de recrutement
+---
 
-## Stack Technique
+## Stack technique
 
-### Backend
-- **Node.js 20.16.0+** avec TypeScript (IMPORTANT: Node 18 n'est plus supporté)
-- **Express.js** pour l'API REST
-- **Prisma** comme ORM
-- **PostgreSQL** pour la base de donnÃ©es
-- **Passport.js** pour l'authentification (JWT + OAuth Google/Microsoft)
-- **Cloudflare R2** pour le stockage de fichiers (CVs, vidÃ©os, PDFs)
-- **PDFKit** pour la gÃ©nÃ©ration de catalogues PDF
-- **OpenAI GPT-4** pour l'extraction intelligente de compÃ©tences depuis les CVs
+**Backend** — `backend/`
+- Node.js 20 + TypeScript, Express (API REST)
+- Prisma ORM → **Neon PostgreSQL** (serverless, connection pooling)
+- Auth : Passport (JWT access 7 j + refresh 30 j) ; portail client séparé
+- Stockage fichiers : **Cloudflare R2** (CV, vidéos, PDF) — URLs signées
+- Paiements : **Stripe Checkout** (achat de candidats)
+- Intégration **GoHighLevel** (GHL) : formulaires, SMS, contacts (PIT token)
+- Génération PDF (pdfkit / pdf-lib), géocodage **Nominatim** (OpenStreetMap)
+- Cache **Redis** optionnel (`config/cache.ts`)
 
-### Frontend
-- **React 18** avec TypeScript
-- **Vite** comme build tool
-- **Material-UI (MUI)** pour l'interface utilisateur
-- **React Query** pour la gestion des donnÃ©es
-- **Zustand** pour le state management
-- **React Router** pour le routing
-- **Leaflet** pour les cartes interactives
-- **Notistack** pour les notifications
+**Frontend** — `frontend/`
+- React 18 + TypeScript, Vite
+- Material-UI (MUI), React Query, Zustand (auth store), React Router
+- **Leaflet** / react-leaflet (cartes), Notistack (toasts)
+- Aperçu CV : `docx-preview` (DOCX) + iframe PDF + `<img>` (images)
 
-## Architecture du Projet
+**Déploiement** — Google Cloud Run (`northamerica-northeast1`), build auto via Cloud Build sur push `main`.
+
+---
+
+## Architecture du dépôt
 
 ```
 talentsecure/
-â”œâ”€â”€ backend/                 # API Node.js/Express
-â”‚   â”œâ”€â”€ src/
-â”‚   â”‚   â”œâ”€â”€ config/         # Configuration (database, passport, storage)
-â”‚   â”‚   â”œâ”€â”€ controllers/    # ContrÃ´leurs mÃ©tier
-â”‚   â”‚   â”œâ”€â”€ routes/         # DÃ©finition des routes API
-â”‚   â”‚   â”œâ”€â”€ services/       # Services (PDF, upload, email)
-â”‚   â”‚   â”œâ”€â”€ middleware/     # Middleware (auth, validation)
-â”‚   â”‚   â”œâ”€â”€ utils/          # Utilitaires (jwt, password, etc.)
-â”‚   â”‚   â””â”€â”€ scripts/        # Scripts de migration et maintenance
-â”‚   â””â”€â”€ prisma/
-â”‚       â””â”€â”€ schema.prisma   # SchÃ©ma de base de donnÃ©es
-â”‚
-â””â”€â”€ frontend/               # Application React
-    â”œâ”€â”€ src/
-    â”‚   â”œâ”€â”€ components/     # Composants rÃ©utilisables
-    â”‚   â”‚   â”œâ”€â”€ admin/     # Composants admin
-    â”‚   â”‚   â””â”€â”€ client/    # Composants portail client
-    â”‚   â”œâ”€â”€ pages/          # Pages de l'application
-    â”‚   â”‚   â”œâ”€â”€ auth/      # Pages d'authentification
-    â”‚   â”‚   â”œâ”€â”€ candidates/ # Gestion des candidats
-    â”‚   â”‚   â”œâ”€â”€ catalogues/ # Gestion des catalogues
-    â”‚   â”‚   â”œâ”€â”€ clients/    # Gestion des clients
-    â”‚   â”‚   â””â”€â”€ client/     # Portail client
-    â”‚   â”œâ”€â”€ services/       # Services API
-    â”‚   â”œâ”€â”€ store/          # State management (Zustand)
-    â”‚   â””â”€â”€ utils/          # Utilitaires
-    â””â”€â”€ public/             # Assets statiques
+├── backend/
+│   ├── src/
+│   │   ├── config/        # env (fail-fast), database, cache, logger, storage
+│   │   ├── controllers/   # endpoints (orchestration)
+│   │   ├── services/      # logique métier (candidate, cv, geocode, stripe, sms…)
+│   │   ├── routes/        # routes + validation Zod
+│   │   ├── middleware/    # auth, validation, upload
+│   │   ├── utils/         # cityNormalize, phone, cacheInvalidation, ghlFetch…
+│   │   ├── data/          # quebecCities.ts (seed des villes QC)
+│   │   └── scripts/       # ops (seeds, admin) + archive/ (jetables)
+│   └── prisma/
+│       ├── schema.prisma
+│       └── migrations/    # SQL appliqués via `prisma db execute` (voir + bas)
+└── frontend/
+    └── src/
+        ├── components/    # CVPreview, map/, video/, client/…
+        ├── pages/         # prospects, candidates, catalogues, clients, client/(portail), uniformes…
+        ├── services/      # appels API
+        └── store/         # authStore / clientAuthStore (init synchrone)
 ```
 
-## FonctionnalitÃ©s Principales
+---
 
-### 1. Administration (Backoffice)
+## Fonctionnalités
 
-#### Gestion des Candidats
-- CrÃ©ation et modification de profils candidats
-- Upload de CVs (stockage Cloudflare R2)
-- Upload de vidÃ©os d'entrevue (stockage Cloudflare R2)
-- Gestion des langues, expÃ©riences, certifications
-- SystÃ¨me de notation globale
-- Statuts: NOUVEAU, EN_TRAITEMENT, DISPONIBLE, EN_RECHERCHE, EMBAUCHE, ARCHIVE
+### Backoffice (RH / Admin)
 
-#### Gestion des Prospects
-- Importation depuis LinkedIn
-- Ã‰valuation et qualification
-- Migration vers candidats actifs
-- Cartes gÃ©ographiques interactives
+- **Candidats** : profils complets (langues, expériences, certifications, BSP, véhicule…), notation, CV + vidéo (R2), édition, archivage, conversion depuis un prospect.
+- **Candidats Potentiels (prospects)** : capture via formulaire GHL (CV + vidéo 30s + réponses), liste filtrable (ville, vidéo, contacté, dates), **fiche éditable** (corriger ville/adresse/contact d'après le CV), aperçu CV + vidéo inline, marquer contacté, export CSV, **export ZIP avec les CV**, transfert vers un client.
+- **Unicité de contact** : une personne ne vit que dans **une** section (Employé / Candidat / Prospect). À la création, détection de doublon (email/téléphone, 6 sens) + dialogue pour **déplacer** le contact (soft-delete réversible, `contact-move.service`).
+- **Catalogues** : sélection ordonnée de candidats, génération PDF (CV fusionnés, téléchargés en parallèle), partage par lien, restriction de contenu.
+- **Compétences (Autre Compétence)** : extraction depuis CV + recherche par compétence, batch. *(NB : voir « Limitations connues » — l'extraction PDF est à réparer.)*
+- **Uniformes** : inventaire, remise avec signature, retours, lavage, rapports.
 
-#### Gestion des Clients
-- CrÃ©ation de profils clients
-- Configuration des accÃ¨s portail
-- GÃ©nÃ©ration de mots de passe sÃ©curisÃ©s
-- Historique des catalogues
+### Portail client + Marketplace
 
-#### Gestion des Catalogues
-- CrÃ©ation de catalogues personnalisÃ©s
-- SÃ©lection de candidats avec ordre personnalisable
-- GÃ©nÃ©ration automatique de PDF
-- SystÃ¨me de paiement et restriction de contenu
-- Partage sÃ©curisÃ© via lien unique
-- Tracking des vues et interactions
+- Auth client séparée (JWT). Dashboard des catalogues assignés.
+- **Marketplace** anonymisé (prénom, ville, note client, certifs, **vidéo**) — jamais de CV ni d'adresse complète avant achat.
+- **Achat par Stripe Checkout** → webhook (source de vérité, idempotent) crée `ClientPurchase` ; après achat, les **coordonnées** (nom complet + téléphone/email) sont révélées.
 
-#### Gestion des CompÃ©tences et Extraction IA ðŸ†•
-- **Extraction automatique de compÃ©tences depuis CVs**
-  - IntÃ©gration OpenAI GPT-4 pour analyse intelligente
-  - Extraction de compÃ©tences techniques et soft skills
-  - Ã‰valuation automatique du niveau d'expÃ©rience
-  - Support pour formats PDF et TXT
+### Système de villes & cartes géographiques (récent, important)
 
-- **Interface "Autres CompÃ©tences"**
-  - Recherche de candidats par compÃ©tences spÃ©cifiques
-  - Statistiques en temps rÃ©el (candidats, compÃ©tences uniques, liens)
-  - Traitement batch pour plusieurs candidats/prospects
-  - Auto-conversion prospect â†’ candidat lors de l'extraction
+La saisie de ville est libre et incohérente (accents, casse, tirets, fautes, suffixes « , QC », villes étrangères). Tout un système la fiabilise :
 
-- **Base de donnÃ©es de compÃ©tences**
-  - Catalogue de 95+ compÃ©tences prÃ©-identifiÃ©es
-  - SystÃ¨me de liens candidat-compÃ©tence
-  - Recherche et filtrage avancÃ©s
+- **Normalisation + auto-correction** — `backend/src/utils/cityNormalize.ts` :
+  - `normalizeCityKey` : minuscules, sans accents, unifie séparateurs (`- ' .`), `St/Ste → Saint/Sainte`, retire suffixes (`, QC`, `Québec`, `Canada`, `City`), répare le mojibake.
+  - `resolveCanonical` / `canonicalCity` : correspondance exacte (seed/alias) **puis approximative (Levenshtein)** contre le seed des villes QC (gardes : longueur ≥ 5, même 1ʳᵉ lettre, distance ≤ 1–2, match unique). Ex. `Longueuill → Longueuil`, `Monreal → Montréal`. Appliquée **à la saisie** (createProspect/updateProspect, webhook GHL, survey-sync, contact-move) et au **regroupement carte**.
+- **Géocodage automatique** — `backend/src/services/cityGeocode.service.ts` + table `city_geocodes` :
+  - Résolution `seed (src/data/quebecCities.ts) → cache DB → Nominatim` en arrière-plan (throttle 1 req/s).
+  - Requête **structurée limitée au Québec** (state=Québec) + filtre lieu + bornes QC → les villes hors-QC/étrangères ne sont **pas** placées.
+  - `classifyProvince(city)` : QC / ON / autre-CA / étranger (pour le tri des dossiers).
+- **Cartes** (`components/map/ProspectsMapClustered.tsx`, `CandidatesMap.tsx`) : **1 marqueur par ville** (coords venant du backend `*/stats/by-city` qui renvoie `{city,count,lat,lng}`), légende des villes en cours de géolocalisation.
+- **Sélection par rayon** : dans le popup d'une ville, boutons 10/25/50/100 km → sélectionne toutes les villes dans le rayon (haversine) → filtre la liste (`cities` IN) + coche les prospects → actions groupées (export, transfert, contacté).
 
-- **Optimisation des appels OpenAI**
-  - Calcul d'un checksum SHA-256 pour réutiliser les réponses OpenAI lorsque le CV n'a pas changé et éviter les appels payants inutiles.
-  - Une file d'attente limite le nombre d'appels simultanés et applique un backoff automatique.
-- **Exports CSV/Excel/PDF**
-  - Les admins peuvent lancer /api/exports/skills/{format} ou utiliser la page /exports côté frontend pour générer des fichiers alignés avec les filtres actifs.
-  - Les exports incluent les coordonnées candidates, le niveau, la confiance et l'origine de chaque compétence.
+### Aperçu CV universel — `frontend/src/components/CVPreview.tsx`
 
-#### Wishlists
-- Gestion de listes de souhaits pour les clients
-- Association de candidats favoris
-- Suivi des prÃ©fÃ©rences clients
+Détection par **octets magiques** (pas l'extension) via le proxy `/api/prospects/cv-proxy` (contourne le CORS + le « soft-redirect » GHL) :
+- **PDF** → iframe ; **DOCX** → `docx-preview` ; **Images** (PNG/JPEG/GIF/WEBP/BMP) → `<img>` ; **.doc** (Word 97-2003) → message + bouton Télécharger.
 
-### 2. Portail Client
+### Capture GHL (formulaire vidéo)
 
-#### Authentification
-- Connexion sÃ©curisÃ©e (email/password)
-- JWT avec refresh tokens
-- Authentification sÃ©parÃ©e du backoffice
+`survey-sync.service.ts` + webhook : récupère CV + vidéo + réponses depuis GHL, télécharge dans R2 (gestion du **soft-redirect** GHL : 200 + `text/plain` « Redirecting to… »), upsert le prospect (avec normalisation de ville).
 
-#### Dashboard Client
-- **Vue d'ensemble des catalogues personnalisÃ©s**
-  - Liste des catalogues assignÃ©s
-  - Statut et nombre de candidats
-  - Indicateurs de paiement
+---
 
-- **Carte des Candidats Potentiels** ðŸ†•
-  - Visualisation en temps rÃ©el de tous les candidats disponibles
-  - Deux vues: Zones (cercles) et Marqueurs (clusters)
-  - Regroupement par ville avec comptage
-  - DiffÃ©renciation visuelle (bleu = potentiels, vert = assignÃ©s)
-  - SystÃ¨me de demande intÃ©grÃ©
+## Sécurité & performance (mises en place)
 
-#### DÃ©tails des Catalogues
-- **Informations des candidats**
-  - Profils dÃ©taillÃ©s (langues, expÃ©riences, certifications)
-  - Notes et Ã©valuations
-  - DisponibilitÃ©s
+**Sécurité**
+- `config/env.ts` : **fail-fast** au boot si `JWT_SECRET` / `JWT_REFRESH_SECRET` (≥ 32 c) / `DATABASE_URL` manquent.
+- CORS : **liste blanche** d'origines exactes (plus de joker `localhost:*`).
+- Stripe : le prix enregistré = **`session.amount_total`** (montant réellement encaissé).
+- Logs : plus de **PII** (nom/email/tél/adresse) dans les logs du webhook.
+- Pas de mass-assignment : `updateProspect` whiteliste les champs.
 
-- **MÃ©dias**
-  - Lecteur vidÃ©o intÃ©grÃ© pour les entrevues
-  - TÃ©lÃ©chargement de CVs
-  - GÃ©nÃ©ration de PDF du catalogue
+> À faire (non implémentés) : retirer les **tokens GHL en dur** dans 4 services + rotation (S1), durcir le **webhook GHL** qui peut « fail-open » si le secret n'est pas configuré (S2), validation upload par magic-bytes (S3), URLs signées plus courtes (S4), rate-limit login (S6).
 
-- **Carte GÃ©ographique des Candidats** ðŸ†•
-  - Visualisation des candidats du catalogue par ville
-  - Toggle entre vue cercles et clusters
-  - Popups interactifs
-  - Bouton "Demander ces candidats"
+**Performance**
+- Cloud Run : `--memory=1Gi --cpu=1 --concurrency=40 --max-instances=10 --timeout=600 --min-instances=1`.
+- Cache (Redis si activé) sur les stats lourdes ; invalidation mutualisée (`utils/cacheInvalidation.ts`).
+- Index composites (`prospect_candidates`) ; exports plafonnés ; téléchargements CV de catalogue en parallèle.
 
-#### SystÃ¨me de Restriction de Contenu
-- Catalogues gratuits vs payants
-- Masquage des informations sensibles (email, tÃ©lÃ©phone, CV, vidÃ©o)
-- Indicateurs visuels de contenu verrouillÃ©
+---
 
-### 3. Cartes GÃ©ographiques Interactives ðŸ†•
+## Installation (développement local)
 
-#### Technologies
-- **Leaflet** pour le rendu de cartes
-- **react-leaflet** pour l'intÃ©gration React
-- **react-leaflet-cluster** pour le regroupement de marqueurs
-- Tuiles OpenStreetMap (style CARTO)
-
-#### Types de Cartes
-
-##### Carte Zones (Cercles)
-- Cercles proportionnels au nombre de candidats
-- Code couleur selon la densitÃ©
-  - Candidats assignÃ©s: Vert (5) â†’ Jaune (10) â†’ Orange (20) â†’ Rouge (20+)
-  - Candidats potentiels: Bleu clair â†’ Bleu foncÃ© selon la densitÃ©
-- Rayon adaptatif
-
-##### Carte Clusters (Marqueurs)
-- Marqueurs individuels par ville
-- Clustering automatique lors du zoom/dÃ©zoom
-- IcÃ´nes colorÃ©es:
-  - Vert: Candidats assignÃ©s
-  - Bleu: Candidats potentiels
-
-#### Interactions
-- Popups avec informations dÃ©taillÃ©es
-- Bouton "Demander ces candidats"
-- Dialog de demande avec formulaire
-- Notifications de confirmation
-
-## Installation et Configuration
-
-### PrÃ©requis
-- Node.js 18+
-- PostgreSQL 14+
-- Compte Cloudflare R2 (ou S3-compatible)
-
-### Backend
+**Prérequis** : Node.js **20+**, accès à une base PostgreSQL (Neon), compte R2 (les creds R2/Stripe/GHL sont surtout côté Cloud Run).
 
 ```bash
+# Backend
 cd backend
-
-# Installer les dÃ©pendances
 npm install
+cp .env.example .env        # éditer (voir variables ci-dessous)
+npx prisma generate
+npm run dev                 # http://localhost:5000
 
-# Configuration
-cp .env.example .env
-# Ã‰diter .env avec vos valeurs
-
-# Base de donnÃ©es
-npm run prisma:generate
-npm run prisma:migrate
-
-# DÃ©marrer en dÃ©veloppement
-npm run dev
-```
-
-### Frontend
-
-```bash
+# Frontend
 cd frontend
-
-# Installer les dÃ©pendances
 npm install
-
-# Configuration
-cp .env.example .env
-# Ã‰diter .env avec l'URL du backend
-
-# DÃ©marrer en dÃ©veloppement
-npm run dev
+npm run dev                 # http://localhost:5173
 ```
 
-## Variables d'Environnement
+### Variables d'environnement
 
-### Backend (.env)
+**Backend** (`backend/.env`)
 ```env
-# Database
-DATABASE_URL="postgresql://user:password@localhost:5432/talentsecure"
+# Requis (sinon l'app refuse de démarrer)
+DATABASE_URL="postgresql://…@…neon.tech/…?sslmode=require"
+JWT_SECRET="… (≥ 32 caractères)"
+JWT_REFRESH_SECRET="… (≥ 32 caractères)"
 
-# JWT
-JWT_SECRET="your-super-secret-key"
-JWT_REFRESH_SECRET="your-refresh-secret"
+# Stockage R2 (sur Cloud Run en prod)
+USE_R2=true
+R2_ACCOUNT_ID="…"
+R2_ACCESS_KEY_ID="…"
+R2_SECRET_ACCESS_KEY="…"
+R2_BUCKET_NAME="talentsecure-videos"
 
-# Cloudflare R2
-CLOUDFLARE_ACCOUNT_ID="your-account-id"
-CLOUDFLARE_ACCESS_KEY_ID="your-access-key"
-CLOUDFLARE_SECRET_ACCESS_KEY="your-secret-key"
-R2_BUCKET_NAME="talentsecure-files"
-R2_PUBLIC_URL="https://files.yourdomain.com"
+# GoHighLevel
+GHL_PIT_TOKEN="pit-…"
+GHL_LOCATION_ID="…"
+GOHIGHLEVEL_WEBHOOK_SECRET="…"      # secret du webhook formulaire
 
-# OpenAI (pour extraction de compÃ©tences)
-OPENAI_API_KEY="sk-your-openai-api-key"
+# Stripe (marketplace)
+STRIPE_SECRET_KEY="sk_…"
+STRIPE_WEBHOOK_SECRET="whsec_…"
+CLIENT_APP_URL="https://…"          # portail client (success/cancel)
 
-# OAuth (optionnel)
-GOOGLE_CLIENT_ID="your-google-client-id"
-GOOGLE_CLIENT_SECRET="your-google-client-secret"
-MICROSOFT_CLIENT_ID="your-microsoft-client-id"
-MICROSOFT_CLIENT_SECRET="your-microsoft-client-secret"
-
-# Frontend URL
+# Optionnels
+CACHE_ENABLED=true                  # + REDIS_URL ou REDIS_HOST/REDIS_PORT
+OPENAI_API_KEY="sk-…"               # extraction de compétences (cf. limitations)
 FRONTEND_URL="http://localhost:5173"
-
-# Server
 PORT=5000
 NODE_ENV=development
 ```
 
-### Frontend (.env)
+**Frontend** (`frontend/.env`)
 ```env
 VITE_API_URL=http://localhost:5000
 ```
 
-## Contributeurs
-
-DÃ©veloppÃ© avec Claude Code (Anthropic)
-
 ---
 
-## Gestion des Prospects
+## Base de données & migrations
 
-### FonctionnalitÃ©s
-
-Le systÃ¨me de gestion des prospects permet de :
-- **Importer automatiquement** des prospects depuis Google Sheets
-- **Visualiser sur une carte** interactive avec clustering
-- **Filtrer** par ville, statut de contact, statut de conversion
-- **SÃ©lectionner en masse** (style Gmail - sÃ©lection multi-pages)
-- **Exporter en CSV** les prospects sÃ©lectionnÃ©s
-- **Marquer comme contactÃ©s** en masse
-- **Exporter vers GoHighLevel** (CRM)
-
-### Import depuis Google Sheets
-
-Configuration requise dans `backend/.env` :
-```bash
-GOOGLE_SHEETS_API_KEY=votre-clÃ©-api
-```
-
-Pour importer les prospects :
-```bash
-cd backend
-npx tsx src/scripts/import-from-google-sheet.ts
-```
-
-Le script :
-- âœ… RÃ©cupÃ¨re les donnÃ©es du Google Sheet public
-- âœ… Normalise les noms de villes (MontrÃ©al, QuÃ©bec, etc.)
-- âœ… DÃ©tecte et ignore les doublons (email ou tÃ©lÃ©phone)
-- âœ… Parse les dates de soumission
-- âœ… Associe automatiquement les CVs si disponibles
-
-### Export vers GoHighLevel
-
-Configuration requise dans `backend/.env` :
-```bash
-GOHIGHLEVEL_API_KEY=votre-clÃ©-api
-GOHIGHLEVEL_LOCATION_ID=votre-location-id
-```
-
-L'export se fait via l'interface web (bouton "Exporter vers GoHighLevel") ou via API :
-```bash
-POST /api/prospects/export-to-gohighlevel
-Content-Type: application/json
-
-{
-  "prospectIds": ["id1", "id2", "id3"]
-}
-```
-
-### Carte Interactive
-
-La carte des prospects (`/prospects`) affiche :
-- ðŸ—ºï¸ Clustering automatique par densitÃ©
-- ðŸ“ Marqueurs bleus pour les prospects
-- ðŸ”¢ Badges avec nombre de prospects par ville
-- ðŸ–±ï¸ Clic sur ville â†’ filtre la liste automatiquement
-- ðŸ” Zoom pour voir dÃ©tails individuels
-
-### SÃ©lection Multi-Pages (Gmail-style)
-
-1. **Cocher les prospects** sur la page actuelle
-2. Quand toute la page est sÃ©lectionnÃ©e, voir le message :
-   *"20 prospects sÃ©lectionnÃ©s sur cette page. SÃ©lectionner tous les 50 prospects de QuÃ©bec?"*
-3. **Cliquer "SÃ©lectionner tout"** pour sÃ©lectionner ALL prospects matching les filtres
-4. **Exporter CSV** ou **Marquer comme contactÃ©s** en masse
-
-### Export CSV
-
-Format du CSV :
-- PrÃ©nom, Nom
-- Email, TÃ©lÃ©phone
-- Ville, Province, Code Postal, Adresse
-- CV (Oui/Non)
-- Date de soumission
-- ContactÃ© (Oui/Non)
-- Converti (Oui/Non)
-- Notes
-
-Encodage : UTF-8 avec BOM (support accents franÃ§ais)
-
----
-
-## DÃ©pannage
-
-### Erreur: "Cannot connect to database"
-
-**Solution:**
-- VÃ©rifier que PostgreSQL est dÃ©marrÃ©
-- VÃ©rifier `DATABASE_URL` dans backend/.env
-- Tester la connexion: `psql -U user -d talentsecure`
-
-### Erreur: "Module not found"
-
-**Solution:**
-```bash
-# Backend
-cd backend && npm install
-
-# Frontend
-cd frontend && npm install
-```
-
-### Port dÃ©jÃ  utilisÃ©
-
-**Solution:**
-```bash
-# Changer le port dans backend/.env
-PORT=5001
-
-# Ou dans frontend/vite.config.ts
-server: { port: 5174 }
-```
-
-### Erreur Google OAuth
-
-**Solution:**
-- VÃ©rifier `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` dans backend/.env
-- VÃ©rifier que le callback URL est autorisÃ© dans Google Cloud Console
-- Callback URL: `http://localhost:5000/api/auth/google/callback`
-
----
-
-## Roadmap
-
-### Phase 1 - MVP (10 semaines) âœ… En cours
-- Setup & Architecture
-- CRUD Candidats
-- Import Excel
-- Recherche avancÃ©e
-- GÃ©nÃ©ration PDF
-- DÃ©ploiement
-
-### Phase 2 - Portal Client (8 semaines)
-- Login clients
-- Visualisation catalogues
-- VidÃ©os streamÃ©es
-- Demande placement
-- Urgency button
-- E-signature contrats
-
-### Phase 3 - Features AvancÃ©es (12 semaines)
-- Background checks (Checkr API)
-- Video interviews (Twilio)
-- AI Matching
-- Analytics avancÃ©es
-- Shift management
-- Multi-language
-
-### Phase 4 - Mobile + Marketplace (15 semaines)
-- Apps iOS + Android
-- Guard Pools
-- Urgency button like Uber
-- API publique
-- Payroll integration
-
-### Phase 5+ - SaaS Multi-Tenant
-- Autres agences peuvent s'inscrire
-- Marketplace inter-agences
-- Revenus: 500K-1M$/an
-
----
-
-## Support
-
-### Questions techniques
-- Consulter les README dans `backend/` et `frontend/`
-- Consulter la documentation complÃ¨te
-- Stack Overflow pour questions gÃ©nÃ©rales
-
-### Bugs
-- GitHub Issues (si repo crÃ©Ã©)
-- Documentation d'erreurs dans `docs/`
-
-### Questions business
-- Ã‰quipe XGUARD Security
-
----
-
-## Contribuer
-
-### Git Workflow
+⚠️ **L'historique de migration Neon est divergent.** On n'utilise **jamais** `prisma migrate deploy`.
+Pour appliquer un changement de schéma :
 
 ```bash
-# 1. CrÃ©er une branche pour la feature
-git checkout -b feature/nom-de-la-feature
-
-# 2. Faire vos modifications
-# ... coder ...
-
-# 3. Commit
-git add .
-git commit -m "feat: description de la feature"
-
-# 4. Push
-git push origin feature/nom-de-la-feature
-
-# 5. CrÃ©er une Pull Request
+# 1. Éditer prisma/schema.prisma
+# 2. Écrire le SQL (idempotent) dans prisma/migrations/<nom>.sql
+#    ex. CREATE TABLE IF NOT EXISTS …  /  CREATE INDEX IF NOT EXISTS …
+# 3. Appliquer sur Neon :
+npx prisma db execute --file prisma/migrations/<nom>.sql --schema prisma/schema.prisma
+# 4. Régénérer le client :
+npx prisma generate
 ```
 
-### Convention de commits
-
-- `feat:` - Nouvelle fonctionnalitÃ©
-- `fix:` - Correction de bug
-- `docs:` - Documentation
-- `style:` - Formatage
-- `refactor:` - Refactoring
-- `test:` - Tests
-- `chore:` - TÃ¢ches diverses
+Tables notables récentes : `city_geocodes` (cache géocodage), index composites `prospect_candidates`.
 
 ---
 
-## Mises Ã  jour et instructions
+## Scripts utiles (`backend/src/scripts/`)
 
-Ces points couvrent les changements livrÃ©s en novembre 2025. Merci de les parcourir avant tout nouveau dÃ©veloppement :
+Lancés à la main via `npx ts-node src/scripts/<x>.ts` (exclus du build). Les scripts jetables sont rangés dans `scripts/archive/`.
 
-1. **Gestion d'erreurs & validation** : consultez `backend/src/middleware` et `backend/src/utils` pour les nouveaux helpers (`ApiError`, sanitisation XSS, validation Zod). Toute nouvelle route doit s'appuyer dessus.
+| Script | Rôle |
+|---|---|
+| `seed-common-skills.ts`, `seed-city-pricing.ts`, `seed-uniforms.ts` | Seeds |
+| `create-admin.ts`, `reset-admin.ts`, `set-client-password.ts` | Comptes |
+| `normalize-prospect-cities-v2.ts` / `normalize-candidate-cities.ts` | Nettoyage des villes (auto-correction → canonique) |
+| `regeocode-cities.ts` | Re-géocode le cache `city_geocodes` (logique stricte QC) |
+| `classify-out-of-quebec.ts` | Classe prospects+candidats par province + scan CV PDF → **CSV de révision** (lecture seule) |
+| `remove-approved.ts` | Soft-delete **réversible** des dossiers hors-QC marqués RETIRER (dry-run par défaut, `--apply`) |
 
-2. **Cache Redis optionnel** : la configuration se trouve dans `backend/src/config/cache.ts` et `backend/src/utils/cache.ts`. Activez-le via `CACHE_ENABLED=true` et les variables `REDIS_*` dans `.env`. Sans Redis, l'API fonctionne en mode sans cache.
-
-3. **Optimisation des fichiers** : `backend/src/services/image.service.ts` compresse automatiquement les images uploadÃ©es; les vidÃ©os restent gÃ©rÃ©es par `video.service.ts`.
-
-4. **Frontend lazy loading & validation** : `frontend/src/App.tsx` utilise dÃ©sormais `React.lazy`/`Suspense` et `frontend/src/validation/candidate.ts` centralise la validation des formulaires candidats. Les composants lourds (Leaflet maps, formulaires d'Ã©valuation) sont chargÃ©s Ã  la demande.
-
-5. **Extraction IA de compÃ©tences** ðŸ†• : le systÃ¨me d'extraction automatique de compÃ©tences utilise OpenAI GPT-4 via `backend/src/services/cv-extraction.service.ts` et `backend/src/controllers/skills.controller.ts`. L'interface se trouve dans `frontend/src/pages/autres-competances/AutresCompetancesPage.tsx`. **Important** : lors de l'extraction sur un prospect, le systÃ¨me le convertit automatiquement en candidat pour permettre la liaison des compÃ©tences.
-
-6. **Conversion prospects â†’ candidats** ðŸ†• : une page dÃ©diÃ©e `frontend/src/pages/prospects/ProspectConvertPage.tsx` permet de convertir un prospect en candidat avec formulaire d'Ã©valuation complet. La route est `/prospects/:id/convert`.
-
-7. **Validation des dates** : les champs de dates utilisent dÃ©sormais un helper `optionalDateString` dans `candidate.ts` qui transforme les chaÃ®nes vides en `null` avant validation pour Ã©viter les erreurs de format.
-
-8. **Sanitization XSS** : temporairement dÃ©sactivÃ©e dans `server.ts` en attendant l'installation du package `xss`. Ã€ rÃ©activer aprÃ¨s installation de la dÃ©pendance manquante.
-
-En cas de doute, revenez Ã  cette section : elle indique oÃ¹ lire le code mis Ã  jour.
-
-## Licence
-
-MIT - XGUARD Security
+**Nettoyage hors-Québec** : on garde **QC + Ontario**, on retire (soft-delete) les autres provinces + l'étranger, avec un **filet CV** (un code postal QC/ON trouvé dans le CV PDF « sauve » le dossier). Réversible (`isDeleted`).
 
 ---
 
-## Contact
+## Déploiement & production
 
-**XGUARD Security**
-Email: contact@xguard.com
-Web: www.xguard.security
+- **Backend** : Cloud Run `talentsecure` → `https://talentsecure-572017163659.northamerica-northeast1.run.app`
+- **Frontend** : Cloud Run `talentsecure-frontend` → `https://talentsecure-frontend-572017163659.northamerica-northeast1.run.app`
+- **DB** : Neon PostgreSQL · **Fichiers** : Cloudflare R2
 
----
+**Workflow** : `git push origin main` → Cloud Build (back + front), build Docker Node 20, `npm ci && npm run build`, deploy Cloud Run (~3-5 min). Les secrets (R2, Stripe, GHL) vivent **uniquement sur Cloud Run**, jamais dans le `.env` local.
 
-**Construisons quelque chose d'incroyable ! ðŸ’ªðŸš€**
-
-
-
-
-
----
-
-## 🚀 Déploiement et Production
-
-### Architecture Cloud
-
-**Backend:** Google Cloud Run (northamerica-northeast1)
-- Service: `talentsecure`
-- URL: `https://talentsecure-572017163659.northamerica-northeast1.run.app`
-- Auto-scaling: 0-10 instances
-- Node.js 20 Alpine
-
-**Frontend:** Google Cloud Run (northamerica-northeast1)
-- Service: `talentsecure-frontend`
-- URL: `https://talentsecure-frontend-572017163659.northamerica-northeast1.run.app`
-- React + Vite build
-
-**Base de données:** Neon PostgreSQL (Azure East US 2)
-- Serverless PostgreSQL
-- Connection pooling activé
-
-**Stockage:** Cloudflare R2
-- Vidéos, CVs, PDFs de catalogues
-- CDN global
-
-### Workflow de déploiement automatique
-
-1. **Push sur `main`** déclenche automatiquement:
-   - Cloud Build Trigger backend
-   - Cloud Build Trigger frontend
-
-2. **Build steps:**
-   - Fetch code from GitHub
-   - Build Docker image (Node 20)
-   - Compile TypeScript
-   - Run `npm ci && npm run build`
-   - Push to Artifact Registry
-   - Deploy to Cloud Run
-   - **Total: ~3-4 minutes**
-
-3. **Health checks:**
-   - Backend: `/health` endpoint
-   - Container doit écouter sur `$PORT` (8080)
-   - Timeout: 300s
-
-### Variables d'environnement Cloud Run
-
-**Backend (talentsecure):**
-```
-NODE_ENV=production
-DATABASE_URL=postgresql://...
-JWT_SECRET=...
-JWT_REFRESH_SECRET=...
-FRONTEND_URL=https://talentsecure-frontend-572017163659.northamerica-northeast1.run.app
-USE_R2=true
-R2_ACCOUNT_ID=...
-R2_ACCESS_KEY_ID=...
-R2_SECRET_ACCESS_KEY=...
-R2_BUCKET_NAME=talentsecure-videos
-GOHIGHLEVEL_WEBHOOK_SECRET=...
-```
-
-### Développement local → Production
-
-**📖 Voir le guide complet:** [DEVELOPMENT_WORKFLOW.md](./DEVELOPMENT_WORKFLOW.md)
-
-**Résumé rapide:**
-
+**Vérifier / déboguer**
 ```bash
-# 1. Développer en local
-npm run dev  # Backend ET Frontend
-
-# 2. Tester localement
-npm run build  # DOIT passer sans erreurs!
-
-# 3. Commit et push
-git add .
-git commit -m "feat: ma nouvelle feature"
-git push origin main
-
-# 4. Cloud Build déploie automatiquement
-# Surveiller: https://console.cloud.google.com/cloud-build/builds?project=talentsecure
-
-# 5. Vérifier en production
-curl https://talentsecure-572017163659.northamerica-northeast1.run.app/health
+# Logs : https://console.cloud.google.com/logs/query?project=talentsecure
+#   resource.labels.service_name="talentsecure"  severity>=ERROR
 ```
 
-### Debugging en production
-
-**Logs Cloud Run:**
-```
-https://console.cloud.google.com/logs/query?project=talentsecure
-```
-
-**Filtres utiles:**
-```
-resource.type="cloud_run_revision"
-resource.labels.service_name="talentsecure"
-severity>=ERROR
-```
-
-**Erreurs communes:**
-- "Container failed to start" → Vérifier DATABASE_URL et TypeScript errors
-- "Module not found" → Vérifier les imports et dépendances
-- "EBADENGINE" → Node version (doit être 20+)
-
-### Rollback en cas de problème
-
-```bash
-# Via Cloud Console:
-1. Aller sur Cloud Run → talentsecure
-2. Onglet "Revisions"
-3. Trouver la dernière version qui marchait
-4. Cliquer "..." → "Manage Traffic"
-5. Mettre 100% du traffic sur l'ancienne revision
-
-# Via gcloud:
-gcloud run services update-traffic talentsecure \
-  --to-revisions=talentsecure-00235-xyz=100 \
-  --region=northamerica-northeast1
-```
-
-### Monitoring
-
-**Métriques à surveiller:**
-- Request count
-- Request latency (p50, p95, p99)
-- Error rate
-- Container instances (auto-scaling)
-- Cold start time
-
-**Alertes configurées:**
-- Error rate > 5%
-- Latency p99 > 5s
-- Container crashes
+**Rollback** : Cloud Run → service → Revisions → router 100 % du trafic vers une révision saine.
 
 ---
 
+## Limitations connues / TODO
+
+- **`cv-extraction.service.ts` cassé** : utilise l'ancienne API `pdf-parse` (`pdfParse(buffer)`) ; or `pdf-parse` v2 exporte une **classe `PDFParse`** (`new PDFParse({data}).getText()`). → l'extraction de compétences des CV PDF échoue. À corriger.
+- Sécurité : items S1 (secrets GHL en dur + rotation), S2 (webhook fail-open), S3/S4/S6 (cf. section Sécurité) non faits.
+- Auto-correction de villes : ne corrige que les fautes de villes **présentes dans le seed** (les grandes villes QC) ; une faute sur une petite ville hors-seed reste non corrigée (à ajouter au seed/alias).
+- Sélection carte : par **ville** (les prospects n'ont pas de coordonnées individuelles).
+
+---
+
+## Conventions
+
+- Commits : `feat:`, `fix:`, `refactor:`, `perf:`, `sec:`, `docs:`, `chore:`.
+- Travailler sur `main` puis push (Cloud Build déploie). Vérifier `npx tsc --noEmit` (back + front) avant de pousser.
+
+---
+
+**XGuard Security** — plateforme TalentSecure.
