@@ -86,7 +86,8 @@ export default function ProspectsPage() {
   const [showMap, setShowMap] = useState(false);
   const [filters, setFilters] = useState({
     city: '',
-    cities: [] as string[], // sélection par rayon sur la carte (multi-villes)
+    cities: [] as string[], // sélection par rayon-VILLE sur la carte (multi-villes)
+    near: null as { lat: number; lng: number; radiusKm: number } | null, // rayon autour d'un point
     isContacted: '',
     isConverted: '',
     hasVideo: '',
@@ -205,6 +206,7 @@ export default function ProspectsPage() {
         search: search || undefined,
         city: filters.city || undefined,
         cities: filters.cities.length > 0 ? filters.cities : undefined,
+        near: filters.near || undefined,
         isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
         isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
         hasVideo: filters.hasVideo === '' ? undefined : filters.hasVideo === 'true',
@@ -308,7 +310,7 @@ export default function ProspectsPage() {
 
   // Selection handlers
   const handleCityClick = (city: string) => {
-    setFilters({ ...filters, city, cities: [] });
+    setFilters({ ...filters, city, cities: [], near: null });
     setShowMap(false); // Hide map after filtering
     enqueueSnackbar(`Filtré par ville: ${city}`, { variant: 'info' });
   };
@@ -320,7 +322,7 @@ export default function ProspectsPage() {
       enqueueSnackbar('Aucune ville dans ce rayon', { variant: 'warning' });
       return;
     }
-    setFilters({ ...filters, city: '', cities });
+    setFilters({ ...filters, city: '', cities, near: null });
     setShowMap(false);
     try {
       const response = await prospectService.getProspects({ page: 1, limit: 10000, cities });
@@ -333,6 +335,27 @@ export default function ProspectsPage() {
       );
     } catch {
       enqueueSnackbar('Erreur lors de la sélection par rayon', { variant: 'error' });
+    }
+  };
+
+  // Recherche par rayon autour d'un POINT déposé/recherché sur la carte : filtre
+  // la liste sur ce rayon ET coche tous les CV trouvés (actions groupées).
+  const handleNearbySelect = async (center: { lat: number; lng: number }, radiusKm: number) => {
+    const near = { lat: center.lat, lng: center.lng, radiusKm };
+    setFilters({ ...filters, city: '', cities: [], near });
+    setShowMap(false);
+    setPage(1);
+    try {
+      const response = await prospectService.getProspects({ page: 1, limit: 10000, near });
+      const ids = response.data.map((p: ProspectCandidate) => p.id);
+      setSelectedProspects(new Set(ids));
+      setSelectAllPages(false);
+      enqueueSnackbar(
+        `${ids.length} CV sélectionné${ids.length > 1 ? 's' : ''} dans un rayon de ${radiusKm} km`,
+        { variant: 'success', autoHideDuration: 8000 },
+      );
+    } catch {
+      enqueueSnackbar('Erreur lors de la recherche par rayon', { variant: 'error' });
     }
   };
 
@@ -366,6 +389,7 @@ export default function ProspectsPage() {
         search: search || undefined,
         city: filters.city || undefined,
         cities: filters.cities.length > 0 ? filters.cities : undefined,
+        near: filters.near || undefined,
         isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
         isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
       });
@@ -396,6 +420,7 @@ export default function ProspectsPage() {
           search: search || undefined,
           city: filters.city || undefined,
           cities: filters.cities.length > 0 ? filters.cities : undefined,
+          near: filters.near || undefined,
           isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
           isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
         });
@@ -481,6 +506,7 @@ export default function ProspectsPage() {
           search: search || undefined,
           city: filters.city || undefined,
           cities: filters.cities.length > 0 ? filters.cities : undefined,
+          near: filters.near || undefined,
           isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
           isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
         });
@@ -610,7 +636,7 @@ export default function ProspectsPage() {
       <Collapse in={showMap}>
         <Box sx={{ mb: 3 }}>
           <Suspense fallback={renderLazyFallback(200)}>
-            <ProspectsMapClustered onCityClick={handleCityClick} onRadiusSelect={handleRadiusSelect} />
+            <ProspectsMapClustered onCityClick={handleCityClick} onRadiusSelect={handleRadiusSelect} onNearbySelect={handleNearbySelect} />
           </Suspense>
         </Box>
       </Collapse>
@@ -763,7 +789,7 @@ export default function ProspectsPage() {
                     onClick={() => {
                       setSelectedProspects(new Set());
                       setSelectAllPages(false);
-                      if (filters.cities.length > 0) setFilters({ ...filters, cities: [] });
+                      if (filters.cities.length > 0 || filters.near) setFilters({ ...filters, cities: [], near: null });
                     }}
                   >
                     Annuler la sélection
@@ -853,7 +879,18 @@ export default function ProspectsPage() {
                       </TableCell>
                       <TableCell>{prospect.email || 'N/A'}</TableCell>
                       <TableCell>{prospect.phone}</TableCell>
-                      <TableCell>{prospect.city || 'N/A'}</TableCell>
+                      <TableCell>
+                        {prospect.city || 'N/A'}
+                        {prospect.distanceKm != null && (
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            color="primary"
+                            label={`${prospect.distanceKm} km`}
+                            sx={{ ml: 0.5, height: 20 }}
+                          />
+                        )}
+                      </TableCell>
                       <TableCell>
                         {prospect.cvUrl ? (
                           <Chip

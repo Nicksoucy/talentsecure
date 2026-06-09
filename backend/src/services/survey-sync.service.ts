@@ -3,6 +3,7 @@ import { downloadGhlFile, detectExtension, isLikelyVideo } from '../utils/ghlFet
 import { uploadBufferToR2 } from '../services/r2.service';
 import { findMatchingEmployee, findMatchingCandidate } from '../utils/candidateMatch';
 import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
+import { resolveProspectCoordinates } from './cityGeocode.service';
 import logger from '../config/logger';
 
 /**
@@ -223,6 +224,15 @@ export async function syncOneSubmission(sub: any): Promise<{ status: string; det
   };
   if (cvStoragePath) baseData.cvStoragePath = cvStoragePath;
   if (videoStoragePath) { baseData.videoStoragePath = videoStoragePath; baseData.videoUploadedAt = videoUploadedAt; }
+
+  // Géocodage : code postal (FSA) d'abord, sinon centre de la ville saisie.
+  const geo = await resolveProspectCoordinates({ postalCode: baseData.postalCode, city: baseData.city });
+  if (geo) {
+    baseData.lat = geo.lat;
+    baseData.lng = geo.lng;
+    baseData.geocodedAt = new Date();
+    baseData.geocodeSource = geo.source;
+  }
 
   if (existing) {
     await prisma.prospectCandidate.update({ where: { id: existing.id }, data: baseData });

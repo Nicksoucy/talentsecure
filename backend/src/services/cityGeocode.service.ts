@@ -10,6 +10,7 @@ import axios from 'axios';
 import { prisma } from '../config/database';
 import logger from '../config/logger';
 import { quebecCitiesCoordinates } from '../data/quebecCities';
+import { quebecFSACentroids } from '../data/quebecFSACentroids';
 import { normalizeCityKey, seedCanonicalName } from '../utils/cityNormalize';
 
 // Seed normalisé (clé normalisée → coords) construit une fois au chargement.
@@ -245,4 +246,58 @@ export async function resolveCityCoordinates(
   }
 
   return result;
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Géocodage PAR PROSPECT (recherche par point + rayon). « Code postal d'abord » :
+// code postal → FSA (3 premiers car.) → centroïde FSA QC (offline, instantané) ;
+// sinon repli sur le centre de la ville saisie. Voir quebecFSACentroids.ts.
+// ───────────────────────────────────────────────────────────────────────────
+
+export type GeocodeSource = 'postal' | 'city';
+export interface ProspectGeocode {
+  lat: number;
+  lng: number;
+  source: GeocodeSource;
+}
+
+/** FSA (3 premiers car.) normalisé d'un code postal canadien, sinon null. */
+export function postalToFSA(postalCode?: string | null): string | null {
+  if (!postalCode) return null;
+  const fsa = postalCode.replace(/\s+/g, '').toUpperCase().slice(0, 3);
+  return /^[A-Z]\d[A-Z]$/.test(fsa) ? fsa : null;
+}
+
+/** Coordonnées du centroïde FSA d'un code postal (offline, QC), sinon null. */
+export function resolvePostalCoordinates(
+  postalCode?: string | null
+): { lat: number; lng: number } | null {
+  const fsa = postalToFSA(postalCode);
+  if (!fsa) return null;
+  const hit = quebecFSACentroids[fsa];
+  return hit ? { lat: hit.lat, lng: hit.lng } : null;
+}
+
+/**
+ * Coordonnées d'un prospect : code postal (FSA, précis) d'abord, sinon centre de
+ * la ville saisie. Retourne null si rien ne résout (ni code postal QC ni ville
+ * géocodable) → le prospect ne sera pas placé sur la carte / absent du « nearby ».
+ * Note : pour une ville jamais vue, resolveCityCoordinates lance un géocodage en
+ * arrière-plan et renvoie null pour l'instant ; un futur backfill la résoudra.
+ */
+export async function resolveProspectCoordinates(input: {
+  postalCode?: string | null;
+  city?: string | null;
+}): Promise<ProspectGeocode | null> {
+  const byPostal = resolvePostalCoordinates(input.postalCode);
+  if (byPostal) return { ...byPostal, source: 'postal' };
+
+  const city = (input.city || '').trim();
+  if (city) {
+    const coords = (await resolveCityCoordinates([city])).get(city);
+    if (coords && coords.lat != null && coords.lng != null) {
+      return { lat: coords.lat, lng: coords.lng, source: 'city' };
+    }
+  }
+  return null;
 }

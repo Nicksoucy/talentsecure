@@ -227,6 +227,10 @@ export interface ProspectCandidate {
   postalCode?: string;
   country?: string;
   fullAddress?: string;
+  lat?: number | null;
+  lng?: number | null;
+  geocodeSource?: string | null; // 'postal' | 'city'
+  distanceKm?: number; // présent seulement en mode recherche par rayon
   cvUrl?: string;
   cvStoragePath?: string;
   videoUrl?: string;

@@ -4,7 +4,8 @@ import { getCache, setCache } from '../config/cache';
 import { buildCacheKey } from '../utils/cache';
 import { invalidateCaches } from '../utils/cacheInvalidation';
 import { findContactEverywhere } from '../utils/candidateMatch';
-import { resolveCityCoordinates } from '../services/cityGeocode.service';
+import { resolveCityCoordinates, resolveProspectCoordinates } from '../services/cityGeocode.service';
+import { haversineKm, boundingBox } from '../utils/geo';
 import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
 
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
@@ -18,6 +19,94 @@ const invalidateProspectCaches = () =>
   });
 
 /**
+ * Filtre Prisma commun aux listes de prospects (search, ville, rayon-ville,
+ * contacté, vidéo, dates…). Factorisé pour être partagé entre la liste paginée
+ * et la recherche par rayon géographique.
+ */
+function buildProspectWhere(query: any): any {
+  const {
+    search, city, cities, isContacted, isConverted, hasVideo,
+    includeProcessed, submissionDateStart, submissionDateEnd,
+  } = query;
+
+  const where: any = {
+    isDeleted: false,
+    isConverted: false, // exclut les prospects convertis (surchargeable ci-dessous)
+  };
+
+  if (search) {
+    where.OR = [
+      { firstName: { contains: String(search), mode: 'insensitive' } },
+      { lastName: { contains: String(search), mode: 'insensitive' } },
+      { email: { contains: String(search), mode: 'insensitive' } },
+      { phone: { contains: String(search), mode: 'insensitive' } },
+    ];
+  }
+
+  // Filtre multi-villes (sélection par rayon-VILLE) : CSV → city IN [...].
+  // Prioritaire sur `city` (filtre simple). Villes normalisées (canonicalCity).
+  if (cities) {
+    const list = String(cities).split(',').map((c) => canonicalCity(c.trim())).filter(Boolean);
+    if (list.length > 0) where.city = { in: list };
+  } else if (city) {
+    where.city = { contains: String(city), mode: 'insensitive' };
+  }
+
+  if (isContacted !== undefined) where.isContacted = isContacted === 'true';
+  if (isConverted !== undefined) where.isConverted = isConverted === 'true';
+
+  // Filtre vidéo : avec / sans vidéo de présentation
+  if (hasVideo === 'true') where.videoStoragePath = { not: null };
+  else if (hasVideo === 'false') where.videoStoragePath = null;
+
+  // Filtrage dynamique : masquer/afficher les prospects déjà traités (skills)
+  if (includeProcessed === 'false') where.skills = { none: {} };
+
+  // Plage de date de soumission
+  if (submissionDateStart || submissionDateEnd) {
+    where.submissionDate = {};
+    if (submissionDateStart) where.submissionDate.gte = new Date(String(submissionDateStart));
+    if (submissionDateEnd) {
+      const end = new Date(String(submissionDateEnd));
+      end.setHours(23, 59, 59, 999); // inclure toute la journée de fin
+      where.submissionDate.lte = end;
+    }
+  }
+
+  return where;
+}
+
+/**
+ * Prospects géolocalisés à ≤ radiusKm d'un point, triés du plus proche au plus
+ * loin (distanceKm ajouté, arrondi à 0,1 km). Pas de PostGIS : pré-filtre
+ * bounding-box (index lat/lng) puis haversine exact en Node. `where` = filtres
+ * déjà construits via buildProspectWhere (ils se composent avec la recherche).
+ */
+async function findProspectsNear(
+  where: any,
+  center: { lat: number; lng: number },
+  radiusKm: number
+) {
+  const box = boundingBox(center, radiusKm);
+  const geoWhere = {
+    ...where,
+    lat: { gte: box.latMin, lte: box.latMax },
+    lng: { gte: box.lngMin, lte: box.lngMax },
+  };
+  const rows = await prisma.prospectCandidate.findMany({
+    where: geoWhere,
+    include: { _count: { select: { skills: true } } },
+  });
+  return rows
+    .map((p) => ({
+      ...p,
+      distanceKm: Math.round(haversineKm(center, { lat: p.lat as number, lng: p.lng as number }) * 10) / 10,
+    }))
+    .filter((p) => p.distanceKm <= radiusKm)
+    .sort((a, b) => a.distanceKm - b.distanceKm);
+}
+
+/**
  * Get all prospect candidates with filters
  */
 export const getProspects = async (
@@ -27,14 +116,6 @@ export const getProspects = async (
 ) => {
   try {
     const {
-      search,
-      city,
-      cities, // NOUVEAU : filtre multi-villes (sélection par rayon sur la carte)
-      isContacted,
-      isConverted,
-      hasVideo,
-      submissionDateStart,
-      submissionDateEnd,
       page = 1,
       limit = 10,
       sortBy = 'submissionDate',
@@ -49,72 +130,32 @@ export const getProspects = async (
       return res.json(cachedResponse);
     }
 
-    // Build filter conditions
-    const where: any = {
-      isDeleted: false,
-      isConverted: false, // Exclure les prospects déjà convertis en candidats
-    };
+    // Filtres communs (search, ville, rayon-ville, contacté, vidéo, dates…).
+    const where = buildProspectWhere(req.query);
 
-    if (search) {
-      where.OR = [
-        { firstName: { contains: search as string, mode: 'insensitive' } },
-        { lastName: { contains: search as string, mode: 'insensitive' } },
-        { email: { contains: search as string, mode: 'insensitive' } },
-        { phone: { contains: search as string, mode: 'insensitive' } },
-      ];
-    }
-
-    // Filtre multi-villes (sélection par rayon) : liste CSV → city IN [...].
-    // Prioritaire sur `city` (filtre simple). Villes normalisées (canonicalCity).
-    if (cities) {
-      const list = String(cities)
-        .split(',')
-        .map((c) => canonicalCity(c.trim()))
-        .filter(Boolean);
-      if (list.length > 0) {
-        where.city = { in: list };
-      }
-    } else if (city) {
-      where.city = { contains: city as string, mode: 'insensitive' };
-    }
-
-    if (isContacted !== undefined) {
-      where.isContacted = isContacted === 'true';
-    }
-
-    if (isConverted !== undefined) {
-      where.isConverted = isConverted === 'true';
-    }
-
-    // Filtre vidéo : avec / sans vidéo de présentation
-    if (hasVideo === 'true') {
-      where.videoStoragePath = { not: null };
-    } else if (hasVideo === 'false') {
-      where.videoStoragePath = null;
-    }
-
-    // NOUVEAU : Filtrage dynamique pour masquer/afficher prospects déjà traités
-    const includeProcessed = req.query.includeProcessed;
-    if (includeProcessed === 'false') {
-      where.skills = { none: {} }; // Exclure prospects avec skills extraites
-    }
-
-    // Filter by submission date range
-    if (submissionDateStart || submissionDateEnd) {
-      where.submissionDate = {};
-      if (submissionDateStart) {
-        where.submissionDate.gte = new Date(submissionDateStart as string);
-      }
-      if (submissionDateEnd) {
-        const end = new Date(submissionDateEnd as string);
-        end.setHours(23, 59, 59, 999); // inclure toute la journée de fin
-        where.submissionDate.lte = end;
-      }
+    // ── Recherche par RAYON autour d'un point (nearLat/nearLng/nearRadiusKm) ──
+    // Filtre la liste sur les prospects géolocalisés à ≤ rayon du point, triés du
+    // plus proche au plus loin (distanceKm), puis pagine en mémoire.
+    const nearLat = Number(req.query.nearLat);
+    const nearLng = Number(req.query.nearLng);
+    const nearRadiusKm = Number(req.query.nearRadiusKm);
+    if (Number.isFinite(nearLat) && Number.isFinite(nearLng) && Number.isFinite(nearRadiusKm) && nearRadiusKm > 0) {
+      const sorted = await findProspectsNear(where, { lat: nearLat, lng: nearLng }, nearRadiusKm);
+      const total = sorted.length;
+      const nearPayload = {
+        data: sorted.slice(skip, skip + Number(limit)),
+        pagination: {
+          total,
+          page: Number(page),
+          limit: Number(limit),
+          totalPages: Math.ceil(total / Number(limit)),
+        },
+      };
+      await setCache(cacheKey, nearPayload, 120);
+      return res.json(nearPayload);
     }
 
     // Tri par date de soumission (plus récent au plus vieux par défaut).
-    // Les candidats avec vidéo restent identifiés par l'étoile ⭐, mais
-    // l'ordre de la liste suit la date d'entrée.
     const orderBy: any = { [sortBy as string]: sortOrder };
 
     const [total, prospects] = await prisma.$transaction([
@@ -204,13 +245,16 @@ export const createProspect = async (
       notes,
     } = req.body;
 
+    const normalizedCity = city ? canonicalCity(city) : city; // normalise la ville à la saisie
+    // Géocodage à la saisie : code postal (FSA) d'abord, sinon centre-ville.
+    const geo = await resolveProspectCoordinates({ postalCode, city: normalizedCity });
     const prospectData = {
       firstName,
       lastName,
       email,
       phone,
       streetAddress,
-      city: city ? canonicalCity(city) : city, // normalise la ville à la saisie
+      city: normalizedCity,
       province: resolveProvince({ postalCode, province }), // province d'après le code postal
       postalCode,
       country: country || 'CA',
@@ -220,6 +264,10 @@ export const createProspect = async (
       submissionDate: submissionDate ? new Date(submissionDate) : null,
       notes,
       source: 'manual',
+      lat: geo?.lat ?? null,
+      lng: geo?.lng ?? null,
+      geocodedAt: geo ? new Date() : null,
+      geocodeSource: geo?.source ?? null,
     };
 
     // DÉTECTION DE DOUBLON : un contact ne doit vivre qu'à une seule place
@@ -277,6 +325,18 @@ export const updateProspect = async (
 
     if (!existingProspect || existingProspect.isDeleted) {
       return res.status(404).json({ error: 'Candidat potentiel non trouvé' });
+    }
+
+    // Re-géocode si l'adresse change (code postal d'abord, sinon centre-ville).
+    if (updateData.postalCode !== undefined || updateData.city !== undefined) {
+      const geo = await resolveProspectCoordinates({
+        postalCode: updateData.postalCode ?? existingProspect.postalCode,
+        city: updateData.city ?? existingProspect.city,
+      });
+      updateData.lat = geo?.lat ?? null;
+      updateData.lng = geo?.lng ?? null;
+      updateData.geocodedAt = geo ? new Date() : null;
+      updateData.geocodeSource = geo?.source ?? null;
     }
 
     // Update prospect
