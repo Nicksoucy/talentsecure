@@ -9,6 +9,7 @@
  * Le seed canonique vient de src/data/quebecCities.ts (mêmes coords que la carte).
  */
 import { quebecCitiesCoordinates } from '../data/quebecCities';
+import { additionalQuebecCityNames } from '../data/quebecCityNames';
 
 /**
  * Répare le « mojibake » français : accents corrompus par un double encodage
@@ -101,6 +102,14 @@ for (const [variant, canonical] of Object.entries(CITY_ALIASES)) {
   seedCanonicalByKey.set(normalizeCityKey(variant), canonical);
 }
 
+// Liste élargie de municipalités QC (noms seulement) : cibles de correction
+// supplémentaires pour les fautes sur des villes hors du seed à coordonnées.
+// On n'écrase jamais une entrée existante (seed/alias prioritaires).
+for (const name of additionalQuebecCityNames) {
+  const k = normalizeCityKey(name);
+  if (k && !seedCanonicalByKey.has(k)) seedCanonicalByKey.set(k, name);
+}
+
 /** Nom canonique si la clé est EXACTEMENT dans le seed/alias, sinon null. */
 export function seedCanonicalName(key: string): string | null {
   return seedCanonicalByKey.get(key) || null;
@@ -163,4 +172,35 @@ export function canonicalCity(city?: string | null): string {
   const tidy = tidyCity(city);
   if (!tidy) return tidy;
   return resolveCanonical(city) ?? tidy;
+}
+
+// 1ʳᵉ lettre d'un code postal canadien → code de province (synchrone, fiable).
+const POSTAL_PREFIX_TO_PROVINCE: Record<string, string> = {
+  A: 'NL', B: 'NS', C: 'PE', E: 'NB',
+  G: 'QC', H: 'QC', J: 'QC',
+  K: 'ON', L: 'ON', M: 'ON', N: 'ON', P: 'ON',
+  R: 'MB', S: 'SK', T: 'AB', V: 'BC', X: 'NT', Y: 'YT',
+};
+
+/**
+ * Province (code 2 lettres) déduite d'un code postal canadien, sinon null.
+ * Détection instantanée (pas d'appel réseau). Exige le motif « LDL » au début
+ * (lettre-chiffre-lettre) pour éviter de conclure sur une saisie non canadienne.
+ */
+export function provinceFromPostalCode(pc?: string | null): string | null {
+  if (!pc) return null;
+  const norm = pc.trim().toUpperCase();
+  if (!/^[A-Z]\d[A-Z]/.test(norm)) return null; // pas un code postal canadien
+  return POSTAL_PREFIX_TO_PROVINCE[norm[0]] ?? null;
+}
+
+/**
+ * Province à enregistrer à la saisie : priorité au code postal (le plus fiable),
+ * sinon la province fournie, sinon « QC » par défaut.
+ */
+export function resolveProvince(input: {
+  postalCode?: string | null;
+  province?: string | null;
+}): string {
+  return provinceFromPostalCode(input.postalCode) || (input.province?.trim() || 'QC');
 }

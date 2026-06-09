@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { findMatchingCandidate, findMatchingEmployee } from '../utils/candidateMatch';
-import { canonicalCity } from '../utils/cityNormalize';
+import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
 
 const prisma = new PrismaClient();
 
@@ -80,8 +80,10 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
     const phone = bodyData.phone || formData.phone || contactData.phone || '';
     const city = bodyData.city || formData.city || contactData.city || null;
     const streetAddress = bodyData.street_address || bodyData.stret_addess || formData.street_address || contactData.address1 || null;
-    const province = bodyData.state || formData.state || contactData.state || 'QC';
+    const provinceRaw = bodyData.state || formData.state || contactData.state || null;
     const postalCode = bodyData.postal_code || formData.postal_code || contactData.postal_code || null;
+    // Province d'après le code postal (le plus fiable), sinon la valeur fournie, sinon QC.
+    const province = resolveProvince({ postalCode, province: provinceRaw });
     const country = bodyData.country || formData.country || contactData.country || 'CA';
     const cvUrl = bodyData.cv_url || formData.cv_url || contactData.svp_joindre_votre_cv || null;
     const videoUrl =

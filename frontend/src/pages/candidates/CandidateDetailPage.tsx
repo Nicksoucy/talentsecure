@@ -85,6 +85,14 @@ const CandidateDetailPage = () => {
   const [promoteDialog, setPromoteDialog] = useState(false);
   const [promoteForm, setPromoteForm] = useState({ hireDate: '', position: '', assignment: '', employeeNumber: '' });
 
+  // Édition rapide des coordonnées (corriger ville/adresse d'après le CV) —
+  // distincte du gros formulaire d'évaluation (« Modifier »).
+  const [editContactOpen, setEditContactOpen] = useState(false);
+  const [contactForm, setContactForm] = useState({
+    firstName: '', lastName: '', email: '', phone: '',
+    address: '', city: '', province: '', postalCode: '',
+  });
+
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
@@ -129,6 +137,40 @@ const CandidateDetailPage = () => {
       });
     },
   });
+
+  // Mise à jour rapide des coordonnées (réutilise updateCandidate ; n'envoie que
+  // les champs perso → la ville est normalisée côté backend).
+  const contactUpdateMutation = useMutation({
+    mutationFn: () => candidateService.updateCandidate(id!, contactForm),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['candidate', id] });
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
+      queryClient.invalidateQueries({ queryKey: ['candidates', 'by-city'] });
+      enqueueSnackbar('Coordonnées mises à jour', { variant: 'success' });
+      setEditContactOpen(false);
+    },
+    onError: (e: any) =>
+      enqueueSnackbar(
+        e?.response?.data?.error || e?.response?.data?.message || 'Erreur lors de la mise à jour',
+        { variant: 'error' }
+      ),
+  });
+
+  const openContactEdit = () => {
+    const c: any = data?.data;
+    if (!c) return;
+    setContactForm({
+      firstName: c.firstName || '',
+      lastName: c.lastName || '',
+      email: c.email || '',
+      phone: c.phone || '',
+      address: c.address || '',
+      city: c.city || '',
+      province: c.province || '',
+      postalCode: c.postalCode || '',
+    });
+    setEditContactOpen(true);
+  };
 
   // Promotion en employé
   const promoteMutation = useMutation({
@@ -359,11 +401,54 @@ const CandidateDetailPage = () => {
           >
             Promouvoir en employé
           </Button>
+          <Button variant="outlined" startIcon={<LocationIcon />} onClick={openContactEdit}>
+            Corriger les coordonnées
+          </Button>
           <Button variant="contained" startIcon={<EditIcon />} onClick={handleOpenEdit}>
             Modifier
           </Button>
         </Box>
       </Box>
+
+      {/* Dialog édition rapide des coordonnées */}
+      <Dialog open={editContactOpen} onClose={() => setEditContactOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Corriger les coordonnées</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField label="Prénom" fullWidth value={contactForm.firstName}
+              onChange={(e) => setContactForm({ ...contactForm, firstName: e.target.value })} />
+            <TextField label="Nom" fullWidth value={contactForm.lastName}
+              onChange={(e) => setContactForm({ ...contactForm, lastName: e.target.value })} />
+          </Box>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField label="Courriel" fullWidth value={contactForm.email}
+              onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })} />
+            <TextField label="Téléphone" fullWidth value={contactForm.phone}
+              onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })} />
+          </Box>
+          <TextField label="Adresse" fullWidth value={contactForm.address}
+            onChange={(e) => setContactForm({ ...contactForm, address: e.target.value })} />
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField label="Ville" fullWidth value={contactForm.city}
+              onChange={(e) => setContactForm({ ...contactForm, city: e.target.value })}
+              helperText="Normalisée automatiquement (ex. « montreal » → « Montréal »)" />
+            <TextField label="Province" fullWidth value={contactForm.province}
+              onChange={(e) => setContactForm({ ...contactForm, province: e.target.value })} />
+          </Box>
+          <TextField label="Code postal" value={contactForm.postalCode} sx={{ maxWidth: 220 }}
+            onChange={(e) => setContactForm({ ...contactForm, postalCode: e.target.value })} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditContactOpen(false)}>Annuler</Button>
+          <Button
+            variant="contained"
+            onClick={() => contactUpdateMutation.mutate()}
+            disabled={contactUpdateMutation.isPending || !contactForm.firstName || !contactForm.phone}
+          >
+            {contactUpdateMutation.isPending ? 'Enregistrement…' : 'Enregistrer'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Dialog promotion en employé */}
       <Dialog open={promoteDialog} onClose={() => setPromoteDialog(false)} maxWidth="sm" fullWidth>

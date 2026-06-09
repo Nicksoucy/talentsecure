@@ -16,20 +16,21 @@
 import * as fs from 'fs';
 import { prisma } from '../config/database';
 import { classifyProvince, ProvinceClass } from '../services/cityGeocode.service';
+import { provinceFromPostalCode } from '../utils/cityNormalize';
 import { downloadGhlFile } from '../utils/ghlFetch';
 
 const { PDFParse } = require('pdf-parse'); // v2 : classe, pas une fonction
 
 type Decision = 'GARDER' | 'RETIRER' | 'A_VERIFIER';
 
+// Réutilise l'heuristique partagée (code postal → province) et la mappe vers la
+// classification grossière utilisée ici (QC / ON / other-CA).
 function provinceFromPostal(pc?: string | null): ProvinceClass | null {
-  if (!pc) return null;
-  const c = pc.trim().toUpperCase()[0];
-  if (!c) return null;
-  if ('GHJ'.includes(c)) return 'QC';
-  if ('KLMNP'.includes(c)) return 'ON';
-  if ('ABCERSTVXY'.includes(c)) return 'other-CA';
-  return null; // lettre invalide → on ne conclut pas
+  const code = provinceFromPostalCode(pc);
+  if (!code) return null;
+  if (code === 'QC') return 'QC';
+  if (code === 'ON') return 'ON';
+  return 'other-CA';
 }
 
 function decisionOf(p: ProvinceClass): Decision {

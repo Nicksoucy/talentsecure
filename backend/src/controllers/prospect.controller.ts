@@ -5,7 +5,7 @@ import { buildCacheKey } from '../utils/cache';
 import { invalidateCaches } from '../utils/cacheInvalidation';
 import { findContactEverywhere } from '../utils/candidateMatch';
 import { resolveCityCoordinates } from '../services/cityGeocode.service';
-import { canonicalCity } from '../utils/cityNormalize';
+import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
 
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
 const PROSPECT_STATS_CACHE_KEY = 'prospects:stats';
@@ -211,7 +211,7 @@ export const createProspect = async (
       phone,
       streetAddress,
       city: city ? canonicalCity(city) : city, // normalise la ville à la saisie
-      province: province || 'QC',
+      province: resolveProvince({ postalCode, province }), // province d'après le code postal
       postalCode,
       country: country || 'CA',
       fullAddress,
