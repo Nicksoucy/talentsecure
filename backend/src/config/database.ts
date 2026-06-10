@@ -25,14 +25,8 @@ process.on('beforeExit', async () => {
   await disconnectDatabase();
 });
 
-process.on('SIGINT', async () => {
-  await disconnectDatabase();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  await disconnectDatabase();
-  process.exit(0);
-});
+// O4 (audit) — SIGINT/SIGTERM sont désormais gérés dans server.ts (arrêt
+// gracieux : on draine le serveur HTTP AVANT de fermer Prisma). On garde
+// `beforeExit` comme filet et on exporte disconnectDatabase pour server.ts.
 
 export default prisma;

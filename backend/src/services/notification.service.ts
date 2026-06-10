@@ -212,12 +212,25 @@ export async function dispatchPendingNotifications(): Promise<DispatchResult> {
   let failed = 0;
 
   for (const n of pending) {
+    // O2 (audit) — CLAIM ATOMIQUE avant tout envoi. node-cron tourne sur CHAQUE
+    // instance Cloud Run : sans réservation, deux instances liraient les mêmes
+    // lignes PENDING et enverraient l'email EN DOUBLE. On réserve via un
+    // compare-and-set sur `attempts` (jeton d'optimistic-lock) : si une autre
+    // instance a déjà pris la notif, count !== 1 → on saute.
+    const claim = await prisma.notification.updateMany({
+      where: { id: n.id, status: 'PENDING', attempts: n.attempts },
+      data: { attempts: n.attempts + 1 },
+    });
+    if (claim.count !== 1) {
+      continue;
+    }
+
     try {
       if (n.channel === 'IN_APP') {
         // Pas d'envoi externe — marquage SENT (la cloche frontend la verra).
         await prisma.notification.update({
           where: { id: n.id },
-          data: { status: 'SENT', sentAt: new Date(), attempts: n.attempts + 1 },
+          data: { status: 'SENT', sentAt: new Date() },
         });
         sent++;
       } else if (n.channel === 'EMAIL' && n.recipientEmail) {
@@ -229,25 +242,24 @@ export async function dispatchPendingNotifications(): Promise<DispatchResult> {
         }
         await prisma.notification.update({
           where: { id: n.id },
-          data: { status: 'SENT', sentAt: new Date(), attempts: n.attempts + 1 },
+          data: { status: 'SENT', sentAt: new Date() },
         });
         sent++;
       } else if (n.channel === 'SMS') {
         // V2.1 : brancher sms.service.ts ici.
         await prisma.notification.update({
           where: { id: n.id },
-          data: { status: 'SENT', sentAt: new Date(), attempts: n.attempts + 1, failedReason: 'SMS dispatch non implémenté V2' },
+          data: { status: 'SENT', sentAt: new Date(), failedReason: 'SMS dispatch non implémenté V2' },
         });
         sent++;
       }
     } catch (e) {
       const reason = (e as Error).message;
-      const nextAttempts = n.attempts + 1;
+      const nextAttempts = n.attempts + 1; // déjà incrémenté par le claim
       await prisma.notification.update({
         where: { id: n.id },
         data: {
           status: nextAttempts >= MAX_ATTEMPTS ? 'FAILED' : 'PENDING',
-          attempts: nextAttempts,
           failedReason: reason,
         },
       });

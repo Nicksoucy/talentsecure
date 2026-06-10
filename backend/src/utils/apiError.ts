@@ -32,7 +32,10 @@ export class ApiError extends Error {
       return new ApiError(statusCode, message || DEFAULT_MESSAGE);
     }
 
-    return new ApiError(500, error instanceof Error ? error.message : DEFAULT_MESSAGE);
+    // A5 (audit) — pour une 500 inconnue, ne PAS divulguer le message interne
+    // (noms de tables/contraintes Prisma, chemins…). Le vrai message + la stack
+    // sont loggés par le handler global ; le client ne voit qu'un message générique.
+    return new ApiError(500, DEFAULT_MESSAGE);
   }
 
   static fromZodIssues(issues: ZodIssue[]): ApiError {

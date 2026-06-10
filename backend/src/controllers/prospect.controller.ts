@@ -603,8 +603,11 @@ export const convertToCandidate = async (
         ? { lat: prospect.lat, lng: prospect.lng, source: prospect.geocodeSource || 'city' }
         : await resolveProspectCoordinates({ postalCode: prospect.postalCode, city: prospect.city });
 
-    // Create qualified candidate from prospect data
-    const candidate = await prisma.candidate.create({
+    // Create qualified candidate from prospect data.
+    // F3 (audit) — ATOMIQUE : création candidat + marquage prospect converti +
+    // audit dans une seule transaction (un crash au milieu laissait un doublon).
+    const candidate = await prisma.$transaction(async (tx) => {
+      const created = await tx.candidate.create({
       data: {
         // Prospect identity (always preserved)
         firstName: prospect.firstName,
@@ -621,6 +624,11 @@ export const convertToCandidate = async (
         geocodeSource: convertGeo?.source ?? null,
         cvUrl: prospect.cvUrl,
         cvStoragePath: prospect.cvStoragePath,
+        // F3 — la vidéo de présentation (argument de vente du marketplace) ne
+        // doit PAS être perdue à la conversion.
+        videoUrl: prospect.videoUrl,
+        videoStoragePath: prospect.videoStoragePath,
+        videoUploadedAt: prospect.videoUploadedAt,
 
         // Form data (ratings, notes, etc.)
         ...scalarData,
@@ -652,28 +660,40 @@ export const convertToCandidate = async (
         certifications: true,
         situationTests: true,
       },
+      });
+
+      // Mark prospect as converted
+      await tx.prospectCandidate.update({
+        where: { id },
+        data: {
+          isConverted: true,
+          convertedAt: new Date(),
+          convertedToId: created.id,
+        },
+      });
+
+      // Log audit
+      await tx.auditLog.create({
+        data: {
+          userId,
+          action: 'CREATE',
+          resource: 'Candidate',
+          resourceId: created.id,
+          details: `Candidat créé depuis prospect: ${prospect.firstName} ${prospect.lastName}`,
+        },
+      });
+
+      return created;
     });
 
-    // Mark prospect as converted
-    await prisma.prospectCandidate.update({
-      where: { id },
-      data: {
-        isConverted: true,
-        convertedAt: new Date(),
-        convertedToId: candidate.id,
-      },
-    });
-
-    // Log audit
-    await prisma.auditLog.create({
-      data: {
-        userId,
-        action: 'CREATE',
-        resource: 'Candidate',
-        resourceId: candidate.id,
-        details: `Candidat créé depuis prospect: ${prospect.firstName} ${prospect.lastName}`,
-      },
-    });
+    // F3 — transfert des compétences extraites du prospect (best-effort : un
+    // échec ne doit pas annuler la conversion déjà committée).
+    try {
+      const { cvExtractionService } = require('../services/cv-extraction.service');
+      await cvExtractionService.transferProspectSkillsToCandidate(prospect.id, candidate.id);
+    } catch (e) {
+      console.error('⚠️ Transfert compétences prospect→candidat échoué (conversion conservée):', (e as Error).message);
+    }
 
     await invalidateProspectCaches();
 

@@ -1,11 +1,10 @@
 ﻿import { Request, Response, NextFunction } from 'express';
-import { PrismaClient, SkillCategory, SkillLevel, SkillSource } from '@prisma/client';
+import { SkillCategory, SkillLevel, SkillSource } from '@prisma/client';
 import { cvExtractionService } from '../services/cv-extraction.service';
 import { buildExtractedSkillsFilters, fetchExtractedSkillsResults } from '../services/skill-search.service';
 import { aiExtractionService } from '../services/ai-extraction.service';
 import { skillsService } from '../services/skills.service';
-
-const prisma = new PrismaClient();
+import { prisma } from '../config/database';
 
 // ============================================
 // SKILLS MANAGEMENT (CRUD)

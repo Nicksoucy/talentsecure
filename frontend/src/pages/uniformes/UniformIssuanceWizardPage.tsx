@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Stack, Paper, TextField, MenuItem, Autocomplete, Button, Table, TableHead,
   TableRow, TableCell, TableBody, Divider, Checkbox, FormControlLabel, Alert, IconButton, Chip,
@@ -117,6 +117,7 @@ export default function UniformIssuanceWizardPage() {
 
   // ---- Finalisation ----
   const [issuanceId, setIssuanceId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const finalize = useMutation({
     mutationFn: async () => {
       // Validation : une ligne sized avec qté > 0 doit avoir une grandeur choisie.
@@ -145,6 +146,10 @@ export default function UniformIssuanceWizardPage() {
     },
     onSuccess: (id) => {
       setIssuanceId(id);
+      // W11 (audit) — rafraîchir stock/mouvements après une remise (sinon
+      // l'inventaire affiche des valeurs périmées jusqu'au staleTime).
+      queryClient.invalidateQueries({ queryKey: ['uniform-stock'] });
+      queryClient.invalidateQueries({ queryKey: ['uniform-movements'] });
       enqueueSnackbar(historical ? 'Remise historique enregistrée — stock NON modifié' : 'Remise finalisée — stock décrémenté', { variant: 'success' });
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || e?.message || 'Erreur', { variant: 'error' }),

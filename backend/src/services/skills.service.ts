@@ -1,8 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database';
 import { cvExtractionService } from './cv-extraction.service';
 import { aiExtractionService } from './ai-extraction.service';
-
-const prisma = new PrismaClient();
 
 interface BatchProcessOptions {
     model?: string;

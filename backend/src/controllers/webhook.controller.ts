@@ -18,41 +18,6 @@ function verifyGhlWebhookSecret(headerValue: unknown): boolean {
   return crypto.timingSafeEqual(a, b);
 }
 
-// Mapping des noms de villes pour normalisation
-const CITY_MAPPINGS: Record<string, string> = {
-  'montreal': 'Montréal',
-  'montréal': 'Montréal',
-  'mtl': 'Montréal',
-  'quebec': 'Québec',
-  'québec': 'Québec',
-  'qc': 'Québec',
-  'laval': 'Laval',
-  'gatineau': 'Gatineau',
-  'longueuil': 'Longueuil',
-  'sherbrooke': 'Sherbrooke',
-  'trois-rivieres': 'Trois-Rivières',
-  'trois-rivières': 'Trois-Rivières',
-  'saguenay': 'Saguenay',
-  'levis': 'Lévis',
-  'lévis': 'Lévis',
-  'terrebonne': 'Terrebonne',
-  'saint-jerome': 'Saint-Jérôme',
-  'saint-jérôme': 'Saint-Jérôme',
-  'st-jerome': 'Saint-Jérôme',
-  'st-jérôme': 'Saint-Jérôme',
-  'repentigny': 'Repentigny',
-  'brossard': 'Brossard',
-  'drummondville': 'Drummondville',
-  'saint-jean-sur-richelieu': 'Saint-Jean-sur-Richelieu',
-  'st-jean-sur-richelieu': 'Saint-Jean-sur-Richelieu',
-  'granby': 'Granby',
-  'blainville': 'Blainville',
-  'shawinigan': 'Shawinigan',
-  'dollard-des-ormeaux': 'Dollard-des-Ormeaux',
-  'saint-hyacinthe': 'Saint-Hyacinthe',
-  'st-hyacinthe': 'Saint-Hyacinthe',
-};
-
 /**
  * Normalise le nom d'une ville
  */
