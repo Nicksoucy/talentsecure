@@ -2,9 +2,62 @@ import { prisma } from '../config/database';
 import { Prisma } from '@prisma/client';
 import { canonicalCity } from '../utils/cityNormalize';
 import { resolveCityCoordinates } from './cityGeocode.service';
+import { haversineKm, boundingBox, LatLng } from '../utils/geo';
 
 // O1 — plafond du nombre de lignes exportées d'un coup (sécurité mémoire/timeout).
 const EXPORT_ROW_CAP = 5000;
+
+// Champs renvoyés par la liste (et la recherche par rayon) — vue allégée.
+const LIST_SELECT = {
+    // Basic info (needed for list)
+    id: true,
+    firstName: true,
+    lastName: true,
+    email: true,
+    phone: true,
+    city: true,
+    province: true,
+
+    // Status & ratings (for display and filtering)
+    status: true,
+    globalRating: true,
+    interviewDate: true,
+
+    // Quick checks (for icons/badges)
+    hasBSP: true,
+    hasVehicle: true,
+    hasDriverLicense: true,
+    cvUrl: true,
+    videoUrl: true,
+
+    // Metadata (for display logic)
+    isActive: true,
+    isArchived: true,
+    createdAt: true,
+
+    // HR notes preview (truncated in UI anyway)
+    hrNotes: true,
+
+    // Relations (lightweight, needed for list)
+    availabilities: {
+        select: {
+            type: true,
+            isAvailable: true,
+        },
+    },
+    languages: {
+        select: {
+            language: true,
+            level: true,
+        },
+    },
+    certifications: {
+        select: {
+            name: true,
+            expiryDate: true,
+        },
+    },
+} as const;
 
 interface CandidateFilters {
     search?: string;
@@ -33,10 +86,8 @@ interface PaginationOptions {
 }
 
 export class CandidateService {
-    async findAll(filters: CandidateFilters, pagination: PaginationOptions) {
-        const { page, limit, sortBy, sortOrder } = pagination;
-        const skip = (page - 1) * limit;
-
+    /** Filtre Prisma commun à la liste et à la recherche par rayon. */
+    private buildListWhere(filters: CandidateFilters): any {
         // Build filter conditions with proper AND/OR logic
         const where: any = {
             isDeleted: false,
@@ -155,6 +206,15 @@ export class CandidateService {
             };
         }
 
+        return where;
+    }
+
+    async findAll(filters: CandidateFilters, pagination: PaginationOptions) {
+        const { page, limit, sortBy, sortOrder } = pagination;
+        const skip = (page - 1) * limit;
+
+        const where = this.buildListWhere(filters);
+
         // Build orderBy with special handling for globalRating to place NULL values last
         let orderByClause: any;
         if (sortBy === 'globalRating') {
@@ -175,56 +235,7 @@ export class CandidateService {
                 skip,
                 take: limit,
                 orderBy: orderByClause,
-                select: {
-                    // Basic info (needed for list)
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    email: true,
-                    phone: true,
-                    city: true,
-                    province: true,
-
-                    // Status & ratings (for display and filtering)
-                    status: true,
-                    globalRating: true,
-                    interviewDate: true,
-
-                    // Quick checks (for icons/badges)
-                    hasBSP: true,
-                    hasVehicle: true,
-                    hasDriverLicense: true,
-                    cvUrl: true,
-                    videoUrl: true,
-
-                    // Metadata (for display logic)
-                    isActive: true,
-                    isArchived: true,
-                    createdAt: true,
-
-                    // HR notes preview (truncated in UI anyway)
-                    hrNotes: true,
-
-                    // Relations (lightweight, needed for list)
-                    availabilities: {
-                        select: {
-                            type: true,
-                            isAvailable: true,
-                        },
-                    },
-                    languages: {
-                        select: {
-                            language: true,
-                            level: true,
-                        },
-                    },
-                    certifications: {
-                        select: {
-                            name: true,
-                            expiryDate: true,
-                        },
-                    },
-                },
+                select: LIST_SELECT,
             }),
         ]);
 
@@ -237,8 +248,53 @@ export class CandidateService {
                 totalPages: Math.ceil(total / limit),
             },
         };
+    }
 
+    /**
+     * Candidats géolocalisés à ≤ radiusKm d'un point, triés du plus proche au
+     * plus loin (distanceKm ajouté, arrondi à 0,1 km), avec les mêmes filtres
+     * que la liste. Pas de PostGIS : pré-filtre bounding-box (index lat/lng)
+     * puis haversine exact en Node ; pagination en mémoire.
+     */
+    async findNear(
+        filters: CandidateFilters,
+        center: LatLng,
+        radiusKm: number,
+        pagination: PaginationOptions
+    ) {
+        const { page, limit } = pagination;
+        const box = boundingBox(center, radiusKm);
+        const where = {
+            ...this.buildListWhere(filters),
+            lat: { gte: box.latMin, lte: box.latMax },
+            lng: { gte: box.lngMin, lte: box.lngMax },
+        };
 
+        const rows = await prisma.candidate.findMany({
+            where,
+            select: { ...LIST_SELECT, lat: true, lng: true },
+        });
+
+        const sorted = rows
+            .map((c) => ({
+                ...c,
+                distanceKm:
+                    Math.round(haversineKm(center, { lat: c.lat as number, lng: c.lng as number }) * 10) / 10,
+            }))
+            .filter((c) => c.distanceKm <= radiusKm)
+            .sort((a, b) => a.distanceKm - b.distanceKm);
+
+        const total = sorted.length;
+        const skip = (page - 1) * limit;
+        return {
+            data: sorted.slice(skip, skip + limit),
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit),
+            },
+        };
     }
 
     async findSimilarCandidates(candidateId: string, limit: number = 3) {

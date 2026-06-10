@@ -122,8 +122,13 @@ export const candidateFiltersSchema = z.object({
   interviewDateStart: dateString.or(dateTimeString).optional(),
   interviewDateEnd: dateString.or(dateTimeString).optional(),
   certification: z.string().max(100).optional(),
+  // Recherche par rayon autour d'un point (carte) : centre + rayon en km.
+  nearLat: z.coerce.number().min(-90).max(90).optional(),
+  nearLng: z.coerce.number().min(-180).max(180).optional(),
+  nearRadiusKm: z.coerce.number().min(0).max(1000).optional(),
   page: z.coerce.number().int().min(1).optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional(),
+  // 1000 : permet de récupérer toute une sélection par rayon en un appel.
+  limit: z.coerce.number().int().min(1).max(1000).optional(),
   sortBy: z.string().max(50).optional(),
   sortOrder: z.enum(['asc', 'desc']).optional(),
 }).strict();

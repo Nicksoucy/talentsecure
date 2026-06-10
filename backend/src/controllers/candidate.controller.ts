@@ -7,6 +7,8 @@ import { invalidateCaches } from '../utils/cacheInvalidation';
 import { getStatusFromRating } from '../utils/candidate.utils';
 import { canonicalCity } from '../utils/cityNormalize';
 import { findContactEverywhere } from '../utils/candidateMatch';
+import { resolveProspectCoordinates } from '../services/cityGeocode.service';
+import { buildGeoMapPoints } from '../utils/geo';
 import { Parser } from 'json2csv';
 import { candidateService } from '../services/candidate.service';
 import { aiExtractionService } from '../services/ai-extraction.service';
@@ -14,11 +16,12 @@ import { aiExtractionService } from '../services/ai-extraction.service';
 const CANDIDATE_LIST_CACHE_PREFIX = 'candidates:list';
 const CANDIDATE_STATS_CACHE_KEY = 'candidates:stats';
 const CANDIDATE_CITY_CACHE_KEY = 'candidates:city-stats';
+const CANDIDATE_MAPPOINTS_CACHE_KEY = 'candidates:map-points';
 
 const invalidateCandidateCaches = () =>
   invalidateCaches({
     listPrefix: CANDIDATE_LIST_CACHE_PREFIX,
-    statKeys: [CANDIDATE_STATS_CACHE_KEY, CANDIDATE_CITY_CACHE_KEY],
+    statKeys: [CANDIDATE_STATS_CACHE_KEY, CANDIDATE_CITY_CACHE_KEY, CANDIDATE_MAPPOINTS_CACHE_KEY],
   });
 
 
@@ -113,6 +116,22 @@ export const getCandidates = async (
       sortBy: sortBy as string,
       sortOrder: sortOrder as 'asc' | 'desc',
     };
+
+    // ── Recherche par RAYON autour d'un point (nearLat/nearLng/nearRadiusKm) ──
+    // Liste triée du plus proche au plus loin (distanceKm), mêmes filtres.
+    const nearLat = Number(req.query.nearLat);
+    const nearLng = Number(req.query.nearLng);
+    const nearRadiusKm = Number(req.query.nearRadiusKm);
+    if (Number.isFinite(nearLat) && Number.isFinite(nearLng) && Number.isFinite(nearRadiusKm) && nearRadiusKm > 0) {
+      const nearPayload = await candidateService.findNear(
+        filters,
+        { lat: nearLat, lng: nearLng },
+        nearRadiusKm,
+        pagination
+      );
+      await setCache(cacheKey, nearPayload, 120);
+      return res.json(nearPayload);
+    }
 
     const responsePayload = await candidateService.findAll(filters, pagination);
 
@@ -241,6 +260,10 @@ export const createCandidate = async (
     const finalGlobalRating = globalRating ? Number(globalRating) : null;
     const finalStatus = status || getStatusFromRating(finalGlobalRating);
 
+    const normalizedCity = city ? canonicalCity(city) : 'Non spécifié'; // normalise à la saisie
+    // Géocodage à la saisie : code postal (FSA) d'abord, sinon centre-ville.
+    const geo = await resolveProspectCoordinates({ postalCode, city: normalizedCity });
+
     // Create candidate with nested data
     const candidate = await prisma.candidate.create({
       data: {
@@ -250,9 +273,13 @@ export const createCandidate = async (
         email,
         phone,
         address,
-        city: city ? canonicalCity(city) : 'Non spécifié', // normalise à la saisie
+        city: normalizedCity,
         province: province || 'QC',
         postalCode,
+        lat: geo?.lat ?? null,
+        lng: geo?.lng ?? null,
+        geocodedAt: geo ? new Date() : null,
+        geocodeSource: geo?.source ?? null,
         interviewDate: interviewDate ? new Date(interviewDate) : null,
         // Status
         status: finalStatus,
@@ -374,6 +401,18 @@ export const updateCandidate = async (
     // Normalise la ville à la saisie (si fournie et non vide).
     if (candidateData.city) {
       candidateData.city = canonicalCity(candidateData.city);
+    }
+
+    // Re-géocode si l'adresse change (code postal d'abord, sinon centre-ville).
+    if (candidateData.postalCode !== undefined || candidateData.city !== undefined) {
+      const geo = await resolveProspectCoordinates({
+        postalCode: candidateData.postalCode ?? existingCandidate.postalCode,
+        city: candidateData.city ?? existingCandidate.city,
+      });
+      candidateData.lat = geo?.lat ?? null;
+      candidateData.lng = geo?.lng ?? null;
+      candidateData.geocodedAt = geo ? new Date() : null;
+      candidateData.geocodeSource = geo?.source ?? null;
     }
 
     // Prepare update data with nested relations handling
@@ -583,6 +622,40 @@ export const getCandidatesByCity = async (
     const stats = await candidateService.getByCity();
     const payload = { success: true, data: stats };
     await setCache(CANDIDATE_CITY_CACHE_KEY, payload, 300);
+    res.json(payload);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Points carte « réels » : candidats regroupés par coordonnées individuelles —
+ * centroïde du secteur postal (FSA, source 'postal') ou centre-ville pour ceux
+ * sans code postal (source 'city'). Même affichage que la carte des prospects.
+ */
+export const getCandidatesMapPoints = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const cached = await getCache<{ success: boolean; data: any }>(
+      CANDIDATE_MAPPOINTS_CACHE_KEY
+    );
+    if (cached) {
+      return res.json(cached);
+    }
+
+    const candidates = await prisma.candidate.findMany({
+      where: { isDeleted: false, isActive: true },
+      select: { lat: true, lng: true, geocodeSource: true, postalCode: true, city: true },
+    });
+
+    const { points, unplaced } = buildGeoMapPoints(candidates);
+
+    const payload = { success: true, data: { points, unplaced } };
+    await setCache(CANDIDATE_MAPPOINTS_CACHE_KEY, payload, 300);
+
     res.json(payload);
   } catch (error) {
     next(error);

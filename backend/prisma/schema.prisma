@@ -177,6 +177,13 @@ model Candidate {
   province   String  @default("QC")
   postalCode String?
 
+  // Géolocalisation : coordonnées résolues du candidat (recherche par rayon).
+  // Source : 'postal' (centroïde FSA du code postal) sinon 'city' (centre-ville).
+  lat           Float?
+  lng           Float?
+  geocodedAt    DateTime?
+  geocodeSource String? // 'postal' | 'city'
+
   // Statut et Ã©valuation
   status        CandidateStatus @default(EN_ATTENTE)
   globalRating  Float? // Note globale /10
@@ -298,6 +305,7 @@ model Candidate {
   @@index([hasRCR])
   @@index([city, hasBSP, available24_7]) // Common search combination
   @@index([globalRating, available24_7]) // Rating + availability
+  @@index([lat, lng]) // Pré-filtre bounding-box (recherche par rayon)
   @@map("candidates")
 }
 

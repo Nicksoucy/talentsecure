@@ -5,7 +5,7 @@ import { buildCacheKey } from '../utils/cache';
 import { invalidateCaches } from '../utils/cacheInvalidation';
 import { findContactEverywhere } from '../utils/candidateMatch';
 import { resolveCityCoordinates, resolveProspectCoordinates } from '../services/cityGeocode.service';
-import { haversineKm, boundingBox } from '../utils/geo';
+import { haversineKm, boundingBox, buildGeoMapPoints } from '../utils/geo';
 import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
 
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
@@ -596,6 +596,13 @@ export const convertToCandidate = async (
       consentDate: scalarData.consentDate,
     });
 
+    // Géolocalisation : reprend les coords du prospect, sinon résout
+    // (code postal → FSA, repli centre-ville) pour la carte des candidats.
+    const convertGeo =
+      prospect.lat != null && prospect.lng != null
+        ? { lat: prospect.lat, lng: prospect.lng, source: prospect.geocodeSource || 'city' }
+        : await resolveProspectCoordinates({ postalCode: prospect.postalCode, city: prospect.city });
+
     // Create qualified candidate from prospect data
     const candidate = await prisma.candidate.create({
       data: {
@@ -608,6 +615,10 @@ export const convertToCandidate = async (
         city: prospect.city || 'Non spécifié',
         province: prospect.province || 'QC',
         postalCode: prospect.postalCode || '',
+        lat: convertGeo?.lat ?? null,
+        lng: convertGeo?.lng ?? null,
+        geocodedAt: convertGeo ? new Date() : null,
+        geocodeSource: convertGeo?.source ?? null,
         cvUrl: prospect.cvUrl,
         cvStoragePath: prospect.cvStoragePath,
 
@@ -775,62 +786,7 @@ export const getProspectsMapPoints = async (
       select: { lat: true, lng: true, geocodeSource: true, postalCode: true, city: true },
     });
 
-    interface PointGroup {
-      lat: number;
-      lng: number;
-      count: number;
-      source: string;
-      fsa: string | null;
-      cities: Map<string, number>;
-    }
-    const groups = new Map<string, PointGroup>();
-    let unplaced = 0;
-
-    for (const p of prospects) {
-      if (p.lat == null || p.lng == null) {
-        unplaced++;
-        continue;
-      }
-      const key = `${p.lat}|${p.lng}`;
-      let g = groups.get(key);
-      if (!g) {
-        g = {
-          lat: p.lat,
-          lng: p.lng,
-          count: 0,
-          source: p.geocodeSource || 'city',
-          fsa: null,
-          cities: new Map(),
-        };
-        groups.set(key, g);
-      }
-      g.count++;
-      const ville = canonicalCity(p.city || '');
-      if (ville) g.cities.set(ville, (g.cities.get(ville) || 0) + 1);
-      if (!g.fsa && p.postalCode) {
-        const f = p.postalCode.trim().toUpperCase().slice(0, 3);
-        if (/^[A-Z]\d[A-Z]$/.test(f)) g.fsa = f;
-      }
-    }
-
-    const points = [...groups.values()]
-      .map((g) => {
-        // Ville dominante du groupe → libellé lisible du point.
-        let topCity = '';
-        let topN = 0;
-        for (const [c, n] of g.cities) {
-          if (n > topN) {
-            topCity = c;
-            topN = n;
-          }
-        }
-        const label =
-          g.source === 'postal'
-            ? `Secteur ${g.fsa ?? '?'}${topCity ? ` · ${topCity}` : ''}`
-            : `${topCity || 'Ville inconnue'} (centre-ville approx.)`;
-        return { lat: g.lat, lng: g.lng, count: g.count, source: g.source, label };
-      })
-      .sort((a, b) => b.count - a.count);
+    const { points, unplaced } = buildGeoMapPoints(prospects);
 
     const payload = { success: true, data: { points, unplaced } };
     await setCache(PROSPECT_MAPPOINTS_CACHE_KEY, payload, 300);

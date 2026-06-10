@@ -9,6 +9,7 @@ import {
   archiveCandidate,
   unarchiveCandidate,
   getCandidatesByCity,
+  getCandidatesMapPoints,
   getCitiesSuggestions,
   getCandidatesSuggestions,
   initiateVideoUpload,
@@ -126,6 +127,14 @@ router.get('/stats/summary', getCandidatesStats);
  * @access  Private (All authenticated users)
  */
 router.get('/stats/by-city', getCandidatesByCity);
+
+/**
+ * @route   GET /api/candidates/stats/map-points
+ * @desc    Points carte individuels (groupés par secteur postal FSA, repli
+ *          centre-ville pour les candidats sans code postal)
+ * @access  Private (All authenticated users)
+ */
+router.get('/stats/map-points', getCandidatesMapPoints);
 
 /**
  * @route   GET /api/candidates/suggestions/cities

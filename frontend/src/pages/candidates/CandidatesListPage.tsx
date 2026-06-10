@@ -168,6 +168,7 @@ export default function CandidatesListPage() {
     interviewDateStart: '',
     interviewDateEnd: '',
     certification: '',
+    near: null as { lat: number; lng: number; radiusKm: number } | null, // rayon autour d'un point (carte)
   });
   // Debounced filters to prevent API spam on text inputs (like City)
   const [debouncedFilters, setDebouncedFilters] = useState(filters);
@@ -258,6 +259,7 @@ export default function CandidatesListPage() {
       interviewDateStart: '',
       interviewDateEnd: '',
       certification: '',
+      near: null,
     });
     setAdvancedFilters({
       cities: [],
@@ -327,6 +329,7 @@ export default function CandidatesListPage() {
           interviewDateStart: debouncedFilters.interviewDateStart || undefined,
           interviewDateEnd: debouncedFilters.interviewDateEnd || undefined,
           certification: debouncedFilters.certification || undefined,
+          near: debouncedFilters.near || undefined,
           includeArchived,
           sortBy,
           sortOrder,
@@ -394,13 +397,33 @@ export default function CandidatesListPage() {
     setPage(1);
   };
 
-  // Handle city click from map
-  const handleCityClick = (city: string) => {
-    setFilters({ ...filters, city });
-    setCityInput(city); // Update local input for autocomplete
-    setShowMap(false); // Hide map after filtering
+  // Recherche par rayon autour d'un POINT de la carte (déposé, recherché, ou
+  // « Voir ces candidats » d'un secteur) : filtre la liste sur ce rayon (triée
+  // du plus proche au plus loin) ET coche les candidats trouvés.
+  const handleNearbySelect = async (
+    center: { lat: number; lng: number },
+    radiusKm: number,
+    label?: string,
+  ) => {
+    const near = { lat: center.lat, lng: center.lng, radiusKm };
+    setFilters({ ...filters, city: '', near });
+    setCityInput('');
+    setShowMap(false);
     setPage(1);
-    enqueueSnackbar(`Filtré par ville: ${city}`, { variant: 'info' });
+    try {
+      const response = await candidateService.getCandidates({ page: 1, limit: 1000, near });
+      const ids = response.data.map((c) => c.id);
+      setSelectedCandidates(new Set(ids));
+      const s = ids.length > 1 ? 's' : '';
+      enqueueSnackbar(
+        label
+          ? `${ids.length} candidat${s} sélectionné${s} — ${label}`
+          : `${ids.length} candidat${s} sélectionné${s} dans un rayon de ${radiusKm} km`,
+        { variant: 'success', autoHideDuration: 8000 },
+      );
+    } catch {
+      enqueueSnackbar('Erreur lors de la recherche par rayon', { variant: 'error' });
+    }
   };
 
   // Clear all filters
@@ -415,6 +438,7 @@ export default function CandidatesListPage() {
       interviewDateStart: '',
       interviewDateEnd: '',
       certification: '',
+      near: null,
     });
     setPage(1);
   };
@@ -960,7 +984,7 @@ export default function CandidatesListPage() {
       <Collapse in={showMap}>
         <Box sx={{ mb: 3 }}>
           <Suspense fallback={renderLazyFallback(200)}>
-            <CandidatesMap onCityClick={handleCityClick} />
+            <CandidatesMap onNearbySelect={handleNearbySelect} />
           </Suspense>
         </Box>
       </Collapse>

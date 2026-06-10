@@ -18,6 +18,8 @@ interface GetCandidatesParams {
   interviewDateEnd?: string;
   includeArchived?: boolean;
   certification?: string;
+  /** Recherche par rayon autour d'un point (carte) → nearLat/nearLng/nearRadiusKm. */
+  near?: { lat: number; lng: number; radiusKm: number } | null;
   page?: number;
   limit?: number;
   sortBy?: string;
@@ -39,7 +41,15 @@ export const candidateService = {
    * Get all candidates with filters
    */
   async getCandidates(params?: GetCandidatesParams): Promise<CandidatesResponse> {
-    const response = await api.get('/api/candidates', { params });
+    // `near` (point + rayon) → nearLat/nearLng/nearRadiusKm pour l'API.
+    const { near, ...rest } = params || {};
+    const query: any = { ...rest };
+    if (near) {
+      query.nearLat = near.lat;
+      query.nearLng = near.lng;
+      query.nearRadiusKm = near.radiusKm;
+    }
+    const response = await api.get('/api/candidates', { params: query });
     return response.data;
   },
 
