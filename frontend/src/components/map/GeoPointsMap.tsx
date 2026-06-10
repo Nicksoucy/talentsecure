@@ -18,8 +18,7 @@ import {
   Button,
   TextField,
   Stack,
-  ToggleButton,
-  ToggleButtonGroup,
+  Slider,
 } from '@mui/material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -133,8 +132,6 @@ function MapRefSetter({ mapRef }: { mapRef: React.MutableRefObject<L.Map | null>
   return null;
 }
 
-const RADIUS_PRESETS = [5, 10, 25, 50, 100];
-
 const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
   pointsUrl,
   listUrl,
@@ -177,6 +174,8 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
   }, [pointsUrl]);
 
   // Compteur dans le rayon (aperçu) : recalculé au changement point/rayon.
+  // Debounce : le slider émet en continu pendant le glissement — on n'appelle
+  // l'API qu'une fois la valeur stabilisée (le cercle, lui, suit en direct).
   useEffect(() => {
     if (!dropPoint) {
       setNearCount(null);
@@ -184,27 +183,30 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
     }
     let cancelled = false;
     setCountLoading(true);
-    api
-      .get(listUrl, {
-        params: {
-          nearLat: dropPoint[0],
-          nearLng: dropPoint[1],
-          nearRadiusKm: radiusKm,
-          page: 1,
-          limit: 1,
-        },
-      })
-      .then((r) => {
-        if (!cancelled) setNearCount(r.data.pagination?.total ?? 0);
-      })
-      .catch(() => {
-        if (!cancelled) setNearCount(null);
-      })
-      .finally(() => {
-        if (!cancelled) setCountLoading(false);
-      });
+    const timer = setTimeout(() => {
+      api
+        .get(listUrl, {
+          params: {
+            nearLat: dropPoint[0],
+            nearLng: dropPoint[1],
+            nearRadiusKm: radiusKm,
+            page: 1,
+            limit: 1,
+          },
+        })
+        .then((r) => {
+          if (!cancelled) setNearCount(r.data.pagination?.total ?? 0);
+        })
+        .catch(() => {
+          if (!cancelled) setNearCount(null);
+        })
+        .finally(() => {
+          if (!cancelled) setCountLoading(false);
+        });
+    }, 350);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [dropPoint, radiusKm, listUrl]);
 
@@ -278,23 +280,34 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
                 ? `Point déposé — ajustez le rayon puis trouvez les ${unitPlural} proches.`
                 : 'Cliquez sur la carte pour déposer un point, ou cherchez un code postal.'}
             </Typography>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Typography variant="caption">Rayon</Typography>
-              <ToggleButtonGroup
+            <Stack
+              direction="row"
+              spacing={1.5}
+              alignItems="center"
+              sx={{ minWidth: { xs: '100%', sm: 280 }, pr: 1 }}
+            >
+              <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>
+                Rayon : <strong>{radiusKm} km</strong>
+              </Typography>
+              <Slider
                 size="small"
-                exclusive
                 value={radiusKm}
-                onChange={(_, v) => {
-                  if (v) setRadiusKm(v);
-                }}
-              >
-                {RADIUS_PRESETS.map((km) => (
-                  <ToggleButton key={km} value={km} sx={{ px: 1 }}>
-                    {km}
-                  </ToggleButton>
-                ))}
-              </ToggleButtonGroup>
-              <Typography variant="caption">km</Typography>
+                onChange={(_, v) => setRadiusKm(v as number)}
+                min={1}
+                max={100}
+                step={1}
+                valueLabelDisplay="auto"
+                valueLabelFormat={(v) => `${v} km`}
+                marks={[
+                  { value: 1 },
+                  { value: 10 },
+                  { value: 25 },
+                  { value: 50 },
+                  { value: 75 },
+                  { value: 100 },
+                ]}
+                sx={{ flex: 1, minWidth: 160 }}
+              />
             </Stack>
           </Stack>
 
