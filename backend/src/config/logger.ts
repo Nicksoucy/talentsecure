@@ -45,35 +45,30 @@ const consoleFormat = winston.format.combine(
   )
 );
 
-// Create transports
-const transports: winston.transport[] = [
-  // Console transport
-  new winston.transports.Console({
-    format: consoleFormat,
-  }),
-
-  // Error log file
-  new winston.transports.File({
-    filename: path.join(logDir, 'error.log'),
-    level: 'error',
-    format: logFormat,
-    maxsize: 5242880, // 5MB
-    maxFiles: 5,
-  }),
-
-  // Combined log file
-  new winston.transports.File({
-    filename: path.join(logDir, 'combined.log'),
-    format: logFormat,
-    maxsize: 5242880, // 5MB
-    maxFiles: 5,
-  }),
-];
-
-// In production, don't log to console
-if (process.env.NODE_ENV === 'production') {
-  transports.shift(); // Remove console transport
-}
+// Create transports.
+// O1 (audit) — sur Cloud Run le filesystem est ÉPHÉMÈRE : les transports fichier
+// sont invisibles dans Cloud Logging (et grossissent en RAM jusqu'à l'OOM). En
+// production on loggue donc en JSON sur stdout, que Cloud Logging capte et parse
+// nativement (champ `severity`). En dev on garde la console lisible + les fichiers.
+const isProd = process.env.NODE_ENV === 'production';
+const transports: winston.transport[] = isProd
+  ? [new winston.transports.Console({ format: logFormat })]
+  : [
+      new winston.transports.Console({ format: consoleFormat }),
+      new winston.transports.File({
+        filename: path.join(logDir, 'error.log'),
+        level: 'error',
+        format: logFormat,
+        maxsize: 5242880, // 5MB
+        maxFiles: 5,
+      }),
+      new winston.transports.File({
+        filename: path.join(logDir, 'combined.log'),
+        format: logFormat,
+        maxsize: 5242880, // 5MB
+        maxFiles: 5,
+      }),
+    ];
 
 // In test environment, only log errors
 const level = process.env.NODE_ENV === 'test' ? 'error' : (process.env.LOG_LEVEL || 'info');
@@ -84,12 +79,12 @@ const logger = winston.createLogger({
   levels,
   format: logFormat,
   transports,
-  exceptionHandlers: [
-    new winston.transports.File({ filename: path.join(logDir, 'exceptions.log') }),
-  ],
-  rejectionHandlers: [
-    new winston.transports.File({ filename: path.join(logDir, 'rejections.log') }),
-  ],
+  exceptionHandlers: isProd
+    ? [new winston.transports.Console({ format: logFormat })]
+    : [new winston.transports.File({ filename: path.join(logDir, 'exceptions.log') })],
+  rejectionHandlers: isProd
+    ? [new winston.transports.Console({ format: logFormat })]
+    : [new winston.transports.File({ filename: path.join(logDir, 'rejections.log') })],
   exitOnError: false,
 });
 

@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { getDashboardOverview } from '../controllers/dashboard.controller';
-import { authenticateJWT } from '../middleware/auth';
+import { authenticateStaff } from '../middleware/auth';
 
 const router = Router();
 
 // All dashboard routes require authentication
-router.use(authenticateJWT);
+router.use(authenticateStaff);
 
 /**
  * @route   GET /api/dashboard/overview

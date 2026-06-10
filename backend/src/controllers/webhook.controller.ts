@@ -1,9 +1,22 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import crypto from 'crypto';
+import { prisma } from '../config/database';
 import { findMatchingCandidate, findMatchingEmployee } from '../utils/candidateMatch';
 import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
 
-const prisma = new PrismaClient();
+/**
+ * Vérifie le secret du webhook GHL — fail-closed + timing-safe.
+ * Si GOHIGHLEVEL_WEBHOOK_SECRET n'est pas configuré, on REFUSE (jamais fail-open).
+ */
+function verifyGhlWebhookSecret(headerValue: unknown): boolean {
+  const expected = process.env.GOHIGHLEVEL_WEBHOOK_SECRET;
+  if (!expected) return false;
+  if (typeof headerValue !== 'string' || headerValue.length === 0) return false;
+  const a = Buffer.from(headerValue);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
 
 // Mapping des noms de villes pour normalisation
 const CITY_MAPPINGS: Record<string, string> = {
@@ -57,10 +70,9 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
     // On logge seulement la structure (clés présentes) pour le debug.
     console.log('📥 Webhook GoHighLevel reçu', { keys: Object.keys(req.body || {}) });
 
-    // Vérifier la clé secrète (sécurité)
-    const webhookSecret = req.headers['x-webhook-secret'];
-    if (webhookSecret !== process.env.GOHIGHLEVEL_WEBHOOK_SECRET) {
-      console.error('❌ Webhook secret invalide');
+    // Vérifier la clé secrète (sécurité) — fail-closed si non configuré.
+    if (!verifyGhlWebhookSecret(req.headers['x-webhook-secret'])) {
+      console.error('❌ Webhook secret invalide ou non configuré');
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -94,20 +106,23 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
     if (!firstName || !phone) {
       // S7 — pas de PII : on logge la présence, pas les valeurs.
       console.error('❌ Champs requis manquants:', { hasFirstName: !!firstName, hasPhone: !!phone });
+      // S12 — pas de PII en réponse : on indique seulement la présence des champs.
       return res.status(400).json({
         error: 'Missing required fields',
         required: ['first_name', 'phone'],
-        received: { firstName, phone }
+        received: { hasFirstName: !!firstName, hasPhone: !!phone }
       });
     }
 
-    // Vérifier les doublons (par email OU téléphone)
+    // Vérifier les doublons (par email OU téléphone).
+    // F4 — ne JAMAIS mettre un objet vide dans le OR : Prisma le ferait matcher
+    // TOUTES les lignes (→ faux « doublon » quand l'email est absent). Le
+    // téléphone est requis (validé plus haut) ; l'email est optionnel.
+    const duplicateOr: any[] = [{ phone }];
+    if (email) duplicateOr.push({ email });
     const existingProspect = await prisma.prospectCandidate.findFirst({
       where: {
-        OR: [
-          email ? { email } : {},
-          { phone }
-        ],
+        OR: duplicateOr,
         isDeleted: false,
       }
     });
@@ -116,7 +131,7 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
     const matchingEmployee = await findMatchingEmployee(prisma, email, phone);
     if (matchingEmployee) {
       console.log('ℹ️ Déjà Employé — non ajouté aux Candidats Potentiels:', {
-        employeeId: matchingEmployee.id, email, phone,
+        employeeId: matchingEmployee.id,
       });
       return res.status(200).json({
         message: 'Cette personne est déjà un Employé. Non ajoutée aux Candidats Potentiels.',
@@ -142,8 +157,6 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
       }
       console.log('ℹ️ Déjà Candidat — non ajouté aux Candidats Potentiels:', {
         candidateId: matchingCandidate.id,
-        email,
-        phone,
       });
       return res.status(200).json({
         message: 'Cette personne est déjà un Candidat. Non ajoutée aux Candidats Potentiels.',
@@ -154,8 +167,6 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
     if (existingProspect) {
       console.log('⚠️ Prospect déjà existant:', {
         id: existingProspect.id,
-        email: existingProspect.email,
-        phone: existingProspect.phone
       });
       return res.status(409).json({
         error: 'Duplicate prospect',
@@ -218,12 +229,11 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
       }
     }
 
+    // S12 — pas de PII dans les logs : seulement l'id et la présence des fichiers.
     console.log('✅ Prospect créé avec succès:', {
       id: prospect.id,
-      name: `${firstName} ${lastName}`,
-      email,
-      phone,
-      cvUrl: cvUrl || 'Non fourni',
+      hasCv: !!cvUrl,
+      hasVideo: !!videoUrl,
     });
 
     return res.status(201).json({
@@ -251,8 +261,8 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
  */
 export const handleSurveyWebhook = async (req: Request, res: Response) => {
   try {
-    const webhookSecret = req.headers['x-webhook-secret'];
-    if (webhookSecret !== process.env.GOHIGHLEVEL_WEBHOOK_SECRET) {
+    // Fail-closed si le secret n'est pas configuré (jamais fail-open).
+    if (!verifyGhlWebhookSecret(req.headers['x-webhook-secret'])) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 

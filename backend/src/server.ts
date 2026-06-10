@@ -48,6 +48,12 @@ import { startScheduler } from './jobs/scheduler';
 const app: Application = express();
 const PORT = parseInt(process.env.PORT || '8080', 10);
 
+// S8 — derrière le proxy Cloud Run (un seul hop), faire confiance au premier
+// X-Forwarded-For pour que `req.ip` soit l'IP réelle du client. Sans cela les
+// rate-limiters (login, global) keyent sur l'IP du proxy = compteurs partagés
+// par tous les utilisateurs (429 collectifs) et IP d'audit fausses.
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet());
 

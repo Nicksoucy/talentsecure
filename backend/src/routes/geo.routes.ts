@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { resolveLocation } from '../controllers/geo.controller';
-import { authenticateJWT } from '../middleware/auth';
+import { authenticateStaff } from '../middleware/auth';
 
 const router = Router();
 
 // Authentification requise (comme les autres routes /api).
-router.use(authenticateJWT);
+router.use(authenticateStaff);
 
 /**
  * @route   GET /api/geo/resolve

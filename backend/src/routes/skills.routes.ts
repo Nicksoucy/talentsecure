@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { validate } from '../middleware/validation.middleware';
-import { authenticateJWT } from '../middleware/auth';
+import { authenticateStaff } from '../middleware/auth';
 import {
   getAllSkills,
   getSkillById,
@@ -102,41 +102,41 @@ const searchCandidatesSchema = {
 // ============================================
 
 // Get skills stats (must be before /:id route)
-router.get('/prospect-stats', authenticateJWT, getProspectSkillsDistribution);
-router.get('/stats', authenticateJWT, getSkillsStats);
+router.get('/prospect-stats', authenticateStaff, getProspectSkillsDistribution);
+router.get('/stats', authenticateStaff, getSkillsStats);
 
 // Search extracted skills
-router.get('/search', authenticateJWT, searchExtractedSkills);
+router.get('/search', authenticateStaff, searchExtractedSkills);
 
 // CRUD operations
-router.get('/', authenticateJWT, getAllSkills);
-router.get('/:id', authenticateJWT, getSkillById);
-router.post('/', authenticateJWT, validate(createSkillSchema), createSkill);
-router.put('/:id', authenticateJWT, validate(updateSkillSchema), updateSkill);
-router.delete('/:id', authenticateJWT, deleteSkill);
+router.get('/', authenticateStaff, getAllSkills);
+router.get('/:id', authenticateStaff, getSkillById);
+router.post('/', authenticateStaff, validate(createSkillSchema), createSkill);
+router.put('/:id', authenticateStaff, validate(updateSkillSchema), updateSkill);
+router.delete('/:id', authenticateStaff, deleteSkill);
 
 // Search candidates by skills
-router.post('/search-candidates', authenticateJWT, validate(searchCandidatesSchema), searchCandidatesBySkills);
+router.post('/search-candidates', authenticateStaff, validate(searchCandidatesSchema), searchCandidatesBySkills);
 
 // ============================================
 // CANDIDATE SKILLS ROUTES
 // ============================================
 
 // Candidate-specific skill management
-router.get('/candidates/:candidateId/skills', authenticateJWT, getCandidateSkills);
+router.get('/candidates/:candidateId/skills', authenticateStaff, getCandidateSkills);
 router.post(
   '/candidates/:candidateId/skills',
-  authenticateJWT,
+  authenticateStaff,
   validate(addCandidateSkillSchema),
   addCandidateSkill
 );
 router.put(
   '/candidates/:candidateId/skills/:skillId',
-  authenticateJWT,
+  authenticateStaff,
   validate(updateCandidateSkillSchema),
   updateCandidateSkill
 );
-router.delete('/candidates/:candidateId/skills/:skillId', authenticateJWT, removeCandidateSkill);
+router.delete('/candidates/:candidateId/skills/:skillId', authenticateStaff, removeCandidateSkill);
 
 // ============================================
 // EXTRACTION ROUTES
@@ -157,13 +157,13 @@ const batchExtractSchema = {
 };
 
 // Batch extract (MUST be before /extract/:candidateId to avoid route conflict)
-router.post('/extract/batch', authenticateJWT, validate(batchExtractSchema), batchExtractSkills);
+router.post('/extract/batch', authenticateStaff, validate(batchExtractSchema), batchExtractSkills);
 
 // Extract skills from candidate
-router.post('/extract/:candidateId', authenticateJWT, validate(extractSkillsSchema), extractSkillsFromCandidate);
+router.post('/extract/:candidateId', authenticateStaff, validate(extractSkillsSchema), extractSkillsFromCandidate);
 
 // Get extraction logs
-router.get('/extract/:candidateId/logs', authenticateJWT, getExtractionLogs);
+router.get('/extract/:candidateId/logs', authenticateStaff, getExtractionLogs);
 
 // ============================================
 // AI EXTRACTION ROUTES
@@ -178,13 +178,13 @@ const aiExtractionSchema = {
 };
 
 // AI extraction
-router.post('/extract/:candidateId/ai', authenticateJWT, validate(aiExtractionSchema), extractSkillsWithAI);
+router.post('/extract/:candidateId/ai', authenticateStaff, validate(aiExtractionSchema), extractSkillsWithAI);
 
 // Hybrid extraction (Regex + AI)
-router.post('/extract/:candidateId/hybrid', authenticateJWT, validate(aiExtractionSchema), extractSkillsHybrid);
+router.post('/extract/:candidateId/hybrid', authenticateStaff, validate(aiExtractionSchema), extractSkillsHybrid);
 
 // AI stats
-router.get('/extract/ai/stats', authenticateJWT, getAIExtractionStats);
+router.get('/extract/ai/stats', authenticateStaff, getAIExtractionStats);
 
 export default router;
 

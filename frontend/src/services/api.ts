@@ -64,8 +64,16 @@ api.interceptors.response.use(
       _retry?: boolean;
     };
 
+    // Never attempt a token refresh for the auth endpoints themselves: a 401 from
+    // /login means "bad credentials" and must propagate to the page; otherwise the
+    // refresh-then-redirect flow silently reloads /login and the user never sees
+    // the error message.
+    const reqUrl = originalRequest.url || '';
+    const isAuthEndpoint =
+      reqUrl.includes('/auth/login') || reqUrl.includes('/auth/refresh');
+
     // If 401 and not already retried, try to refresh token
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true;
 
       try {

@@ -14,6 +14,14 @@ const invalidateClientCaches = (clientId?: string) =>
     detailId: clientId,
   });
 
+// S2 (audit) — ne JAMAIS exposer le hash de mot de passe d'un client dans une
+// réponse API. À appliquer avant la mise en cache ET avant res.json.
+const stripClientSecret = <T extends Record<string, any>>(client: T): T => {
+  if (!client) return client;
+  const { password, ...safe } = client;
+  return safe as T;
+};
+
 /**
  * Get all clients with filters
  */
@@ -74,7 +82,7 @@ export const getClients = async (
     ]);
 
     const responsePayload = {
-      data: clients,
+      data: clients.map(stripClientSecret),
       pagination: {
         total,
         page: Number(page),
@@ -128,7 +136,7 @@ export const getClientById = async (
       return res.status(404).json({ error: 'Client non trouvé' });
     }
 
-    const payload = { data: client };
+    const payload = { data: stripClientSecret(client) };
     await setCache(cacheKey, payload, 300);
 
     res.json(payload);
@@ -198,7 +206,7 @@ export const createClient = async (
 
     res.status(201).json({
       message: 'Client créé avec succès',
-      data: client,
+      data: stripClientSecret(client),
     });
   } catch (error) {
     next(error);
@@ -259,7 +267,7 @@ export const updateClient = async (
 
     res.json({
       message: 'Client mis à jour avec succès',
-      data: client,
+      data: stripClientSecret(client),
     });
   } catch (error) {
     next(error);
@@ -338,7 +346,7 @@ export const reactivateClient = async (
 
     res.json({
       message: 'Client réactivé avec succès',
-      data: client,
+      data: stripClientSecret(client),
     });
   } catch (error) {
     next(error);

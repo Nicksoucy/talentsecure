@@ -298,7 +298,7 @@ const ClientDashboardPage = () => {
                       </Typography>
                       <Box display="flex" gap={1} mb={2} flexWrap="wrap">
                         <Chip
-                          label={`${catalogue.candidateCount} candidats`}
+                          label={`${catalogue.items?.length ?? 0} candidats`}
                           size="small"
                           color="primary"
                         />

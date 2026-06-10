@@ -419,6 +419,15 @@ export const deleteCatalogue = async (
       return res.status(404).json({ error: 'Catalogue non trouvé' });
     }
 
+    // D2 (audit) — la suppression est un HARD delete qui cascade les
+    // catalogue_payments (pièces financières). On refuse de détruire un
+    // catalogue déjà payé : à archiver plutôt qu'à supprimer.
+    if ((catalogue as any).isPaid) {
+      return res.status(409).json({
+        error: 'Ce catalogue a un paiement enregistré : suppression refusée. Archivez-le plutôt.',
+      });
+    }
+
     // Delete catalogue
     await prisma.catalogue.delete({
       where: { id },
@@ -784,6 +793,21 @@ export const getCatalogueByToken = async (
           strengths: null,
           weaknesses: null,
           interviewDetails: null,
+          // C1 (audit) — sur un lien PUBLIC (token qui peut circuler), ne jamais
+          // exposer les identifiants sensibles ni les notes d'évaluation internes :
+          // n° BSP, n° de permis, coordonnées GPS, clé R2 brute, sous-notes RH.
+          bspNumber: null,
+          bspExpiryDate: null,
+          driverLicenseNumber: null,
+          driverLicenseClass: null,
+          lat: null,
+          lng: null,
+          videoStoragePath: null,
+          professionalismRating: null,
+          communicationRating: null,
+          appearanceRating: null,
+          motivationRating: null,
+          experienceRating: null,
           // Si paiement requis non payé : on masque aussi le reste évaluatif
           ...(isContentRestricted
             ? { videoUrl: null, videoStoragePath: null, experiences: [], certifications: [] }

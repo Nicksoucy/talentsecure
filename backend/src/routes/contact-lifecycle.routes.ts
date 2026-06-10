@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { lookupContact, moveContactController } from '../controllers/contact-lifecycle.controller';
-import { authenticateJWT } from '../middleware/auth';
+import { authenticateStaff } from '../middleware/auth';
 
 const router = Router();
 
-router.use(authenticateJWT);
+router.use(authenticateStaff);
 
 // GET /api/contacts/lookup?email=&phone=
 router.get('/lookup', lookupContact);

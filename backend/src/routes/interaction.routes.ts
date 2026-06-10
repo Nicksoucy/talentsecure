@@ -5,7 +5,7 @@ import {
     createInteraction,
     deleteInteraction
 } from '../controllers/interaction.controller';
-import { authenticateJWT, authorizeRoles } from '../middleware/auth';
+import { authenticateStaff, authorizeRoles } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
 
 const router = express.Router({ mergeParams: true });
@@ -19,7 +19,7 @@ const createInteractionSchema = z.object({
 });
 
 // Routes
-router.use(authenticateJWT);
+router.use(authenticateStaff);
 
 /**
  * @route   GET /api/clients/:clientId/interactions

@@ -40,12 +40,19 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
           create: { clientId, candidateId, type: 'EVALUATED', city, price },
         });
         logger.info(`[stripe] achat enregistré client=${clientId} candidat=${candidateId}`);
+      } else {
+        // Paiement encaissé mais metadata manquantes : impossible de créer
+        // l'achat. On loggue en ERREUR (à investiguer/rembourser) mais on renvoie
+        // 200 — un retry Stripe ne fera pas réapparaître des metadata absentes.
+        logger.error(`[stripe] checkout.session.completed sans metadata clientId/candidateId (session=${session.id})`);
       }
     }
   } catch (e: any) {
-    logger.error(`[stripe] erreur traitement webhook: ${e.message}`);
-    // On renvoie 200 quand même si la signature était valide, pour éviter les
-    // retries en boucle ; l'erreur est loggée pour investigation.
+    // L'upsert est idempotent → on renvoie 500 pour que Stripe REJOUE l'event.
+    // C'est volontairement préférable à un 200 qui perdrait l'achat en silence
+    // sur une erreur DB transitoire (le client a payé mais rien n'est créé).
+    logger.error(`[stripe] erreur traitement webhook (Stripe va rejouer): ${e.message}`);
+    return res.status(500).send('Webhook handler failed');
   }
 
   res.json({ received: true });

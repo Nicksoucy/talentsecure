@@ -26,12 +26,12 @@ interface Prospect {
     id: string;
     firstName: string;
     lastName: string;
-    email: string;
+    email?: string;
     city?: string;
     cvUrl?: string;
     cvStoragePath?: string;
     createdAt: string;
-    contacted: boolean;
+    isContacted: boolean;
     _count?: { skills: number }; // NOUVEAU : compteur de compétences
 }
 
@@ -126,7 +126,7 @@ const ProspectsTable: React.FC<ProspectsTableProps> = ({
                                     {new Date(prospect.createdAt).toLocaleDateString()}
                                 </TableCell>
                                 <TableCell>
-                                    {prospect.contacted ? (
+                                    {prospect.isContacted ? (
                                         <Chip label="Oui" color="success" size="small" />
                                     ) : (
                                         <Chip label="Non" color="warning" size="small" />

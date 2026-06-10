@@ -9,8 +9,9 @@ import {
   reactivateClient,
   registerClient,
 } from '../controllers/client.controller';
-import { authenticateJWT, authorizeRoles } from '../middleware/auth';
+import { authenticateStaff, authorizeRoles } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
+import { loginLimiter } from '../middleware/rate-limit.middleware';
 
 // Validation schemas
 const uuidParam = z.object({
@@ -24,10 +25,13 @@ const router = express.Router();
  * @desc    Public client registration
  * @access  Public
  */
-router.post('/register', registerClient);
+// S3 — inscription publique rate-limitée (anti-abus / création en masse).
+// NB : le compte reste isActive:true (auto-activé). Pour exiger une approbation
+// manuelle, passer isActive:false dans registerClient + écran d'approbation admin.
+router.post('/register', loginLimiter, registerClient);
 
 // All other routes require authentication
-router.use(authenticateJWT);
+router.use(authenticateStaff);
 
 /**
  * @route   GET /api/clients

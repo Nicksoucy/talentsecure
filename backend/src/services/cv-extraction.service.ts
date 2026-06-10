@@ -1,5 +1,7 @@
 import { Skill, SkillLevel, CandidateStatus } from '@prisma/client';
-const pdfParse = require('pdf-parse');
+// F1 (audit) — pdf-parse v2 exporte une CLASSE `PDFParse` (l'ancien appel
+// fonction `pdfParse(buffer)` levait une TypeError avalée → extraction vide).
+const { PDFParse } = require('pdf-parse');
 import * as fs from 'fs';
 import * as path from 'path';
 import { LOCAL_CV_PATH, GCS_CV_BUCKET, storage, useGCS } from '../config/storage';
@@ -443,8 +445,8 @@ export class CVExtractionService {
       // Read PDF file
       const dataBuffer = fs.readFileSync(filePath);
 
-      // Parse PDF
-      const data = await pdfParse(dataBuffer);
+      // Parse PDF (API v2 : new PDFParse({ data }).getText())
+      const data = await new PDFParse({ data: dataBuffer }).getText();
 
       return data.text || '';
     } catch (error: any) {
@@ -462,6 +464,23 @@ export class CVExtractionService {
     }
 
     try {
+      // F1 (audit) — les CV sont réellement stockés sur R2. On les télécharge
+      // via une URL signée vers un fichier temporaire. En cas d'échec, le
+      // catch renvoie null (= comportement antérieur, aucune régression).
+      const { useR2, getSignedFileUrl } = require('./r2.service');
+      if (useR2) {
+        const axios = require('axios');
+        const tempDir = path.join(__dirname, '../../temp');
+        if (!fs.existsSync(tempDir)) {
+          fs.mkdirSync(tempDir, { recursive: true });
+        }
+        const tempFilePath = path.join(tempDir, `temp_${Date.now()}_${path.basename(cvStoragePath)}`);
+        const signedUrl = await getSignedFileUrl(cvStoragePath, 600);
+        const resp = await axios.get(signedUrl, { responseType: 'arraybuffer' });
+        fs.writeFileSync(tempFilePath, Buffer.from(resp.data));
+        return tempFilePath;
+      }
+
       if (useGCS && storage) {
         // Download from Google Cloud Storage to temp file
         const tempDir = path.join(__dirname, '../../temp');

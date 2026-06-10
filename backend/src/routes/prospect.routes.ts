@@ -24,7 +24,7 @@ import {
 } from '../controllers/prospect.controller';
 import { getProspectAnalysis } from '../controllers/prospect-scoring.controller';
 import { proxyCv } from '../controllers/cv-proxy.controller';
-import { authenticateJWT, authorizeRoles } from '../middleware/auth';
+import { authenticateStaff, authorizeRoles } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
 
 // Validation schemas
@@ -54,7 +54,7 @@ const prospectQueryFilters = z.object({
 const router = Router();
 
 // All prospect routes require authentication
-router.use(authenticateJWT);
+router.use(authenticateStaff);
 
 /**
  * @route   GET /api/prospects

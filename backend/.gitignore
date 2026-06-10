@@ -52,3 +52,10 @@ gcs-credentials.json
 tmp/
 temp/
 *.tmp
+
+# C4 (audit) — exports de PII générés par des scripts (ne JAMAIS commiter).
+# Ex. classify-out-of-quebec.ts → out-of-quebec-review.csv (prénom/nom/CP/lien fiche).
+*-review.csv
+out-of-quebec-review.csv
+# Scripts de debug ad hoc créés à la racine (les vrais scripts vivent dans src/scripts).
+/check-users.ts

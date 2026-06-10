@@ -59,7 +59,9 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
-      sourcemap: true,
+      // O7 audit — 'hidden' : les sourcemaps sont générés (pour Sentry) mais NON
+      // référencés dans les bundles → le code source n'est plus exposé publiquement.
+      sourcemap: 'hidden',
       // O5 — sépare les gros vendors (recharts/d3, MUI) dans leurs propres
       // chunks pour un meilleur cache navigateur (ils changent rarement). On ne
       // touche pas à react lui-même pour éviter tout souci d'ordre de chargement.

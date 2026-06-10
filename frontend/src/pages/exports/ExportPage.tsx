@@ -48,7 +48,7 @@ const ExportPage = () => {
       }
       setIsLoadingPreview(true);
       try {
-        const data = await skillsService.searchSkills(query, category || undefined, minConfidence || undefined, accessToken);
+        const data = await skillsService.searchSkills(query, category || undefined, minConfidence || undefined, undefined, accessToken);
         if (!cancelled) {
           setPreview(data.results || []);
         }

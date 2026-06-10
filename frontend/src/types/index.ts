@@ -201,6 +201,8 @@ export interface Catalogue {
   pdfUrl?: string;
   createdAt: string;
   updatedAt: string;
+  // Le portail client (dashboard) renvoie les items du catalogue avec chaque catalogue.
+  items?: { id: string }[];
 }
 
 // Client types
@@ -251,6 +253,7 @@ export interface ProspectCandidate {
   deletedAt?: string;
   createdAt: string;
   updatedAt: string;
+  _count?: { skills: number }; // présent quand l'API inclut le compteur de compétences
 }
 
 export interface Employee {

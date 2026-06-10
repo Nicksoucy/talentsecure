@@ -28,7 +28,7 @@ import {
   downloadCandidateCV,
   deleteCandidateCV,
 } from '../controllers/upload.controller';
-import { authenticateJWT, authorizeRoles } from '../middleware/auth';
+import { authenticateStaff, authorizeRoles } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
 import { createCandidateSchema, updateCandidateSchema, candidateFiltersSchema, candidateIdSchema } from '../validation/candidate.validation';
 import { uploadCV } from '../middleware/upload';
@@ -79,7 +79,7 @@ const advancedSearchSchema = z.object({
 const router = Router();
 
 // All candidate routes require authentication
-router.use(authenticateJWT);
+router.use(authenticateStaff);
 
 // --- Direct Video Upload Routes (Start) ---
 /**

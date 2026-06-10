@@ -51,7 +51,6 @@ import BatchResultsDialog from './components/BatchResultsDialog';
 import ExtractionHistoryDialog from './components/ExtractionHistoryDialog'; // NOUVEAU
 import ReExtractionConfirmDialog from './components/ReExtractionConfirmDialog'; //NOUVEAU P2.2
 import BatchExtractionConfirmDialog from './components/BatchExtractionConfirmDialog'; // NOUVEAU P2.3
-import SkillsDistributionCharts from './components/SkillsDistributionCharts'; // NOUVEAU P3.2
 import { useSkillsAggregation } from '@/hooks/useSkillsAggregation';
 
 const LEVEL_COLORS = {
@@ -283,8 +282,9 @@ const AutresCompetancesPage = () => {
     );
   };
 
-  const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.checked) {
+  // ProspectsTable calls onSelectAll(checked: boolean), pas un ChangeEvent.
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
       const allIds = prospects.map((p: any) => p.id);
       setSelectedCandidateIds(allIds);
     } else {

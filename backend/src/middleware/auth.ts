@@ -38,6 +38,39 @@ export const authenticateJWT = (
 };
 
 /**
+ * Authentifie via JWT PUIS rejette les tokens du portail client.
+ *
+ * S1 (audit) — le portail client et le backoffice partagent le même secret JWT,
+ * et la stratégie passport accepte les tokens `role:'CLIENT'`. Sans ce garde, un
+ * compte client (auto-inscrit) atteint les endpoints staff qui n'ont pas de
+ * `authorizeRoles` explicite et exfiltre toute la base RH. À utiliser sur tous
+ * les routeurs du backoffice. Les routeurs réellement client-facing
+ * (marketplace, wishlist, client-auth) gardent `authenticateJWT`.
+ *
+ * N'a AUCUN impact sur les rôles staff (ADMIN/RH_RECRUITER/SALES/MAGASIN/…) :
+ * ils passent exactement comme avant ; seuls les tokens CLIENT reçoivent 403.
+ */
+export const authenticateStaff = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  passport.authenticate('jwt', { session: false }, (err: any, user: User) => {
+    if (err) {
+      return res.status(500).json({ error: 'Erreur d\'authentification' });
+    }
+    if (!user) {
+      return res.status(401).json({ error: 'Non authentifié' });
+    }
+    if ((user as { role?: string }).role === 'CLIENT') {
+      return res.status(403).json({ error: 'Accès refusé' });
+    }
+    req.user = user;
+    next();
+  })(req, res, next);
+};
+
+/**
  * Middleware pour vérifier les rôles
  */
 export const authorizeRoles = (...roles: UserRole[]) => {
