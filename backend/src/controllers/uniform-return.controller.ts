@@ -166,6 +166,19 @@ export const finalizeReturn = async (req: Request, res: Response, next: NextFunc
             items.push({ batchId: washBatchId, variantId: line.variantId, quantity: 1, returnLineId: line.id });
           }
           await tx.uniformWashBatchItem.createMany({ data: items });
+          // F2 (audit) — la pièce rapportée par l'agent RÉ-ENTRE physiquement en
+          // stock (IN +1) AVANT d'aller au lavage. Sans ce crédit, le cycle
+          // remise(-1) → retour → lavage(WASH_OUT_GOOD +1) perdait 1 pièce à
+          // chaque fois, et bloquait le retour quand la réserve tombait à 0.
+          await applyMovement(tx, {
+            variantId: line.variantId,
+            type: 'IN',
+            quantity: line.quantity,
+            location: 'BACK_OFFICE',
+            reason: `Retour ${ret.id} (réintégration physique)`,
+            returnId: ret.id,
+            createdById: userId(req),
+          });
           // Mouvement WASH_IN (delta - sur quantityOnHand). Débit pris sur le
           // BACK_OFFICE (la réserve qui porte le stock) : sûr même quand le
           // front office est à 0. Les pièces propres ré-entreront au FRONT_OFFICE
@@ -181,8 +194,17 @@ export const finalizeReturn = async (req: Request, res: Response, next: NextFunc
           });
           goodCount += line.quantity;
         } else if (line.condition === 'DAMAGED' && line.variantId) {
-          // Poubelle directe — la pièce a été comptée comme OUT à la remise,
-          // donc on enregistre DAMAGED comme événement audit pur (delta -).
+          // F2 (audit) — la pièce rapportée RÉ-ENTRE en stock (IN +1) puis part au
+          // rebut (DAMAGED -1) : net -1 (UNE pièce détruite), au lieu de -2 avant.
+          await applyMovement(tx, {
+            variantId: line.variantId,
+            type: 'IN',
+            quantity: line.quantity,
+            location: 'BACK_OFFICE',
+            reason: `Retour ${ret.id} (réintégration avant rebut)`,
+            returnId: ret.id,
+            createdById: userId(req),
+          });
           await applyMovement(tx, {
             variantId: line.variantId,
             type: 'DAMAGED',
