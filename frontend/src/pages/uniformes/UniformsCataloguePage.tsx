@@ -19,6 +19,7 @@ import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import EditIcon from '@mui/icons-material/Edit';
 import FitScreenIcon from '@mui/icons-material/FitScreen';
+import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import { usePerms } from '@/hooks/usePerms';
@@ -171,6 +172,8 @@ export default function UniformsCataloguePage() {
 
   // ---- Photo par morceau ----
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  // Aperçu agrandi d'une photo (clic sur la loupe).
+  const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null);
   const uploadImage = useMutation({
     mutationFn: ({ id, file }: { id: string; file: File }) => uniformService.uploadItemImage(id, file),
     onMutate: ({ id }) => setUploadingId(id),
@@ -380,7 +383,8 @@ export default function UniformsCataloguePage() {
           const backSum = sumLoc(item.variants, 'BACK_OFFICE');
           const emplacements = [...new Set((item.variants || []).map((v) => v.emplacement).filter(Boolean))] as string[];
           const isUploading = uploadingId === item.id;
-          const fit: 'cover' | 'contain' = item.imageFit === 'contain' ? 'contain' : 'cover';
+          // Défaut « article entier sur fond blanc » (contain) sauf si réglé sur « remplir ».
+          const fit: 'cover' | 'contain' = item.imageFit === 'cover' ? 'cover' : 'contain';
           return (
             <Card
               key={item.id}
@@ -446,7 +450,7 @@ export default function UniformsCataloguePage() {
               <Box
                 component={canWriteUniforms ? 'label' : 'div'}
                 sx={{
-                  position: 'relative', height: 150, bgcolor: 'grey.100', cursor: canWriteUniforms ? 'pointer' : 'default',
+                  position: 'relative', height: 200, bgcolor: '#fff', cursor: canWriteUniforms ? 'pointer' : 'default',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
                   borderBottom: '1px solid', borderColor: 'divider',
                   '&:hover .photo-overlay': { opacity: 1 },
@@ -465,12 +469,28 @@ export default function UniformsCataloguePage() {
                   />
                 )}
                 {item.imageUrl ? (
-                  <Box component="img" src={item.imageUrl} alt={item.name} sx={{ width: '100%', height: '100%', objectFit: fit, bgcolor: fit === 'contain' ? 'grey.50' : undefined }} />
+                  <Box component="img" src={item.imageUrl} alt={item.name} sx={{ width: '100%', height: '100%', objectFit: fit, p: fit === 'contain' ? 1 : 0, bgcolor: '#fff' }} />
                 ) : (
                   <Stack alignItems="center" spacing={0.5} sx={{ color: 'text.disabled' }}>
                     <CheckroomIcon sx={{ fontSize: 40 }} />
                     <Typography variant="caption">{canWriteUniforms ? 'Ajouter une photo' : 'Aucune photo'}</Typography>
                   </Stack>
+                )}
+                {/* Loupe : agrandir la photo (pour tous, lecture seule incluse) */}
+                {item.imageUrl && (
+                  <Tooltip title="Agrandir la photo">
+                    <IconButton
+                      size="small"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setLightbox({ url: item.imageUrl!, name: item.name }); }}
+                      sx={{
+                        position: 'absolute', bottom: 6, right: 6, zIndex: 4, p: 0.25,
+                        bgcolor: 'rgba(255,255,255,0.9)', boxShadow: 1,
+                        '&:hover': { bgcolor: '#fff' },
+                      }}
+                    >
+                      <ZoomInIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </IconButton>
+                  </Tooltip>
                 )}
                 {/* Overlay au survol / pendant l'upload */}
                 {canWriteUniforms && (
@@ -540,6 +560,20 @@ export default function UniformsCataloguePage() {
       </Box>
 
       {/* Nouveau morceau */}
+      {/* Aperçu agrandi de la photo (clic sur la loupe) */}
+      <Dialog open={!!lightbox} onClose={() => setLightbox(null)} maxWidth="md">
+        <DialogTitle sx={{ pb: 1 }}>{lightbox?.name}</DialogTitle>
+        <DialogContent sx={{ display: 'flex', justifyContent: 'center', bgcolor: '#fff', p: 2 }}>
+          {lightbox && (
+            <Box component="img" src={lightbox.url} alt={lightbox.name}
+              sx={{ maxWidth: '100%', maxHeight: '72vh', objectFit: 'contain' }} />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLightbox(null)}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog open={itemDlg} onClose={() => setItemDlg(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Nouveau morceau</DialogTitle>
         <DialogContent>
