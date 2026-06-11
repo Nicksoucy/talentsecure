@@ -1249,6 +1249,7 @@ model UniformItem {
   defaultReplacementCost Decimal          @default(0) @db.Decimal(10, 2)
   imageStoragePath       String? // photo du morceau (clé R2)
   imageFit               String? // affichage photo : 'cover' (remplir) | 'contain' (entière)
+  imageBg                String? // fond de la photo : 'dark' (sombre, pour articles clairs) | null (clair/blanc)
   sortOrder              Int              @default(0)
   isActive               Boolean          @default(true)
   createdById            String?

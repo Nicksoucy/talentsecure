@@ -55,6 +55,7 @@ export interface UniformItem {
   imageStoragePath?: string | null;
   imageUrl?: string | null; // URL signée renvoyée par l'API pour l'affichage
   imageFit?: string | null; // 'cover' (remplir) | 'contain' (photo entière)
+  imageBg?: string | null; // 'dark' (fond sombre) | null (fond clair/blanc)
   sortOrder: number;
   isActive: boolean;
   variants?: UniformVariant[];

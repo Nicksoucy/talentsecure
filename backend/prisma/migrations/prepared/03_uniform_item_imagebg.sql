@@ -1,0 +1,1 @@
+ALTER TABLE "uniform_items" ADD COLUMN IF NOT EXISTS "imageBg" TEXT;

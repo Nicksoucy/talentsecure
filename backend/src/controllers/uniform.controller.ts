@@ -138,7 +138,7 @@ export const uploadItemImage = async (req: Request, res: Response, next: NextFun
 
 export const updateItem = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, type, isOneSize, defaultReplacementCost, sortOrder, isActive, imageFit } = req.body;
+    const { name, type, isOneSize, defaultReplacementCost, sortOrder, isActive, imageFit, imageBg } = req.body;
     const data: any = {};
     if (name !== undefined) data.name = name;
     if (type !== undefined) data.type = type;
@@ -147,6 +147,7 @@ export const updateItem = async (req: Request, res: Response, next: NextFunction
     if (sortOrder !== undefined) data.sortOrder = sortOrder;
     if (isActive !== undefined) data.isActive = isActive;
     if (imageFit !== undefined) data.imageFit = imageFit;
+    if (imageBg !== undefined) data.imageBg = imageBg;
     const item = await prisma.uniformItem.update({ where: { id: req.params.id }, data });
     res.json({ message: 'Morceau mis à jour', data: item });
   } catch (error) {

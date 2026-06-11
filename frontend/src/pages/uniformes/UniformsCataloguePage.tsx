@@ -20,6 +20,7 @@ import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import EditIcon from '@mui/icons-material/Edit';
 import FitScreenIcon from '@mui/icons-material/FitScreen';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
+import InvertColorsIcon from '@mui/icons-material/InvertColors';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import { usePerms } from '@/hooks/usePerms';
@@ -212,6 +213,14 @@ export default function UniformsCataloguePage() {
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
 
+  // ---- Fond de la photo (clair / sombre) par morceau — pour les articles clairs ----
+  const setBg = useMutation({
+    mutationFn: ({ id, bg }: { id: string; bg: 'dark' | null }) =>
+      uniformService.updateItem(id, { imageBg: bg } as any),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['uniform-items'] }),
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
+  });
+
   // ---- Renommer / modifier un morceau ----
   const [editItem, setEditItem] = useState<UniformItem | null>(null);
   const [editForm, setEditForm] = useState({ name: '', type: 'UNIFORME', defaultReplacementCost: 0 });
@@ -385,6 +394,8 @@ export default function UniformsCataloguePage() {
           const isUploading = uploadingId === item.id;
           // Défaut « article entier sur fond blanc » (contain) sauf si réglé sur « remplir ».
           const fit: 'cover' | 'contain' = item.imageFit === 'cover' ? 'cover' : 'contain';
+          // Fond sombre optionnel (pour les articles clairs qui se perdraient sur blanc).
+          const dark = item.imageBg === 'dark';
           return (
             <Card
               key={item.id}
@@ -446,11 +457,27 @@ export default function UniformsCataloguePage() {
                 </Tooltip>
               )}
 
+              {/* Basculer le fond de la photo (clair / sombre) — pour les articles clairs */}
+              {canWriteUniforms && item.imageUrl && (
+                <Tooltip title={dark ? 'Fond sombre — cliquer pour fond clair' : 'Fond clair — cliquer pour fond sombre'}>
+                  <IconButton
+                    size="small"
+                    onClick={() => setBg.mutate({ id: item.id, bg: dark ? null : 'dark' })}
+                    sx={{
+                      position: 'absolute', top: 152, right: 4, zIndex: 3, p: 0.25,
+                      bgcolor: 'rgba(255,255,255,0.85)', '&:hover': { bgcolor: 'rgba(255,255,255,0.95)' },
+                    }}
+                  >
+                    <InvertColorsIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                  </IconButton>
+                </Tooltip>
+              )}
+
               {/* Zone photo (cliquable pour téléverser si écriture autorisée) */}
               <Box
                 component={canWriteUniforms ? 'label' : 'div'}
                 sx={{
-                  position: 'relative', height: 200, bgcolor: '#fff', cursor: canWriteUniforms ? 'pointer' : 'default',
+                  position: 'relative', height: 200, bgcolor: dark ? '#222' : '#fff', cursor: canWriteUniforms ? 'pointer' : 'default',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
                   borderBottom: '1px solid', borderColor: 'divider',
                   '&:hover .photo-overlay': { opacity: 1 },
@@ -469,7 +496,7 @@ export default function UniformsCataloguePage() {
                   />
                 )}
                 {item.imageUrl ? (
-                  <Box component="img" src={item.imageUrl} alt={item.name} sx={{ width: '100%', height: '100%', objectFit: fit, p: fit === 'contain' ? 1 : 0, bgcolor: '#fff' }} />
+                  <Box component="img" src={item.imageUrl} alt={item.name} sx={{ width: '100%', height: '100%', objectFit: fit, p: fit === 'contain' ? 1 : 0, bgcolor: dark ? '#222' : '#fff' }} />
                 ) : (
                   <Stack alignItems="center" spacing={0.5} sx={{ color: 'text.disabled' }}>
                     <CheckroomIcon sx={{ fontSize: 40 }} />
