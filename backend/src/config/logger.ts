@@ -36,6 +36,23 @@ const logFormat = winston.format.combine(
   winston.format.json()
 );
 
+// Production (Cloud Logging) : mappe le niveau winston vers le champ `severity`
+// que Cloud Logging reconnaît, pour que le filtre/alerting `severity>=ERROR`
+// fonctionne (sinon les erreurs sont visibles mais non étiquetées).
+const SEVERITY_BY_LEVEL: Record<string, string> = {
+  error: 'ERROR', warn: 'WARNING', info: 'INFO', http: 'INFO', debug: 'DEBUG',
+};
+const gcpProdFormat = winston.format.combine(
+  winston.format((info) => {
+    info.severity = SEVERITY_BY_LEVEL[info.level] || 'DEFAULT';
+    return info;
+  })(),
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.errors({ stack: true }),
+  winston.format.splat(),
+  winston.format.json()
+);
+
 // Define console format (more readable)
 const consoleFormat = winston.format.combine(
   winston.format.colorize({ all: true }),
@@ -52,7 +69,7 @@ const consoleFormat = winston.format.combine(
 // nativement (champ `severity`). En dev on garde la console lisible + les fichiers.
 const isProd = process.env.NODE_ENV === 'production';
 const transports: winston.transport[] = isProd
-  ? [new winston.transports.Console({ format: logFormat })]
+  ? [new winston.transports.Console({ format: gcpProdFormat })]
   : [
       new winston.transports.Console({ format: consoleFormat }),
       new winston.transports.File({
@@ -80,10 +97,10 @@ const logger = winston.createLogger({
   format: logFormat,
   transports,
   exceptionHandlers: isProd
-    ? [new winston.transports.Console({ format: logFormat })]
+    ? [new winston.transports.Console({ format: gcpProdFormat })]
     : [new winston.transports.File({ filename: path.join(logDir, 'exceptions.log') })],
   rejectionHandlers: isProd
-    ? [new winston.transports.Console({ format: logFormat })]
+    ? [new winston.transports.Console({ format: gcpProdFormat })]
     : [new winston.transports.File({ filename: path.join(logDir, 'rejections.log') })],
   exitOnError: false,
 });

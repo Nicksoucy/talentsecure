@@ -2,6 +2,9 @@ import { Skill, SkillLevel, CandidateStatus } from '@prisma/client';
 // F1 (audit) — pdf-parse v2 exporte une CLASSE `PDFParse` (l'ancien appel
 // fonction `pdfParse(buffer)` levait une TypeError avalée → extraction vide).
 const { PDFParse } = require('pdf-parse');
+// F1+ (audit) — extraction des CV Word (.docx) via mammoth (le code ne lisait
+// que les PDF ; les CV Word ne donnaient aucune compétence).
+const mammoth = require('mammoth');
 import * as fs from 'fs';
 import * as path from 'path';
 import { LOCAL_CV_PATH, GCS_CV_BUCKET, storage, useGCS } from '../config/storage';
@@ -456,6 +459,24 @@ export class CVExtractionService {
   }
 
   /**
+   * Extraction du texte d'un CV Word (.docx) via mammoth.
+   * (.doc binaire ancien non supporté — mammoth ne lit que le format .docx XML.)
+   */
+  private async extractTextFromDocx(filePath: string): Promise<string> {
+    try {
+      if (!fs.existsSync(filePath)) {
+        console.warn(`DOCX file not found: ${filePath}`);
+        return '';
+      }
+      const result = await mammoth.extractRawText({ path: filePath });
+      return result.value || '';
+    } catch (error: any) {
+      console.error(`Error extracting text from DOCX ${filePath}:`, error.message);
+      return '';
+    }
+  }
+
+  /**
    * Get CV file from storage (local or cloud)
    */
   private async getCVFilePath(cvStoragePath: string): Promise<string | null> {
@@ -556,6 +577,12 @@ export class CVExtractionService {
             if (pdfText && pdfText.length > 0) {
               textParts.push('\n=== CONTENU DU CV PDF ===\n');
               textParts.push(pdfText);
+            }
+          } else if (tempFilePath && tempFilePath.toLowerCase().endsWith('.docx')) {
+            const docxText = await this.extractTextFromDocx(tempFilePath);
+            if (docxText && docxText.length > 0) {
+              textParts.push('\n=== CONTENU DU CV ===\n');
+              textParts.push(docxText);
             }
           }
         }
@@ -660,6 +687,12 @@ export class CVExtractionService {
           if (pdfText && pdfText.length > 0) {
             textParts.push('\n=== CONTENU DU CV PDF ===\n');
             textParts.push(pdfText);
+          }
+        } else if (tempFilePath && tempFilePath.toLowerCase().endsWith('.docx')) {
+          const docxText = await this.extractTextFromDocx(tempFilePath);
+          if (docxText && docxText.length > 0) {
+            textParts.push('\n=== CONTENU DU CV ===\n');
+            textParts.push(docxText);
           }
         }
       }

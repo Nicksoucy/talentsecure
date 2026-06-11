@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { UniformStockLocation } from '@prisma/client';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { prisma } from '../config/database';
 import { ApiError } from '../utils/apiError';
 import { applyMovement, transferStock, computeHoldings, computeAmountOwed } from '../services/uniform-stock.service';
@@ -635,7 +635,7 @@ export const exportInventoryXlsx = async (_req: Request, res: Response, next: Ne
       map.set(v.itemId, e);
     }
 
-    const buildSheet = (groups: Map<string, Row>) => {
+    const buildSheet = (wb: ExcelJS.Workbook, name: string, groups: Map<string, Row>) => {
       const aoa: any[][] = [];
       const header: any[] = ["Pièce d'uniforme", 'Type', 'QT', 'QT Back', 'QT Front'];
       for (const s of SIZES) header.push(s, `Empl. ${s}`);
@@ -663,21 +663,22 @@ export const exportInventoryXlsx = async (_req: Request, res: Response, next: Ne
         aoa.push(row);
       }
 
-      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      const ws = wb.addWorksheet(name);
       // Largeurs de colonnes
-      ws['!cols'] = [{ wch: 38 }, { wch: 11 }, { wch: 6 }, { wch: 8 }, { wch: 8 }, ...Array(SIZES.length * 2).fill({ wch: 6 }), { wch: 11 }, { wch: 13 }];
+      ws.columns = [{ width: 38 }, { width: 11 }, { width: 6 }, { width: 8 }, { width: 8 }, ...Array(SIZES.length * 2).fill({ width: 6 }), { width: 11 }, { width: 13 }];
+      ws.addRows(aoa);
       return ws;
     };
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, buildSheet(grouped.SECURITE), 'Inventaire sécurité');
-    XLSX.utils.book_append_sheet(wb, buildSheet(grouped.SIGNALISATION), 'Inventaire signalisation');
+    const wb = new ExcelJS.Workbook();
+    buildSheet(wb, 'Inventaire sécurité', grouped.SECURITE);
+    buildSheet(wb, 'Inventaire signalisation', grouped.SIGNALISATION);
 
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const buf = await wb.xlsx.writeBuffer();
     const today = new Date().toISOString().split('T')[0];
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="Inventaire_${today}.xlsx"`);
-    res.send(buf);
+    res.send(Buffer.from(buf as ArrayBuffer));
   } catch (error) {
     next(error);
   }

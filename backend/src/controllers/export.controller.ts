@@ -1,7 +1,7 @@
 ﻿import { Request, Response, NextFunction } from 'express';
 import { Parser } from 'json2csv';
 import PDFDocument from 'pdfkit';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { buildExtractedSkillsFilters, fetchExtractedSkillsResults } from '../services/skill-search.service';
 
 const flattenResults = (results: any[]) => {
@@ -102,14 +102,18 @@ export const exportSkillsExcel = async (req: Request, res: Response, next: NextF
     const { results } = await fetchExtractedSkillsResults(filters);
     const rows = flattenResults(results);
 
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Competences');
-    const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+    // exceljs (remplace xlsx, vuln HIGH) — génération seulement.
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Competences');
+    if (rows.length > 0) {
+      worksheet.columns = Object.keys(rows[0]).map((key) => ({ header: key, key }));
+      worksheet.addRows(rows);
+    }
+    const buffer = await workbook.xlsx.writeBuffer();
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${getFileName('skills-export', 'xlsx')}"`);
-    res.send(buffer);
+    res.send(Buffer.from(buffer as ArrayBuffer));
   } catch (error) {
     next(error);
   }
