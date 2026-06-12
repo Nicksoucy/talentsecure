@@ -95,7 +95,7 @@ export const listIssuances = async (req: Request, res: Response, next: NextFunct
         skip,
         take: Number(limit),
         orderBy: { createdAt: 'desc' },
-        include: { lines: true },
+        include: { lines: { include: { variant: { include: { item: true } } } } },
       }),
     ]);
 

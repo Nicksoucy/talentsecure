@@ -6,7 +6,10 @@ import { usePerms } from '@/hooks/usePerms';
 const ALL_TABS = [
   { label: 'Catalogue', path: '/uniformes', match: (p: string) => p === '/uniformes' || p === '/uniformes/' },
   { label: 'Inventaire', path: '/uniformes/inventaire', match: (p: string) => p.startsWith('/uniformes/inventaire') },
-  { label: 'Remise', path: '/uniformes/remises/nouvelle', match: (p: string) => p.startsWith('/uniformes/remises'), write: true },
+  { label: 'Remise', path: '/uniformes/remises/nouvelle', match: (p: string) => p.startsWith('/uniformes/remises/nouvelle'), write: true },
+  // « Planifiées » (brouillons) : visible à toute l'équipe — n'importe qui peut
+  // préparer/ajuster un envoi ; le magasin le finalise ensuite.
+  { label: 'Planifiées', path: '/uniformes/remises/brouillons', match: (p: string) => p.startsWith('/uniformes/remises/brouillon') },
   { label: 'Retour', path: '/uniformes/retours', match: (p: string) => p.startsWith('/uniformes/retours'), write: true },
   { label: 'Lots de lavage', path: '/uniformes/lavage', match: (p: string) => p.startsWith('/uniformes/lavage') },
   { label: 'Rapports', path: '/uniformes/rapports', match: (p: string) => p.startsWith('/uniformes/rapports') },

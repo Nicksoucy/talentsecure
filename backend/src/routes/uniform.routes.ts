@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
-import { authenticateJWT, authorizeReadWrite } from '../middleware/auth';
+import { authenticateJWT, authorizeReadWrite, authorizeRoles } from '../middleware/auth';
 import { publicShareLimiter } from '../middleware/rate-limit.middleware';
 import * as ctrl from '../controllers/uniform.controller';
 import * as iss from '../controllers/uniform-issuance.controller';
@@ -43,6 +43,22 @@ router.post('/sign/:token', publicShareLimiter, ctrl.submitSign);
 // Tout le reste : staff ADMIN + RH_RECRUITER.
 // -------------------------------------------------------------------------
 router.use(authenticateJWT);
+
+// -------------------------------------------------------------------------
+// Préparation d'un BROUILLON de remise — ouverte à TOUTE l'équipe ayant accès
+// au module (MAGASIN lecture seule incluse). Permet à n'importe qui de préparer
+// d'avance les envois ; le magasin/gestion n'a plus qu'à ouvrir → finaliser →
+// signer → envoyer. Cette route ne crée qu'un brouillon : AUCUN impact stock,
+// AUCUNE signature, AUCUN SMS. La finalisation (décrément stock), la signature
+// et l'envoi SMS restent réservées aux rôles d'écriture (cf. authorizeReadWrite
+// + routes /finalize, /counter-sign, /send-sms ci-dessous).
+// Déclarée AVANT le garde par méthode pour échapper au write-gate (POST).
+router.post(
+  '/issuances/draft',
+  authorizeRoles('ADMIN', 'RH_RECRUITER', 'MAGASIN', 'MAGASIN_GESTION'),
+  iss.createIssuance,
+);
+
 // Lecture (GET) : ADMIN, RH, MAGASIN (lecture seule). Écriture : ADMIN, RH.
 // Invariant : toutes les lectures du module sont des GET, toutes les mutations
 // sont POST/PUT/DELETE (cf. authorizeReadWrite).

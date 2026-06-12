@@ -1,6 +1,8 @@
 export type UniformDivision = 'SECURITE' | 'SIGNALISATION';
 export type UniformPieceType = 'UNIFORME' | 'EQUIPEMENT';
 export type UniformStockLocation = 'BACK_OFFICE' | 'FRONT_OFFICE';
+/** Source d'une ligne de remise : AUTO = front d'abord, puis back. */
+export type UniformSourceMode = 'AUTO' | UniformStockLocation;
 export type UniformMovementType =
   | 'IN'
   | 'OUT'

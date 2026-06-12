@@ -41,6 +41,7 @@ const UniformsHubPage = lazy(() => import('./pages/uniformes/UniformsHubPage'));
 const UniformsCataloguePage = lazy(() => import('./pages/uniformes/UniformsCataloguePage'));
 const UniformInventoryPage = lazy(() => import('./pages/uniformes/UniformInventoryPage'));
 const UniformIssuanceWizardPage = lazy(() => import('./pages/uniformes/UniformIssuanceWizardPage'));
+const DraftIssuancesPage = lazy(() => import('./pages/uniformes/DraftIssuancesPage'));
 const UniformReturnsPage = lazy(() => import('./pages/uniformes/UniformReturnsPage'));
 const UniformReportsPage = lazy(() => import('./pages/uniformes/UniformReportsPage'));
 const UniformWashBatchesPage = lazy(() => import('./pages/uniformes/UniformWashBatchesPage'));
@@ -148,6 +149,8 @@ function App() {
             >
               <Route index element={<UniformsCataloguePage />} />
               <Route path="inventaire" element={<UniformInventoryPage />} />
+              <Route path="remises/brouillons" element={<DraftIssuancesPage />} />
+              <Route path="remises/brouillon/:id" element={<UniformIssuanceWizardPage />} />
               <Route path="remises/nouvelle" element={<UniformIssuanceWizardPage />} />
               <Route path="retours" element={<UniformReturnsPage />} />
               <Route path="lavage" element={<UniformWashBatchesPage />} />

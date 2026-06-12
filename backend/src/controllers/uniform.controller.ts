@@ -408,9 +408,41 @@ export const replenishVariant = async (req: Request, res: Response, next: NextFu
 
 export const adjustVariant = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { quantity, reason, location } = req.body;
-    if (quantity === undefined || quantity === 0) throw new ApiError(400, 'Quantité (signée) requise');
+    const { quantity, setTo, reason, location } = req.body;
     const loc = parseLocation(location);
+
+    // Mode « quantité réelle » (décompte physique) : le client envoie la quantité
+    // cible de l'emplacement ; le delta est calculé ICI, dans la transaction,
+    // pour éviter qu'un décompte basé sur un affichage périmé écrase un mouvement
+    // concurrent. setTo est prioritaire si quantity est aussi envoyé.
+    if (setTo !== undefined) {
+      if (!Number.isInteger(setTo) || setTo < 0) throw new ApiError(400, 'setTo doit être un entier ≥ 0');
+      const result = await prisma.$transaction(async (tx) => {
+        const variant = await tx.uniformVariant.findUnique({ where: { id: req.params.variantId } });
+        if (!variant) throw new ApiError(404, 'Variante introuvable');
+        const bucket = await tx.uniformVariantStock.findUnique({
+          where: { variantId_location: { variantId: req.params.variantId, location: loc } },
+        });
+        const current = bucket?.quantityOnHand ?? 0;
+        const delta = setTo - current;
+        if (delta === 0) return null; // aucun écart → aucun mouvement (ledger sans bruit)
+        return applyMovement(tx, {
+          variantId: req.params.variantId,
+          type: 'ADJUST',
+          quantity: delta,
+          location: loc,
+          reason: `Décompte: ${current} → ${setTo}` + (reason ? ` — ${reason}` : ''),
+          createdById: userId(req),
+        });
+      });
+      res.status(result ? 201 : 200).json({
+        message: result ? 'Inventaire ajusté' : 'Aucun écart — inventaire déjà à jour',
+        data: result,
+      });
+      return;
+    }
+
+    if (quantity === undefined || quantity === 0) throw new ApiError(400, 'Quantité (signée) requise');
     const result = await prisma.$transaction((tx) =>
       applyMovement(tx, {
         variantId: req.params.variantId,

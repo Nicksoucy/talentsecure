@@ -19,6 +19,10 @@ export function usePerms() {
     isMagasinAny,
     canViewUniforms: isAdmin || isRh || isMagasinAny,
     canWriteUniforms: isAdmin || isRh || isMagasinGestion,
+    // Préparer un brouillon de remise : ouvert à toute l'équipe ayant accès au
+    // module (MAGASIN lecture seule incluse). La finalisation/signature/envoi
+    // restent gardées par canWriteUniforms.
+    canPrepareUniformDraft: isAdmin || isRh || isMagasinAny,
     canWriteEmployees: isAdmin || isRh,
     canManageUsers: isAdmin,
   };

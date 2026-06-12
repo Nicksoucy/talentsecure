@@ -19,6 +19,7 @@ import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import { usePerms } from '@/hooks/usePerms';
 import type { UniformStockLocation } from '@/types/uniform';
+import StockQuickFixDialog, { type StockQuickFixTarget } from './components/StockQuickFixDialog';
 
 // ---------- Design B (heatmap) tokens ----------
 const T = {
@@ -426,19 +427,9 @@ export default function UniformInventoryPage() {
     staleTime: 0,
   });
 
-  const [adjust, setAdjust] = useState<{ variantId: string; label: string; back?: number; front?: number } | null>(null);
-  const [qty, setQty] = useState('');
-  const [reason, setReason] = useState('');
-  const [adjustLoc, setAdjustLoc] = useState<UniformStockLocation>('BACK_OFFICE');
-  const doAdjust = useMutation({
-    mutationFn: () => uniformService.adjust(adjust!.variantId, Number(qty), reason, adjustLoc),
-    onSuccess: () => {
-      enqueueSnackbar('Inventaire ajusté', { variant: 'success' });
-      setAdjust(null); setQty(''); setReason(''); setAdjustLoc('BACK_OFFICE');
-      invalidateUniformCaches(qc);
-    },
-    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
-  });
+  // Correction de stock d'une variante (Ajuster delta/quantité réelle +
+  // Transférer + Réappro) — dialog partagé avec la page Remise.
+  const [quickFix, setQuickFix] = useState<StockQuickFixTarget | null>(null);
 
   // Transfert back ↔ front
   const [transferOpen, setTransferOpen] = useState(false);
@@ -583,7 +574,8 @@ export default function UniformInventoryPage() {
     }
   };
 
-  const openAdjust = (r: Row) => setAdjust({ variantId: r.variantId, label: `${r.itemName} — ${r.size}`, back: r.backOffice, front: r.frontOffice });
+  const openAdjust = (r: Row) =>
+    setQuickFix({ variantId: r.variantId, label: `${r.itemName} — ${r.size}`, back: r.backOffice ?? 0, front: r.frontOffice ?? 0 });
 
   return (
     <Box sx={{ bgcolor: T.bg, mx: -3, mt: -3, mb: -3, px: 3, py: 3, minHeight: 'calc(100vh - 100px)', fontFamily: T.fontSans }}>
@@ -932,37 +924,14 @@ export default function UniformInventoryPage() {
         </>
       )}
 
-      {/* Adjust dialog */}
-      <Dialog open={!!adjust} onClose={() => setAdjust(null)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontFamily: T.fontSans, fontWeight: 600 }}>Ajuster l'inventaire</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" mb={0.5} sx={{ fontFamily: T.fontSans }}>{adjust?.label}</Typography>
-          {(adjust?.front !== undefined || adjust?.back !== undefined) && (
-            <Typography variant="caption" color="text.secondary" sx={{ fontFamily: T.fontSans }}>
-              Actuel — Front {adjust?.front ?? 0} · Back {adjust?.back ?? 0}
-            </Typography>
-          )}
-          <Stack spacing={2} mt={1.5}>
-            <TextField select fullWidth label="Emplacement" value={adjustLoc} onChange={(e) => setAdjustLoc(e.target.value as UniformStockLocation)}>
-              <MenuItem value="BACK_OFFICE">Back office (entrepôt)</MenuItem>
-              <MenuItem value="FRONT_OFFICE">Front office (comptoir)</MenuItem>
-            </TextField>
-            <TextField type="number" fullWidth label="Delta (ex. +5 ou -3)" value={qty} onChange={(e) => setQty(e.target.value)} />
-            <TextField fullWidth label="Raison" value={reason} onChange={(e) => setReason(e.target.value)} />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAdjust(null)} sx={{ textTransform: 'none' }}>Annuler</Button>
-          <Button
-            variant="contained"
-            disabled={!qty || doAdjust.isPending}
-            onClick={() => doAdjust.mutate()}
-            sx={{ textTransform: 'none', bgcolor: T.primary, '&:hover': { bgcolor: '#1c1b1b' } }}
-          >
-            Ajuster
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Correction de stock (Ajuster delta/quantité réelle + Transférer + Réappro) */}
+      <StockQuickFixDialog
+        open={!!quickFix}
+        target={quickFix}
+        initialTab="adjust"
+        defaultLocation="BACK_OFFICE"
+        onClose={() => setQuickFix(null)}
+      />
 
       {/* Transfer dialog */}
       <Dialog open={transferOpen} onClose={closeTransfer} maxWidth="xs" fullWidth>

@@ -119,9 +119,14 @@ export const uniformService = {
     const r = await api.post(`/api/uniforms/variants/${variantId}/replenish`, { quantity, reason, location });
     return r.data;
   },
-  async adjust(variantId: string, quantity: number, reason?: string, location?: UniformStockLocation) {
-    const r = await api.post(`/api/uniforms/variants/${variantId}/adjust`, { quantity, reason, location });
-    return r.data;
+  /** Ajustement d'inventaire : delta signé (number) OU quantité réelle comptée
+   *  ({ setTo }) — dans ce cas le serveur calcule l'écart en transaction. */
+  async adjust(variantId: string, change: number | { setTo: number }, reason?: string, location?: UniformStockLocation) {
+    const body = typeof change === 'number'
+      ? { quantity: change, reason, location }
+      : { setTo: change.setTo, reason, location };
+    const r = await api.post(`/api/uniforms/variants/${variantId}/adjust`, body);
+    return r.data as { message: string; data: unknown };
   },
   async transfer(variantId: string, data: { quantity: number; from: UniformStockLocation; to: UniformStockLocation; reason?: string }) {
     const r = await api.post(`/api/uniforms/variants/${variantId}/transfer`, data);
@@ -139,6 +144,12 @@ export const uniformService = {
   },
   async createIssuance(data: { employeeId: string; division: UniformDivision; dueReturnAt?: string; notes?: string; lines: IssuanceLineInput[]; sourceLocation?: UniformStockLocation }) {
     const r = await api.post('/api/uniforms/issuances', data);
+    return r.data as { data: UniformIssuance };
+  },
+  /** Prépare un BROUILLON de remise (aucun impact stock/SMS/signature).
+   *  Ouvert à toute l'équipe ayant accès au module (route /issuances/draft). */
+  async prepareDraftIssuance(data: { employeeId: string; division: UniformDivision; dueReturnAt?: string; notes?: string; lines: IssuanceLineInput[]; sourceLocation?: UniformStockLocation }) {
+    const r = await api.post('/api/uniforms/issuances/draft', data);
     return r.data as { data: UniformIssuance };
   },
   async updateIssuance(id: string, data: { dueReturnAt?: string | null; notes?: string; lines?: IssuanceLineInput[] }) {
