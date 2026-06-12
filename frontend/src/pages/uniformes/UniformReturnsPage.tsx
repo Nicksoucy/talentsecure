@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Stack, Paper, TextField, MenuItem, Autocomplete, Button, Alert, Card,
   CardContent, ToggleButtonGroup, ToggleButton, Divider, Chip, Grid,
@@ -12,6 +12,7 @@ import SendIcon from '@mui/icons-material/Send';
 import LocalLaundryServiceIcon from '@mui/icons-material/LocalLaundryService';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
+import { invalidateUniformCaches } from '@/utils/uniformCache';
 import { employeeService } from '@/services/employee.service';
 import { usePerms } from '@/hooks/usePerms';
 import type { UniformItemCondition } from '@/types/uniform';
@@ -114,6 +115,7 @@ export default function UniformReturnsPage() {
 
   const allTagged = pieces.length > 0 && counts.pending === 0;
 
+  const qc = useQueryClient();
   const createAndFinalize = useMutation({
     mutationFn: async () => {
       // 1 ligne par pièce (qty=1) — granularité maximale pour audit + wash batch.
@@ -133,6 +135,7 @@ export default function UniformReturnsPage() {
     onSuccess: ({ id, washBatchId: wbId }) => {
       setReturnId(id);
       setWashBatchId(wbId);
+      invalidateUniformCaches(qc); // sync stock/inventaire après le retour
       enqueueSnackbar(
         wbId ? `Retour finalisé — lot de lavage créé (${counts.good} pièce(s))` : 'Retour finalisé',
         { variant: 'success' },

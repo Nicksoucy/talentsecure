@@ -23,6 +23,7 @@ import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import InvertColorsIcon from '@mui/icons-material/InvertColors';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
+import { invalidateUniformCaches } from '@/utils/uniformCache';
 import { usePerms } from '@/hooks/usePerms';
 import type { UniformDivision, UniformItem, UniformStockLocation, UniformVariant } from '@/types/uniform';
 
@@ -119,6 +120,7 @@ export default function UniformsCataloguePage() {
   const { data, isLoading } = useQuery({
     queryKey: ['uniform-items', division, search],
     queryFn: () => uniformService.listItems({ division: division || undefined, search: search || undefined }),
+    staleTime: 0, // toujours rafraîchir à l'ouverture du Catalogue
   });
   const items = data?.data || [];
 
@@ -130,7 +132,7 @@ export default function UniformsCataloguePage() {
     onSuccess: () => {
       enqueueSnackbar('Morceau créé', { variant: 'success' });
       setItemDlg(false);
-      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+      invalidateUniformCaches(qc);
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
@@ -150,7 +152,7 @@ export default function UniformsCataloguePage() {
       enqueueSnackbar('Grandeur ajoutée', { variant: 'success' });
       setVariantDlg(null);
       setVariantForm({ size: '', replacementCost: '', reorderThreshold: '', emplacement: '' });
-      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+      invalidateUniformCaches(qc);
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
@@ -166,7 +168,7 @@ export default function UniformsCataloguePage() {
       setReplenish(null);
       setReplenishQty('');
       setReplenishLoc('BACK_OFFICE');
-      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+      invalidateUniformCaches(qc);
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
@@ -180,7 +182,7 @@ export default function UniformsCataloguePage() {
     onMutate: ({ id }) => setUploadingId(id),
     onSuccess: () => {
       enqueueSnackbar('Photo enregistrée', { variant: 'success' });
-      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+      invalidateUniformCaches(qc);
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Échec photo', { variant: 'error' }),
     onSettled: () => setUploadingId(null),
@@ -209,7 +211,7 @@ export default function UniformsCataloguePage() {
   const setFit = useMutation({
     mutationFn: ({ id, fit }: { id: string; fit: 'cover' | 'contain' }) =>
       uniformService.updateItem(id, { imageFit: fit } as any),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['uniform-items'] }),
+    onSuccess: () => invalidateUniformCaches(qc),
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
 
@@ -217,7 +219,7 @@ export default function UniformsCataloguePage() {
   const setBg = useMutation({
     mutationFn: ({ id, bg }: { id: string; bg: 'dark' | null }) =>
       uniformService.updateItem(id, { imageBg: bg } as any),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['uniform-items'] }),
+    onSuccess: () => invalidateUniformCaches(qc),
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
 
@@ -233,7 +235,7 @@ export default function UniformsCataloguePage() {
     onSuccess: () => {
       enqueueSnackbar('Morceau mis à jour', { variant: 'success' });
       setEditItem(null);
-      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+      invalidateUniformCaches(qc);
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
@@ -245,7 +247,7 @@ export default function UniformsCataloguePage() {
     onSuccess: () => {
       enqueueSnackbar('Morceau archivé', { variant: 'success' });
       setArchiveItem(null);
-      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+      invalidateUniformCaches(qc);
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
@@ -267,7 +269,7 @@ export default function UniformsCataloguePage() {
     onSuccess: () => {
       enqueueSnackbar('Inventaire ajusté', { variant: 'success' });
       setAdjustVar(null); setAdjQty(''); setAdjReason(''); setAdjLoc('BACK_OFFICE');
-      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+      invalidateUniformCaches(qc);
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
@@ -280,7 +282,7 @@ export default function UniformsCataloguePage() {
     onSuccess: () => {
       enqueueSnackbar('Emplacement mis à jour', { variant: 'success' });
       setEmplVar(null);
-      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+      invalidateUniformCaches(qc);
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
@@ -292,7 +294,7 @@ export default function UniformsCataloguePage() {
     onSuccess: () => {
       enqueueSnackbar('Grandeur retirée', { variant: 'success' });
       setArchiveVar(null);
-      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+      invalidateUniformCaches(qc);
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
@@ -307,7 +309,7 @@ export default function UniformsCataloguePage() {
     onSuccess: () => {
       enqueueSnackbar('Stock transféré', { variant: 'success' });
       setTransferVar(null); setTQty(''); setTFrom('BACK_OFFICE');
-      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+      invalidateUniformCaches(qc);
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
@@ -320,10 +322,10 @@ export default function UniformsCataloguePage() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const reorder = useMutation({
     mutationFn: (ids: string[]) => uniformService.reorderItems(ids),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['uniform-items'] }),
+    onSuccess: () => invalidateUniformCaches(qc),
     onError: () => {
       enqueueSnackbar('Erreur lors du réordonnancement', { variant: 'error' });
-      qc.invalidateQueries({ queryKey: ['uniform-items'] });
+      invalidateUniformCaches(qc);
     },
   });
   const onCardDragOver = (e: React.DragEvent, overId: string) => {

@@ -9,8 +9,10 @@ import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import SendIcon from '@mui/icons-material/Send';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SearchIcon from '@mui/icons-material/Search';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
+import { invalidateUniformCaches } from '@/utils/uniformCache';
 import { employeeService } from '@/services/employee.service';
 import { usePerms } from '@/hooks/usePerms';
 import type { UniformDivision, UniformItem, UniformStockLocation, UniformVariant } from '@/types/uniform';
@@ -18,6 +20,8 @@ import BarcodeScannerInput from './components/BarcodeScannerInput';
 import SignaturePad from './components/SignaturePad';
 
 const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
+/** Normalise pour la recherche : minuscules + sans accents. */
+const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const locLabel: Record<UniformStockLocation, string> = { FRONT_OFFICE: 'Front office', BACK_OFFICE: 'Back office' };
 /** Stock d'une variante à un emplacement (0 si inconnu). */
 const locQty = (v: UniformVariant | undefined, loc: UniformStockLocation) =>
@@ -50,14 +54,18 @@ export default function UniformIssuanceWizardPage() {
   const [historical, setHistorical] = useState(false);
   const [historicalDate, setHistoricalDate] = useState('');
   const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [search, setSearch] = useState(''); // filtre la grille d'articles
 
   const employees = useQuery({
     queryKey: ['emp-search', empSearch],
     queryFn: () => employeeService.getEmployees({ search: empSearch || undefined, limit: 15, status: 'ACTIF' }),
   });
   const itemsQ = useQuery({
-    queryKey: ['uniform-items-div', division],
+    // Clé unifiée sous le préfixe ['uniform-items'] → couverte par les
+    // invalidations du Catalogue (articles renommés/ajoutés remontent ici).
+    queryKey: ['uniform-items', division],
     queryFn: () => uniformService.listItems({ division }),
+    staleTime: 0, // toujours rafraîchir à l'ouverture de la Remise
   });
   const items = itemsQ.data?.data || [];
 
@@ -105,8 +113,9 @@ export default function UniformIssuanceWizardPage() {
     }
   };
 
-  const uniformeItems = useMemo(() => items.filter((i) => i.type === 'UNIFORME'), [items]);
-  const equipItems = useMemo(() => items.filter((i) => i.type === 'EQUIPEMENT'), [items]);
+  const q = norm(search.trim());
+  const uniformeItems = useMemo(() => items.filter((i) => i.type === 'UNIFORME' && (!q || norm(i.name).includes(q))), [items, q]);
+  const equipItems = useMemo(() => items.filter((i) => i.type === 'EQUIPEMENT' && (!q || norm(i.name).includes(q))), [items, q]);
 
   const grandTotal =
     items.reduce((s, it) => s + (rowState[it.id]?.qty || 0) * rowCost(it), 0) +
@@ -146,10 +155,8 @@ export default function UniformIssuanceWizardPage() {
     },
     onSuccess: (id) => {
       setIssuanceId(id);
-      // W11 (audit) — rafraîchir stock/mouvements après une remise (sinon
-      // l'inventaire affiche des valeurs périmées jusqu'au staleTime).
-      queryClient.invalidateQueries({ queryKey: ['uniform-stock'] });
-      queryClient.invalidateQueries({ queryKey: ['uniform-movements'] });
+      // Sync inventaire : rafraîchir TOUS les modules uniformes après la remise.
+      invalidateUniformCaches(queryClient);
       enqueueSnackbar(historical ? 'Remise historique enregistrée — stock NON modifié' : 'Remise finalisée — stock décrémenté', { variant: 'success' });
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || e?.message || 'Erreur', { variant: 'error' }),
@@ -190,6 +197,7 @@ export default function UniformIssuanceWizardPage() {
         consents: { payroll: cPayroll, policy: cPolicy, fit: cFit },
       }),
     onSuccess: () => {
+      invalidateUniformCaches(queryClient);
       enqueueSnackbar("Signature de l'agent enregistrée", { variant: 'success' });
       navigate(`/employees/${employee.id}`);
     },
@@ -349,6 +357,14 @@ export default function UniformIssuanceWizardPage() {
                 Aucun stock à <b>{locLabel[sourceLocation]}</b>. Transférez du stock (Inventaire → Transférer)
                 ou choisissez « Back office » comme source ci-dessus.
               </Alert>
+            )}
+            <TextField
+              size="small" fullWidth placeholder="Rechercher un article par nom…"
+              value={search} onChange={(e) => setSearch(e.target.value)} sx={{ mb: 2 }}
+              InputProps={{ startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: 'text.disabled' }} /> }}
+            />
+            {q && uniformeItems.length === 0 && equipItems.length === 0 && (
+              <Typography color="text.secondary" sx={{ py: 1 }}>Aucun article ne correspond à « {search} ».</Typography>
             )}
             {renderSection('Uniforme', uniformeItems)}
             {renderSection('Équipement', equipItems)}

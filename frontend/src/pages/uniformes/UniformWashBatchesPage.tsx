@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { invalidateUniformCaches } from '@/utils/uniformCache';
 import {
   Box, Typography, Tabs, Tab, Paper, Table, TableHead, TableRow, TableCell, TableBody,
   Chip, Button, Stack, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton,
@@ -134,9 +135,9 @@ function WashBatchDialog({ batchId, onClose }: { batchId: string; onClose: () =>
   const batch = data?.data;
 
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['wash-batches'] });
     qc.invalidateQueries({ queryKey: ['wash-batch', batchId] });
     qc.invalidateQueries({ queryKey: ['notifications'] });
+    invalidateUniformCaches(qc); // sync stock/items après inspection (pièces réintégrées)
   };
 
   const sendMutation = useMutation({

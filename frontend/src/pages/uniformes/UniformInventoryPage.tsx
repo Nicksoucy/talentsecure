@@ -12,6 +12,7 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import { invalidateUniformCaches } from '@/utils/uniformCache';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import { useSnackbar } from 'notistack';
@@ -418,10 +419,11 @@ export default function UniformInventoryPage() {
 
   const [moveType, setMoveType] = useState('');
 
-  const stock = useQuery({ queryKey: ['uniform-stock'], queryFn: () => uniformService.reportStock() });
+  const stock = useQuery({ queryKey: ['uniform-stock'], queryFn: () => uniformService.reportStock(), staleTime: 0 });
   const movements = useQuery({
     queryKey: ['uniform-movements', moveType],
     queryFn: () => uniformService.listMovements({ limit: 100, type: moveType || undefined }),
+    staleTime: 0,
   });
 
   const [adjust, setAdjust] = useState<{ variantId: string; label: string; back?: number; front?: number } | null>(null);
@@ -433,8 +435,7 @@ export default function UniformInventoryPage() {
     onSuccess: () => {
       enqueueSnackbar('Inventaire ajusté', { variant: 'success' });
       setAdjust(null); setQty(''); setReason(''); setAdjustLoc('BACK_OFFICE');
-      qc.invalidateQueries({ queryKey: ['uniform-stock'] });
-      qc.invalidateQueries({ queryKey: ['uniform-movements'] });
+      invalidateUniformCaches(qc);
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
@@ -453,8 +454,7 @@ export default function UniformInventoryPage() {
     onSuccess: () => {
       enqueueSnackbar('Transfert effectué', { variant: 'success' });
       closeTransfer();
-      qc.invalidateQueries({ queryKey: ['uniform-stock'] });
-      qc.invalidateQueries({ queryKey: ['uniform-movements'] });
+      invalidateUniformCaches(qc);
     },
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
@@ -523,10 +523,10 @@ export default function UniformInventoryPage() {
   const canReorder = canWriteUniforms && divFilter === 'ALL' && statusFilter === 'ALL' && !search.trim();
   const reorderMut = useMutation({
     mutationFn: (ids: string[]) => uniformService.reorderItems(ids),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['uniform-stock'] }),
+    onSuccess: () => invalidateUniformCaches(qc),
     onError: () => {
       enqueueSnackbar('Erreur lors du réordonnancement', { variant: 'error' });
-      qc.invalidateQueries({ queryKey: ['uniform-stock'] });
+      invalidateUniformCaches(qc);
     },
   });
   const moveItem = (sectionItems: Group[], index: number, dir: number) => {
