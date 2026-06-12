@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Paper, Grid, Chip, Button, Stack, Divider, CircularProgress,
+  Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, FormControlLabel, Checkbox,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import EditIcon from '@mui/icons-material/Edit';
+import { useSnackbar } from 'notistack';
 import { employeeService } from '@/services/employee.service';
 import { usePerms } from '@/hooks/usePerms';
 import UniformFichePanel from '../uniformes/components/UniformFichePanel';
@@ -22,7 +26,9 @@ const fmtDate = (d?: string) => (d ? new Date(d).toLocaleDateString('fr-CA') : '
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { canViewUniforms } = usePerms();
+  const qc = useQueryClient();
+  const { enqueueSnackbar } = useSnackbar();
+  const { canViewUniforms, canWriteEmployees } = usePerms();
 
   const { data, isLoading } = useQuery({
     queryKey: ['employee', id],
@@ -30,11 +36,49 @@ export default function EmployeeDetailPage() {
     enabled: !!id,
   });
 
+  const [editOpen, setEditOpen] = useState(false);
+  const [form, setForm] = useState<any>({});
+  const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
+
+  const saveMut = useMutation({
+    mutationFn: () => {
+      const payload: any = { ...form };
+      // Champs optionnels vides → null (évite de stocker des chaînes vides).
+      ['employeeNumber', 'email', 'address', 'city', 'postalCode', 'position', 'assignment', 'bspNumber'].forEach((k) => {
+        if (payload[k] === '') payload[k] = null;
+      });
+      payload.hireDate = form.hireDate || null;
+      if (!form.hasBSP) payload.bspNumber = null;
+      return employeeService.updateEmployee(id!, payload);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['employee', id] });
+      qc.invalidateQueries({ queryKey: ['employees'] });
+      enqueueSnackbar('Employé mis à jour', { variant: 'success' });
+      setEditOpen(false);
+    },
+    onError: (err: any) => enqueueSnackbar(err?.response?.data?.error || 'Erreur lors de la mise à jour', { variant: 'error' }),
+  });
+
   if (isLoading) {
     return <Box display="flex" justifyContent="center" py={6}><CircularProgress /></Box>;
   }
   const e: any = data?.data;
   if (!e) return <Typography>Employé introuvable</Typography>;
+
+  const openEdit = () => {
+    setForm({
+      firstName: e.firstName || '', lastName: e.lastName || '',
+      employeeNumber: e.employeeNumber || '', status: e.status || 'ACTIF',
+      email: e.email || '', phone: e.phone || '',
+      address: e.address || '', city: e.city || '', province: e.province || 'QC', postalCode: e.postalCode || '',
+      position: e.position || '', assignment: e.assignment || '',
+      hireDate: e.hireDate ? String(e.hireDate).slice(0, 10) : '',
+      hasBSP: !!e.hasBSP, bspNumber: e.bspNumber || '', hasVehicle: !!e.hasVehicle,
+    });
+    setEditOpen(true);
+  };
+  const canSave = !!(form.firstName?.trim() && form.lastName?.trim() && form.phone?.trim());
 
   return (
     <Box>
@@ -46,16 +90,25 @@ export default function EmployeeDetailPage() {
       <Paper sx={{ p: 3, mb: 3 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2} flexWrap="wrap" gap={1}>
           <Typography variant="h5" fontWeight="bold">{e.firstName} {e.lastName}</Typography>
-          <Chip
-            label={e.status === 'ACTIF' ? 'Actif' : 'Inactif'}
-            color={e.status === 'ACTIF' ? 'success' : 'default'}
-          />
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Chip
+              label={e.status === 'ACTIF' ? 'Actif' : 'Inactif'}
+              color={e.status === 'ACTIF' ? 'success' : 'default'}
+            />
+            {canWriteEmployees && (
+              <Button startIcon={<EditIcon />} variant="outlined" size="small" onClick={openEdit}>
+                Modifier
+              </Button>
+            )}
+          </Stack>
         </Stack>
         <Grid container spacing={2}>
           <Info label="Matricule" value={e.employeeNumber} />
           <Info label="Courriel" value={e.email} />
           <Info label="Téléphone" value={e.phone} />
+          <Info label="Adresse" value={e.address} />
           <Info label="Ville" value={e.city} />
+          <Info label="Code postal" value={e.postalCode} />
           <Info label="Poste" value={e.position} />
           <Info label="Mandat / site" value={e.assignment} />
           <Info label="Date d'embauche" value={fmtDate(e.hireDate)} />
@@ -73,6 +126,44 @@ export default function EmployeeDetailPage() {
       ) : (
         <Typography color="text.secondary">Accès à la gestion des uniformes réservé.</Typography>
       )}
+
+      {/* Dialogue de modification */}
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Modifier l'employé</DialogTitle>
+        <DialogContent dividers>
+          <Grid container spacing={2} sx={{ mt: 0 }}>
+            <Grid item xs={12} sm={6}><TextField label="Prénom" fullWidth size="small" required value={form.firstName || ''} onChange={(ev) => set('firstName', ev.target.value)} /></Grid>
+            <Grid item xs={12} sm={6}><TextField label="Nom" fullWidth size="small" required value={form.lastName || ''} onChange={(ev) => set('lastName', ev.target.value)} /></Grid>
+            <Grid item xs={12} sm={6}><TextField label="Matricule" fullWidth size="small" value={form.employeeNumber || ''} onChange={(ev) => set('employeeNumber', ev.target.value)} /></Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField label="Statut" select fullWidth size="small" value={form.status || 'ACTIF'} onChange={(ev) => set('status', ev.target.value)}>
+                <MenuItem value="ACTIF">Actif</MenuItem>
+                <MenuItem value="INACTIF">Inactif</MenuItem>
+              </TextField>
+            </Grid>
+            <Grid item xs={12} sm={6}><TextField label="Courriel" fullWidth size="small" value={form.email || ''} onChange={(ev) => set('email', ev.target.value)} /></Grid>
+            <Grid item xs={12} sm={6}><TextField label="Téléphone" fullWidth size="small" required value={form.phone || ''} onChange={(ev) => set('phone', ev.target.value)} /></Grid>
+            <Grid item xs={12}><TextField label="Adresse" fullWidth size="small" value={form.address || ''} onChange={(ev) => set('address', ev.target.value)} /></Grid>
+            <Grid item xs={12} sm={5}><TextField label="Ville" fullWidth size="small" value={form.city || ''} onChange={(ev) => set('city', ev.target.value)} /></Grid>
+            <Grid item xs={6} sm={3}><TextField label="Province" fullWidth size="small" value={form.province || ''} onChange={(ev) => set('province', ev.target.value)} /></Grid>
+            <Grid item xs={6} sm={4}><TextField label="Code postal" fullWidth size="small" value={form.postalCode || ''} onChange={(ev) => set('postalCode', ev.target.value)} /></Grid>
+            <Grid item xs={12} sm={6}><TextField label="Poste" fullWidth size="small" value={form.position || ''} onChange={(ev) => set('position', ev.target.value)} /></Grid>
+            <Grid item xs={12} sm={6}><TextField label="Mandat / site" fullWidth size="small" value={form.assignment || ''} onChange={(ev) => set('assignment', ev.target.value)} /></Grid>
+            <Grid item xs={12} sm={6}><TextField label="Date d'embauche" type="date" fullWidth size="small" InputLabelProps={{ shrink: true }} value={form.hireDate || ''} onChange={(ev) => set('hireDate', ev.target.value)} /></Grid>
+            <Grid item xs={12} sm={6}><FormControlLabel control={<Checkbox checked={!!form.hasVehicle} onChange={(ev) => set('hasVehicle', ev.target.checked)} />} label="Véhicule" /></Grid>
+            <Grid item xs={12} sm={6}><FormControlLabel control={<Checkbox checked={!!form.hasBSP} onChange={(ev) => set('hasBSP', ev.target.checked)} />} label="BSP" /></Grid>
+            {form.hasBSP && (
+              <Grid item xs={12} sm={6}><TextField label="N° BSP" fullWidth size="small" value={form.bspNumber || ''} onChange={(ev) => set('bspNumber', ev.target.value)} /></Grid>
+            )}
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditOpen(false)}>Annuler</Button>
+          <Button variant="contained" disabled={!canSave || saveMut.isPending} onClick={() => saveMut.mutate()}>
+            {saveMut.isPending ? 'Enregistrement…' : 'Enregistrer'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
