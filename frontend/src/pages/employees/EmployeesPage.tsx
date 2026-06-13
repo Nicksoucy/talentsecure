@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 import {
+  Alert,
   Box,
   Card,
   CardContent,
@@ -37,7 +38,7 @@ import { useNavigate } from 'react-router-dom';
 import { employeeService } from '@/services/employee.service';
 import { useAuthStore } from '@/store/authStore';
 import ContactConflictDialog from '@/components/ContactConflictDialog';
-import { ContactConflict } from '@/services/contact.service';
+import { contactService, ContactConflict } from '@/services/contact.service';
 
 function formatDate(d?: string) {
   if (!d) return '—';
@@ -60,6 +61,28 @@ export default function EmployeesPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [contactConflict, setContactConflict] = useState<ContactConflict | null>(null);
+  // Vérification proactive de doublon (par courriel) AVANT de créer.
+  // 'idle' = pas encore vérifié ; 'none' = vérifié, aucun doublon trouvé.
+  const [dupChecked, setDupChecked] = useState<'idle' | 'none'>('idle');
+
+  // Réutilise l'infra existante : GET /api/contacts/lookup cherche dans les 3
+  // sections (Employé/Candidat/Prospect), inclut les inactifs, exclut les
+  // fiches supprimées. Si trouvé → on rouvre le ContactConflictDialog existant
+  // (« Voir la fiche existante » + « Déplacer vers Employés »).
+  const checkDuplicate = useMutation({
+    mutationFn: () => contactService.lookup(form.email.trim() || undefined),
+    onSuccess: (res) => {
+      if (res.data) {
+        setAddOpen(false);
+        setContactConflict(res.data);
+        setDupChecked('idle');
+      } else {
+        setDupChecked('none');
+      }
+    },
+    onError: (error: any) =>
+      enqueueSnackbar(error.response?.data?.error || 'Erreur lors de la vérification', { variant: 'error' }),
+  });
 
   const createMutation = useMutation({
     mutationFn: () => employeeService.createEmployee({
@@ -114,7 +137,11 @@ export default function EmployeesPage() {
           </Typography>
         </Box>
         {isUniformStaff && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddOpen(true)}>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => { setForm({ ...EMPTY_FORM }); setDupChecked('idle'); setAddOpen(true); }}
+          >
             Ajouter un employé
           </Button>
         )}
@@ -260,7 +287,7 @@ export default function EmployeesPage() {
       )}
 
       {/* Ajouter un employé */}
-      <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={addOpen} onClose={() => { setAddOpen(false); setDupChecked('idle'); }} maxWidth="sm" fullWidth>
         <DialogTitle>Ajouter un employé</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
           <Box sx={{ display: 'flex', gap: 2 }}>
@@ -269,8 +296,27 @@ export default function EmployeesPage() {
             <TextField label="Nom" fullWidth value={form.lastName}
               onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
           </Box>
-          <TextField label="Courriel" fullWidth value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <TextField label="Courriel" fullWidth value={form.email}
+              onChange={(e) => { setForm({ ...form, email: e.target.value }); setDupChecked('idle'); }} />
+            <Tooltip title="Vérifier si ce courriel existe déjà (employés actifs, inactifs, candidats et prospects)">
+              <span>
+                <Button
+                  variant="outlined"
+                  sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                  disabled={!form.email.trim() || checkDuplicate.isPending}
+                  onClick={() => checkDuplicate.mutate()}
+                >
+                  {checkDuplicate.isPending ? 'Vérification…' : 'Vérifier'}
+                </Button>
+              </span>
+            </Tooltip>
+          </Box>
+          {dupChecked === 'none' && (
+            <Alert severity="success">
+              Aucun doublon trouvé pour « {form.email.trim()} » — vous pouvez créer l'employé.
+            </Alert>
+          )}
           <TextField label="Téléphone" fullWidth value={form.phone}
             onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           <Box sx={{ display: 'flex', gap: 2 }}>
@@ -291,7 +337,7 @@ export default function EmployeesPage() {
             onChange={(e) => setForm({ ...form, assignment: e.target.value })} />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAddOpen(false)}>Annuler</Button>
+          <Button onClick={() => { setAddOpen(false); setDupChecked('idle'); }}>Annuler</Button>
           <Button variant="contained"
             onClick={() => createMutation.mutate()}
             disabled={createMutation.isPending || !form.firstName || !form.phone}>
