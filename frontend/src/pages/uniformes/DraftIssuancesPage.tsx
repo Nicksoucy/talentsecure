@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -11,8 +12,8 @@ import SendIcon from '@mui/icons-material/Send';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
-import { sendDraftIssuance } from './sendDraftIssuance';
 import { usePerms } from '@/hooks/usePerms';
+import SendIssuanceDialog from './components/SendIssuanceDialog';
 
 const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
 
@@ -58,23 +59,9 @@ export default function DraftIssuancesPage() {
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
 
-  // Envoi rapide : finalise (décrémente le stock) + envoie le SMS de signature
-  // à l'agent, sans ouvrir le wizard. L'employeur signe ensuite (fiche agent).
-  const send = useMutation({
-    mutationFn: (id: string) => sendDraftIssuance(id),
-    onSuccess: (res) => {
-      if (res.smsSent) {
-        enqueueSnackbar("Remise envoyée — SMS de signature envoyé à l'agent", { variant: 'success' });
-      } else {
-        enqueueSnackbar(
-          `Remise finalisée, mais l'envoi du SMS a échoué${res.smsError ? ` : ${res.smsError}` : ''}.`,
-          { variant: 'warning', autoHideDuration: 12000 },
-        );
-      }
-      qc.invalidateQueries({ queryKey: ['issuances'] });
-    },
-    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || e?.message || 'Erreur', { variant: 'error' }),
-  });
+  // Envoi rapide : ouvre une fenêtre (signature employeur optionnelle) qui
+  // finalise + (signe) + envoie le SMS à l'agent, sans ouvrir le wizard.
+  const [sendForId, setSendForId] = useState<string | null>(null);
 
   const openDraft = (id: string) => navigate(`/uniformes/remises/brouillon/${id}`);
 
@@ -83,12 +70,7 @@ export default function DraftIssuancesPage() {
       {canWriteUniforms && (
         <Button
           size="small" variant="contained" startIcon={<SendIcon />}
-          disabled={send.isPending}
-          onClick={() => {
-            if (window.confirm("Envoyer cette remise maintenant ?\n\nLe stock sera décrémenté et un SMS de signature sera envoyé à l'agent. L'employeur pourra signer ensuite.")) {
-              send.mutate(d.id);
-            }
-          }}
+          onClick={() => setSendForId(d.id)}
         >
           Envoyer
         </Button>
@@ -193,6 +175,13 @@ export default function DraftIssuancesPage() {
           </Paper>
         )
       )}
+
+      <SendIssuanceDialog
+        open={!!sendForId}
+        issuanceId={sendForId}
+        onClose={() => setSendForId(null)}
+        onSent={() => qc.invalidateQueries({ queryKey: ['issuances'] })}
+      />
     </Box>
   );
 }

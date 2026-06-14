@@ -12,11 +12,11 @@ import EditIcon from '@mui/icons-material/Edit';
 import SendIcon from '@mui/icons-material/Send';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
-import { sendDraftIssuance } from '../sendDraftIssuance';
 import { usePerms } from '@/hooks/usePerms';
 import SignaturePad from './SignaturePad';
 import IssuanceLinesEditor from './IssuanceLinesEditor';
 import MobileIssuanceSheet from './MobileIssuanceSheet';
+import SendIssuanceDialog from './SendIssuanceDialog';
 import type { UniformIssuance, UniformIssuanceLine } from '@/types/uniform';
 
 const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
@@ -71,23 +71,9 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
 
-  // Envoi rapide d'un brouillon : finalise (décrémente le stock) + envoie le SMS
-  // de signature à l'agent, sans passer par le wizard. L'employeur signe après.
-  const send = useMutation({
-    mutationFn: (id: string) => sendDraftIssuance(id),
-    onSuccess: (res) => {
-      if (res.smsSent) {
-        enqueueSnackbar("Remise envoyée — SMS de signature envoyé à l'agent", { variant: 'success' });
-      } else {
-        enqueueSnackbar(
-          `Remise finalisée, mais l'envoi du SMS a échoué${res.smsError ? ` : ${res.smsError}` : ''}. Utilisez « Renvoyer le SMS ».`,
-          { variant: 'warning', autoHideDuration: 12000 },
-        );
-      }
-      qc.invalidateQueries({ queryKey: ['uniform-fiche', employeeId] });
-    },
-    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || e?.message || 'Erreur', { variant: 'error' }),
-  });
+  // Envoi rapide d'un brouillon : ouvre une fenêtre (signature employeur
+  // optionnelle) qui finalise + (signe) + envoie le SMS à l'agent.
+  const [sendForId, setSendForId] = useState<string | null>(null);
   const resendSms = useMutation({
     mutationFn: (id: string) => uniformService.sendIssuanceSms(id),
     onSuccess: () => {
@@ -147,12 +133,7 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
       {i.status === 'DRAFT' && (
         <Button
           size="small" variant="contained" color="primary" startIcon={<SendIcon />}
-          disabled={send.isPending}
-          onClick={() => {
-            if (window.confirm("Envoyer cette remise maintenant ?\n\nLe stock sera décrémenté et un SMS de signature sera envoyé à l'agent. L'employeur pourra signer ensuite.")) {
-              send.mutate(i.id);
-            }
-          }}
+          onClick={() => setSendForId(i.id)}
         >
           Envoyer
         </Button>
@@ -339,6 +320,13 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
         onClose={() => setIssueOpen(false)}
         employeeId={employeeId}
         onDone={() => qc.invalidateQueries({ queryKey: ['uniform-fiche', employeeId] })}
+      />
+
+      <SendIssuanceDialog
+        open={!!sendForId}
+        issuanceId={sendForId}
+        onClose={() => setSendForId(null)}
+        onSent={() => qc.invalidateQueries({ queryKey: ['uniform-fiche', employeeId] })}
       />
 
       <Dialog open={!!signEmployerFor} onClose={closeEmployerDlg} maxWidth="sm" fullWidth fullScreen={isMobile}>
