@@ -12,6 +12,7 @@
     "prisma:studio": "prisma studio",
     "backfill:geocode": "ts-node src/scripts/backfillProspectGeocodes.ts",
     "backfill:geocode-candidates": "ts-node src/scripts/backfillCandidateGeocodes.ts",
+    "backfill:experience-months": "ts-node src/scripts/backfillExperienceMonths.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

@@ -6,6 +6,7 @@ import { buildCacheKey } from '../utils/cache';
 import { invalidateCaches } from '../utils/cacheInvalidation';
 import { getStatusFromRating } from '../utils/candidate.utils';
 import { canonicalCity } from '../utils/cityNormalize';
+import { computeExperienceMonths } from '../utils/experience';
 import { findContactEverywhere } from '../utils/candidateMatch';
 import { resolveProspectCoordinates } from '../services/cityGeocode.service';
 import { buildGeoMapPoints } from '../utils/geo';
@@ -314,6 +315,8 @@ export const createCandidate = async (
         consentSignature,
         // Creator
         createdById: userId,
+        // Expérience dénormalisée (somme des mois) pour la recherche avancée.
+        totalExperienceMonths: computeExperienceMonths(experiences),
         // Nested creates
         availabilities: availabilities ? {
           create: availabilities,
@@ -436,6 +439,8 @@ export const updateCandidate = async (
         deleteMany: {},
         create: experiences,
       };
+      // Recalcule le total dénormalisé depuis les nouvelles expériences.
+      prismaUpdateData.totalExperienceMonths = computeExperienceMonths(experiences);
     }
     if (certifications) {
       prismaUpdateData.certifications = {

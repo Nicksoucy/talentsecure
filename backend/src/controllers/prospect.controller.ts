@@ -4,6 +4,7 @@ import { getCache, setCache } from '../config/cache';
 import { buildCacheKey } from '../utils/cache';
 import { invalidateCaches } from '../utils/cacheInvalidation';
 import { findContactEverywhere } from '../utils/candidateMatch';
+import { computeExperienceMonths } from '../utils/experience';
 import { resolveCityCoordinates, resolveProspectCoordinates } from '../services/cityGeocode.service';
 import { haversineKm, boundingBox, buildGeoMapPoints } from '../utils/geo';
 import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
@@ -635,6 +636,9 @@ export const convertToCandidate = async (
 
         // Required metadata
         createdById: userId,
+
+        // Expérience dénormalisée (somme des mois) pour la recherche avancée.
+        totalExperienceMonths: computeExperienceMonths(sanitizedExperiences),
 
         // Nested creates using SANITIZED data
         ...(availabilities.length > 0 && {

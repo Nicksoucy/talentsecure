@@ -234,6 +234,11 @@ model Candidate {
   willingToRelocate  Boolean @default(false) // Prêt à déménager
   maxCommuteMins     Int? // Temps de trajet maximum (minutes)
 
+  // Expérience (dénormalisé) : somme des mois des expériences, pour filtrer par
+  // années d'expérience (recherche avancée minExperience). Maintenu par les
+  // chemins d'écriture de candidats + script backfill:experience-months.
+  totalExperienceMonths Int @default(0)
+
   // Certifications supplémentaires (NOUVEAU - Phase 1)
   hasRCR          Boolean   @default(false) // RCR/DEA
   rcrExpiryDate   DateTime?
@@ -305,6 +310,7 @@ model Candidate {
   @@index([hasRCR])
   @@index([city, hasBSP, available24_7]) // Common search combination
   @@index([globalRating, available24_7]) // Rating + availability
+  @@index([globalRating, totalExperienceMonths]) // Rating + expérience (recherche avancée)
   @@index([lat, lng]) // Pré-filtre bounding-box (recherche par rayon)
   @@map("candidates")
 }

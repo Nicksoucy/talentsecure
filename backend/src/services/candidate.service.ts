@@ -530,13 +530,16 @@ export class CandidateService {
     async advancedSearch(body: any) {
         const {
             cities = [], certifications = [], availability = [],
-            minRating, hasVehicle, languages = [], skills = [],
+            minExperience, minRating, hasVehicle, languages = [], skills = [],
             page = 1, limit = 20,
         } = body;
 
         const where: any = { isDeleted: false, isActive: true };
 
         if (cities.length > 0) where.city = { in: cities };
+
+        // Expérience minimale (en années) → filtre sur le total dénormalisé (mois).
+        if (minExperience) where.totalExperienceMonths = { gte: Math.round(Number(minExperience) * 12) };
 
         if (certifications.includes('BSP')) where.hasBSP = true;
         if (certifications.includes('RCR')) where.hasRCR = true;
