@@ -9,8 +9,10 @@ import {
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import EditIcon from '@mui/icons-material/Edit';
+import SendIcon from '@mui/icons-material/Send';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
+import { sendDraftIssuance } from '../sendDraftIssuance';
 import { usePerms } from '@/hooks/usePerms';
 import SignaturePad from './SignaturePad';
 import IssuanceLinesEditor from './IssuanceLinesEditor';
@@ -69,6 +71,32 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
 
+  // Envoi rapide d'un brouillon : finalise (décrémente le stock) + envoie le SMS
+  // de signature à l'agent, sans passer par le wizard. L'employeur signe après.
+  const send = useMutation({
+    mutationFn: (id: string) => sendDraftIssuance(id),
+    onSuccess: (res) => {
+      if (res.smsSent) {
+        enqueueSnackbar("Remise envoyée — SMS de signature envoyé à l'agent", { variant: 'success' });
+      } else {
+        enqueueSnackbar(
+          `Remise finalisée, mais l'envoi du SMS a échoué${res.smsError ? ` : ${res.smsError}` : ''}. Utilisez « Renvoyer le SMS ».`,
+          { variant: 'warning', autoHideDuration: 12000 },
+        );
+      }
+      qc.invalidateQueries({ queryKey: ['uniform-fiche', employeeId] });
+    },
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || e?.message || 'Erreur', { variant: 'error' }),
+  });
+  const resendSms = useMutation({
+    mutationFn: (id: string) => uniformService.sendIssuanceSms(id),
+    onSuccess: () => {
+      enqueueSnackbar("SMS renvoyé à l'agent", { variant: 'success' });
+      qc.invalidateQueries({ queryKey: ['uniform-fiche', employeeId] });
+    },
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.message || e?.response?.data?.error || "Échec de l'envoi SMS", { variant: 'warning' }),
+  });
+
   // Signature employeur a posteriori (cas où l'agent a signé via SMS)
   const [signEmployerFor, setSignEmployerFor] = useState<string | null>(null);
   const [employerSig, setEmployerSig] = useState<string | null>(null);
@@ -116,6 +144,24 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
     <>
       <Button size="small" startIcon={<PictureAsPdfIcon />} onClick={() => openPdf('issuance', i.id)}>PDF</Button>
       {canWriteUniforms && (<>
+      {i.status === 'DRAFT' && (
+        <Button
+          size="small" variant="contained" color="primary" startIcon={<SendIcon />}
+          disabled={send.isPending}
+          onClick={() => {
+            if (window.confirm("Envoyer cette remise maintenant ?\n\nLe stock sera décrémenté et un SMS de signature sera envoyé à l'agent. L'employeur pourra signer ensuite.")) {
+              send.mutate(i.id);
+            }
+          }}
+        >
+          Envoyer
+        </Button>
+      )}
+      {i.status === 'ISSUED' && i.signatureStatus !== 'SIGNED' && (
+        <Button size="small" startIcon={<SendIcon />} disabled={resendSms.isPending} onClick={() => resendSms.mutate(i.id)}>
+          Renvoyer le SMS
+        </Button>
+      )}
       <Button size="small" component="label" startIcon={<UploadFileIcon />} disabled={uploadingFor === i.id}>
         {uploadingFor === i.id ? '…' : (i.formPdfStoragePath ? 'Remplacer PDF' : 'Téléverser PDF')}
         <input

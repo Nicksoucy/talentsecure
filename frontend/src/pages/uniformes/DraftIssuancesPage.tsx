@@ -7,9 +7,11 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import SendIcon from '@mui/icons-material/Send';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
+import { sendDraftIssuance } from './sendDraftIssuance';
 import { usePerms } from '@/hooks/usePerms';
 
 const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
@@ -56,12 +58,43 @@ export default function DraftIssuancesPage() {
     onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
   });
 
+  // Envoi rapide : finalise (décrémente le stock) + envoie le SMS de signature
+  // à l'agent, sans ouvrir le wizard. L'employeur signe ensuite (fiche agent).
+  const send = useMutation({
+    mutationFn: (id: string) => sendDraftIssuance(id),
+    onSuccess: (res) => {
+      if (res.smsSent) {
+        enqueueSnackbar("Remise envoyée — SMS de signature envoyé à l'agent", { variant: 'success' });
+      } else {
+        enqueueSnackbar(
+          `Remise finalisée, mais l'envoi du SMS a échoué${res.smsError ? ` : ${res.smsError}` : ''}.`,
+          { variant: 'warning', autoHideDuration: 12000 },
+        );
+      }
+      qc.invalidateQueries({ queryKey: ['issuances'] });
+    },
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || e?.message || 'Erreur', { variant: 'error' }),
+  });
+
   const openDraft = (id: string) => navigate(`/uniformes/remises/brouillon/${id}`);
 
   const actions = (d: any) => (
     <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap justifyContent="flex-end">
+      {canWriteUniforms && (
+        <Button
+          size="small" variant="contained" startIcon={<SendIcon />}
+          disabled={send.isPending}
+          onClick={() => {
+            if (window.confirm("Envoyer cette remise maintenant ?\n\nLe stock sera décrémenté et un SMS de signature sera envoyé à l'agent. L'employeur pourra signer ensuite.")) {
+              send.mutate(d.id);
+            }
+          }}
+        >
+          Envoyer
+        </Button>
+      )}
       {canWriteUniforms ? (
-        <Button size="small" variant="contained" startIcon={<PlayArrowIcon />} onClick={() => openDraft(d.id)}>
+        <Button size="small" variant="outlined" startIcon={<PlayArrowIcon />} onClick={() => openDraft(d.id)}>
           Ouvrir / Finaliser
         </Button>
       ) : (
