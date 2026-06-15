@@ -17,7 +17,7 @@ export default function UniformReportsPage() {
   return (
     <Box>
       <Typography variant="h5" mb={2}>Rapports — Uniformes</Typography>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
         <Tab label="Stock" />
         <Tab label="Retours en retard" />
         <Tab label="Pertes / dommages" />
@@ -31,6 +31,7 @@ export default function UniformReportsPage() {
               <Chip color="primary" label={`Valeur : ${money(stock.data.data.totals.totalValue)}`} />
             </Stack>
           )}
+          <Box sx={{ overflowX: 'auto' }}>
           <Table size="small">
             <TableHead><TableRow><TableCell>Morceau</TableCell><TableCell>Division</TableCell><TableCell>Grandeur</TableCell><TableCell>Emplacement</TableCell><TableCell align="right">Stock</TableCell><TableCell align="right">Valeur</TableCell></TableRow></TableHead>
             <TableBody>
@@ -46,10 +47,12 @@ export default function UniformReportsPage() {
               ))}
             </TableBody>
           </Table>
+          </Box>
         </>
       )}
 
       {tab === 1 && (
+        <Box sx={{ overflowX: 'auto' }}>
         <Table size="small">
           <TableHead><TableRow><TableCell>Agent</TableCell><TableCell>Division</TableCell><TableCell>Retour prévu</TableCell><TableCell align="right">Pièces</TableCell><TableCell align="right">Coût</TableCell></TableRow></TableHead>
           <TableBody>
@@ -65,6 +68,7 @@ export default function UniformReportsPage() {
             {overdue.data?.data?.length === 0 && <TableRow><TableCell colSpan={5}><Typography variant="body2" color="text.secondary">Aucun retour en retard.</Typography></TableCell></TableRow>}
           </TableBody>
         </Table>
+        </Box>
       )}
 
       {tab === 2 && (
@@ -75,6 +79,7 @@ export default function UniformReportsPage() {
               <Chip color="error" label={`Coût total : ${money(losses.data.data.totals.totalCost)}`} />
             </Stack>
           )}
+          <Box sx={{ overflowX: 'auto' }}>
           <Table size="small">
             <TableHead><TableRow><TableCell>Agent</TableCell><TableCell align="right">Unités</TableCell><TableCell align="right">Coût</TableCell></TableRow></TableHead>
             <TableBody>
@@ -87,6 +92,7 @@ export default function UniformReportsPage() {
               ))}
             </TableBody>
           </Table>
+          </Box>
         </>
       )}
     </Box>

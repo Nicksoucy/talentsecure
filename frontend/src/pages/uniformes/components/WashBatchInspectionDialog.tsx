@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, Stack, Typography, Card,
-  CardContent, ToggleButtonGroup, ToggleButton, TextField, Alert, Box,
+  CardContent, ToggleButtonGroup, ToggleButton, TextField, Alert, Box, useTheme, useMediaQuery,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
@@ -25,6 +25,8 @@ interface Props {
  */
 export default function WashBatchInspectionDialog({ batch, open, onClose, onSuccess }: Props) {
   const { enqueueSnackbar } = useSnackbar();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [inspections, setInspections] = useState<Record<string, UniformItemCondition | null>>(() => {
     const init: Record<string, UniformItemCondition | null> = {};
     for (const item of batch.items) {
@@ -72,7 +74,7 @@ export default function WashBatchInspectionDialog({ batch, open, onClose, onSucc
   });
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth fullScreen={isMobile}>
       <DialogTitle>
         Inspection du lot #{batch.id.slice(0, 8)} — {batch.items.length} pièce(s)
       </DialogTitle>

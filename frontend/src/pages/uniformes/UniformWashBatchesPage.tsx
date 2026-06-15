@@ -5,7 +5,7 @@ import { invalidateUniformCaches } from '@/utils/uniformCache';
 import {
   Box, Typography, Tabs, Tab, Paper, Table, TableHead, TableRow, TableCell, TableBody,
   Chip, Button, Stack, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton,
-  Alert, Divider,
+  Alert, Divider, useTheme, useMediaQuery,
 } from '@mui/material';
 import LocalLaundryServiceIcon from '@mui/icons-material/LocalLaundryService';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
@@ -58,7 +58,7 @@ export default function UniformWashBatchesPage() {
         <Tab label="Archives" value="archive" />
       </Tabs>
 
-      <Paper>
+      <Paper sx={{ overflowX: 'auto' }}>
         <Table size="small">
           <TableHead>
             <TableRow>
@@ -123,6 +123,8 @@ function WashBatchDialog({ batchId, onClose }: { batchId: string; onClose: () =>
   const { enqueueSnackbar } = useSnackbar();
   const qc = useQueryClient();
   const { canWriteUniforms } = usePerms();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [showSend, setShowSend] = useState(false);
   const [showInspect, setShowInspect] = useState(false);
   const [vendor, setVendor] = useState('');
@@ -162,7 +164,7 @@ function WashBatchDialog({ batchId, onClose }: { batchId: string; onClose: () =>
   });
 
   return (
-    <Dialog open onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open onClose={onClose} maxWidth="md" fullWidth fullScreen={isMobile}>
       <DialogTitle>
         Lot de lavage #{batchId.slice(0, 8)}
         {batch && (
@@ -263,10 +265,10 @@ function WashBatchDialog({ batchId, onClose }: { batchId: string; onClose: () =>
       </DialogActions>
 
       {/* Send sub-dialog */}
-      <Dialog open={showSend} onClose={() => setShowSend(false)}>
+      <Dialog open={showSend} onClose={() => setShowSend(false)} fullWidth maxWidth="xs" fullScreen={isMobile}>
         <DialogTitle>Envoyer au lavage</DialogTitle>
         <DialogContent>
-          <Stack spacing={2} mt={1} minWidth={400}>
+          <Stack spacing={2} mt={1} sx={{ minWidth: { xs: 0, sm: 360 } }}>
             <TextField label="Fournisseur" value={vendor} onChange={(e) => setVendor(e.target.value)} fullWidth />
             <TextField label="Notes (optionnel)" value={notes} onChange={(e) => setNotes(e.target.value)} multiline rows={2} fullWidth />
           </Stack>

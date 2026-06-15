@@ -360,12 +360,12 @@ export default function UniformsCataloguePage() {
       </Stack>
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} mb={3}>
-        <TextField select size="small" label="Division" value={division} onChange={(e) => setDivision(e.target.value as any)} sx={{ minWidth: 180 }}>
+        <TextField select size="small" label="Division" value={division} onChange={(e) => setDivision(e.target.value as any)} sx={{ minWidth: { xs: 0, sm: 180 }, width: { xs: '100%', sm: 'auto' } }}>
           <MenuItem value="">Toutes</MenuItem>
           <MenuItem value="SECURITE">Sécurité</MenuItem>
           <MenuItem value="SIGNALISATION">Signalisation</MenuItem>
         </TextField>
-        <TextField size="small" label="Recherche" value={search} onChange={(e) => setSearch(e.target.value)} fullWidth sx={{ maxWidth: 320 }} />
+        <TextField size="small" label="Recherche" value={search} onChange={(e) => setSearch(e.target.value)} fullWidth sx={{ maxWidth: { xs: '100%', sm: 320 } }} />
       </Stack>
 
       {isLoading && <Typography>Chargement…</Typography>}
@@ -384,7 +384,11 @@ export default function UniformsCataloguePage() {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+          gridTemplateColumns: {
+            xs: '1fr',
+            sm: 'repeat(auto-fill, minmax(220px, 1fr))',
+            md: 'repeat(auto-fill, minmax(260px, 1fr))',
+          },
           gap: 2,
         }}
       >

@@ -204,17 +204,35 @@ export default function UniformFichePanel({ employeeId }: { employeeId: string }
 
       <Paper sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle1" mb={1}>Détentions actuelles</Typography>
-        <Box sx={{ overflowX: 'auto' }}>
-          <Table size="small">
-            <TableHead><TableRow><TableCell>Pièce</TableCell><TableCell>Grandeur</TableCell><TableCell align="right">Qté</TableCell><TableCell align="right">Coût unit.</TableCell></TableRow></TableHead>
-            <TableBody>
+        {isMobile ? (
+          holdings.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">Aucune pièce détenue.</Typography>
+          ) : (
+            <Stack spacing={0.5}>
               {holdings.map((h) => (
-                <TableRow key={h.variantId}><TableCell>{h.itemName}</TableCell><TableCell>{h.size}</TableCell><TableCell align="right">{h.quantity}</TableCell><TableCell align="right">{money(h.replacementCost)}</TableCell></TableRow>
+                <Stack key={h.variantId} direction="row" justifyContent="space-between" alignItems="center" sx={{ py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" fontWeight={600} noWrap>{h.itemName}</Typography>
+                    <Typography variant="caption" color="text.secondary">{h.size} · {money(h.replacementCost)}</Typography>
+                  </Box>
+                  <Chip size="small" label={`× ${h.quantity}`} />
+                </Stack>
               ))}
-              {holdings.length === 0 && <TableRow><TableCell colSpan={4}><Typography variant="body2" color="text.secondary">Aucune pièce détenue.</Typography></TableCell></TableRow>}
-            </TableBody>
-          </Table>
-        </Box>
+            </Stack>
+          )
+        ) : (
+          <Box sx={{ overflowX: 'auto' }}>
+            <Table size="small">
+              <TableHead><TableRow><TableCell>Pièce</TableCell><TableCell>Grandeur</TableCell><TableCell align="right">Qté</TableCell><TableCell align="right">Coût unit.</TableCell></TableRow></TableHead>
+              <TableBody>
+                {holdings.map((h) => (
+                  <TableRow key={h.variantId}><TableCell>{h.itemName}</TableCell><TableCell>{h.size}</TableCell><TableCell align="right">{h.quantity}</TableCell><TableCell align="right">{money(h.replacementCost)}</TableCell></TableRow>
+                ))}
+                {holdings.length === 0 && <TableRow><TableCell colSpan={4}><Typography variant="body2" color="text.secondary">Aucune pièce détenue.</Typography></TableCell></TableRow>}
+              </TableBody>
+            </Table>
+          </Box>
+        )}
       </Paper>
 
       <Paper sx={{ p: 2, mb: 2 }}>

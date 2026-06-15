@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Stack, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions,
   Button, TextField, Tabs, Tab, Tooltip, MenuItem, InputAdornment, Table, TableHead, TableRow,
-  TableCell, TableBody, Autocomplete, Collapse,
+  TableCell, TableBody, Autocomplete, Collapse, useTheme, useMediaQuery,
 } from '@mui/material';
 import TuneIcon from '@mui/icons-material/Tune';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -155,7 +155,7 @@ function flatVisualOrder(groups: Group[]): string[] {
 // ---------- Components ----------
 function KpiCell({ label, value, hint, mono = true, accent }: { label: string; value: any; hint?: string; mono?: boolean; accent?: string }) {
   return (
-    <Box sx={{ flex: 1, p: 2.5, borderRight: `1px solid ${T.outline}`, '&:last-of-type': { borderRight: 'none' } }}>
+    <Box sx={{ flex: 1, minWidth: { xs: 130, md: 0 }, p: 2.5, borderRight: `1px solid ${T.outline}`, '&:last-of-type': { borderRight: 'none' } }}>
       <Typography sx={{ fontFamily: T.fontSans, fontSize: 11, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: T.onSurfaceVariant, mb: 1 }}>
         {label}
       </Typography>
@@ -416,6 +416,8 @@ export default function UniformInventoryPage() {
   const qc = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
   const { canWriteUniforms } = usePerms();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [tab, setTab] = useState(0);
 
   const [moveType, setMoveType] = useState('');
@@ -592,7 +594,7 @@ export default function UniformInventoryPage() {
             Vue d'ensemble par morceau et par taille. Cliquez sur une cellule pour ajuster.
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1.5}>
+        <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap justifyContent={{ xs: 'flex-start', md: 'flex-end' }}>
           {canWriteUniforms && (<>
           <Button
             variant="outlined"
@@ -652,6 +654,9 @@ export default function UniformInventoryPage() {
       <Tabs
         value={tab}
         onChange={(_, v) => setTab(v)}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
         sx={{
           mb: 3, minHeight: 36,
           '& .MuiTab-root': { textTransform: 'none', fontFamily: T.fontSans, fontWeight: 500, fontSize: 14, minHeight: 36, py: 0.75, color: T.onSurfaceVariant },
@@ -665,8 +670,8 @@ export default function UniformInventoryPage() {
 
       {tab === 0 && (
         <>
-          {/* KPI strip */}
-          <Box sx={{ display: 'flex', bgcolor: T.surface, border: `1px solid ${T.outline}`, borderRadius: 2, mb: 4, overflow: 'hidden' }}>
+          {/* KPI strip — défile horizontalement sur mobile au lieu de s'écraser */}
+          <Box sx={{ display: 'flex', bgcolor: T.surface, border: `1px solid ${T.outline}`, borderRadius: 2, mb: 4, overflowX: 'auto' }}>
             <KpiCell label="Unités en stock" value={totalUnits.toLocaleString('fr-CA')} hint="tous morceaux confondus" />
             <KpiCell label="Back office" value={(totals?.totalBackOffice ?? 0).toLocaleString('fr-CA')} hint="entrepôt principal" />
             <KpiCell label="Front office" value={(totals?.totalFrontOffice ?? 0).toLocaleString('fr-CA')} hint="comptoir de remise" />
@@ -772,7 +777,7 @@ export default function UniformInventoryPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               sx={{
-                flexGrow: 1, maxWidth: 420,
+                flexGrow: 1, maxWidth: { xs: '100%', md: 420 },
                 '& .MuiOutlinedInput-root': {
                   bgcolor: T.surface, fontFamily: T.fontSans, fontSize: 14,
                   '& fieldset': { borderColor: T.outline },
@@ -934,7 +939,7 @@ export default function UniformInventoryPage() {
       />
 
       {/* Transfer dialog */}
-      <Dialog open={transferOpen} onClose={closeTransfer} maxWidth="xs" fullWidth>
+      <Dialog open={transferOpen} onClose={closeTransfer} maxWidth="xs" fullWidth fullScreen={isMobile}>
         <DialogTitle sx={{ fontFamily: T.fontSans, fontWeight: 600 }}>Transférer du stock</DialogTitle>
         <DialogContent>
           <Stack spacing={2} mt={1}>

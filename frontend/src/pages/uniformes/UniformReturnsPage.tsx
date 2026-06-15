@@ -182,7 +182,7 @@ export default function UniformReturnsPage() {
       <Paper sx={{ p: 2, mb: 2 }}>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
           <Autocomplete
-            sx={{ flex: 1, minWidth: 280 }}
+            sx={{ flex: 1, minWidth: { xs: 0, md: 280 }, width: { xs: '100%', md: 'auto' } }}
             options={employees.data?.data || []}
             getOptionLabel={(o: any) => `${o.firstName} ${o.lastName}`}
             value={employee}
@@ -192,7 +192,7 @@ export default function UniformReturnsPage() {
             isOptionEqualToValue={(o: any, v: any) => o.id === v?.id}
             disabled={!!returnId}
           />
-          <TextField select size="small" label="Remise" value={issuanceId} onChange={(e) => loadIssuance(e.target.value)} sx={{ minWidth: 280 }} disabled={!employee || !!returnId}>
+          <TextField select size="small" label="Remise" value={issuanceId} onChange={(e) => loadIssuance(e.target.value)} sx={{ minWidth: { xs: 0, md: 280 }, width: { xs: '100%', md: 'auto' } }} disabled={!employee || !!returnId}>
             {activeIssuances.map((i) => (
               <MenuItem key={i.id} value={i.id}>
                 {new Date(i.issuedAt || i.createdAt).toLocaleDateString('fr-CA')} — {i.division === 'SIGNALISATION' ? 'Signalisation' : 'Sécurité'} ({i.itemsCount} pièces)
@@ -326,7 +326,7 @@ export default function UniformReturnsPage() {
           </Stack>
           <Divider sx={{ my: 2 }}>ou signature au comptoir</Divider>
           <Stack spacing={2}>
-            <TextField size="small" label="Nom signataire" value={signedByName} onChange={(e) => setSignedByName(e.target.value)} sx={{ maxWidth: 360 }} />
+            <TextField size="small" label="Nom signataire" value={signedByName} onChange={(e) => setSignedByName(e.target.value)} sx={{ maxWidth: { xs: '100%', sm: 360 } }} />
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={3}>
               <Box sx={{ flex: 1 }}><SignaturePad label="Signature de l'employé" onChange={setEmpSig} /></Box>
               <Box sx={{ flex: 1 }}><SignaturePad label="Signature de l'employeur" onChange={setEmprSig} /></Box>
