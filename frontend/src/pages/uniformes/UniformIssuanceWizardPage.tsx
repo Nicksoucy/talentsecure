@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Stack, Paper, TextField, MenuItem, Autocomplete, Button, Table, TableHead,
   TableRow, TableCell, TableBody, Divider, Checkbox, FormControlLabel, Alert, IconButton, Chip,
-  ToggleButton, ToggleButtonGroup, Tooltip,
+  ToggleButton, ToggleButtonGroup, Tooltip, Card, CardContent, useTheme, useMediaQuery,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
@@ -60,6 +60,8 @@ interface CustomLine {
 export default function UniformIssuanceWizardPage() {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { canWriteUniforms, canPrepareUniformDraft } = usePerms();
 
   // Mode "édition d'un brouillon" : /uniformes/remises/brouillon/:id
@@ -380,122 +382,168 @@ export default function UniformIssuanceWizardPage() {
   const renderSection = (title: string, list: UniformItem[]) => {
     if (list.length === 0) return null;
     const subtotal = list.reduce((s, it) => s + (rowState[it.id]?.qty || 0) * rowCost(it), 0);
+
+    // Contrôles d'une ligne, factorisés pour être réutilisés en tableau (desktop)
+    // ET en cartes (mobile). `stepper(big)` agrandit les cibles tactiles sur mobile.
+    const lineParts = (it: UniformItem) => {
+      const st = rowState[it.id] || { variantId: '', qty: 0 };
+      const v = effectiveVariant(it);
+      const sized = !it.isOneSize && it.type !== 'EQUIPEMENT';
+      const mode = st.source ?? defaultMode;
+      const split = v && st.qty > 0 ? planSplit(v, st.qty, mode) : null;
+      const shortfall = !historical && split ? split.shortfall : 0;
+      const lineTotal = st.qty * rowCost(it);
+
+      const sizeField = sized ? (
+        <TextField
+          select size="small" fullWidth value={st.variantId}
+          onChange={(e) => setSize(it.id, e.target.value)}
+          SelectProps={{ displayEmpty: true }}
+        >
+          <MenuItem value=""><em>— choisir —</em></MenuItem>
+          {(it.variants || []).map((variant) => (
+            <MenuItem key={variant.id} value={variant.id}>
+              {variant.size} — F:{locQty(variant, 'FRONT_OFFICE')} · B:{locQty(variant, 'BACK_OFFICE')}
+            </MenuItem>
+          ))}
+        </TextField>
+      ) : (
+        <Typography variant="body2" color="text.secondary">
+          {it.isOneSize ? 'Taille unique' : '—'}{v ? ` (F:${locQty(v, 'FRONT_OFFICE')} · B:${locQty(v, 'BACK_OFFICE')})` : ''}
+        </Typography>
+      );
+
+      const stepper = (big: boolean) => (
+        <Stack direction="row" alignItems="center" justifyContent={big ? 'flex-start' : 'center'} spacing={big ? 1 : 0.5}>
+          <IconButton size={big ? 'medium' : 'small'} onClick={() => setQty(it.id, (st.qty || 0) - 1)}><RemoveIcon fontSize={big ? 'medium' : 'small'} /></IconButton>
+          <TextField
+            size="small" type="number" value={st.qty}
+            onChange={(e) => setQty(it.id, Number(e.target.value))}
+            inputProps={{ style: { textAlign: 'center', width: big ? 60 : 44 }, min: 0 }}
+            error={shortfall > 0}
+          />
+          <IconButton size={big ? 'medium' : 'small'} onClick={() => setQty(it.id, (st.qty || 0) + 1)}><AddIcon fontSize={big ? 'medium' : 'small'} /></IconButton>
+        </Stack>
+      );
+
+      const sourceToggle = st.qty > 0 && !historical && canWriteUniforms ? (
+        <ToggleButtonGroup
+          exclusive size="small" value={mode}
+          onChange={(_, val: UniformSourceMode | null) => setSource(it.id, val)}
+          sx={{ mt: 0.5, '& .MuiToggleButton-root': { py: { xs: 0.4, sm: 0 }, px: { xs: 1.4, sm: 0.9 }, fontSize: { xs: '0.8rem', sm: 11 }, textTransform: 'none', lineHeight: 1.7 } }}
+        >
+          <ToggleButton value="AUTO">Auto</ToggleButton>
+          <ToggleButton value="FRONT_OFFICE">F</ToggleButton>
+          <ToggleButton value="BACK_OFFICE">B</ToggleButton>
+        </ToggleButtonGroup>
+      ) : null;
+
+      const captions = (
+        <>
+          {split && !historical && shortfall === 0 && canWriteUniforms && (
+            <Typography variant="caption" color="text.secondary" display="block">
+              Sortie : {[split.front > 0 ? `Front ${split.front}` : null, split.back > 0 ? `Back ${split.back}` : null].filter(Boolean).join(' · ')}
+            </Typography>
+          )}
+          {shortfall > 0 && (
+            <>
+              <Typography variant="caption" color="error" display="block">
+                Manque {shortfall} — dispo F:{locQty(v, 'FRONT_OFFICE')} · B:{locQty(v, 'BACK_OFFICE')}
+              </Typography>
+              {canWriteUniforms && (
+                <Button
+                  size="small" color="error"
+                  onClick={() => setQuickFix({ itemId: it.id, variantId: st.variantId, tab: 'transfer', suggestedQty: shortfall })}
+                  sx={{ textTransform: 'none', py: 0, minHeight: 0, fontSize: 11 }}
+                >
+                  Corriger le stock
+                </Button>
+              )}
+            </>
+          )}
+        </>
+      );
+
+      const quickFixIcon = canWriteUniforms ? (
+        <Tooltip title={st.variantId ? 'Corriger le stock (transfert · ajustement · réappro)' : "Choisissez une grandeur d'abord"}>
+          <span>
+            <IconButton
+              size="small" disabled={!st.variantId}
+              onClick={() => setQuickFix({ itemId: it.id, variantId: st.variantId, tab: 'transfer' })}
+            >
+              <TuneIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+      ) : null;
+
+      return { st, sizeField, stepper, sourceToggle, captions, quickFixIcon, lineTotal };
+    };
+
     return (
       <Box mb={2}>
         <Typography variant="subtitle2" sx={{ bgcolor: '#eef1f6', px: 1.5, py: 0.75, borderRadius: 1, fontWeight: 700 }}>
           {title}
         </Typography>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ width: '38%' }}>Pièce</TableCell>
-              <TableCell sx={{ width: 170 }}>Taille</TableCell>
-              <TableCell align="center" sx={{ width: 170 }}>Quantité</TableCell>
-              <TableCell align="right">Coût unit.</TableCell>
-              <TableCell align="right">Total</TableCell>
-              {canWriteUniforms && <TableCell sx={{ width: 48 }} />}
-            </TableRow>
-          </TableHead>
-          <TableBody>
+        {isMobile ? (
+          <Stack spacing={1} mt={1}>
             {list.map((it) => {
-              const st = rowState[it.id] || { variantId: '', qty: 0 };
-              const v = effectiveVariant(it);
-              const sized = !it.isOneSize && it.type !== 'EQUIPEMENT';
-              const mode = st.source ?? defaultMode;
-              const split = v && st.qty > 0 ? planSplit(v, st.qty, mode) : null;
-              const shortfall = !historical && split ? split.shortfall : 0;
-              const lineTotal = st.qty * rowCost(it);
+              const p = lineParts(it);
               return (
-                <TableRow key={it.id} sx={st.qty > 0 ? { bgcolor: '#f5faf5' } : undefined}>
-                  <TableCell>{it.name}</TableCell>
-                  <TableCell>
-                    {sized ? (
-                      <TextField
-                        select size="small" fullWidth value={st.variantId}
-                        onChange={(e) => setSize(it.id, e.target.value)}
-                        SelectProps={{ displayEmpty: true }}
-                      >
-                        <MenuItem value=""><em>— choisir —</em></MenuItem>
-                        {(it.variants || []).map((variant) => (
-                          <MenuItem key={variant.id} value={variant.id}>
-                            {variant.size} — F:{locQty(variant, 'FRONT_OFFICE')} · B:{locQty(variant, 'BACK_OFFICE')}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        {it.isOneSize ? 'Taille unique' : '—'}{v ? ` (F:${locQty(v, 'FRONT_OFFICE')} · B:${locQty(v, 'BACK_OFFICE')})` : ''}
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell align="center">
-                    <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5}>
-                      <IconButton size="small" onClick={() => setQty(it.id, (st.qty || 0) - 1)}><RemoveIcon fontSize="small" /></IconButton>
-                      <TextField
-                        size="small" type="number" value={st.qty}
-                        onChange={(e) => setQty(it.id, Number(e.target.value))}
-                        inputProps={{ style: { textAlign: 'center', width: 44 }, min: 0 }}
-                        error={shortfall > 0}
-                      />
-                      <IconButton size="small" onClick={() => setQty(it.id, (st.qty || 0) + 1)}><AddIcon fontSize="small" /></IconButton>
+                <Card key={it.id} variant="outlined" sx={{ bgcolor: p.st.qty > 0 ? '#f5faf5' : undefined }}>
+                  <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                      <Typography sx={{ fontWeight: 600, flex: 1 }}>{it.name}</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>{money(rowCost(it))}</Typography>
                     </Stack>
-                    {/* Choix de source + répartition : n'ont d'effet qu'à la
-                        finalisation (un brouillon ne porte pas d'emplacement) →
-                        réservés aux profils qui peuvent finaliser. */}
-                    {st.qty > 0 && !historical && canWriteUniforms && (
-                      <ToggleButtonGroup
-                        exclusive size="small" value={mode}
-                        onChange={(_, val: UniformSourceMode | null) => setSource(it.id, val)}
-                        sx={{ mt: 0.5, '& .MuiToggleButton-root': { py: 0, px: 0.9, fontSize: 11, textTransform: 'none', lineHeight: 1.7 } }}
-                      >
-                        <ToggleButton value="AUTO">Auto</ToggleButton>
-                        <ToggleButton value="FRONT_OFFICE">F</ToggleButton>
-                        <ToggleButton value="BACK_OFFICE">B</ToggleButton>
-                      </ToggleButtonGroup>
-                    )}
-                    {split && !historical && shortfall === 0 && canWriteUniforms && (
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        Sortie : {[split.front > 0 ? `Front ${split.front}` : null, split.back > 0 ? `Back ${split.back}` : null].filter(Boolean).join(' · ')}
-                      </Typography>
-                    )}
-                    {shortfall > 0 && (
-                      <>
-                        <Typography variant="caption" color="error" display="block">
-                          Manque {shortfall} — dispo F:{locQty(v, 'FRONT_OFFICE')} · B:{locQty(v, 'BACK_OFFICE')}
-                        </Typography>
-                        {canWriteUniforms && (
-                          <Button
-                            size="small" color="error"
-                            onClick={() => setQuickFix({ itemId: it.id, variantId: st.variantId, tab: 'transfer', suggestedQty: shortfall })}
-                            sx={{ textTransform: 'none', py: 0, minHeight: 0, fontSize: 11 }}
-                          >
-                            Corriger le stock
-                          </Button>
-                        )}
-                      </>
-                    )}
-                  </TableCell>
-                  <TableCell align="right">{money(rowCost(it))}</TableCell>
-                  <TableCell align="right">{lineTotal > 0 ? money(lineTotal) : '—'}</TableCell>
-                  {canWriteUniforms && (
-                    <TableCell align="center" sx={{ px: 0.5 }}>
-                      <Tooltip title={st.variantId ? 'Corriger le stock (transfert · ajustement · réappro)' : "Choisissez une grandeur d'abord"}>
-                        <span>
-                          <IconButton
-                            size="small" disabled={!st.variantId}
-                            onClick={() => setQuickFix({ itemId: it.id, variantId: st.variantId, tab: 'transfer' })}
-                          >
-                            <TuneIcon fontSize="small" />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    </TableCell>
-                  )}
-                </TableRow>
+                    <Box sx={{ mt: 1 }}>{p.sizeField}</Box>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1 }}>
+                      {p.stepper(true)}
+                      {p.lineTotal > 0 && <Typography sx={{ ml: 'auto', fontWeight: 600 }}>{money(p.lineTotal)}</Typography>}
+                      {p.quickFixIcon}
+                    </Stack>
+                    {p.sourceToggle && <Box sx={{ mt: 1 }}>{p.sourceToggle}</Box>}
+                    {p.captions}
+                  </CardContent>
+                </Card>
               );
             })}
-          </TableBody>
-        </Table>
+          </Stack>
+        ) : (
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ width: '38%' }}>Pièce</TableCell>
+                <TableCell sx={{ width: 170 }}>Taille</TableCell>
+                <TableCell align="center" sx={{ width: 170 }}>Quantité</TableCell>
+                <TableCell align="right">Coût unit.</TableCell>
+                <TableCell align="right">Total</TableCell>
+                {canWriteUniforms && <TableCell sx={{ width: 48 }} />}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {list.map((it) => {
+                const p = lineParts(it);
+                return (
+                  <TableRow key={it.id} sx={p.st.qty > 0 ? { bgcolor: '#f5faf5' } : undefined}>
+                    <TableCell>{it.name}</TableCell>
+                    <TableCell>{p.sizeField}</TableCell>
+                    <TableCell align="center">
+                      {p.stepper(false)}
+                      {p.sourceToggle}
+                      {p.captions}
+                    </TableCell>
+                    <TableCell align="right">{money(rowCost(it))}</TableCell>
+                    <TableCell align="right">{p.lineTotal > 0 ? money(p.lineTotal) : '—'}</TableCell>
+                    {canWriteUniforms && (
+                      <TableCell align="center" sx={{ px: 0.5 }}>{p.quickFixIcon}</TableCell>
+                    )}
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
         <Stack direction="row" justifyContent="flex-end" pr={1} mt={0.5}>
           <Typography variant="body2" color="text.secondary">Sous-total {title.toLowerCase()} : <b>{money(subtotal)}</b></Typography>
         </Stack>
@@ -526,7 +574,7 @@ export default function UniformIssuanceWizardPage() {
       <Paper sx={{ p: 2, mb: 2 }}>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
           <Autocomplete
-            sx={{ flex: 1, minWidth: 260 }}
+            sx={{ flex: 1, minWidth: { xs: 0, md: 260 }, width: { xs: '100%', md: 'auto' } }}
             options={employees.data?.data || []}
             getOptionLabel={(o: any) => `${o.firstName} ${o.lastName}${o.assignment ? ' — ' + o.assignment : ''}`}
             value={employee}
@@ -536,21 +584,21 @@ export default function UniformIssuanceWizardPage() {
             isOptionEqualToValue={(o: any, v: any) => o.id === v?.id}
             disabled={!!issuanceId || isEdit}
           />
-          <TextField select size="small" label="Division" value={division} onChange={(e) => setDivision(e.target.value as UniformDivision)} sx={{ minWidth: 170 }} disabled={!!issuanceId || isEdit}>
+          <TextField select size="small" label="Division" value={division} onChange={(e) => setDivision(e.target.value as UniformDivision)} sx={{ minWidth: { xs: 0, md: 170 }, width: { xs: '100%', md: 'auto' } }} disabled={!!issuanceId || isEdit}>
             <MenuItem value="SECURITE">Sécurité</MenuItem>
             <MenuItem value="SIGNALISATION">Signalisation</MenuItem>
           </TextField>
           <TextField
             select size="small" label="Source par défaut" value={defaultMode}
             onChange={(e) => setDefaultMode(e.target.value as UniformSourceMode)}
-            sx={{ minWidth: 190 }} disabled={!!issuanceId}
+            sx={{ minWidth: { xs: 0, md: 190 }, width: { xs: '100%', md: 'auto' } }} disabled={!!issuanceId}
             helperText="Auto : front d'abord, puis back"
           >
             <MenuItem value="AUTO">Auto (recommandé)</MenuItem>
             <MenuItem value="FRONT_OFFICE">Front office seulement</MenuItem>
             <MenuItem value="BACK_OFFICE">Back office seulement</MenuItem>
           </TextField>
-          <TextField type="date" size="small" label="Retour prévu" InputLabelProps={{ shrink: true }} value={dueReturnAt} onChange={(e) => setDueReturnAt(e.target.value)} disabled={!!issuanceId} />
+          <TextField type="date" size="small" label="Retour prévu" InputLabelProps={{ shrink: true }} value={dueReturnAt} onChange={(e) => setDueReturnAt(e.target.value)} disabled={!!issuanceId} sx={{ width: { xs: '100%', md: 'auto' } }} />
         </Stack>
         {!isEdit && canWriteUniforms && (
           <>
@@ -624,25 +672,27 @@ export default function UniformIssuanceWizardPage() {
               </Button>
             </Stack>
             {customs.map((c, i) => (
-              <Stack key={i} direction="row" spacing={1} alignItems="center" mb={1}>
-                <TextField size="small" label="Désignation" value={c.name} onChange={(e) => setCustoms(customs.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} sx={{ flex: 1 }} />
-                <TextField size="small" type="number" label="Qté" value={c.qty} onChange={(e) => setCustoms(customs.map((x, j) => j === i ? { ...x, qty: Number(e.target.value) } : x))} sx={{ width: 80 }} />
-                <TextField size="small" type="number" label="Coût ($)" value={c.cost} onChange={(e) => setCustoms(customs.map((x, j) => j === i ? { ...x, cost: Number(e.target.value) } : x))} sx={{ width: 110 }} />
-                <IconButton size="small" onClick={() => setCustoms(customs.filter((_, j) => j !== i))}><DeleteIcon fontSize="small" /></IconButton>
+              <Stack key={i} direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} mb={1}>
+                <TextField size="small" label="Désignation" value={c.name} onChange={(e) => setCustoms(customs.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} sx={{ flex: 1, width: { xs: '100%', sm: 'auto' } }} />
+                <Stack direction="row" spacing={1} sx={{ width: { xs: '100%', sm: 'auto' } }}>
+                  <TextField size="small" type="number" label="Qté" value={c.qty} onChange={(e) => setCustoms(customs.map((x, j) => j === i ? { ...x, qty: Number(e.target.value) } : x))} sx={{ width: { xs: '50%', sm: 80 } }} />
+                  <TextField size="small" type="number" label="Coût ($)" value={c.cost} onChange={(e) => setCustoms(customs.map((x, j) => j === i ? { ...x, cost: Number(e.target.value) } : x))} sx={{ width: { xs: '50%', sm: 110 } }} />
+                  <IconButton size="small" onClick={() => setCustoms(customs.filter((_, j) => j !== i))}><DeleteIcon fontSize="small" /></IconButton>
+                </Stack>
               </Stack>
             ))}
 
             <Divider sx={{ my: 2 }} />
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={1}>
               <Chip color={anyPicked ? 'primary' : 'default'} label={`${items.filter((it) => (rowState[it.id]?.qty || 0) > 0).length + customs.filter((c) => c.name && c.qty > 0).length} ligne(s)`} />
-              <Typography variant="h6">Coût total du prêt : {money(grandTotal)}</Typography>
+              <Typography variant={isMobile ? 'subtitle1' : 'h6'}>Coût total du prêt : {money(grandTotal)}</Typography>
             </Stack>
           </Paper>
 
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} justifyContent="flex-end">
             {canPrepareUniformDraft && !historical && (
               <Button
-                variant="outlined" size="large"
+                variant="outlined" size="large" fullWidth={isMobile}
                 disabled={!employee || !anyPicked || prepareDraft.isPending}
                 onClick={() => prepareDraft.mutate()}
               >
@@ -650,8 +700,10 @@ export default function UniformIssuanceWizardPage() {
               </Button>
             )}
             {canWriteUniforms && (
-              <Button variant="contained" size="large" disabled={!employee || !anyPicked || finalize.isPending} onClick={() => finalize.mutate()}>
-                {historical ? 'Enregistrer la remise historique (sans toucher au stock)' : 'Finaliser & signer (décrémente le stock)'}
+              <Button variant="contained" size="large" fullWidth={isMobile} disabled={!employee || !anyPicked || finalize.isPending} onClick={() => finalize.mutate()}>
+                {historical
+                  ? (isMobile ? 'Enregistrer (historique)' : 'Enregistrer la remise historique (sans toucher au stock)')
+                  : (isMobile ? 'Finaliser & signer' : 'Finaliser & signer (décrémente le stock)')}
               </Button>
             )}
           </Stack>

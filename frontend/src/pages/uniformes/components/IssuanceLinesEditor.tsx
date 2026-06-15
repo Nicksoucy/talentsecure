@@ -3,8 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, Table, TableHead, TableRow,
   TableCell, TableBody, TextField, MenuItem, IconButton, Stack, Typography, Divider, Box, Alert,
+  Card, CardContent, useTheme, useMediaQuery,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import RemoveIcon from '@mui/icons-material/Remove';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
@@ -37,6 +39,8 @@ interface CustomLine {
 export default function IssuanceLinesEditor({ open, onClose, issuance, employeeId }: Props) {
   const qc = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const division = issuance.division as UniformDivision;
 
   const itemsQ = useQuery({
@@ -119,52 +123,88 @@ export default function IssuanceLinesEditor({ open, onClose, issuance, employeeI
         <Typography variant="subtitle2" sx={{ bgcolor: '#eef1f6', px: 1.5, py: 0.75, borderRadius: 1, fontWeight: 700 }}>
           {title}
         </Typography>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ width: '40%' }}>Pièce</TableCell>
-              <TableCell sx={{ width: 140 }}>Taille</TableCell>
-              <TableCell align="center" sx={{ width: 120 }}>Qté</TableCell>
-              <TableCell align="right">Coût unit.</TableCell>
-              <TableCell align="right">Total</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+        {isMobile ? (
+          <Stack spacing={1} mt={1}>
             {list.map((it) => {
               const st = rowState[it.id] || { variantId: '', qty: 0 };
               const sized = !it.isOneSize && it.type !== 'EQUIPEMENT';
               const lineTotal = st.qty * rowCost(it);
               return (
-                <TableRow key={it.id}>
-                  <TableCell>{it.name}</TableCell>
-                  <TableCell>
+                <Card key={it.id} variant="outlined" sx={{ bgcolor: st.qty > 0 ? '#f5faf5' : undefined }}>
+                  <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+                      <Typography sx={{ fontWeight: 600, flex: 1 }}>{it.name}</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>{money(rowCost(it))}</Typography>
+                    </Stack>
                     {sized ? (
-                      <TextField select size="small" value={st.variantId} onChange={(e) => setSize(it.id, e.target.value)} sx={{ minWidth: 110 }}>
-                        <MenuItem value=""><em>—</em></MenuItem>
+                      <TextField select size="small" fullWidth value={st.variantId} onChange={(e) => setSize(it.id, e.target.value)} sx={{ mt: 1 }}>
+                        <MenuItem value=""><em>— choisir —</em></MenuItem>
                         {(it.variants || []).filter((v) => v.isActive).map((v) => (
                           <MenuItem key={v.id} value={v.id}>{v.size}</MenuItem>
                         ))}
                       </TextField>
                     ) : (
-                      <Typography variant="body2" color="text.secondary">Unique</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Taille unique</Typography>
                     )}
-                  </TableCell>
-                  <TableCell align="center">
-                    <TextField size="small" type="number" value={st.qty} onChange={(e) => setQty(it.id, Number(e.target.value))} sx={{ width: 80 }} inputProps={{ min: 0 }} />
-                  </TableCell>
-                  <TableCell align="right">{money(rowCost(it))}</TableCell>
-                  <TableCell align="right">{lineTotal > 0 ? money(lineTotal) : '—'}</TableCell>
-                </TableRow>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1 }}>
+                      <IconButton onClick={() => setQty(it.id, (st.qty || 0) - 1)}><RemoveIcon /></IconButton>
+                      <TextField size="small" type="number" value={st.qty} onChange={(e) => setQty(it.id, Number(e.target.value))} inputProps={{ style: { textAlign: 'center', width: 60 }, min: 0 }} />
+                      <IconButton onClick={() => setQty(it.id, (st.qty || 0) + 1)}><AddIcon /></IconButton>
+                      {lineTotal > 0 && <Typography sx={{ ml: 'auto', fontWeight: 600 }}>{money(lineTotal)}</Typography>}
+                    </Stack>
+                  </CardContent>
+                </Card>
               );
             })}
-          </TableBody>
-        </Table>
+          </Stack>
+        ) : (
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ width: '40%' }}>Pièce</TableCell>
+                <TableCell sx={{ width: 140 }}>Taille</TableCell>
+                <TableCell align="center" sx={{ width: 120 }}>Qté</TableCell>
+                <TableCell align="right">Coût unit.</TableCell>
+                <TableCell align="right">Total</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {list.map((it) => {
+                const st = rowState[it.id] || { variantId: '', qty: 0 };
+                const sized = !it.isOneSize && it.type !== 'EQUIPEMENT';
+                const lineTotal = st.qty * rowCost(it);
+                return (
+                  <TableRow key={it.id}>
+                    <TableCell>{it.name}</TableCell>
+                    <TableCell>
+                      {sized ? (
+                        <TextField select size="small" value={st.variantId} onChange={(e) => setSize(it.id, e.target.value)} sx={{ minWidth: 110 }}>
+                          <MenuItem value=""><em>—</em></MenuItem>
+                          {(it.variants || []).filter((v) => v.isActive).map((v) => (
+                            <MenuItem key={v.id} value={v.id}>{v.size}</MenuItem>
+                          ))}
+                        </TextField>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">Unique</Typography>
+                      )}
+                    </TableCell>
+                    <TableCell align="center">
+                      <TextField size="small" type="number" value={st.qty} onChange={(e) => setQty(it.id, Number(e.target.value))} sx={{ width: 80 }} inputProps={{ min: 0 }} />
+                    </TableCell>
+                    <TableCell align="right">{money(rowCost(it))}</TableCell>
+                    <TableCell align="right">{lineTotal > 0 ? money(lineTotal) : '—'}</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
       </Box>
     );
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth fullScreen={isMobile}>
       <DialogTitle>Modifier les pièces — {division === 'SECURITE' ? 'Sécurité' : 'Signalisation'}</DialogTitle>
       <DialogContent>
         {issuance.status !== 'DRAFT' && (
@@ -184,11 +224,13 @@ export default function IssuanceLinesEditor({ open, onClose, issuance, employeeI
           </Button>
         </Stack>
         {customs.map((c, i) => (
-          <Stack key={i} direction="row" spacing={1} alignItems="center" mb={1}>
-            <TextField size="small" label="Désignation" value={c.name} onChange={(e) => setCustoms(customs.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} sx={{ flex: 1 }} />
-            <TextField size="small" type="number" label="Qté" value={c.qty} onChange={(e) => setCustoms(customs.map((x, j) => j === i ? { ...x, qty: Number(e.target.value) } : x))} sx={{ width: 80 }} />
-            <TextField size="small" type="number" label="Coût ($)" value={c.cost} onChange={(e) => setCustoms(customs.map((x, j) => j === i ? { ...x, cost: Number(e.target.value) } : x))} sx={{ width: 110 }} />
-            <IconButton size="small" onClick={() => setCustoms(customs.filter((_, j) => j !== i))}><DeleteIcon fontSize="small" /></IconButton>
+          <Stack key={i} direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} mb={1}>
+            <TextField size="small" label="Désignation" value={c.name} onChange={(e) => setCustoms(customs.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} sx={{ flex: 1, width: { xs: '100%', sm: 'auto' } }} />
+            <Stack direction="row" spacing={1} sx={{ width: { xs: '100%', sm: 'auto' } }}>
+              <TextField size="small" type="number" label="Qté" value={c.qty} onChange={(e) => setCustoms(customs.map((x, j) => j === i ? { ...x, qty: Number(e.target.value) } : x))} sx={{ width: { xs: '50%', sm: 80 } }} />
+              <TextField size="small" type="number" label="Coût ($)" value={c.cost} onChange={(e) => setCustoms(customs.map((x, j) => j === i ? { ...x, cost: Number(e.target.value) } : x))} sx={{ width: { xs: '50%', sm: 110 } }} />
+              <IconButton size="small" onClick={() => setCustoms(customs.filter((_, j) => j !== i))}><DeleteIcon fontSize="small" /></IconButton>
+            </Stack>
           </Stack>
         ))}
 
