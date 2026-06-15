@@ -411,6 +411,63 @@ function OneSizeTable({ groups, onAdjust, onMove, canReorder }: { groups: Group[
   );
 }
 
+/**
+ * Vue MOBILE de la heatmap : une carte par morceau, avec une tuile par grandeur
+ * (couleur = statut de stock comme la heatmap, tap → ajuster). Remplace les
+ * tableaux larges (scroll horizontal) par un affichage vertical natif mobile.
+ */
+function MobileStockList({ groups, onAdjust }: { groups: Group[]; onAdjust?: (variant: Row) => void }) {
+  if (groups.length === 0) {
+    return <Typography sx={{ color: T.onSurfaceVariant, py: 2, fontFamily: T.fontSans }}>Aucun morceau.</Typography>;
+  }
+  return (
+    <Stack spacing={1.25} mb={4}>
+      {groups.map((g) => {
+        const low = g.variants.some((v) => v.lowStock && v.quantityOnHand > 0);
+        const totalColor = g.total === 0 ? T.errorText : low ? T.warnText : T.onSurface;
+        return (
+          <Box key={g.itemId} sx={{ bgcolor: T.surface, border: `1px solid ${T.outline}`, borderRadius: 2, p: 1.5 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ fontFamily: T.fontSans, fontSize: 15, fontWeight: 600, color: T.primary }} noWrap>{g.itemName}</Typography>
+                <Typography sx={{ fontFamily: T.fontSans, fontSize: 11, color: T.onSurfaceVariant }}>
+                  {g.division === 'SIGNALISATION' ? 'Signalisation' : 'Sécurité'}{g.emplacement ? ` · ${g.emplacement}` : ''} · {money(g.replacementCost)}/u
+                </Typography>
+              </Box>
+              <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                <Typography sx={{ fontFamily: T.fontMono, fontSize: 20, fontWeight: 700, color: totalColor, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{g.total}</Typography>
+                <Typography sx={{ fontFamily: T.fontSans, fontSize: 10, color: T.onSurfaceVariant }}>total</Typography>
+              </Box>
+            </Stack>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 1 }}>
+              {g.variants.map((v) => {
+                const s = cellStyle(v.quantityOnHand, v.reorderThreshold);
+                const label = g.isOneSize || /^uniqu/i.test(v.size) ? 'Unique' : v.size;
+                return (
+                  <Box
+                    key={v.variantId}
+                    onClick={onAdjust ? () => onAdjust(v) : undefined}
+                    sx={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 64,
+                      px: 1, py: 0.75, borderRadius: 1.5, cursor: onAdjust ? 'pointer' : 'default',
+                      bgcolor: s.bg, color: s.color, border: `1px solid ${T.outline}`,
+                      '&:active': onAdjust ? { filter: 'brightness(0.94)' } : undefined,
+                    }}
+                  >
+                    <Typography sx={{ fontFamily: T.fontSans, fontSize: 11, fontWeight: 600, lineHeight: 1.2 }}>{label}</Typography>
+                    <Typography sx={{ fontFamily: T.fontMono, fontSize: 16, fontWeight: 700, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>{v.quantityOnHand}</Typography>
+                    <Typography sx={{ fontFamily: T.fontSans, fontSize: 10, opacity: 0.85, lineHeight: 1.2 }}>F{v.frontOffice ?? 0}·B{v.backOffice ?? 0}</Typography>
+                  </Box>
+                );
+              })}
+            </Box>
+          </Box>
+        );
+      })}
+    </Stack>
+  );
+}
+
 // ---------- Page ----------
 export default function UniformInventoryPage() {
   const qc = useQueryClient();
@@ -850,26 +907,32 @@ export default function UniformInventoryPage() {
             </Typography>
           )}
 
-          {/* Heatmap tables */}
-          <HeatmapTable
-            title="Hauts — chemises, polos, chandails"
-            subtitle="Tailles lettrées"
-            columns={topsSizes}
-            groups={tops}
-            onCellClick={canWriteUniforms ? (v) => v && openAdjust(v) : undefined}
-            onMove={moveItem}
-            canReorder={canReorder}
-          />
-          <HeatmapTable
-            title="Pantalons — par tour de taille"
-            subtitle="Tailles numériques"
-            columns={pantsSizes}
-            groups={pants}
-            onCellClick={canWriteUniforms ? (v) => v && openAdjust(v) : undefined}
-            onMove={moveItem}
-            canReorder={canReorder}
-          />
-          <OneSizeTable groups={oneSize} onAdjust={canWriteUniforms ? openAdjust : undefined} onMove={moveItem} canReorder={canReorder} />
+          {/* Heatmap — vue mobile dédiée (cartes + tuiles) vs tableaux desktop */}
+          {isMobile ? (
+            <MobileStockList groups={groups} onAdjust={canWriteUniforms ? openAdjust : undefined} />
+          ) : (
+            <>
+              <HeatmapTable
+                title="Hauts — chemises, polos, chandails"
+                subtitle="Tailles lettrées"
+                columns={topsSizes}
+                groups={tops}
+                onCellClick={canWriteUniforms ? (v) => v && openAdjust(v) : undefined}
+                onMove={moveItem}
+                canReorder={canReorder}
+              />
+              <HeatmapTable
+                title="Pantalons — par tour de taille"
+                subtitle="Tailles numériques"
+                columns={pantsSizes}
+                groups={pants}
+                onCellClick={canWriteUniforms ? (v) => v && openAdjust(v) : undefined}
+                onMove={moveItem}
+                canReorder={canReorder}
+              />
+              <OneSizeTable groups={oneSize} onAdjust={canWriteUniforms ? openAdjust : undefined} onMove={moveItem} canReorder={canReorder} />
+            </>
+          )}
         </>
       )}
 
