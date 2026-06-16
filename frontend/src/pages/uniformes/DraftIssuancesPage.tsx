@@ -6,6 +6,7 @@ import {
   Chip, Alert, useTheme, useMediaQuery, Card, CardContent, Divider,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import EditIcon from '@mui/icons-material/Edit';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SendIcon from '@mui/icons-material/Send';
@@ -14,6 +15,7 @@ import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import { usePerms } from '@/hooks/usePerms';
 import SendIssuanceDialog from './components/SendIssuanceDialog';
+import UniformOrderImportDialog from './components/UniformOrderImportDialog';
 
 const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
 
@@ -62,6 +64,8 @@ export default function DraftIssuancesPage() {
   // Envoi rapide : ouvre une fenêtre (signature employeur optionnelle) qui
   // finalise + (signe) + envoie le SMS à l'agent, sans ouvrir le wizard.
   const [sendForId, setSendForId] = useState<string | null>(null);
+  // Import d'une commande collée (Teams) → brouillon.
+  const [importOpen, setImportOpen] = useState(false);
 
   const openDraft = (id: string) => navigate(`/uniformes/remises/brouillon/${id}`);
 
@@ -106,9 +110,14 @@ export default function DraftIssuancesPage() {
           </Typography>
         </Box>
         {canPrepareUniformDraft && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/uniformes/remises/nouvelle')}>
-            Préparer une remise
-          </Button>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+            <Button variant="outlined" startIcon={<ContentPasteIcon />} onClick={() => setImportOpen(true)}>
+              Coller une commande
+            </Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/uniformes/remises/nouvelle')}>
+              Préparer une remise
+            </Button>
+          </Stack>
         )}
       </Stack>
 
@@ -181,6 +190,12 @@ export default function DraftIssuancesPage() {
         issuanceId={sendForId}
         onClose={() => setSendForId(null)}
         onSent={() => qc.invalidateQueries({ queryKey: ['issuances'] })}
+      />
+
+      <UniformOrderImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onCreated={(id) => navigate(`/uniformes/remises/brouillon/${id}`)}
       />
     </Box>
   );
