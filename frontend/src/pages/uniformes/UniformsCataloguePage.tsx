@@ -18,6 +18,8 @@ import TuneIcon from '@mui/icons-material/Tune';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import EditIcon from '@mui/icons-material/Edit';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import FitScreenIcon from '@mui/icons-material/FitScreen';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import InvertColorsIcon from '@mui/icons-material/InvertColors';
@@ -207,6 +209,37 @@ export default function UniformsCataloguePage() {
   // ---- Dialog: détails / grandeurs d'un morceau ----
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const detailsItem = useMemo(() => items.find((i) => i.id === detailsId) || null, [items, detailsId]);
+
+  // ---- Ordre manuel + renommage des grandeurs ----
+  // Tri : ordre manuel (sortOrder) d'abord, puis tri naturel des grandeurs en
+  // départage (tant que rien n'a été réordonné, tous les sortOrder valent 0).
+  const sortedVariants = useMemo(
+    () => [...(detailsItem?.variants || [])].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || compareSizes(a.size, b.size)),
+    [detailsItem],
+  );
+  const reorderVariants = useMutation({
+    mutationFn: (ids: string[]) => uniformService.reorderVariants(detailsItem!.id, ids),
+    onSuccess: () => invalidateUniformCaches(qc),
+    onError: (e: any) => { enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }); invalidateUniformCaches(qc); },
+  });
+  const moveVariant = (index: number, dir: number) => {
+    const t = index + dir;
+    if (t < 0 || t >= sortedVariants.length) return;
+    const ids = sortedVariants.map((v) => v.id);
+    [ids[index], ids[t]] = [ids[t], ids[index]];
+    reorderVariants.mutate(ids);
+  };
+  const [renameVar, setRenameVar] = useState<{ variant: UniformVariant; itemName: string } | null>(null);
+  const [renameVal, setRenameVal] = useState('');
+  const renameVariant = useMutation({
+    mutationFn: () => uniformService.updateVariant(renameVar!.variant.id, { size: renameVal.trim() } as any),
+    onSuccess: () => {
+      enqueueSnackbar('Grandeur renommée', { variant: 'success' });
+      setRenameVar(null); setRenameVal('');
+      invalidateUniformCaches(qc);
+    },
+    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
+  });
 
   // ---- Affichage de la photo (remplir / entière) par morceau ----
   const setFit = useMutation({
@@ -661,9 +694,30 @@ export default function UniformsCataloguePage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {[...(detailsItem?.variants || [])].sort((a, b) => compareSizes(a.size, b.size)).map((v) => (
+                {sortedVariants.map((v, i) => (
                   <TableRow key={v.id}>
-                    <TableCell>{v.size}</TableCell>
+                    <TableCell>
+                      <Stack direction="row" alignItems="center" spacing={0.25}>
+                        {canWriteUniforms && (
+                          <Stack>
+                            <IconButton size="small" sx={{ p: 0 }} disabled={i === 0 || reorderVariants.isPending} onClick={() => moveVariant(i, -1)}>
+                              <ArrowUpwardIcon sx={{ fontSize: 15 }} />
+                            </IconButton>
+                            <IconButton size="small" sx={{ p: 0 }} disabled={i === sortedVariants.length - 1 || reorderVariants.isPending} onClick={() => moveVariant(i, 1)}>
+                              <ArrowDownwardIcon sx={{ fontSize: 15 }} />
+                            </IconButton>
+                          </Stack>
+                        )}
+                        <span>{v.size}</span>
+                        {canWriteUniforms && (
+                          <Tooltip title="Renommer la grandeur">
+                            <IconButton size="small" onClick={() => { setRenameVar({ variant: v, itemName: detailsItem?.name || '' }); setRenameVal(v.size); }}>
+                              <EditIcon sx={{ fontSize: 14 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Stack>
+                    </TableCell>
                     <TableCell><code>{v.barcode}</code></TableCell>
                     <TableCell>
                       {canWriteUniforms ? (
@@ -769,6 +823,26 @@ export default function UniformsCataloguePage() {
         <DialogActions>
           <Button onClick={() => setVariantDlg(null)}>Annuler</Button>
           <Button variant="contained" disabled={!variantForm.size || createVariant.isPending} onClick={() => createVariant.mutate()}>Ajouter</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Renommer une grandeur */}
+      <Dialog open={!!renameVar} onClose={() => setRenameVar(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Renommer la grandeur — {renameVar?.itemName}</DialogTitle>
+        <DialogContent>
+          <Autocomplete
+            freeSolo
+            options={SIZE_OPTION_LIST}
+            groupBy={(o) => o.group}
+            getOptionLabel={(o) => (typeof o === 'string' ? o : o.value)}
+            inputValue={renameVal}
+            onInputChange={(_, v) => setRenameVal(v)}
+            renderInput={(params) => <TextField {...params} label="Grandeur" sx={{ mt: 1 }} autoFocus />}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRenameVar(null)}>Annuler</Button>
+          <Button variant="contained" disabled={!renameVal.trim() || renameVariant.isPending} onClick={() => renameVariant.mutate()}>Renommer</Button>
         </DialogActions>
       </Dialog>
 

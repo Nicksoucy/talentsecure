@@ -69,6 +69,11 @@ export const uniformService = {
     const r = await api.post(`/api/uniforms/items/${itemId}/variants`, data);
     return r.data;
   },
+  /** Réordonne les grandeurs d'un morceau (ids dans l'ordre voulu). */
+  async reorderVariants(itemId: string, ids: string[]) {
+    const r = await api.post(`/api/uniforms/items/${itemId}/variants/reorder`, { ids });
+    return r.data;
+  },
   async updateVariant(variantId: string, data: Partial<UniformVariant>) {
     const r = await api.put(`/api/uniforms/variants/${variantId}`, data);
     return r.data;

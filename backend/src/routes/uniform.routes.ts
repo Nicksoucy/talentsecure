@@ -107,6 +107,7 @@ router.get('/items/:id/variants', (req, res, next) => {
   (req.query as any).itemId = req.params.id;
   return ctrl.listVariants(req, res, next);
 });
+router.post('/items/:id/variants/reorder', ctrl.reorderVariants);
 router.post('/items/:id/variants', ctrl.createVariant);
 
 // Remises (prêts)

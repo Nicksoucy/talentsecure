@@ -47,7 +47,7 @@ export const listItems = async (req: Request, res: Response, next: NextFunction)
 
     const items = await prisma.uniformItem.findMany({
       where,
-      include: { variants: { where: { isActive: true }, orderBy: { size: 'asc' }, include: { stockByLocation: true } } },
+      include: { variants: { where: { isActive: true }, orderBy: [{ sortOrder: 'asc' }, { size: 'asc' }], include: { stockByLocation: true } } },
       // Ordre manuel (sortOrder) d'abord ; division/nom en départage tant que
       // l'utilisateur n'a pas réordonné (sortOrder tous égaux au départ).
       orderBy: [{ sortOrder: 'asc' }, { division: 'asc' }, { name: 'asc' }],
@@ -105,11 +105,25 @@ export const reorderItems = async (req: Request, res: Response, next: NextFuncti
   }
 };
 
+/** Réordonne les grandeurs (variantes) d'un morceau : sortOrder = position reçue. */
+export const reorderVariants = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { ids } = req.body as { ids: string[] };
+    if (!Array.isArray(ids) || ids.length === 0) throw new ApiError(400, 'ids requis');
+    await prisma.$transaction(
+      ids.map((id, idx) => prisma.uniformVariant.update({ where: { id }, data: { sortOrder: idx } }))
+    );
+    res.json({ message: 'Ordre des grandeurs mis à jour' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getItem = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const item = await prisma.uniformItem.findUnique({
       where: { id: req.params.id },
-      include: { variants: { where: { isActive: true }, orderBy: { size: 'asc' }, include: { stockByLocation: true } } },
+      include: { variants: { where: { isActive: true }, orderBy: [{ sortOrder: 'asc' }, { size: 'asc' }], include: { stockByLocation: true } } },
     });
     if (!item) throw new ApiError(404, 'Morceau introuvable');
     res.json({ data: await withImageUrl(item) });
@@ -204,6 +218,10 @@ export const createVariant = async (req: Request, res: Response, next: NextFunct
     const { size, replacementCost, reorderThreshold, sku, emplacement } = req.body;
     const sizeVal = size || 'Unique';
 
+    // Nouvelle grandeur ajoutée en FIN de liste (l'utilisateur la replace ensuite).
+    const maxOrder = await prisma.uniformVariant.aggregate({ where: { itemId: item.id }, _max: { sortOrder: true } });
+    const nextOrder = (maxOrder._max.sortOrder ?? 0) + 1;
+
     // La contrainte unique (itemId, size) inclut aussi les grandeurs ARCHIVÉES
     // (isActive=false, masquées de la liste). On réactive plutôt que d'échouer ;
     // si elle est déjà active → message clair au lieu d'un 500.
@@ -216,6 +234,7 @@ export const createVariant = async (req: Request, res: Response, next: NextFunct
         where: { id: existing.id },
         data: {
           isActive: true,
+          sortOrder: nextOrder,
           replacementCost: replacementCost ?? existing.replacementCost,
           reorderThreshold: reorderThreshold ?? existing.reorderThreshold,
           ...(emplacement !== undefined ? { emplacement } : {}),
@@ -234,6 +253,7 @@ export const createVariant = async (req: Request, res: Response, next: NextFunct
         sku: sku ?? null,
         emplacement: emplacement ?? null,
         barcode,
+        sortOrder: nextOrder,
         replacementCost: replacementCost ?? item.defaultReplacementCost,
         reorderThreshold: reorderThreshold ?? null,
       },
@@ -249,7 +269,16 @@ export const updateVariant = async (req: Request, res: Response, next: NextFunct
   try {
     const { size, replacementCost, reorderThreshold, sku, isActive, emplacement } = req.body;
     const data: any = {};
-    if (size !== undefined) data.size = size;
+    if (size !== undefined) {
+      // Renommage : refuser si une autre grandeur du même morceau porte déjà ce nom
+      // (sinon violation de la contrainte unique → 500).
+      const current = await prisma.uniformVariant.findUnique({ where: { id: req.params.variantId } });
+      if (current && size !== current.size) {
+        const dup = await prisma.uniformVariant.findFirst({ where: { itemId: current.itemId, size, id: { not: current.id } } });
+        if (dup) throw new ApiError(409, `La grandeur « ${size} » existe déjà pour ce morceau.`);
+      }
+      data.size = size;
+    }
     if (replacementCost !== undefined) data.replacementCost = replacementCost;
     if (reorderThreshold !== undefined) data.reorderThreshold = reorderThreshold;
     if (sku !== undefined) data.sku = sku;

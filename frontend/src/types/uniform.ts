@@ -43,6 +43,7 @@ export interface UniformVariant {
   quantityOnHand: number; // total (= Σ emplacements)
   reorderThreshold?: number | null;
   isActive: boolean;
+  sortOrder?: number; // ordre manuel des grandeurs (0 = tri auto)
   item?: UniformItem;
   stockByLocation?: UniformVariantStock[];
 }
