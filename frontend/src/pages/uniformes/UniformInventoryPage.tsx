@@ -20,6 +20,7 @@ import { uniformService } from '@/services/uniform.service';
 import { usePerms } from '@/hooks/usePerms';
 import type { UniformStockLocation } from '@/types/uniform';
 import StockQuickFixDialog, { type StockQuickFixTarget } from './components/StockQuickFixDialog';
+import { compareSizes, isPantsSize } from './sizeOrder';
 
 // ---------- Design B (heatmap) tokens ----------
 const T = {
@@ -54,24 +55,13 @@ const locShort: Record<string, string> = { BACK_OFFICE: 'Back', FRONT_OFFICE: 'F
 
 // ---------- Bucket detection ----------
 const LETTER_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
-const isNumericSize = (s: string) => /^\d{2,3}(\.5)?$/.test(s.trim());
 type Bucket = 'tops' | 'pants' | 'one-size';
 function detectBucket(sizes: string[], isOneSize: boolean): Bucket {
   if (isOneSize || sizes.every((s) => /^uniqu/i.test(s) || s === '—' || s === '')) return 'one-size';
-  if (sizes.every((s) => isNumericSize(s))) return 'pants';
+  // Pantalons : grandeurs numériques OU hybrides (« Medium 32 », « XL 40 »).
+  if (sizes.every((s) => isPantsSize(s))) return 'pants';
   if (sizes.some((s) => LETTER_SIZES.includes(s.toUpperCase()))) return 'tops';
   return 'one-size';
-}
-function sortLetterSizes(a: string, b: string) {
-  const i = (s: string) => {
-    const u = s.toUpperCase();
-    const idx = LETTER_SIZES.indexOf(u);
-    return idx === -1 ? 99 : idx;
-  };
-  return i(a) - i(b);
-}
-function sortNumericSizes(a: string, b: string) {
-  return parseFloat(a) - parseFloat(b);
 }
 
 // ---------- Heatmap cell color ----------
@@ -440,7 +430,7 @@ function MobileStockList({ groups, onAdjust }: { groups: Group[]; onAdjust?: (va
               </Box>
             </Stack>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 1 }}>
-              {g.variants.map((v) => {
+              {[...g.variants].sort((a, b) => compareSizes(a.size, b.size)).map((v) => {
                 const s = cellStyle(v.quantityOnHand, v.reorderThreshold);
                 const label = g.isOneSize || /^uniqu/i.test(v.size) ? 'Unique' : v.size;
                 return (
@@ -594,12 +584,12 @@ export default function UniformInventoryPage() {
   const topsSizes = useMemo(() => {
     const s = new Set<string>();
     tops.forEach((g) => g.variants.forEach((v) => s.add(v.size)));
-    return Array.from(s).sort(sortLetterSizes);
+    return Array.from(s).sort(compareSizes);
   }, [tops]);
   const pantsSizes = useMemo(() => {
     const s = new Set<string>();
     pants.forEach((g) => g.variants.forEach((v) => s.add(v.size)));
-    return Array.from(s).sort(sortNumericSizes);
+    return Array.from(s).sort(compareSizes);
   }, [pants]);
 
   // Action required = out of stock + low stock

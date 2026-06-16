@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Button, Stack, TextField, MenuItem, Table, TableHead, TableRow, TableCell,
   TableBody, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Tooltip,
-  Card, CardContent, CardActions, CircularProgress, Divider,
+  Card, CardContent, CardActions, CircularProgress, Divider, Autocomplete,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import PrintIcon from '@mui/icons-material/Print';
@@ -25,6 +25,7 @@ import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
 import { invalidateUniformCaches } from '@/utils/uniformCache';
 import { usePerms } from '@/hooks/usePerms';
+import { compareSizes, SIZE_OPTION_LIST } from './sizeOrder';
 import type { UniformDivision, UniformItem, UniformStockLocation, UniformVariant } from '@/types/uniform';
 
 const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
@@ -660,7 +661,7 @@ export default function UniformsCataloguePage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {(detailsItem?.variants || []).map((v) => (
+                {[...(detailsItem?.variants || [])].sort((a, b) => compareSizes(a.size, b.size)).map((v) => (
                   <TableRow key={v.id}>
                     <TableCell>{v.size}</TableCell>
                     <TableCell><code>{v.barcode}</code></TableCell>
@@ -751,7 +752,15 @@ export default function UniformsCataloguePage() {
         <DialogTitle>Ajouter une grandeur — {variantDlg?.name}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} mt={1}>
-            <TextField label="Grandeur (ex. M, 34, Unique)" value={variantForm.size} onChange={(e) => setVariantForm({ ...variantForm, size: e.target.value })} />
+            <Autocomplete
+              freeSolo
+              options={SIZE_OPTION_LIST}
+              groupBy={(o) => o.group}
+              getOptionLabel={(o) => (typeof o === 'string' ? o : o.value)}
+              inputValue={variantForm.size}
+              onInputChange={(_, v) => setVariantForm({ ...variantForm, size: v })}
+              renderInput={(params) => <TextField {...params} label="Grandeur (choisir ou taper — ex. M, 34, Medium 32)" />}
+            />
             <TextField type="number" label="Coût ($) — défaut du morceau si vide" value={variantForm.replacementCost} onChange={(e) => setVariantForm({ ...variantForm, replacementCost: e.target.value })} />
             <TextField type="number" label="Seuil de réappro (optionnel)" value={variantForm.reorderThreshold} onChange={(e) => setVariantForm({ ...variantForm, reorderThreshold: e.target.value })} />
             <TextField label="Emplacement (ex. B4, A1-A2, Étagère)" value={variantForm.emplacement} onChange={(e) => setVariantForm({ ...variantForm, emplacement: e.target.value })} />
