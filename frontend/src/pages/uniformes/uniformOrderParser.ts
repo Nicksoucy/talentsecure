@@ -127,6 +127,45 @@ export function normalizeSize(sizeText: string): string {
  * et un indicateur de confiance. Imparfait par nature (ex. couleur de chemise
  * non précisée) → l'aperçu permet à l'utilisateur de corriger.
  */
+/**
+ * Règles d'alias : on ASSUME la pièce standard par défaut (ex. chemise → grise,
+ * pantalon → militaire) quand la commande n'est pas précise. La personne qui
+ * donne les uniformes peut toujours changer dans l'aperçu. Chaque règle :
+ *  - `when` : matche le libellé de la commande (texte normalisé) ;
+ *  - `must` : tous ces motifs doivent être dans le nom de l'article ;
+ *  - `prefer` : départage (ex. « gris » plutôt que « blanc »).
+ */
+/** Mots trop communs dans les noms d'articles → exclus du repli flou. */
+const STOPWORDS = new Set([
+  'securite', 'securites', 'signalisation', 'haute', 'visibilite', 'des', 'pour',
+  'avec', 'taille', 'unique', 'grandeur', 'noir', 'noire', 'gris', 'grise', 'blanc', 'blanche',
+]);
+
+interface AliasRule { when: RegExp; must: RegExp[]; prefer?: RegExp }
+const ALIAS_RULES: AliasRule[] = [
+  // Chemises — défaut GRISE
+  { when: /chemise.*(manches?\s*longue|\bml\b)/, must: [/chemise/, /\(ml\)/], prefer: /gris/ },
+  { when: /chemise.*(manches?\s*courte|\bmc\b)/, must: [/chemise/, /\(mc\)/], prefer: /gris/ },
+  { when: /chandail.*(longue|\bml\b)/, must: [/chandail/, /\(ml\)/] },
+  { when: /chandail.*(courte|\bmc\b)/, must: [/chandail/, /\(mc\)/] },
+  // Pantalon — défaut MILITAIRE
+  { when: /pantalon/, must: [/pantalon/], prefer: /militaire/ },
+  { when: /ceinture/, must: [/ceinture/] },
+  { when: /manteau/, must: [/manteau/] },
+  { when: /veston/, must: [/veston/] },
+  { when: /\bpolo\b/, must: [/polo/] },
+  { when: /cravate/, must: [/cravate/] },
+  // Équipement / « Autre »
+  { when: /dossard/, must: [/dossard/] },
+  { when: /lunette/, must: [/lunette/] },
+  { when: /\bgant/, must: [/gant/] },
+  { when: /lampe|flashlight/, must: [/lampe/] },
+  { when: /casque/, must: [/casque/] },
+  { when: /gyrophare/, must: [/gyrophare/] },
+  { when: /chapeau/, must: [/chapeau/] },
+  { when: /plaque/, must: [/plaque/] },
+];
+
 export function matchItem(rawName: string, items: UniformItem[]): { item: UniformItem | null; confident: boolean } {
   const t = norm(rawName);
   if (!t) return { item: null, confident: false };
@@ -135,22 +174,19 @@ export function matchItem(rawName: string, items: UniformItem[]): { item: Unifor
   const exact = items.find((it) => norm(it.name) === t);
   if (exact) return { item: exact, confident: true };
 
-  // 2. Manches longues / courtes → (ML) / (MC).
-  const wantsML = /manches?\s*longue/.test(t) || /\bml\b/.test(t);
-  const wantsMC = /manches?\s*courte/.test(t) || /\bmc\b/.test(t);
-  if (t.includes('chemise') || t.includes('chandail') || t.includes('polo')) {
-    if (wantsML) {
-      const ml = items.find((it) => /chemise|chandail/.test(norm(it.name)) && /\(ml\)/.test(norm(it.name)));
-      if (ml) return { item: ml, confident: false };
-    }
-    if (wantsMC) {
-      const mc = items.find((it) => /chemise|chandail/.test(norm(it.name)) && /\(mc\)/.test(norm(it.name)));
-      if (mc) return { item: mc, confident: false };
-    }
+  // 2. Règles d'alias : on assume la pièce standard.
+  for (const rule of ALIAS_RULES) {
+    if (!rule.when.test(t)) continue;
+    const candidates = items.filter((it) => rule.must.every((m) => m.test(norm(it.name))));
+    if (candidates.length === 0) continue;
+    const picked = (rule.prefer && candidates.find((it) => rule.prefer!.test(norm(it.name)))) || candidates[0];
+    return { item: picked, confident: true };
   }
 
-  // 3. Recouvrement de mots-clés (le plus de tokens communs gagne).
-  const tokens = t.split(' ').filter((w) => w.length > 2);
+  // 3. Recouvrement de mots-clés (le plus de tokens communs gagne). On ignore
+  //    les mots trop communs (« sécurité », « haute visibilité »…) qui sinon
+  //    feraient matcher n'importe quel « … de sécurité » sur le premier article.
+  const tokens = t.split(' ').filter((w) => w.length > 2 && !STOPWORDS.has(w));
   let best: { it: UniformItem; score: number } | null = null;
   for (const it of items) {
     const inm = norm(it.name);
