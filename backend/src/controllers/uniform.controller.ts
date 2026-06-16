@@ -202,11 +202,35 @@ export const createVariant = async (req: Request, res: Response, next: NextFunct
     const item = await prisma.uniformItem.findUnique({ where: { id: req.params.id } });
     if (!item) throw new ApiError(404, 'Morceau introuvable');
     const { size, replacementCost, reorderThreshold, sku, emplacement } = req.body;
+    const sizeVal = size || 'Unique';
+
+    // La contrainte unique (itemId, size) inclut aussi les grandeurs ARCHIVÉES
+    // (isActive=false, masquées de la liste). On réactive plutôt que d'échouer ;
+    // si elle est déjà active → message clair au lieu d'un 500.
+    const existing = await prisma.uniformVariant.findFirst({
+      where: { itemId: item.id, size: sizeVal },
+    });
+    if (existing) {
+      if (existing.isActive) throw new ApiError(409, `La grandeur « ${sizeVal} » existe déjà pour ce morceau.`);
+      const reactivated = await prisma.uniformVariant.update({
+        where: { id: existing.id },
+        data: {
+          isActive: true,
+          replacementCost: replacementCost ?? existing.replacementCost,
+          reorderThreshold: reorderThreshold ?? existing.reorderThreshold,
+          ...(emplacement !== undefined ? { emplacement } : {}),
+        },
+        include: { item: true },
+      });
+      res.status(200).json({ message: 'Grandeur réactivée (elle avait été retirée)', data: reactivated });
+      return;
+    }
+
     const barcode = await generateUniqueBarcode();
     const variant = await prisma.uniformVariant.create({
       data: {
         itemId: item.id,
-        size: size || 'Unique',
+        size: sizeVal,
         sku: sku ?? null,
         emplacement: emplacement ?? null,
         barcode,
