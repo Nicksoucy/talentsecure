@@ -285,6 +285,9 @@ export interface Employee {
   deletedAt?: string;
   createdAt: string;
   updatedAt: string;
+  // Nombre de remises d'uniforme en BROUILLON (DRAFT) préparées pour cet employé.
+  // Fourni par la liste /api/employees pour afficher l'indicateur dans le tableau.
+  draftIssuanceCount?: number;
 }
 
 // API Response types

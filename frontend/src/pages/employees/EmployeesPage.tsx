@@ -266,11 +266,27 @@ export default function EmployeesPage() {
                   </TableCell>
                   {isUniformStaff && (
                     <TableCell align="right">
-                      <Tooltip title="Ouvrir le profil (gestion uniformes)">
-                        <IconButton size="small" color="primary" onClick={() => navigate(`/employees/${e.id}`)}>
-                          <CheckroomIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1, justifyContent: 'flex-end' }}>
+                        {/* Indicateur : un brouillon de remise d'uniforme a été préparé d'avance
+                            pour cet employé et attend d'être finalisé. Clic = ouvre la fiche. */}
+                        {(e.draftIssuanceCount ?? 0) > 0 && (
+                          <Tooltip title={`${e.draftIssuanceCount} brouillon${e.draftIssuanceCount! > 1 ? 's' : ''} de remise d'uniforme à finaliser`}>
+                            <Chip
+                              label={e.draftIssuanceCount === 1 ? 'Brouillon' : `${e.draftIssuanceCount} brouillons`}
+                              color="warning"
+                              size="small"
+                              variant="outlined"
+                              onClick={() => navigate(`/employees/${e.id}`)}
+                              sx={{ cursor: 'pointer' }}
+                            />
+                          </Tooltip>
+                        )}
+                        <Tooltip title="Ouvrir le profil (gestion uniformes)">
+                          <IconButton size="small" color="primary" onClick={() => navigate(`/employees/${e.id}`)}>
+                            <CheckroomIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
                     </TableCell>
                   )}
                 </TableRow>

@@ -42,8 +42,26 @@ export const getEmployees = async (req: Request, res: Response, next: NextFuncti
       }),
     ]);
 
+    // Indicateur « brouillon de remise d'uniforme » : pour chaque employé de la
+    // page, compte les remises d'uniforme en statut DRAFT (préparées d'avance,
+    // pas encore finalisées). Le lien employeeId est lâche (pas de FK), donc on
+    // compte par groupBy sur les ids de la page courante (rapide, index status).
+    const pageIds = employees.map((e) => e.id);
+    const draftGroups = pageIds.length
+      ? await prisma.uniformIssuance.groupBy({
+          by: ['employeeId'],
+          where: { employeeId: { in: pageIds }, status: 'DRAFT' },
+          _count: true,
+        })
+      : [];
+    const draftCountByEmployee = new Map(draftGroups.map((g) => [g.employeeId, g._count]));
+    const employeesWithDrafts = employees.map((e) => ({
+      ...e,
+      draftIssuanceCount: draftCountByEmployee.get(e.id) ?? 0,
+    }));
+
     res.json({
-      data: employees,
+      data: employeesWithDrafts,
       pagination: {
         total,
         page: Number(page),
