@@ -83,9 +83,18 @@ app.use(cors({
 }));
 
 // Rate limiting
+// Garde-fou anti-DoS GROSSIER sur tout /api, keyé sur l'IP. Le bureau XGuard
+// sort par UNE seule IP publique (NAT) : tous les collègues partagent donc ce
+// compteur. Avec un SPA qui sonde les notifications (toutes les 30 s) + la
+// navigation normale, un défaut bas (ex. 100/15min) bloquait des actions
+// légitimes en 429 (ex. counter-sign d'une remise → SMS non envoyé). On garde
+// donc un plafond généreux : la vraie protection brute-force est sur les
+// limiteurs DÉDIÉS et serrés (login 5/15min, refresh 10/h, partage public
+// 30/min — voir middleware/rate-limit.middleware.ts), non touchés ici.
+// Surchargé en prod par l'env RATE_LIMIT_MAX_REQUESTS.
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10),
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '3000', 10),
   standardHeaders: true,
   legacyHeaders: false,
   message: 'Trop de requetes depuis cette IP, veuillez reessayer plus tard.',
