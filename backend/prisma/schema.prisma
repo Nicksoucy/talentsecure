@@ -287,6 +287,7 @@ model Candidate {
   placements          Placement[]
   purchases           ClientPurchase[]
   skills              CandidateSkill[] // Skills extracted from CV
+  videos              CandidateVideo[] // Vidéos typées (présentation, entrevue, …)
 
   @@index([status])
   @@index([globalRating])
@@ -313,6 +314,29 @@ model Candidate {
   @@index([globalRating, totalExperienceMonths]) // Rating + expérience (recherche avancée)
   @@index([lat, lng]) // Pré-filtre bounding-box (recherche par rayon)
   @@map("candidates")
+}
+
+// Vidéos d'un candidat, typées (PRESENTATION = vidéo de présentation reprise du
+// prospect, INTERVIEW = vidéo d'entrevue RH, OTHER = autre). Plusieurs vidéos par
+// candidat. Les colonnes video* de Candidate restent un MIROIR de la vidéo de
+// PRESENTATION (rétrocompat des surfaces client : catalogue, marketplace, public).
+model CandidateVideo {
+  id          String    @id @default(uuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  type             String // 'PRESENTATION' | 'INTERVIEW' | 'OTHER'
+  videoUrl         String? // URL (publique/embed ou trace source selon l'origine)
+  videoStoragePath String? // Clé R2 / chemin de stockage (sert à signer l'URL)
+  videoSourceUrl   String? // URL source d'origine (ex. GHL) à titre de trace
+  videoUploadedAt  DateTime @default(now())
+  createdById      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([candidateId])
+  @@index([candidateId, type])
+  @@map("candidate_videos")
 }
 
 model Availability {

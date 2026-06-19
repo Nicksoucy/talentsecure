@@ -188,6 +188,18 @@ export interface Candidate {
   experiences?: Experience[];
   certifications?: Certification[];
   situationTests?: SituationTest[];
+  videos?: CandidateVideo[];
+}
+
+// Vidéos typées d'un candidat. videoUrl/videoStoragePath ci-dessus restent un
+// miroir de la vidéo de PRESENTATION (rétrocompat des surfaces client).
+export type CandidateVideoType = 'PRESENTATION' | 'INTERVIEW' | 'OTHER';
+
+export interface CandidateVideo {
+  id: string;
+  type: CandidateVideoType;
+  videoUploadedAt?: string | null;
+  hasVideo: boolean;
 }
 
 // Catalogue types

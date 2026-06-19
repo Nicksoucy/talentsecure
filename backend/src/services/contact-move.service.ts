@@ -1,6 +1,7 @@
 import { prisma } from '../config/database';
 import { ContactSection } from '../utils/candidateMatch';
 import { canonicalCity } from '../utils/cityNormalize';
+import { createCandidateVideoTx } from './candidate-video.service';
 
 /**
  * Déplace un contact d'une section à une autre (les 6 sens).
@@ -113,6 +114,18 @@ export async function moveContact(opts: {
         },
         select: { id: true, firstName: true, lastName: true },
       });
+      // Vidéo de présentation reprise → enregistrée aussi comme vidéo typée
+      // PRESENTATION (les colonnes video* du candidat = miroir, déjà posées).
+      if (n.videoStoragePath || n.videoUrl) {
+        await createCandidateVideoTx(tx, {
+          candidateId: created.id,
+          type: 'PRESENTATION',
+          videoUrl: n.videoUrl,
+          videoStoragePath: n.videoStoragePath,
+          videoSourceUrl: n.videoUrl,
+          videoUploadedAt: n.videoUploadedAt,
+        });
+      }
     } else if (toSection === 'prospect') {
       created = await tx.prospectCandidate.create({
         data: {

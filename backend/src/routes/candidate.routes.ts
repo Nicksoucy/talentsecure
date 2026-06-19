@@ -24,6 +24,14 @@ import {
   getCandidatesStats,
 } from '../controllers/candidate.controller';
 import {
+  getCandidateVideos,
+  getCandidateVideoUrlByType,
+  initiateCandidateVideoUpload,
+  completeCandidateVideoUpload,
+  uploadCandidateVideoByType,
+  deleteCandidateVideoByType,
+} from '../controllers/candidate-video.controller';
+import {
   uploadCandidateCV,
   downloadCandidateCV,
   deleteCandidateCV,
@@ -247,6 +255,73 @@ router.delete(
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
   validate({ params: candidateIdSchema }),
   deleteCandidateVideo
+);
+
+// --- Typed Video Routes (multiples vidéos par candidat : présentation, entrevue) ---
+// MUST be before generic /:id routes. Le param :type ∈ {presentation, interview, other}
+// est validé dans le contrôleur (pas de schéma zod ici pour ne pas rejeter :type).
+
+/**
+ * @route   GET /api/candidates/:id/videos
+ * @desc    Liste des vidéos typées d'un candidat
+ * @access  Private (ADMIN, RH_RECRUITER, SALES)
+ */
+router.get('/:id/videos', authorizeRoles('ADMIN', 'RH_RECRUITER', 'SALES'), getCandidateVideos);
+
+/**
+ * @route   GET /api/candidates/:id/videos/:type/url
+ * @desc    URL signée d'une vidéo typée
+ * @access  Private (ADMIN, RH_RECRUITER, SALES)
+ */
+router.get(
+  '/:id/videos/:type/url',
+  authorizeRoles('ADMIN', 'RH_RECRUITER', 'SALES'),
+  getCandidateVideoUrlByType
+);
+
+/**
+ * @route   POST /api/candidates/:id/videos/:type/initiate-upload
+ * @desc    URL signée pour upload direct d'une vidéo typée
+ * @access  Private (ADMIN, RH_RECRUITER)
+ */
+router.post(
+  '/:id/videos/:type/initiate-upload',
+  authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  initiateCandidateVideoUpload
+);
+
+/**
+ * @route   POST /api/candidates/:id/videos/:type/complete-upload
+ * @desc    Confirme l'upload direct d'une vidéo typée
+ * @access  Private (ADMIN, RH_RECRUITER)
+ */
+router.post(
+  '/:id/videos/:type/complete-upload',
+  authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  completeCandidateVideoUpload
+);
+
+/**
+ * @route   POST /api/candidates/:id/videos/:type
+ * @desc    Upload multipart de secours d'une vidéo typée
+ * @access  Private (ADMIN, RH_RECRUITER)
+ */
+router.post(
+  '/:id/videos/:type',
+  authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  videoUpload.single('video'),
+  uploadCandidateVideoByType
+);
+
+/**
+ * @route   DELETE /api/candidates/:id/videos/:type
+ * @desc    Supprime une vidéo typée
+ * @access  Private (ADMIN, RH_RECRUITER)
+ */
+router.delete(
+  '/:id/videos/:type',
+  authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  deleteCandidateVideoByType
 );
 
 // Generic ID routes - MUST be after specific routes

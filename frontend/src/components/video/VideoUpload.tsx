@@ -16,7 +16,9 @@ import {
 
 interface VideoUploadProps {
   candidateId: string;
-  currentVideoPath?: string | null;
+  videoType?: 'PRESENTATION' | 'INTERVIEW' | 'OTHER';
+  title?: string;
+  hasVideo?: boolean;
   onUploadSuccess?: () => void;
   onDeleteSuccess?: () => void;
 }
@@ -25,7 +27,9 @@ import { candidateService } from '../../services/candidate.service';
 
 const VideoUpload: React.FC<VideoUploadProps> = ({
   candidateId,
-  currentVideoPath,
+  videoType = 'INTERVIEW',
+  title = 'Vidéo',
+  hasVideo = false,
   onUploadSuccess,
   onDeleteSuccess,
 }) => {
@@ -73,8 +77,9 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       // 1. Try to initiate direct upload
       let directUploadData;
       try {
-        const initResponse = await candidateService.initiateVideoUpload(
+        const initResponse = await candidateService.initiateVideoUploadByType(
           candidateId,
+          videoType,
           selectedFile.name,
           selectedFile.type
         );
@@ -101,7 +106,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         );
 
         // 3. Complete upload
-        await candidateService.completeVideoUpload(candidateId, directUploadData.key);
+        await candidateService.completeVideoUploadByType(candidateId, videoType, directUploadData.key);
       } else {
         // Fallback logic if needed, but for now we expect signedUrl
         throw new Error("Configuration d'upload invalide");
@@ -135,7 +140,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
     setError(null);
 
     try {
-      await candidateService.deleteVideo(candidateId);
+      await candidateService.deleteVideoByType(candidateId, videoType);
 
       setSuccess('Vidéo supprimée avec succès!');
 
@@ -155,7 +160,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
       <Box display="flex" alignItems="center" gap={1} mb={2}>
         <VideoIcon color="primary" />
         <Typography variant="h6">
-          Vidéo d'entretien
+          {title}
         </Typography>
       </Box>
 
@@ -171,7 +176,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
         </Alert>
       )}
 
-      {currentVideoPath && !success?.includes('supprimée') && (
+      {hasVideo && !success?.includes('supprimée') && (
         <Box mb={2}>
           <Alert
             severity="info"

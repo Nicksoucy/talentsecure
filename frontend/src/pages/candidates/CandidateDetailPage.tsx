@@ -109,6 +109,20 @@ const CandidateDetailPage = () => {
     queryClient.invalidateQueries({ queryKey: ['candidate', id] });
   };
 
+  // Vidéos typées (présentation / entrevue) du candidat.
+  const { data: videosResp, refetch: refetchVideos } = useQuery({
+    queryKey: ['candidate-videos', id],
+    queryFn: () => candidateService.getVideosList(id!),
+    enabled: !!id,
+  });
+  const videos = videosResp?.data ?? [];
+  const presentationVideo = videos.find((v) => v.type === 'PRESENTATION' && v.hasVideo);
+  const interviewVideo = videos.find((v) => v.type === 'INTERVIEW' && v.hasVideo);
+  const onVideosChanged = () => {
+    refetchVideos();
+    refetchCandidate();
+  };
+
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: (updateData: any) => candidateService.updateCandidate(id!, updateData),
@@ -664,22 +678,47 @@ const CandidateDetailPage = () => {
                 />
               </Box>
 
-              {/* Video Management */}
-              <Box>
-                {candidate.videoStoragePath && (
+              {/* Video Management — présentation + entrevue */}
+              <Box sx={{ mb: 3 }}>
+                {presentationVideo && (
                   <Box sx={{ mb: 2 }}>
                     <VideoPlayer
                       candidateId={candidate.id}
+                      videoType="PRESENTATION"
+                      title="Vidéo de présentation"
                       candidateName={`${candidate.firstName} ${candidate.lastName}`}
+                      uploadedAt={presentationVideo.videoUploadedAt}
                     />
                   </Box>
                 )}
-
                 <VideoUpload
                   candidateId={candidate.id}
-                  currentVideoPath={candidate.videoStoragePath}
-                  onUploadSuccess={refetchCandidate}
-                  onDeleteSuccess={refetchCandidate}
+                  videoType="PRESENTATION"
+                  title="Vidéo de présentation"
+                  hasVideo={!!presentationVideo}
+                  onUploadSuccess={onVideosChanged}
+                  onDeleteSuccess={onVideosChanged}
+                />
+              </Box>
+              <Box>
+                {interviewVideo && (
+                  <Box sx={{ mb: 2 }}>
+                    <VideoPlayer
+                      candidateId={candidate.id}
+                      videoType="INTERVIEW"
+                      title="Vidéo d'entrevue"
+                      candidateName={`${candidate.firstName} ${candidate.lastName}`}
+                      uploadedAt={interviewVideo.videoUploadedAt}
+                    />
+                  </Box>
+                )}
+                <VideoUpload
+                  candidateId={candidate.id}
+                  videoType="INTERVIEW"
+                  title="Vidéo d'entrevue"
+                  hasVideo={!!interviewVideo}
+                  onUploadSuccess={onVideosChanged}
+                  onDeleteSuccess={onVideosChanged}
                 />
               </Box>
             </Grid>
@@ -812,20 +851,49 @@ const CandidateDetailPage = () => {
               />
             </Grid>
             <Grid item xs={12} md={6}>
-              {/* Video Section */}
-              {candidate.videoStoragePath && (
-                <VideoPlayer
+              {/* Video Section — présentation + entrevue */}
+              <Box sx={{ mb: 3 }}>
+                {presentationVideo && (
+                  <Box sx={{ mb: 2 }}>
+                    <VideoPlayer
+                      candidateId={candidate.id}
+                      videoType="PRESENTATION"
+                      title="Vidéo de présentation"
+                      candidateName={`${candidate.firstName} ${candidate.lastName}`}
+                      uploadedAt={presentationVideo.videoUploadedAt}
+                    />
+                  </Box>
+                )}
+                <VideoUpload
                   candidateId={candidate.id}
-                  candidateName={`${candidate.firstName} ${candidate.lastName}`}
+                  videoType="PRESENTATION"
+                  title="Vidéo de présentation"
+                  hasVideo={!!presentationVideo}
+                  onUploadSuccess={onVideosChanged}
+                  onDeleteSuccess={onVideosChanged}
                 />
-              )}
-
-              <VideoUpload
-                candidateId={candidate.id}
-                currentVideoPath={candidate.videoStoragePath}
-                onUploadSuccess={refetchCandidate}
-                onDeleteSuccess={refetchCandidate}
-              />
+              </Box>
+              <Box>
+                {interviewVideo && (
+                  <Box sx={{ mb: 2 }}>
+                    <VideoPlayer
+                      candidateId={candidate.id}
+                      videoType="INTERVIEW"
+                      title="Vidéo d'entrevue"
+                      candidateName={`${candidate.firstName} ${candidate.lastName}`}
+                      uploadedAt={interviewVideo.videoUploadedAt}
+                    />
+                  </Box>
+                )}
+                <VideoUpload
+                  candidateId={candidate.id}
+                  videoType="INTERVIEW"
+                  title="Vidéo d'entrevue"
+                  hasVideo={!!interviewVideo}
+                  onUploadSuccess={onVideosChanged}
+                  onDeleteSuccess={onVideosChanged}
+                />
+              </Box>
             </Grid>
           </Grid>
         </CustomTabPanel>
