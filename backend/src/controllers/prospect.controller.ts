@@ -8,6 +8,7 @@ import { computeExperienceMonths } from '../utils/experience';
 import { resolveCityCoordinates, resolveProspectCoordinates } from '../services/cityGeocode.service';
 import { haversineKm, boundingBox, buildGeoMapPoints } from '../utils/geo';
 import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
+import { createCandidateVideoTx } from '../services/candidate-video.service';
 
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
 const PROSPECT_STATS_CACHE_KEY = 'prospects:stats';
@@ -686,6 +687,21 @@ export const convertToCandidate = async (
           details: `Candidat créé depuis prospect: ${prospect.firstName} ${prospect.lastName}`,
         },
       });
+
+      // F3 — la vidéo de présentation est aussi enregistrée comme vidéo typée
+      // PRESENTATION (les colonnes video* du candidat = miroir, déjà posées à la
+      // création). On pourra ainsi ajouter une vidéo d'ENTREVUE distincte sans
+      // écraser la présentation.
+      if (prospect.videoStoragePath || prospect.videoUrl) {
+        await createCandidateVideoTx(tx, {
+          candidateId: created.id,
+          type: 'PRESENTATION',
+          videoUrl: prospect.videoUrl,
+          videoStoragePath: prospect.videoStoragePath,
+          videoSourceUrl: prospect.videoUrl,
+          videoUploadedAt: prospect.videoUploadedAt,
+        });
+      }
 
       return created;
     });

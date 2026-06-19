@@ -16,37 +16,39 @@ import { candidateService } from '../../services/candidate.service';
 
 interface VideoPlayerProps {
   candidateId: string;
+  videoType?: 'PRESENTATION' | 'INTERVIEW' | 'OTHER';
+  title?: string;
   candidateName?: string;
+  uploadedAt?: string | null;
   showTitle?: boolean;
 }
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({
   candidateId,
+  videoType = 'INTERVIEW',
+  title = 'Vidéo',
   candidateName,
+  uploadedAt = null,
   showTitle = true,
 }) => {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [uploadedAt, setUploadedAt] = useState<string | null>(null);
 
   useEffect(() => {
     loadVideo();
-  }, [candidateId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidateId, videoType]);
 
   const loadVideo = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      console.log('🎥 VideoPlayer - candidateId reçu:', candidateId);
-      console.log('🎥 VideoPlayer - type de candidateId:', typeof candidateId);
-
-      const response = await candidateService.getVideoUrl(candidateId);
+      const response = await candidateService.getVideoUrlByType(candidateId, videoType);
 
       if (response.success && response.data.videoUrl) {
         setVideoUrl(response.data.videoUrl);
-        setUploadedAt(response.data.videoUploadedAt);
       } else {
         setError('Aucune vidéo disponible');
       }
@@ -69,7 +71,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         {showTitle && (
           <Box display="flex" alignItems="center" gap={1} mb={2}>
             <VideoIcon color="primary" />
-            <Typography variant="h6">Vidéo d'entretien</Typography>
+            <Typography variant="h6">{title}</Typography>
           </Box>
         )}
         <Box display="flex" justifyContent="center" alignItems="center" minHeight={200}>
@@ -85,7 +87,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         {showTitle && (
           <Box display="flex" alignItems="center" gap={1} mb={2}>
             <VideoIcon color="disabled" />
-            <Typography variant="h6">Vidéo d'entretien</Typography>
+            <Typography variant="h6">{title}</Typography>
           </Box>
         )}
         <Alert
@@ -104,7 +106,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         <Box display="flex" alignItems="center" gap={1} mb={2}>
           <VideoIcon color="primary" />
           <Typography variant="h6">
-            Vidéo d'entretien
+            {title}
             {candidateName && ` - ${candidateName}`}
           </Typography>
         </Box>

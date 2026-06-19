@@ -765,6 +765,29 @@ export class CVExtractionService {
       },
     });
 
+    // Reprend la vidéo de présentation du prospect (auparavant PERDUE sur ce
+    // chemin) : miroir video* du candidat + ligne typée PRESENTATION.
+    if (prospect.videoStoragePath || prospect.videoUrl) {
+      await prisma.candidate.update({
+        where: { id: candidate.id },
+        data: {
+          videoUrl: prospect.videoUrl,
+          videoStoragePath: prospect.videoStoragePath,
+          videoUploadedAt: prospect.videoUploadedAt,
+        },
+      });
+      await prisma.candidateVideo.create({
+        data: {
+          candidateId: candidate.id,
+          type: 'PRESENTATION',
+          videoUrl: prospect.videoUrl,
+          videoStoragePath: prospect.videoStoragePath,
+          videoSourceUrl: prospect.videoUrl,
+          videoUploadedAt: prospect.videoUploadedAt ?? new Date(),
+        },
+      });
+    }
+
     // Mark prospect as converted
     await prisma.prospectCandidate.update({
       where: { id: prospectId },

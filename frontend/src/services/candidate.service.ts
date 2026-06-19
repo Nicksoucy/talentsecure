@@ -248,6 +248,68 @@ export const candidateService = {
     return response.data;
   },
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // Vidéos TYPÉES (présentation / entrevue / autre) — table candidate_videos.
+  // Le type est passé en minuscule dans l'URL (le backend normalise la casse).
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /** Liste des vidéos typées d'un candidat (métadonnées). */
+  async getVideosList(candidateId: string): Promise<{
+    success: boolean;
+    data: Array<{ id: string; type: string; videoUploadedAt: string | null; hasVideo: boolean }>;
+  }> {
+    const response = await api.get(`/api/candidates/${candidateId}/videos`);
+    return response.data;
+  },
+
+  /** URL signée d'une vidéo typée. */
+  async getVideoUrlByType(candidateId: string, type: string): Promise<{
+    success: boolean;
+    data: { videoUrl: string; expiresIn: number };
+  }> {
+    const response = await api.get(`/api/candidates/${candidateId}/videos/${type.toLowerCase()}/url`);
+    return response.data;
+  },
+
+  /** Initie l'upload direct d'une vidéo typée (URL signée). */
+  async initiateVideoUploadByType(
+    candidateId: string,
+    type: string,
+    filename: string,
+    contentType: string
+  ): Promise<{
+    success: boolean;
+    data: { signedUrl: string; key: string; provider: string; expiresIn: number };
+  }> {
+    const response = await api.post(
+      `/api/candidates/${candidateId}/videos/${type.toLowerCase()}/initiate-upload`,
+      { filename, contentType }
+    );
+    return response.data;
+  },
+
+  /** Confirme l'upload direct d'une vidéo typée. */
+  async completeVideoUploadByType(
+    candidateId: string,
+    type: string,
+    key: string
+  ): Promise<{ success: boolean; message: string; data: any }> {
+    const response = await api.post(
+      `/api/candidates/${candidateId}/videos/${type.toLowerCase()}/complete-upload`,
+      { key }
+    );
+    return response.data;
+  },
+
+  /** Supprime une vidéo typée. */
+  async deleteVideoByType(
+    candidateId: string,
+    type: string
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await api.delete(`/api/candidates/${candidateId}/videos/${type.toLowerCase()}`);
+    return response.data;
+  },
+
   /**
    * Get candidates statistics (total, by status)
    */
