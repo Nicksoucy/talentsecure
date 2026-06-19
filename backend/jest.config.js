@@ -22,4 +22,8 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
   testTimeout: 30000,
   verbose: true,
+  // Les suites DB partagent UNE base de test ; cleanDatabase() fait un TRUNCATE
+  // global. En parallèle, une suite effacerait les données semées d'une autre.
+  // On exécute donc en série (la suite est petite, ~quelques secondes).
+  maxWorkers: 1,
 };

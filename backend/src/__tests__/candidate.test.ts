@@ -1,28 +1,9 @@
 import request from 'supertest';
-import express, { Express } from 'express';
+import type { Express } from 'express';
 import { prisma, cleanDatabase } from './setup';
-import candidateRoutes from '../routes/candidate.routes';
+import { createApp } from '../app';
 import { hashPassword } from '../utils/password';
 import { generateAccessToken } from '../utils/jwt';
-import '../config/passport'; // Register passport strategies
-
-// Create a test app
-function createTestApp(): Express {
-  const app = express();
-  app.use(express.json());
-  app.use('/api/candidates', candidateRoutes);
-
-  // Error handler
-  app.use((err: any, req: any, res: any, next: any) => {
-    console.error('Test error:', err);
-    res.status(err.statusCode || err.status || 500).json({
-      error: err.message || 'Internal server error',
-      details: err.details
-    });
-  });
-
-  return app;
-}
 
 describe('Candidate CRUD', () => {
   let app: Express;
@@ -35,7 +16,7 @@ describe('Candidate CRUD', () => {
   let testCandidate: any;
 
   beforeAll(async () => {
-    app = createTestApp();
+    app = createApp();
     await cleanDatabase();
 
     const hashedPassword = await hashPassword('Test123456');
@@ -136,7 +117,16 @@ describe('Candidate CRUD', () => {
         .send(candidateData);
 
       expect(response.status).toBe(201);
-      expect(response.body.data).toMatchObject(candidateData);
+      // La ville est canonicalisée (Montreal → Montréal) ; on vérifie les champs
+      // stables plutôt que le payload brut.
+      expect(response.body.data).toMatchObject({
+        firstName: 'New',
+        lastName: 'Candidate',
+        email: 'new.candidate@example.com',
+        phone: '514-987-6543',
+        postalCode: 'H2B 2B2',
+        status: 'EN_ATTENTE',
+      });
     });
 
     it('should create a candidate as RH_RECRUITER', async () => {
@@ -236,7 +226,7 @@ describe('Candidate CRUD', () => {
         firstName: 'Messy',
         lastName: 'Postal',
         email: 'messy.postal@example.com',
-        phone: '514-111-2222',
+        phone: '514-111-9999',
         address: '123 Test',
         city: 'Montreal',
         postalCode: ' h3z  2y7 ', // Messy input
@@ -302,7 +292,7 @@ describe('Candidate CRUD', () => {
 
     it('should filter by status', async () => {
       const response = await request(app)
-        .get('/api/candidates?status=NEW')
+        .get('/api/candidates?status=EN_ATTENTE')
         .set('Authorization', `Bearer ${adminToken}`);
 
       expect(response.status).toBe(200);
@@ -381,7 +371,7 @@ describe('Candidate CRUD', () => {
 
     it('should update a candidate as RH_RECRUITER', async () => {
       const updateData = {
-        notes: 'RH updated notes',
+        hrNotes: 'RH updated notes',
       };
 
       const response = await request(app)
@@ -389,8 +379,9 @@ describe('Candidate CRUD', () => {
         .set('Authorization', `Bearer ${rhToken}`)
         .send(updateData);
 
-
-      expect(response.status).toBe(403);
+      // RH_RECRUITER est autorisé à modifier (route authorizeRoles ADMIN, RH_RECRUITER).
+      expect(response.status).toBe(200);
+      expect(response.body.data.hrNotes).toBe('RH updated notes');
     });
 
     it('should validate update data', async () => {

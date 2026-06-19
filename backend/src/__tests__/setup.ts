@@ -1,56 +1,62 @@
 import { PrismaClient } from '@prisma/client';
 
-// Mock environment variables for testing
+// Variables d'environnement pour les tests.
 process.env.NODE_ENV = 'test';
-process.env.JWT_SECRET = 'test-jwt-secret-key-for-testing-only';
-process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-for-testing-only';
-process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://user:password@localhost:5432/talentsecure_test';
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-key-for-testing-only';
+process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'test-refresh-secret-for-testing-only';
+// Les jobs cron ne doivent jamais démarrer en test.
+process.env.DISABLE_SCHEDULER = 'true';
 
-// Create a singleton Prisma client for tests
+// Base de TEST — garde-fou anti-catastrophe.
+// On n'accepte qu'une URL qui RESSEMBLE à une base de test (localhost/_test).
+// - DATABASE_URL absente  → défaut local *_test.
+// - DATABASE_URL présente mais ressemblant à la prod (ex. backend/.env Neon
+//   chargé dans le shell) → on REFUSE de lancer les tests, pour ne JAMAIS
+//   toucher une base réelle.
+const TEST_DB_DEFAULT = 'postgresql://postgres:postgres@localhost:5432/talentsecure_test';
+const isTestDbUrl = (u: string): boolean => /localhost|127\.0\.0\.1|_test\b|talentsecure_test/.test(u);
+
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = TEST_DB_DEFAULT;
+} else if (!isTestDbUrl(process.env.DATABASE_URL)) {
+  const redacted = process.env.DATABASE_URL.replace(/:\/\/[^@]*@/, '://***@');
+  throw new Error(
+    `SÉCURITÉ: DATABASE_URL ne ressemble pas à une base de test (${redacted}). ` +
+    'Les tests sont refusés pour ne jamais toucher une base réelle. Utilisez une base *_test.'
+  );
+}
+
+// Singleton Prisma pour les tests (lit DATABASE_URL fixée ci-dessus).
 export const prisma = new PrismaClient();
 
-// Cleanup function to run after all tests
 afterAll(async () => {
   await prisma.$disconnect();
 });
 
-// Helper to clean up database between tests
-export async function cleanDatabase() {
-  // D1 (audit) — garde-fou anti-catastrophe : ces deleteMany sont MASSIFS. Si
-  // DATABASE_URL ne ressemble pas à une base de test (ex. Neon prod exportée dans
-  // le shell), on REFUSE d'effacer quoi que ce soit. Placé ICI (et non au chargement
-  // du module) pour ne pas casser les tests qui ne touchent pas la BD.
+/**
+ * Vide toutes les tables applicatives entre les tests.
+ *
+ * Implémentation robuste : `TRUNCATE … RESTART IDENTITY CASCADE` sur TOUTES les
+ * tables du schéma `public` en une seule instruction. CASCADE ignore l'ordre des
+ * clés étrangères, et lister dynamiquement les tables inclut automatiquement
+ * toute nouvelle table (candidate_videos, uniformes, etc.) sans maintenance.
+ * La table interne `_prisma_migrations` est épargnée.
+ */
+export async function cleanDatabase(): Promise<void> {
   const dbUrl = process.env.DATABASE_URL || '';
-  if (!/localhost|127\.0\.0\.1|_test\b|talentsecure_test/.test(dbUrl)) {
+  if (!isTestDbUrl(dbUrl)) {
     throw new Error(
       'REFUS: DATABASE_URL ne ressemble pas à une base de test (localhost/_test). ' +
-      'cleanDatabase() effacerait des données réelles. Utilisez une base de test dédiée.'
+      'cleanDatabase() effacerait des données réelles.'
     );
   }
 
-  // Delete in correct order to respect foreign key constraints
-  // First delete all child tables that reference other tables
-  await prisma.catalogueItem.deleteMany();
-  await prisma.catalogueSelection.deleteMany();
-  await prisma.cataloguePayment.deleteMany();
-  await prisma.placement.deleteMany();
-  await prisma.availability.deleteMany();
-  await prisma.language.deleteMany();
-  await prisma.experience.deleteMany();
-  await prisma.certification.deleteMany();
-  await prisma.situationTest.deleteMany();
-  await prisma.candidateSkill.deleteMany();
-  await prisma.prospectSkill.deleteMany();
-  await prisma.wishlistItem.deleteMany();
-  await prisma.clientWishlist.deleteMany();
-  await prisma.clientPurchase.deleteMany();
+  const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
+    SELECT tablename FROM pg_tables
+    WHERE schemaname = 'public' AND tablename != '_prisma_migrations'
+  `;
+  if (tables.length === 0) return;
 
-  // Then delete parent tables
-  await prisma.candidate.deleteMany();
-  await prisma.prospectCandidate.deleteMany();
-  await prisma.catalogue.deleteMany();
-  await prisma.client.deleteMany();
-  await prisma.skill.deleteMany();
-  await prisma.auditLog.deleteMany();
-  await prisma.user.deleteMany();
+  const list = tables.map((t) => `"public"."${t.tablename}"`).join(', ');
+  await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`);
 }

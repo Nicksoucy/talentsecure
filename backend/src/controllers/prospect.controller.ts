@@ -425,8 +425,13 @@ export const markAsContacted = async (
 /**
  * Deep sanitization: converts empty strings and undefined to null recursively
  */
-const sanitizePayload = (payload: any): any => {
-  if (payload === '' || payload === undefined) return null;
+export const sanitizePayload = (payload: any): any => {
+  // Les chaînes sont trim ; une chaîne vide (ou blanche) ou `undefined` → null.
+  if (typeof payload === 'string') {
+    const trimmed = payload.trim();
+    return trimmed === '' ? null : trimmed;
+  }
+  if (payload === undefined) return null;
   if (Array.isArray(payload)) return payload.map(sanitizePayload);
   if (payload && typeof payload === 'object') {
     return Object.fromEntries(
