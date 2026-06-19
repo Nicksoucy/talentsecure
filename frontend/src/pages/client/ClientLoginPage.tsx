@@ -45,7 +45,8 @@ const ClientLoginPage = () => {
     setLoading(true);
 
     try {
-      const response = await clientAuthService.login(data);
+      // data est validé par zod → email + password garantis présents.
+      const response = await clientAuthService.login({ email: data.email!, password: data.password! });
       setAuth(response.client, response.accessToken, response.refreshToken);
       enqueueSnackbar('Connexion réussie !', { variant: 'success' });
       navigate('/client/dashboard');

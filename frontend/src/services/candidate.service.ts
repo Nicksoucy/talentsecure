@@ -3,7 +3,7 @@ import { Candidate } from '@/types';
 
 interface GetCandidatesParams {
   search?: string;
-  status?: string;
+  status?: string | string[];
   minRating?: number;
   city?: string;
   hasBSP?: boolean;
