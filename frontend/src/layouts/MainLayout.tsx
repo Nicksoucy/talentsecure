@@ -34,6 +34,7 @@ import {
 import { useAuthStore } from '@/store/authStore';
 import { usePerms } from '@/hooks/usePerms';
 import NotificationBell from './components/NotificationBell';
+import GlobalSearchBar from '@/components/GlobalSearch/GlobalSearchBar';
 import { authService } from '@/services/auth.service';
 
 const DRAWER_WIDTH = 240;
@@ -137,6 +138,7 @@ const MainLayout = () => {
           </Typography>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <GlobalSearchBar />
             <NotificationBell />
             <Typography variant="body2" sx={{ ml: 1 }}>
               {user?.firstName} {user?.lastName}

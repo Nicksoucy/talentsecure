@@ -8,6 +8,7 @@ import { getStatusFromRating } from '../utils/candidate.utils';
 import { canonicalCity } from '../utils/cityNormalize';
 import { computeExperienceMonths } from '../utils/experience';
 import { findContactEverywhere } from '../utils/candidateMatch';
+import { resolveSearchIds } from '../utils/search';
 import { resolveProspectCoordinates } from '../services/cityGeocode.service';
 import { buildGeoMapPoints } from '../utils/geo';
 import { Parser } from 'json2csv';
@@ -78,12 +79,18 @@ export const getCandidates = async (
       interviewDateStart,
       interviewDateEnd,
       includeArchived,
+      includeDeleted,
+      includeInactive,
       certification,
       page = 1,
       limit = 10,
       sortBy = 'createdAt',
       sortOrder = 'desc',
     } = req.query;
+
+    // Récupérer les supprimés/désactivés est réservé aux ADMIN (échappatoire
+    // « inclure les supprimés » côté UI). Les autres rôles ne peuvent pas forcer.
+    const isAdmin = req.user?.role === 'ADMIN';
 
     const cacheKey = buildCacheKey(CANDIDATE_LIST_CACHE_PREFIX, req.query);
     const cachedResponse = await getCache<{ data: any; pagination: any }>(cacheKey);
@@ -92,22 +99,31 @@ export const getCandidates = async (
       return res.json(cachedResponse);
     }
 
+    // Le schéma de validation (Zod) transforme déjà les booléens 'true'/'false'
+    // en vrais booléens et écrase req.query (Express 4) ; mais certains params
+    // (includeDeleted/includeInactive) restent des chaînes. `truthy` coerce les
+    // deux formes → robuste et corrige des filtres jusque-là cassés
+    // (`boolean === 'true'` valait toujours false).
+    const truthy = (v: unknown): boolean => v === true || v === 'true';
+
     const filters = {
       search: search as string,
       status: status as string,
       minRating: minRating ? Number(minRating) : undefined,
       city: city as string,
-      hasBSP: hasBSP !== undefined ? hasBSP === 'true' : undefined,
-      hasVehicle: hasVehicle !== undefined ? hasVehicle === 'true' : undefined,
-      hasVideo: hasVideo !== undefined ? hasVideo === 'true' : undefined,
-      hasDriverLicense: hasDriverLicense !== undefined ? hasDriverLicense === 'true' : undefined,
-      hasCV: hasCV !== undefined ? hasCV === 'true' : undefined,
-      canWorkUrgent: canWorkUrgent !== undefined ? canWorkUrgent === 'true' : undefined,
+      hasBSP: hasBSP !== undefined ? truthy(hasBSP) : undefined,
+      hasVehicle: hasVehicle !== undefined ? truthy(hasVehicle) : undefined,
+      hasVideo: hasVideo !== undefined ? truthy(hasVideo) : undefined,
+      hasDriverLicense: hasDriverLicense !== undefined ? truthy(hasDriverLicense) : undefined,
+      hasCV: hasCV !== undefined ? truthy(hasCV) : undefined,
+      canWorkUrgent: canWorkUrgent !== undefined ? truthy(canWorkUrgent) : undefined,
       maxTravelKm: maxTravelKm ? Number(maxTravelKm) : undefined,
       bspStatus: bspStatus as string,
       interviewDateStart: interviewDateStart as string,
       interviewDateEnd: interviewDateEnd as string,
-      includeArchived: includeArchived === 'true',
+      includeArchived: truthy(includeArchived),
+      includeDeleted: isAdmin && truthy(includeDeleted),
+      includeInactive: isAdmin && truthy(includeInactive),
       certification: certification as string,
     };
 
@@ -722,24 +738,23 @@ export const getCandidatesSuggestions = async (
       });
     }
 
-    const candidates = await prisma.candidate.findMany({
-      where: {
-        isDeleted: false,
-        isActive: true,
-        OR: [
-          { firstName: { contains: q as string, mode: 'insensitive' } },
-          { lastName: { contains: q as string, mode: 'insensitive' } },
-          { email: { contains: q as string, mode: 'insensitive' } },
-        ],
-      },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-      },
-      take: 10,
-    });
+    const ids = await resolveSearchIds('candidates', String(q));
+    const candidates = ids.length
+      ? await prisma.candidate.findMany({
+          where: {
+            isDeleted: false,
+            isActive: true,
+            id: { in: ids },
+          },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+          take: 10,
+        })
+      : [];
 
     const suggestions = candidates.map((c) => ({
       id: c.id,

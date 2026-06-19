@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { canonicalCity } from '../utils/cityNormalize';
 import { resolveCityCoordinates } from './cityGeocode.service';
 import { haversineKm, boundingBox, LatLng } from '../utils/geo';
+import { resolveSearchIds, hasSearchTokens } from '../utils/search';
 
 // O1 — plafond du nombre de lignes exportées d'un coup (sécurité mémoire/timeout).
 const EXPORT_ROW_CAP = 5000;
@@ -76,6 +77,10 @@ interface CandidateFilters {
     interviewDateEnd?: string;
     includeArchived?: boolean;
     certification?: string;
+    /** ADMIN seulement : inclure les candidats supprimés (soft-delete). */
+    includeDeleted?: boolean;
+    /** ADMIN seulement : inclure les candidats désactivés (isActive=false). */
+    includeInactive?: boolean;
 }
 
 interface PaginationOptions {
@@ -86,13 +91,22 @@ interface PaginationOptions {
 }
 
 export class CandidateService {
-    /** Filtre Prisma commun à la liste et à la recherche par rayon. */
+    /**
+     * Filtre Prisma commun à la liste et à la recherche par rayon.
+     *
+     * NB : la recherche texte (`filters.search`) N'est PAS gérée ici — elle est
+     * résolue en amont (async) via `resolveSearchIds` puis injectée sous forme
+     * de `where.id = { in: [...] }` par les appelants (`findAll`/`findNear`),
+     * car le moteur de recherche tokenisé/accent-insensible s'appuie sur des
+     * requêtes SQL brutes.
+     */
     private buildListWhere(filters: CandidateFilters): any {
         // Build filter conditions with proper AND/OR logic
-        const where: any = {
-            isDeleted: false,
-            isActive: true,
-        };
+        const where: any = {};
+
+        // Soft-delete / désactivation : exclus par défaut, surchargeables par un ADMIN.
+        if (!filters.includeDeleted) where.isDeleted = false;
+        if (!filters.includeInactive) where.isActive = true;
 
         // By default, exclude archived candidates unless explicitly requested
         if (!filters.includeArchived) {
@@ -101,18 +115,6 @@ export class CandidateService {
 
         // Collect OR conditions to combine them properly
         const orConditions: any[] = [];
-
-        // Search filter
-        if (filters.search) {
-            orConditions.push({
-                OR: [
-                    { firstName: { contains: filters.search, mode: 'insensitive' } },
-                    { lastName: { contains: filters.search, mode: 'insensitive' } },
-                    { email: { contains: filters.search, mode: 'insensitive' } },
-                    { phone: { contains: filters.search, mode: 'insensitive' } },
-                ],
-            });
-        }
 
         // CV filter
         if (filters.hasCV !== undefined) {
@@ -215,6 +217,12 @@ export class CandidateService {
 
         const where = this.buildListWhere(filters);
 
+        // Recherche texte → ids résolus (tokenisé, accent-insensible, repli flou).
+        // On n'injecte le filtre que si la requête produit des tokens (sinon liste normale).
+        if (filters.search && hasSearchTokens(filters.search)) {
+            where.id = { in: await resolveSearchIds('candidates', filters.search) };
+        }
+
         // Build orderBy with special handling for globalRating to place NULL values last
         let orderByClause: any;
         if (sortBy === 'globalRating') {
@@ -264,11 +272,16 @@ export class CandidateService {
     ) {
         const { page, limit } = pagination;
         const box = boundingBox(center, radiusKm);
-        const where = {
+        const where: any = {
             ...this.buildListWhere(filters),
             lat: { gte: box.latMin, lte: box.latMax },
             lng: { gte: box.lngMin, lte: box.lngMax },
         };
+
+        // Recherche texte (mêmes filtres que la liste) → ids résolus.
+        if (filters.search && hasSearchTokens(filters.search)) {
+            where.id = { in: await resolveSearchIds('candidates', filters.search) };
+        }
 
         const rows = await prisma.candidate.findMany({
             where,
@@ -438,17 +451,12 @@ export class CandidateService {
         const where: any = { isDeleted: false };
         if (includeArchived !== 'true') where.isArchived = false;
 
-        const orConditions: any[] = [];
-        if (search) {
-            orConditions.push({
-                OR: [
-                    { firstName: { contains: search as string, mode: 'insensitive' } },
-                    { lastName: { contains: search as string, mode: 'insensitive' } },
-                    { email: { contains: search as string, mode: 'insensitive' } },
-                    { phone: { contains: search as string, mode: 'insensitive' } },
-                ],
-            });
+        // Recherche texte → ids résolus (même moteur tokenisé/accent-insensible que la liste).
+        if (search && hasSearchTokens(String(search))) {
+            where.id = { in: await resolveSearchIds('candidates', String(search)) };
         }
+
+        const orConditions: any[] = [];
         if (status) where.status = status;
         if (minRating) where.globalRating = { gte: Number(minRating) };
         if (city) where.city = { contains: city as string, mode: 'insensitive' };

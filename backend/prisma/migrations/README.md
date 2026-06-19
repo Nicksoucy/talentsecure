@@ -101,3 +101,41 @@ Vérification effectuée : la commande `prisma migrate diff --from-empty
 environnements (dev, prod, staging) qui ont été créés via `db push`
 ont déjà ce schéma — il suffit de marquer 0_init comme `applied`
 sans le ré-exécuter.
+
+---
+
+## Migration `20260620000000_add_search_text` — dérive VOLONTAIRE (à lire)
+
+Cette migration ajoute la colonne **générée** `searchText` (+ extensions
+`unaccent`/`pg_trgm`, fonction `immutable_unaccent`, index GIN trigramme) sur
+`candidates`, `employees` et `prospect_candidates`, pour la recherche de
+personnes insensible aux accents / tokenisée / floue (`src/utils/search.ts`).
+
+Particularités à NE PAS « corriger » :
+
+- **La colonne `searchText` n'est PAS déclarée dans `schema.prisma`** — c'est
+  intentionnel. C'est une colonne `GENERATED ALWAYS … STORED` : Prisma tenterait
+  de l'écrire sur chaque `create`/`update` et Postgres rejette toute écriture sur
+  une colonne générée (ce qui casserait TOUS les create/update). On la lit
+  uniquement via `$queryRaw`. Donc `prisma migrate status`/`migrate dev`
+  signaleront une « dérive » : c'est normal, ne pas l'annuler, ne pas
+  `db pull` cette colonne dans le schéma.
+
+- **`immutable_unaccent`** : wrapper IMMUTABLE obligatoire autour de `unaccent`
+  (seulement STABLE) — sinon la colonne générée et l'index GIN sont refusés.
+
+- **Concaténation avec `||`** (et non `concat_ws`, qui est STABLE → « generation
+  expression is not immutable »).
+
+- **Application** : cette base applique le SQL **directement** en prod (l'historique
+  `prisma/migrations` local a divergé de `_prisma_migrations` ; `migrate deploy`
+  est inutilisable). Appliquer avec :
+
+  ```bash
+  DATABASE_URL="$PROD" npx prisma db execute \
+    --schema prisma/schema.prisma \
+    --file prisma/migrations/20260620000000_add_search_text/migration.sql
+  ```
+
+  Le `searchText` est backfillé automatiquement (colonne générée). Rollback :
+  `DROP COLUMN "searchText"` sur les 3 tables + `DROP FUNCTION immutable_unaccent`.

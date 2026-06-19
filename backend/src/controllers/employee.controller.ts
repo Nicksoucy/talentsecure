@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { findContactEverywhere } from '../utils/candidateMatch';
+import { resolveSearchIds, hasSearchTokens } from '../utils/search';
 
 /**
  * Liste des employés (avec pagination, recherche, filtre statut).
@@ -22,14 +23,9 @@ export const getEmployees = async (req: Request, res: Response, next: NextFuncti
 
     if (status) where.status = status;
     if (city) where.city = { contains: city as string, mode: 'insensitive' };
-    if (search) {
-      where.OR = [
-        { firstName: { contains: search as string, mode: 'insensitive' } },
-        { lastName: { contains: search as string, mode: 'insensitive' } },
-        { email: { contains: search as string, mode: 'insensitive' } },
-        { phone: { contains: search as string } },
-        { assignment: { contains: search as string, mode: 'insensitive' } },
-      ];
+    // Recherche tokenisée / insensible aux accents / téléphone normalisé + repli flou.
+    if (search && hasSearchTokens(String(search))) {
+      where.id = { in: await resolveSearchIds('employees', String(search)) };
     }
 
     const [total, employees] = await prisma.$transaction([

@@ -117,6 +117,11 @@ export const candidateFiltersSchema = z.object({
   hasCV: z.enum(['true', 'false']).transform((val) => val === 'true').optional(),
   canWorkUrgent: z.enum(['true', 'false']).transform((val) => val === 'true').optional(),
   includeArchived: z.enum(['true', 'false']).transform((val) => val === 'true').optional(),
+  // ADMIN seulement (vérifié dans le contrôleur) : échappatoires « inclure les
+  // supprimés / désactivés ». Non transformés → restent des chaînes, le
+  // contrôleur teste `=== 'true'` (robuste quelle que soit la mutation de req.query).
+  includeDeleted: z.enum(['true', 'false']).optional(),
+  includeInactive: z.enum(['true', 'false']).optional(),
   maxTravelKm: z.coerce.number().min(0).max(1000).optional(),
   bspStatus: z.enum(['VALID', 'EXPIRED', 'PENDING', 'NONE']).optional(),
   interviewDateStart: dateString.or(dateTimeString).optional(),

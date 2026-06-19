@@ -39,7 +39,8 @@ import {
   FileDownload as FileDownloadIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import CrossTableHint from '@/components/CrossTableHint';
 
 import { adminService } from '@/services/admin.service';
 import { employeeService } from '@/services/employee.service';
@@ -154,12 +155,19 @@ export default function CandidatesListPage() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
 
+  // Lien profond `?q=` (bandeau « trouvé ailleurs » / omnibox) : pré-remplit la recherche.
+  const [searchParams] = useSearchParams();
+  const initialQ = searchParams.get('q') || '';
+  const isAdmin = user?.role === 'ADMIN';
+
   // Search and filter states
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState(''); // Debounced value for API calls
+  const [search, setSearch] = useState(initialQ);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialQ); // Debounced value for API calls
   const [showFilters, setShowFilters] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [includeArchived, setIncludeArchived] = useState(false);
+  // ADMIN seulement : échappatoire « inclure les supprimés » (le backend ignore ce param pour les autres rôles).
+  const [includeDeleted, setIncludeDeleted] = useState(false);
   const [filters, setFilters] = useState({
     status: '',
     minRating: '',
@@ -296,7 +304,7 @@ export default function CandidatesListPage() {
 
   // Fetch candidates with debounced search and keepPreviousData to prevent UI flashing
   const { data, isLoading, error } = useQuery({
-    queryKey: ['candidates', page, pageSize, debouncedSearch, debouncedFilters, sortBy, sortOrder, includeArchived, isAdvancedSearch, advancedFilters],
+    queryKey: ['candidates', page, pageSize, debouncedSearch, debouncedFilters, sortBy, sortOrder, includeArchived, includeDeleted, isAdvancedSearch, advancedFilters],
     queryFn: () => {
       if (isAdvancedSearch) {
         // Map boolean availability to string array
@@ -331,6 +339,8 @@ export default function CandidatesListPage() {
           certification: debouncedFilters.certification || undefined,
           near: debouncedFilters.near || undefined,
           includeArchived,
+          includeDeleted: includeDeleted || undefined,
+          includeInactive: includeDeleted || undefined,
           sortBy,
           sortOrder,
         });
@@ -1041,6 +1051,36 @@ export default function CandidatesListPage() {
           />
         ) : undefined}
       />
+
+      {/* Sauvetage sur 0 résultat : élargir le périmètre (archivés, et supprimés
+          pour les admins) puis bandeau « trouvé ailleurs » (employés/prospects). */}
+      {!isLoading && candidates.length === 0 && debouncedSearch.trim().length > 0 && (
+        <>
+          {(!includeArchived || (isAdmin && !includeDeleted)) && (
+            <Alert
+              severity="info"
+              sx={{ mb: 2 }}
+              action={
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  {!includeArchived && (
+                    <Button color="inherit" size="small" onClick={() => { setIncludeArchived(true); setPage(1); }}>
+                      Inclure les archivés
+                    </Button>
+                  )}
+                  {isAdmin && !includeDeleted && (
+                    <Button color="inherit" size="small" onClick={() => { setIncludeDeleted(true); setPage(1); }}>
+                      Inclure les supprimés
+                    </Button>
+                  )}
+                </Box>
+              }
+            >
+              Aucun candidat actif pour « {debouncedSearch.trim()} ». La personne a peut-être été archivée{isAdmin ? ' ou supprimée' : ''}.
+            </Alert>
+          )}
+          <CrossTableHint q={debouncedSearch} currentSection="candidate" enabled />
+        </>
+      )}
 
       <Card>
         <CardContent>
