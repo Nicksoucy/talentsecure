@@ -1,0 +1,16 @@
+{
+  "name": "talentsecure-root",
+  "private": true,
+  "description": "Outillage dev racine (hooks git) — backend/ et frontend/ restent des paquets npm distincts.",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "backend/**/*.ts": "backend/node_modules/.bin/eslint --fix",
+    "frontend/**/*.{ts,tsx}": "frontend/node_modules/.bin/eslint --fix"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.10"
+  }
+}
