@@ -10,7 +10,9 @@ import { candidateService } from '@/services/candidate.service';
 
 const svc = candidateService as unknown as { getVideoUrlByType: ReturnType<typeof vi.fn> };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe('VideoPlayer', () => {
   it('charge et affiche la vidéo via l\'URL signée du bon type', async () => {
