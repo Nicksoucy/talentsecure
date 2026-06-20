@@ -8,7 +8,14 @@
 
 import dotenv from 'dotenv';
 
-dotenv.config();
+// En test, on ne charge PAS le .env du projet : les variables sont fournies
+// explicitement par le harness (src/__tests__/setup.ts). Cela isole les tests du
+// .env réel (jamais de secrets/Neon prod chargés par mégarde) et permet à
+// env.test.ts de vérifier le comportement « variable manquante » sans que dotenv
+// ne les recharge.
+if (process.env.NODE_ENV !== 'test') {
+  dotenv.config();
+}
 
 const REQUIRED_VARS = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'DATABASE_URL'] as const;
 

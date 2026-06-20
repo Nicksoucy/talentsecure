@@ -1,24 +1,9 @@
 import request from 'supertest';
-import express, { Express } from 'express';
+import type { Express } from 'express';
 import { prisma, cleanDatabase } from './setup';
-import authRoutes from '../routes/auth.routes';
+import { createApp } from '../app';
 import { hashPassword } from '../utils/password';
 import { generateAccessToken } from '../utils/jwt';
-
-// Create a test app
-function createTestApp(): Express {
-  const app = express();
-  app.use(express.json());
-  app.use('/api/auth', authRoutes);
-
-  // Error handler
-  app.use((err: any, req: any, res: any, next: any) => {
-    console.error('Test error:', err);
-    res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
-  });
-
-  return app;
-}
 
 describe('Authentication', () => {
   let app: Express;
@@ -27,7 +12,7 @@ describe('Authentication', () => {
   let adminToken: string;
 
   beforeAll(async () => {
-    app = createTestApp();
+    app = createApp();
     await cleanDatabase();
 
     // Create test users
@@ -117,7 +102,7 @@ describe('Authentication', () => {
         .send({});
 
       expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty('error');
+      expect(response.body).toHaveProperty('success', false);
     });
 
     it('should validate email format', async () => {
@@ -338,11 +323,12 @@ describe('Authentication', () => {
       expect(response.body).toHaveProperty('message', 'Déconnexion réussie');
     });
 
-    it('should allow logout without authentication', async () => {
+    it('should reject logout without authentication', async () => {
       const response = await request(app)
         .post('/api/auth/logout');
 
-      expect(response.status).toBe(200);
+      // La déconnexion exige désormais un token valide.
+      expect(response.status).toBe(401);
     });
   });
 });

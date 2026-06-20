@@ -9,6 +9,7 @@ import { resolveCityCoordinates, resolveProspectCoordinates } from '../services/
 import { haversineKm, boundingBox, buildGeoMapPoints } from '../utils/geo';
 import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
 import { createCandidateVideoTx } from '../services/candidate-video.service';
+import { resolveSearchIds, hasSearchTokens } from '../utils/search';
 
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
 const PROSPECT_STATS_CACHE_KEY = 'prospects:stats';
@@ -28,7 +29,7 @@ const invalidateProspectCaches = () =>
  */
 function buildProspectWhere(query: any): any {
   const {
-    search, city, cities, isContacted, isConverted, hasVideo,
+    city, cities, isContacted, isConverted, hasVideo,
     includeProcessed, submissionDateStart, submissionDateEnd,
   } = query;
 
@@ -37,14 +38,9 @@ function buildProspectWhere(query: any): any {
     isConverted: false, // exclut les prospects convertis (surchargeable ci-dessous)
   };
 
-  if (search) {
-    where.OR = [
-      { firstName: { contains: String(search), mode: 'insensitive' } },
-      { lastName: { contains: String(search), mode: 'insensitive' } },
-      { email: { contains: String(search), mode: 'insensitive' } },
-      { phone: { contains: String(search), mode: 'insensitive' } },
-    ];
-  }
+  // NB : la recherche texte (`query.search`) est résolue en amont (async) via
+  // `resolveSearchIds` puis injectée sous forme de `where.id = { in: [...] }`
+  // par `getProspects` (moteur tokenisé/accent-insensible). Voir plus bas.
 
   // Filtre multi-villes (sélection par rayon-VILLE) : CSV → city IN [...].
   // Prioritaire sur `city` (filtre simple). Villes normalisées (canonicalCity).
@@ -133,8 +129,16 @@ export const getProspects = async (
       return res.json(cachedResponse);
     }
 
-    // Filtres communs (search, ville, rayon-ville, contacté, vidéo, dates…).
+    // Filtres communs (ville, rayon-ville, contacté, vidéo, dates…).
     const where = buildProspectWhere(req.query);
+
+    // Recherche texte → ids résolus (tokenisé, accent-insensible, téléphone
+    // normalisé, repli flou). Injecté avant le branchement near/liste pour
+    // s'appliquer aux deux. N'injecte que si la requête produit des tokens.
+    const searchRaw = req.query.search;
+    if (searchRaw && hasSearchTokens(String(searchRaw))) {
+      where.id = { in: await resolveSearchIds('prospect_candidates', String(searchRaw)) };
+    }
 
     // ── Recherche par RAYON autour d'un point (nearLat/nearLng/nearRadiusKm) ──
     // Filtre la liste sur les prospects géolocalisés à ≤ rayon du point, triés du
@@ -421,8 +425,13 @@ export const markAsContacted = async (
 /**
  * Deep sanitization: converts empty strings and undefined to null recursively
  */
-const sanitizePayload = (payload: any): any => {
-  if (payload === '' || payload === undefined) return null;
+export const sanitizePayload = (payload: any): any => {
+  // Les chaînes sont trim ; une chaîne vide (ou blanche) ou `undefined` → null.
+  if (typeof payload === 'string') {
+    const trimmed = payload.trim();
+    return trimmed === '' ? null : trimmed;
+  }
+  if (payload === undefined) return null;
   if (Array.isArray(payload)) return payload.map(sanitizePayload);
   if (payload && typeof payload === 'object') {
     return Object.fromEntries(
@@ -892,24 +901,23 @@ export const getProspectsSuggestions = async (
       });
     }
 
-    const prospects = await prisma.prospectCandidate.findMany({
-      where: {
-        isDeleted: false,
-        isConverted: false, // Exclure les prospects déjà convertis
-        OR: [
-          { firstName: { contains: q as string, mode: 'insensitive' } },
-          { lastName: { contains: q as string, mode: 'insensitive' } },
-          { email: { contains: q as string, mode: 'insensitive' } },
-        ],
-      },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-      },
-      take: 10,
-    });
+    const ids = await resolveSearchIds('prospect_candidates', String(q));
+    const prospects = ids.length
+      ? await prisma.prospectCandidate.findMany({
+          where: {
+            isDeleted: false,
+            isConverted: false, // Exclure les prospects déjà convertis
+            id: { in: ids },
+          },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+          take: 10,
+        })
+      : [];
 
     const suggestions = prospects.map((p) => ({
       id: p.id,
@@ -1358,7 +1366,7 @@ export const exportProspectsZip = async (req: Request, res: Response, next: Next
     res.setHeader('Content-Disposition', `attachment; filename="prospects_${new Date().toISOString().slice(0,10)}.zip"`);
 
     const archive = archiver('zip', { zlib: { level: 6 } });
-    archive.on('error', (err: any) => { console.error('ZIP error:', err); try { res.end(); } catch {} });
+    archive.on('error', (err: any) => { console.error('ZIP error:', err); try { res.end(); } catch { /* flux déjà fermé */ } });
     archive.pipe(res);
 
     // 1) Construire le CSV des prospects
@@ -1437,7 +1445,7 @@ export const exportProspectsZip = async (req: Request, res: Response, next: Next
         stack: process.env.NODE_ENV === 'production' ? undefined : error?.stack,
       });
     } else {
-      try { res.end(); } catch {}
+      try { res.end(); } catch { /* flux déjà fermé */ }
     }
   }
 };

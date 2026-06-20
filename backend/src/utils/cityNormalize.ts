@@ -33,7 +33,7 @@ function fixMojibake(s: string): string {
     .replace(/[Ãã]¹/g, 'ù')
     .replace(/[Ãã]»/g, 'û')
     .replace(/[Ãã]¼/g, 'ü')
-    .replace(/[Ãã] /g, 'à'); // à (espace insécable)
+    .replace(/[Ãã]\u00A0/g, 'à'); // à (espace insécable)
 }
 
 /**
@@ -44,7 +44,11 @@ function fixMojibake(s: string): string {
  */
 function stripSuffix(s: string): string {
   let out = fixMojibake(s || '').replace(/\s+/g, ' ').trim();
-  const re = /[,\s]+\(?\s*(q\.?c\.?|québec|quebec|canada|city)\s*\)?$/i;
+  // Quantificateurs d'espaces BORNÉS ({1,3}/{0,3}) : les espaces ont déjà été
+  // compressés à l'unité (ligne ci-dessus), donc un séparateur réel fait au plus
+  // « , » = 2 car. Borner supprime le backtracking polynomial (ReDoS) — un
+  // quantificateur non borné comme `[,\s]+` est réessayé à chaque position (O(n²)).
+  const re = /[,\s]{1,3}(?:\(\s{0,3})?(q\.?c\.?|québec|quebec|canada|city)\s{0,3}\)?$/i;
   let prev: string;
   do {
     prev = out;

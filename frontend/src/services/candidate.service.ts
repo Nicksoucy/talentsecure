@@ -3,7 +3,7 @@ import { Candidate } from '@/types';
 
 interface GetCandidatesParams {
   search?: string;
-  status?: string;
+  status?: string | string[];
   minRating?: number;
   city?: string;
   hasBSP?: boolean;
@@ -17,6 +17,9 @@ interface GetCandidatesParams {
   interviewDateStart?: string;
   interviewDateEnd?: string;
   includeArchived?: boolean;
+  /** ADMIN seulement : inclure les candidats supprimés / désactivés. */
+  includeDeleted?: boolean;
+  includeInactive?: boolean;
   certification?: string;
   /** Recherche par rayon autour d'un point (carte) → nearLat/nearLng/nearRadiusKm. */
   near?: { lat: number; lng: number; radiusKm: number } | null;

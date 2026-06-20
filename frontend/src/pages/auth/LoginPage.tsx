@@ -44,7 +44,8 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      const response = await authService.login(data);
+      // data est validé par zod (email + password ≥ 6) → champs garantis présents.
+      const response = await authService.login({ email: data.email!, password: data.password! });
       setAuth(response.user, response.accessToken, response.refreshToken);
       enqueueSnackbar('Connexion réussie !', { variant: 'success' });
       navigate('/dashboard');

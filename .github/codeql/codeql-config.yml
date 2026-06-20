@@ -1,0 +1,13 @@
+name: "TalentSecure CodeQL config"
+
+# Le code de test n'est pas livré en production : on l'exclut de l'analyse
+# (sinon CodeQL signale p.ex. js/missing-rate-limiting sur les routes Express
+#  montées à la volée dans les tests — faux positifs).
+paths-ignore:
+  - '**/__tests__/**'
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/e2e/**'
+  - 'frontend/src/test/**'
+  - '**/*.config.ts'
+  - '**/*.config.js'

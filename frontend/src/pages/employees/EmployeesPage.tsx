@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 import {
   Alert,
@@ -34,11 +34,12 @@ import {
   Link,
 } from '@mui/material';
 import { Search as SearchIcon, Badge as BadgeIcon, Add as AddIcon, Checkroom as CheckroomIcon } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { employeeService } from '@/services/employee.service';
 import { useAuthStore } from '@/store/authStore';
 import ContactConflictDialog from '@/components/ContactConflictDialog';
 import { contactService, ContactConflict } from '@/services/contact.service';
+import CrossTableHint from '@/components/CrossTableHint';
 
 function formatDate(d?: string) {
   if (!d) return '—';
@@ -48,8 +49,14 @@ function formatDate(d?: string) {
 const EMPTY_FORM = { firstName: '', lastName: '', email: '', phone: '', status: 'ACTIF', hireDate: '', position: '', assignment: '' };
 
 export default function EmployeesPage() {
+  // Lien profond `?q=` (depuis le bandeau « trouvé ailleurs » / l'omnibox) : pré-remplit la recherche.
+  const [searchParams] = useSearchParams();
+  const initialQ = searchParams.get('q') || '';
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialQ);
+  // La saisie est instantanée (controlled), mais l'appel API est debouncé (300 ms)
+  // pour ne pas refaire une requête à chaque frappe.
+  const [debouncedSearch, setDebouncedSearch] = useState(initialQ);
   const [status, setStatus] = useState<'' | 'ACTIF' | 'INACTIF'>('');
   const pageSize = 20;
   const queryClient = useQueryClient();
@@ -105,17 +112,27 @@ export default function EmployeesPage() {
     },
   });
 
+  // Debounce de la recherche (300 ms) — repart en page 1 à chaque nouveau terme.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const { data, isLoading } = useQuery({
-    queryKey: ['employees', page, search, status],
+    queryKey: ['employees', page, debouncedSearch, status],
     queryFn: () =>
       employeeService.getEmployees({
         page,
         limit: pageSize,
-        search: search || undefined,
+        search: debouncedSearch.trim() || undefined,
         status: status || undefined,
         sortBy: 'createdAt',
         sortOrder: 'desc',
       }),
+    placeholderData: keepPreviousData,
   });
 
   const { data: statsData } = useQuery({
@@ -125,7 +142,9 @@ export default function EmployeesPage() {
 
   const employees = data?.data ?? [];
   const totalPages = data?.pagination.totalPages ?? 1;
+  const totalResults = data?.pagination.total ?? 0;
   const stats = statsData?.data;
+  const searchActive = debouncedSearch.trim().length > 0;
 
   return (
     <Box>
@@ -181,7 +200,7 @@ export default function EmployeesPage() {
           <TextField
             placeholder="Rechercher par nom, email, téléphone, mandat…"
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            onChange={(e) => setSearch(e.target.value)}
             sx={{ flex: 1, minWidth: 260 }}
             InputProps={{
               startAdornment: (
@@ -203,6 +222,9 @@ export default function EmployeesPage() {
           </FormControl>
         </CardContent>
       </Card>
+
+      {/* Bandeau « trouvé ailleurs » : 0 employé ici, mais la personne existe peut-être en candidat/prospect. */}
+      <CrossTableHint q={debouncedSearch} currentSection="employee" enabled={!isLoading && employees.length === 0} />
 
       {/* Tableau */}
       <TableContainer component={Paper}>
@@ -296,9 +318,14 @@ export default function EmployeesPage() {
         </Table>
       </TableContainer>
 
-      {totalPages > 1 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-          <Pagination count={totalPages} page={page} onChange={(_, p) => setPage(p)} color="primary" />
+      {!isLoading && employees.length > 0 && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, mt: 3 }}>
+          <Typography variant="body2" color="text.secondary">
+            Page {page} sur {totalPages} ({totalResults} {totalResults > 1 ? 'employés' : 'employé'}{searchActive ? ' trouvés' : ''})
+          </Typography>
+          {totalPages > 1 && (
+            <Pagination count={totalPages} page={page} onChange={(_, p) => setPage(p)} color="primary" />
+          )}
         </Box>
       )}
 

@@ -40,7 +40,7 @@ import {
   Share as ShareIcon,
 } from '@mui/icons-material';
 import { useSnackbar } from 'notistack';
-import { catalogueService } from '@/services/catalogue.service';
+import { catalogueService, type CreateCatalogueData } from '@/services/catalogue.service';
 import { candidateService } from '@/services/candidate.service';
 import { clientService } from '@/services/client.service';
 import { TableSkeleton } from '@/components/skeletons';
@@ -179,7 +179,8 @@ export default function CataloguesPage() {
       return;
     }
 
-    createMutation.mutate(validation.data);
+    // validation.data est la sortie validée du schéma (clientId/title/candidateIds requis).
+    createMutation.mutate(validation.data as CreateCatalogueData);
   };
 
   const handleDeleteCatalogue = (id: string) => {

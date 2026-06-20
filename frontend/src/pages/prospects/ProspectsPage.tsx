@@ -1,5 +1,5 @@
 import { Suspense, useState, useEffect, lazy } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   Box,
   Button,
@@ -59,7 +59,8 @@ import CVPreview from '@/components/CVPreview';
 import ProspectVideoPlayer from '@/components/video/ProspectVideoPlayer';
 import ContactConflictDialog from '@/components/ContactConflictDialog';
 import { ContactConflict } from '@/services/contact.service';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import CrossTableHint from '@/components/CrossTableHint';
 import { prospectService } from '@/services/prospect.service';
 import { downloadProspectsCsv } from './prospectsCsv';
 import ProspectsDialogs from './ProspectsDialogs';
@@ -79,9 +80,14 @@ export default function ProspectsPage() {
     </Box>
   );
 
+  // Lien profond `?q=` (bandeau « trouvé ailleurs » / omnibox) : pré-remplit la recherche.
+  const [searchParams] = useSearchParams();
+  const initialQ = searchParams.get('q') || '';
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialQ);
+  // Recherche debouncée (300 ms) — l'input reste instantané, l'appel API attend.
+  const [debouncedSearch, setDebouncedSearch] = useState(initialQ);
   const [showFilters, setShowFilters] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [filters, setFilters] = useState({
@@ -196,14 +202,23 @@ export default function ProspectsPage() {
     }
   }, [page, selectAllPages]);
 
+  // Debounce de la recherche (300 ms) — repart en page 1 à chaque nouveau terme.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   // Fetch prospects
   const { data, isLoading, error } = useQuery({
-    queryKey: ['prospects', page, pageSize, search, filters],
+    queryKey: ['prospects', page, pageSize, debouncedSearch, filters],
     queryFn: () =>
       prospectService.getProspects({
         page,
         limit: pageSize,
-        search: search || undefined,
+        search: debouncedSearch.trim() || undefined,
         city: filters.city || undefined,
         cities: filters.cities.length > 0 ? filters.cities : undefined,
         near: filters.near || undefined,
@@ -215,6 +230,7 @@ export default function ProspectsPage() {
         sortBy: 'submissionDate',
         sortOrder: 'desc',
       }),
+    placeholderData: keepPreviousData,
   });
 
   // Fetch stats
@@ -520,7 +536,12 @@ export default function ProspectsPage() {
 
   const prospects = data?.data || [];
   const totalPages = data?.pagination?.totalPages || 1;
+  const totalResults = data?.pagination?.total ?? 0;
   const stats = statsData?.data;
+  const searchActive = debouncedSearch.trim().length > 0;
+  const emptyAfterSearch = !isLoading && prospects.length === 0 && searchActive;
+  // « Tous » pour la conversion résout à undefined → le backend masque les convertis par défaut.
+  const convertedHidden = filters.isConverted !== 'true';
 
   return (
     <Box sx={{ p: 3 }}>
@@ -711,6 +732,29 @@ export default function ProspectsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Sauvetage : 0 résultat + convertis masqués → proposer de les inclure
+          (un prospect converti en candidat/employé reste masqué par défaut). */}
+      {emptyAfterSearch && convertedHidden && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => { setFilters({ ...filters, isConverted: 'true' }); setPage(1); }}
+            >
+              Inclure les convertis
+            </Button>
+          }
+        >
+          Aucun candidat potentiel actif pour « {debouncedSearch.trim()} ». La personne a peut-être été convertie.
+        </Alert>
+      )}
+
+      {/* Bandeau « trouvé ailleurs » (employés / candidats). */}
+      <CrossTableHint q={debouncedSearch} currentSection="prospect" enabled={emptyAfterSearch} />
 
       {/* Table */}
       {isLoading ? (
@@ -983,15 +1027,21 @@ export default function ProspectsPage() {
             </Table>
           </TableContainer>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-              <Pagination
-                count={totalPages}
-                page={page}
-                onChange={(_, value) => setPage(value)}
-                color="primary"
-              />
+          {/* Compteur + pagination : visible dès qu'il y a des résultats, pour
+              que l'utilisateur sache qu'une recherche peut tenir sur 2+ pages. */}
+          {prospects.length > 0 && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, mt: 3 }}>
+              <Typography variant="body2" color="text.secondary">
+                Page {page} sur {totalPages} ({totalResults} candidat{totalResults > 1 ? 's' : ''} potentiel{totalResults > 1 ? 's' : ''}{searchActive ? ' trouvés' : ''})
+              </Typography>
+              {totalPages > 1 && (
+                <Pagination
+                  count={totalPages}
+                  page={page}
+                  onChange={(_, value) => setPage(value)}
+                  color="primary"
+                />
+              )}
             </Box>
           )}
         </>
