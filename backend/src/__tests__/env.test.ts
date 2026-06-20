@@ -34,6 +34,11 @@ describe('config/env validator', () => {
 
   beforeEach(() => {
     jest.resetModules();
+    // env.ts ne saute dotenv QUE si NODE_ENV==='test'. Une suite précédente peut
+    // avoir laissé NODE_ENV différent (process.env est global avec maxWorkers:1) ;
+    // sans ça, dotenv rechargerait le vrai .env et re-fournirait les secrets
+    // « supprimés » → les cas « variable manquante » ne lanceraient plus.
+    process.env.NODE_ENV = 'test';
     for (const key of ENV_KEYS) {
       process.env[key] = STRONG_SECRET;
     }
