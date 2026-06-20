@@ -19,6 +19,7 @@
     "test:ci": "jest --testPathPattern='(env|rate-limit|token-util|skill-normalization|ai-extraction)\\.test\\.ts$'",
     "lint": "eslint 'src/**/*.ts' --report-unused-disable-directives",
     "typecheck": "tsc --noEmit",
+    "depcruise": "depcruise src --config .dependency-cruiser.cjs",
     "test:db:push": "prisma db push --skip-generate --force-reset"
   },
   "keywords": [
@@ -94,6 +95,7 @@
     "@types/supertest": "^6.0.3",
     "@typescript-eslint/eslint-plugin": "^6.17.0",
     "@typescript-eslint/parser": "^6.17.0",
+    "dependency-cruiser": "^17.4.3",
     "eslint": "^8.56.0",
     "jest": "^29.7.0",
     "prisma": "^5.7.0",

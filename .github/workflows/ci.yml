@@ -45,6 +45,8 @@ jobs:
       - run: npx prisma generate
       - name: Type-check
         run: npx tsc --noEmit
+      - name: Architecture (dependency-cruiser — pas de cycles)
+        run: npm run depcruise
       - name: Lint (informatif)
         run: npm run lint
         continue-on-error: true
