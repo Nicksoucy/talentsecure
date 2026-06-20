@@ -33,7 +33,7 @@ function fixMojibake(s: string): string {
     .replace(/[Ãã]¹/g, 'ù')
     .replace(/[Ãã]»/g, 'û')
     .replace(/[Ãã]¼/g, 'ü')
-    .replace(/[Ãã] /g, 'à'); // à (espace insécable)
+    .replace(/[Ãã]\u00A0/g, 'à'); // à (espace insécable)
 }
 
 /**

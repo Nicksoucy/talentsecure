@@ -111,6 +111,8 @@ function extractAnswers(others: any): Record<string, any> {
 async function fetchAllSubmissions(): Promise<any[]> {
   const all: any[] = [];
   let page = 1;
+  // Pagination : on sort par `break` quand il n'y a plus de page.
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     const url = `${GHL_BASE}/surveys/submissions?locationId=${GHL_LOCATION}&surveyId=${SURVEY_ID}&limit=50&page=${page}`;
     const res = await fetch(url, { headers: H });

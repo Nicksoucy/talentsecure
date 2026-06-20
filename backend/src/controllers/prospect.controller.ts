@@ -1366,7 +1366,7 @@ export const exportProspectsZip = async (req: Request, res: Response, next: Next
     res.setHeader('Content-Disposition', `attachment; filename="prospects_${new Date().toISOString().slice(0,10)}.zip"`);
 
     const archive = archiver('zip', { zlib: { level: 6 } });
-    archive.on('error', (err: any) => { console.error('ZIP error:', err); try { res.end(); } catch {} });
+    archive.on('error', (err: any) => { console.error('ZIP error:', err); try { res.end(); } catch { /* flux déjà fermé */ } });
     archive.pipe(res);
 
     // 1) Construire le CSV des prospects
@@ -1445,7 +1445,7 @@ export const exportProspectsZip = async (req: Request, res: Response, next: Next
         stack: process.env.NODE_ENV === 'production' ? undefined : error?.stack,
       });
     } else {
-      try { res.end(); } catch {}
+      try { res.end(); } catch { /* flux déjà fermé */ }
     }
   }
 };
