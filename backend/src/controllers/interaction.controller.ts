@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
-import { getCache, deleteCache } from '../config/cache';
+import { deleteCache } from '../config/cache';
 
 const CLIENT_DETAIL_CACHE_PREFIX = 'clients:detail';
 
@@ -104,6 +104,13 @@ export const deleteInteraction = async (
 ) => {
     try {
         const { id, clientId } = req.params;
+
+        // Vérifier l'existence d'abord : sinon prisma.delete lève P2025 (non mappé
+        // par ApiError.fromUnknown) → 500 au lieu d'un 404 attendu.
+        const existing = await prisma.interaction.findUnique({ where: { id } });
+        if (!existing) {
+            return res.status(404).json({ error: 'Interaction introuvable' });
+        }
 
         await prisma.interaction.delete({
             where: { id }
