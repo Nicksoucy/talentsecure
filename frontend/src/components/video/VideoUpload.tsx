@@ -186,6 +186,7 @@ const VideoUpload: React.FC<VideoUploadProps> = ({
                 size="small"
                 onClick={handleDelete}
                 disabled={uploading}
+                aria-label="Supprimer la vidéo"
               >
                 <DeleteIcon />
               </IconButton>
