@@ -174,6 +174,67 @@ VITE_API_URL=http://localhost:5000
 
 ---
 
+## Tests & CI
+
+Le projet est couvert par une suite de tests complète : **1 303 tests** au total, tous verts.
+
+| Couche | Tests | Fichiers | Outils |
+|---|---|---|---|
+| **Backend** (intégration API↔services↔DB) | **437** | 43 | Jest + ts-jest + Supertest + Postgres jetable |
+| **Frontend** (composants, pages, services, hooks, stores) | **864** | 131 | Vitest + jsdom + React Testing Library + MSW |
+| **E2E** (parcours réels) | **2** | 1 | Playwright (Chromium) |
+
+**Couverture : 100 % des controllers backend et 100 % des composants/pages frontend** ont un test dédié. Philosophie « Testing Trophy » (priorité à l'intégration). Les libs lourdes (Leaflet, recharts, scanners caméra `@zxing`, signature canvas, Stripe, R2, GHL, géocodage) sont mockées — **zéro appel réseau réel** dans les tests.
+
+### Lancer les tests backend (Postgres de test local)
+
+Pas de Docker requis — Postgres via Homebrew. Le `LC_ALL` est **obligatoire** sur macOS récent.
+
+```bash
+# 1. Démarrer Postgres 16
+LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
+  /opt/homebrew/opt/postgresql@16/bin/pg_ctl -D /opt/homebrew/var/postgresql@16 -w -l /tmp/pg16.log start
+
+# 2. Créer la base de test (une fois)
+/opt/homebrew/opt/postgresql@16/bin/createdb -h localhost talentsecure_test
+
+# 3. Schéma + colonne générée searchText (hors schema.prisma → SQL à appliquer)
+export TEST_DB="postgresql://<user>@localhost:5432/talentsecure_test"
+DATABASE_URL="$TEST_DB" npx prisma db push --skip-generate --force-reset
+DATABASE_URL="$TEST_DB" npx prisma db execute \
+  --file prisma/migrations/20260620000000_add_search_text/migration.sql --schema prisma/schema.prisma
+
+# 4. Lancer la suite
+cd backend && DATABASE_URL="$TEST_DB" npm test
+```
+
+> ⚠️ JAMAIS `prisma migrate deploy` (l'historique Neon est divergent). Le helper `cleanDatabase()` refuse toute `DATABASE_URL` qui ne ressemble pas à une base de test (garde anti-prod). `jest.config.js` force `maxWorkers:1` (base partagée → série). L'app est montable en test via `createApp()` (`src/app.ts`, sans `listen`).
+
+### Lancer les tests frontend
+
+```bash
+cd frontend
+npm test                 # Vitest (toute la suite)
+npm test -- <chemin>     # un seul fichier
+npm run type-check       # tsc --noEmit (gate CI)
+npx playwright test      # E2E (depuis frontend/, après `npx playwright install chromium`)
+```
+
+`frontend/src/test/` fournit l'infra : `renderWithProviders` (QueryClient `retry:false` + Router + Theme + Snackbar), serveur MSW (`onUnhandledRequest:'error'`), factories, reset des stores Zustand. `frontend/.env.test` (committé) fixe `VITE_API_URL` pour aligner services et mocks en CI.
+
+### CI / gates qualité
+
+À chaque **Pull Request** vers `main`, GitHub Actions (`.github/workflows/ci.yml`) exécute en parallèle :
+
+- **Backend** : `tsc --noEmit` + dependency-cruiser (0 cycle) + Postgres service + `npm test`
+- **Frontend** : `type-check` + `vitest run`
+- **E2E** : Playwright (Chromium)
+- **`ci-success`** : job de synthèse — **seul check requis** pour merger
+
+Plus : **CodeQL** (SAST), **Dependabot** (deps), **husky + lint-staged** (ESLint au pre-commit). Le merge sur `main` déclenche le déploiement Cloud Run.
+
+---
+
 ## Base de données & migrations
 
 ⚠️ **L'historique de migration Neon est divergent.** On n'utilise **jamais** `prisma migrate deploy`.
@@ -239,8 +300,9 @@ Lancés à la main via `npx ts-node src/scripts/<x>.ts` (exclus du build). Les s
 
 ## Conventions
 
-- Commits : `feat:`, `fix:`, `refactor:`, `perf:`, `sec:`, `docs:`, `chore:`.
-- Travailler sur `main` puis push (Cloud Build déploie). Vérifier `npx tsc --noEmit` (back + front) avant de pousser.
+- Commits : `feat:`, `fix:`, `refactor:`, `perf:`, `sec:`, `docs:`, `test:`, `chore:`.
+- **Workflow par Pull Request** : créer une branche, ouvrir une PR vers `main`. La CI (`ci-success`) doit être verte avant de merger ; le merge sur `main` déclenche le déploiement Cloud Run.
+- **Tout nouveau code arrive avec son test** (règle « test-the-change »). Vérifier `npx tsc --noEmit` (back + front) et la suite de tests avant de pousser ; le pre-commit (husky) lance ESLint automatiquement.
 
 ---
 

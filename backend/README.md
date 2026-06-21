@@ -37,6 +37,29 @@ npm run dev                   # http://localhost:5000
 
 ⚠️ **`npm run prisma:migrate` (= `prisma migrate dev`) ne convient PAS pour Neon** (historique divergent). Voir « Migrations » ci-dessous.
 
+## Tests
+
+**437 tests** (43 suites) — **100 % des controllers ont un test d'intégration**. Jest + ts-jest + Supertest sur un Postgres jetable. L'app est montable sans serveur via `createApp()` (`src/app.ts`).
+
+```bash
+# 1. Postgres 16 local (LC_ALL obligatoire sur macOS récent)
+LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
+  /opt/homebrew/opt/postgresql@16/bin/pg_ctl -D /opt/homebrew/var/postgresql@16 -w -l /tmp/pg16.log start
+/opt/homebrew/opt/postgresql@16/bin/createdb -h localhost talentsecure_test   # une fois
+
+# 2. Schéma + colonne générée searchText (hors schema.prisma)
+export TEST_DB="postgresql://<user>@localhost:5432/talentsecure_test"
+DATABASE_URL="$TEST_DB" npx prisma db push --skip-generate --force-reset
+DATABASE_URL="$TEST_DB" npx prisma db execute \
+  --file prisma/migrations/20260620000000_add_search_text/migration.sql --schema prisma/schema.prisma
+
+# 3. Suite
+DATABASE_URL="$TEST_DB" npm test
+```
+
+- `cleanDatabase()` (`src/__tests__/setup.ts`) refuse toute `DATABASE_URL` qui ne ressemble pas à une base de test (**garde anti-prod**) et `TRUNCATE … CASCADE` entre suites. `jest.config.js` : `maxWorkers:1` (base partagée → série). JAMAIS `prisma migrate deploy`.
+- Services externes (R2, Stripe, email/GHL, SMS, géocodage) mockés → zéro réseau réel.
+
 ## Structure
 
 ```
