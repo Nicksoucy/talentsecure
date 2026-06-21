@@ -125,7 +125,10 @@ export default function UniformsCataloguePage() {
     queryFn: () => uniformService.listItems({ division: division || undefined, search: search || undefined }),
     staleTime: 0, // toujours rafraîchir à l'ouverture du Catalogue
   });
-  const items = data?.data || [];
+  // Référence stable : sans useMemo, `data?.data || []` crée un nouveau tableau à
+  // chaque rendu → l'effet de resynchronisation plus bas (dépendance [items]) se
+  // redéclenche en boucle (setOrdered → rerender → nouveau []) jusqu'au blocage.
+  const items = useMemo(() => data?.data || [], [data]);
 
   // ---- Dialog: nouveau morceau ----
   const [itemDlg, setItemDlg] = useState(false);
