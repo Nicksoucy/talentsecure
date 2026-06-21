@@ -29,7 +29,20 @@ npm run dev                   # http://localhost:5173
 | `npm run lint` | ESLint |
 | `npm test` / `test:watch` / `test:coverage` | Vitest |
 
-> `npm run build` ne bloque pas sur les types ; `type-check` remonte ~23 erreurs **préexistantes** dans des fichiers hérités (tolérées). Ne pas en introduire de nouvelles.
+## Tests
+
+**864 tests** (131 fichiers) — **100 % des composants et pages ont un test**. Vitest + jsdom + React Testing Library + MSW.
+
+```bash
+npm test                 # toute la suite
+npm test -- <chemin>     # un seul fichier
+npm run type-check       # tsc --noEmit → 0 erreur (gate CI)
+npx playwright test      # E2E (après `npx playwright install chromium`)
+```
+
+- Infra dans `src/test/` : `renderWithProviders` (QueryClient `retry:false` + Router + Theme + Snackbar), serveur MSW (`onUnhandledRequest:'error'`), factories, reset des stores. `.env.test` (committé) fixe `VITE_API_URL` pour aligner services et mocks en CI.
+- Libs lourdes mockées (Leaflet, recharts, scanners `@zxing`, signature canvas) → zéro réseau réel.
+- ⚠️ Ne lancer **qu'une** suite Vitest complète à la fois (plusieurs en parallèle → contention). `timeout` n'existe pas sur macOS → utiliser `perl -e 'alarm N; exec @ARGV' npx vitest run <f>` comme garde-fou si besoin.
 
 ## Structure
 
