@@ -35,7 +35,7 @@ jobs:
       # Base de TEST jetable (le garde anti-prod de setup.ts l'accepte : localhost + *_test).
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/talentsecure_test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -65,7 +65,7 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -87,7 +87,7 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 20
