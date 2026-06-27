@@ -74,6 +74,7 @@ router.get('/stats/summary', ctrl.statsSummary);
 router.get('/reports/stock', ctrl.reportStock);
 router.get('/reports/overdue', ctrl.reportOverdue);
 router.get('/reports/losses', ctrl.reportLosses);
+router.get('/reports/inactive-holdings', ctrl.reportInactiveHoldings);
 
 // Inventaire — mouvements
 router.get('/movements', ctrl.listMovements);

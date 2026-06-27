@@ -1108,6 +1108,13 @@ model Employee {
   position       String? // Poste / titre
   assignment     String? // Mandat / site (ex: Magellan Brossard)
 
+  // Offboarding uniformes — posés automatiquement à la transition ACTIF→INACTIF,
+  // remis à null si l'employé est réactivé. terminationDate ancre l'échéance de
+  // retour (uniformReturnDeadlineAt = +5 jours ouvrables), utilisée par la
+  // surveillance pour rappels/escalade/clôture automatique.
+  terminationDate         DateTime?
+  uniformReturnDeadlineAt DateTime?
+
   // Certifications clés (reportées du candidat)
   hasBSP        Boolean   @default(false)
   bspNumber     String?
@@ -1255,6 +1262,8 @@ enum NotificationType {
   UNIFORM_BARCODE_UNKNOWN
   UNIFORM_INACTIVE_VARIANT_HAS_STOCK
   UNIFORM_DUPLICATE_ACTIVE_ISSUANCE
+  // Offboarding — ancien employé détenant encore des uniformes
+  UNIFORM_INACTIVE_EMPLOYEE_HAS_HOLDINGS
 }
 
 enum NotificationChannel {

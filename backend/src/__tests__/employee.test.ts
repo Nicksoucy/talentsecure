@@ -174,4 +174,113 @@ describe('Employees — /api/employees', () => {
       expect(after?.isDeleted).toBe(true);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // PUT /:id — offboarding uniformes (transition de statut)
+  // -------------------------------------------------------------------------
+  describe('PUT /:id — offboarding uniformes', () => {
+    // Crée un employé ACTIF détenant `qty` pièces via une remise ISSUED écrite
+    // directement en base (on évite le controller PDF/SMS). `dueReturnAt`=null
+    // par défaut pour tester la propagation de l'échéance.
+    async function seedHolder(phone: string, qty = 2, dueReturnAt: Date | null = null) {
+      const emp = await prisma.employee.create({
+        data: { firstName: 'Fin', lastName: 'Emploi', phone, status: 'ACTIF' },
+      });
+      const item = await prisma.uniformItem.create({
+        data: { division: 'SECURITE', name: `Chemise ${phone}`, defaultReplacementCost: 30 },
+      });
+      const variant = await prisma.uniformVariant.create({
+        data: { itemId: item.id, size: 'M', barcode: `OFF-${phone}`, replacementCost: 30 },
+      });
+      const iss = await prisma.uniformIssuance.create({
+        data: {
+          employeeId: emp.id, division: 'SECURITE', status: 'ISSUED', dueReturnAt,
+          lines: { create: [{ variantId: variant.id, quantity: qty, unitCostSnapshot: 30 }] },
+        },
+      });
+      return { emp, variant, iss };
+    }
+
+    it('ACTIF→INACTIF avec uniformes : pose terminationDate + échéance, propage dueReturnAt, renvoie uniformWarning', async () => {
+      const { emp, iss } = await seedHolder('5145558801', 2, null);
+      const res = await request(app)
+        .put(`/api/employees/${emp.id}`)
+        .set('Authorization', `Bearer ${rhToken}`)
+        .send({ status: 'INACTIF' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe('INACTIF');
+      expect(res.body.data.terminationDate).toBeTruthy();
+      expect(res.body.data.uniformReturnDeadlineAt).toBeTruthy();
+      expect(res.body.uniformWarning).toBeDefined();
+      expect(res.body.uniformWarning.totalPieces).toBe(2);
+      expect(res.body.uniformWarning.activeIssuanceIds).toContain(iss.id);
+
+      // dueReturnAt propagé sur la remise qui n'en avait pas.
+      const after = await prisma.uniformIssuance.findUnique({ where: { id: iss.id } });
+      expect(after?.dueReturnAt).toBeTruthy();
+    });
+
+    it('ACTIF→INACTIF sans uniformes : pas de uniformWarning mais échéance posée', async () => {
+      const emp = await prisma.employee.create({
+        data: { firstName: 'Sans', lastName: 'Uniforme', phone: '5145558802', status: 'ACTIF' },
+      });
+      const res = await request(app)
+        .put(`/api/employees/${emp.id}`)
+        .set('Authorization', `Bearer ${rhToken}`)
+        .send({ status: 'INACTIF' });
+      expect(res.status).toBe(200);
+      expect(res.body.uniformWarning).toBeUndefined();
+      expect(res.body.data.uniformReturnDeadlineAt).toBeTruthy();
+    });
+
+    it('ne propage PAS dueReturnAt si la remise en possède déjà une', async () => {
+      const fixed = new Date('2099-01-15T12:00:00.000Z');
+      const { emp, iss } = await seedHolder('5145558803', 1, fixed);
+      await request(app)
+        .put(`/api/employees/${emp.id}`)
+        .set('Authorization', `Bearer ${rhToken}`)
+        .send({ status: 'INACTIF' });
+      const after = await prisma.uniformIssuance.findUnique({ where: { id: iss.id } });
+      expect(after?.dueReturnAt?.toISOString()).toBe(fixed.toISOString());
+    });
+
+    it('réactivation INACTIF→ACTIF : efface terminationDate + échéance', async () => {
+      const emp = await prisma.employee.create({
+        data: {
+          firstName: 'Re', lastName: 'Actif', phone: '5145558804', status: 'INACTIF',
+          terminationDate: new Date(), uniformReturnDeadlineAt: new Date(),
+        },
+      });
+      const res = await request(app)
+        .put(`/api/employees/${emp.id}`)
+        .set('Authorization', `Bearer ${rhToken}`)
+        .send({ status: 'ACTIF' });
+      expect(res.status).toBe(200);
+      expect(res.body.data.status).toBe('ACTIF');
+      expect(res.body.data.terminationDate).toBeNull();
+      expect(res.body.data.uniformReturnDeadlineAt).toBeNull();
+    });
+
+    it('aller-retour ACTIF→INACTIF→ACTIF : la date butoir propagée est annulée à la réembauche', async () => {
+      const { emp, iss } = await seedHolder('5145558805', 2, null);
+      // 1) Fin d'emploi → dueReturnAt propagé sur la remise (était null).
+      await request(app).put(`/api/employees/${emp.id}`).set('Authorization', `Bearer ${rhToken}`).send({ status: 'INACTIF' });
+      const inactive = await prisma.uniformIssuance.findUnique({ where: { id: iss.id } });
+      expect(inactive?.dueReturnAt).toBeTruthy();
+      // 2) Réembauche → la date butoir propagée doit être annulée (pas d'alerte de retard).
+      await request(app).put(`/api/employees/${emp.id}`).set('Authorization', `Bearer ${rhToken}`).send({ status: 'ACTIF' });
+      const reactivated = await prisma.uniformIssuance.findUnique({ where: { id: iss.id } });
+      expect(reactivated?.dueReturnAt).toBeNull();
+    });
+
+    it('réembauche : une date butoir fixée manuellement (≠ échéance) est PRÉSERVÉE', async () => {
+      const manual = new Date('2099-03-03T12:00:00.000Z');
+      const { emp, iss } = await seedHolder('5145558806', 1, manual);
+      await request(app).put(`/api/employees/${emp.id}`).set('Authorization', `Bearer ${rhToken}`).send({ status: 'INACTIF' });
+      await request(app).put(`/api/employees/${emp.id}`).set('Authorization', `Bearer ${rhToken}`).send({ status: 'ACTIF' });
+      const after = await prisma.uniformIssuance.findUnique({ where: { id: iss.id } });
+      expect(after?.dueReturnAt?.toISOString()).toBe(manual.toISOString());
+    });
+  });
 });
