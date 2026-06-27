@@ -354,4 +354,79 @@ describe('Uniformes — /api/uniforms', () => {
       expect(res.body.data.status).toBe('CREATED');
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Rapport offboarding — anciens employés détenant encore des uniformes
+  // -------------------------------------------------------------------------
+  describe('rapport anciens employés (GET /reports/inactive-holdings)', () => {
+    it('sans token → 401', async () => {
+      const res = await request(app).get('/api/uniforms/reports/inactive-holdings');
+      expect(res.status).toBe(401);
+    });
+
+    it('CLIENT → 403', async () => {
+      const res = await request(app)
+        .get('/api/uniforms/reports/inactive-holdings')
+        .set('Authorization', `Bearer ${clientToken}`);
+      expect(res.status).toBe(403);
+    });
+
+    it('ADMIN → 200, liste les ex-employés (INACTIF) avec pièces détenues', async () => {
+      // Ex-employé INACTIF qui détient encore 2 pièces (remise ISSUED en base).
+      const exEmp = await prisma.employee.create({
+        data: { firstName: 'Anc', lastName: 'Ien', phone: '4385552468', status: 'INACTIF', uniformReturnDeadlineAt: new Date('2099-01-01') },
+      });
+      const iss = await prisma.uniformIssuance.create({
+        data: {
+          employeeId: exEmp.id, division: 'SECURITE', status: 'ISSUED',
+          lines: { create: [{ variantId, quantity: 2, unitCostSnapshot: 25 }] },
+        },
+      });
+
+      const res = await request(app)
+        .get('/api/uniforms/reports/inactive-holdings')
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      const row = res.body.data.find((r: any) => r.employee.id === exEmp.id);
+      expect(row).toBeDefined();
+      expect(row.totalPieces).toBe(2);
+      expect(row.activeIssuanceIds).toContain(iss.id);
+      // L'employé ACTIF seedé (Pierre Lavoie) ne doit PAS apparaître.
+      expect(res.body.data.find((r: any) => r.employee.id === employeeId)).toBeUndefined();
+    });
+
+    it('expose le montant dû et exclut un ex-employé ayant tout retourné', async () => {
+      // Débiteur : 3 émis, 1 perdu (dette 25 $), 2 encore détenus.
+      const debtor = await prisma.employee.create({
+        data: { firstName: 'Det', lastName: 'Eur', phone: '4385559001', status: 'INACTIF' },
+      });
+      const issD = await prisma.uniformIssuance.create({
+        data: { employeeId: debtor.id, division: 'SECURITE', status: 'ISSUED', lines: { create: [{ variantId, quantity: 3, unitCostSnapshot: 25 }] } },
+      });
+      await prisma.uniformReturn.create({
+        data: { issuanceId: issD.id, employeeId: debtor.id, status: 'RETURNED', returnedAt: new Date(), lines: { create: [{ variantId, quantity: 1, condition: 'LOST', unitReplacementCost: 25 }] } },
+      });
+      // A TOUT retourné (détentions 0) → doit être EXCLU du rapport.
+      const cleared = await prisma.employee.create({
+        data: { firstName: 'Cla', lastName: 'Ir', phone: '4385559002', status: 'INACTIF' },
+      });
+      const issC = await prisma.uniformIssuance.create({
+        data: { employeeId: cleared.id, division: 'SECURITE', status: 'ISSUED', lines: { create: [{ variantId, quantity: 1, unitCostSnapshot: 25 }] } },
+      });
+      await prisma.uniformReturn.create({
+        data: { issuanceId: issC.id, employeeId: cleared.id, status: 'RETURNED', returnedAt: new Date(), lines: { create: [{ variantId, quantity: 1, condition: 'GOOD', unitReplacementCost: 25 }] } },
+      });
+
+      const res = await request(app)
+        .get('/api/uniforms/reports/inactive-holdings')
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      const debtorRow = res.body.data.find((r: any) => r.employee.id === debtor.id);
+      expect(debtorRow.totalPieces).toBe(2); // 3 émis − 1 perdu
+      expect(debtorRow.owed).toBe(25);
+      expect(debtorRow.charged).toBe(25);
+      // Celui qui a tout retourné est absent (holdings.length === 0).
+      expect(res.body.data.find((r: any) => r.employee.id === cleared.id)).toBeUndefined();
+    });
+  });
 });

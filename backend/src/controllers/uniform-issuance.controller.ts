@@ -10,7 +10,7 @@ import { generateShareToken, getTokenExpiration } from '../utils/token';
 import { SIGN_TOKEN_DAYS } from '../constants/uniform';
 import { notify } from '../services/notification.service';
 import { subtractBusinessHours } from '../utils/business-days';
-import { computeAmountOwed } from '../services/uniform-stock.service';
+import { closeTerminationCore, notifyTerminationClosed } from '../services/uniform-termination.service';
 
 const userId = (req: Request): string | undefined => (req.user as any)?.id;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -469,80 +469,9 @@ export const closeTermination = async (req: Request, res: Response, next: NextFu
       throw new ApiError(400, 'Remise non clôturable dans cet état');
     }
 
-    // Quantité restante par variante (lignes − retours déjà finalisés).
-    const remaining = new Map<string, { quantity: number; cost: number }>();
-    for (const line of issuance.lines) {
-      if (!line.variantId) continue;
-      const cur = remaining.get(line.variantId) || { quantity: 0, cost: Number(line.unitCostSnapshot) };
-      cur.quantity += line.quantity;
-      remaining.set(line.variantId, cur);
-    }
-    for (const ret of issuance.returns) {
-      if (ret.status !== 'RETURNED') continue;
-      for (const rl of ret.lines) {
-        if (!rl.variantId) continue;
-        const cur = remaining.get(rl.variantId);
-        if (cur) cur.quantity -= rl.quantity;
-      }
-    }
-    const lines = [...remaining.entries()]
-      .filter(([, v]) => v.quantity > 0)
-      .map(([variantId, v]) => ({
-        variantId,
-        quantity: v.quantity,
-        condition: 'NOT_RETURNED' as const,
-        unitReplacementCost: v.cost,
-      }));
-
-    const created = await prisma.$transaction(async (tx) => {
-      const ret = await tx.uniformReturn.create({
-        data: {
-          issuanceId: issuance.id,
-          employeeId: issuance.employeeId,
-          status: 'RETURNED',
-          returnedAt: new Date(),
-          notes: 'Clôture fin d’emploi — pièces non retournées',
-          createdById: userId(req),
-          lines: { create: lines },
-        },
-      });
-      await tx.uniformIssuance.update({ where: { id: issuance.id }, data: { status: 'CLOSED_TERMINATION' } });
-      // Annule la notif DUE_SOON encore en attente
-      await tx.notification.updateMany({
-        where: { dedupKey: { startsWith: `due-soon-${issuance.id}::` }, status: 'PENDING' },
-        data: { status: 'FAILED', failedReason: 'Issuance clôturée (terminaison)' },
-      });
-      return ret;
-    });
-
-    // V2 — Notif RH + PAIE : fin d'emploi clôturée avec dette à prélever
-    try {
-      const owed = await computeAmountOwed(issuance.employeeId);
-      const employee = await prisma.employee.findUnique({ where: { id: issuance.employeeId } });
-      const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Agent';
-      notify({
-        type: 'UNIFORM_TERMINATION_CLOSED',
-        channels: ['EMAIL', 'IN_APP'],
-        audience: 'RH',
-        title: `Fin d'emploi clôturée — ${employeeName}`,
-        message: `Dette uniforme : ${owed.owed.toFixed(2)} $ à prélever sur la dernière paie`,
-        link: `/employees/${issuance.employeeId}`,
-        payload: { issuanceId: issuance.id, employeeId: issuance.employeeId, amountOwed: owed.owed },
-      }).catch(() => {});
-      notify({
-        type: 'UNIFORM_TERMINATION_CLOSED',
-        channels: ['EMAIL'],
-        audience: 'PAIE',
-        title: `Prélèvement uniforme — ${employeeName}`,
-        message: `Montant à prélever sur la dernière paie : ${owed.owed.toFixed(2)} $`,
-        link: `/employees/${issuance.employeeId}`,
-        payload: { issuanceId: issuance.id, employeeId: issuance.employeeId, amountOwed: owed.owed },
-      }).catch(() => {});
-    } catch (e) {
-      console.error('notify closeTermination failed:', e);
-    }
-
-    res.json({ message: 'Fin d’emploi clôturée — montant dû calculé', data: created });
+    const result = await closeTerminationCore(issuance, userId(req) ?? null);
+    await notifyTerminationClosed(issuance.employeeId);
+    res.json({ message: 'Fin d’emploi clôturée — montant dû calculé', data: result });
   } catch (error) {
     next(error);
   }

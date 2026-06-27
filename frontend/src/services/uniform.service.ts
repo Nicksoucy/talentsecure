@@ -7,6 +7,7 @@ import type {
   UniformMovement,
   Holding,
   AmountOwed,
+  InactiveHolder,
   UniformDivision,
   UniformPieceType,
   UniformItemCondition,
@@ -251,6 +252,10 @@ export const uniformService = {
   async reportLosses() {
     const r = await api.get('/api/uniforms/reports/losses');
     return r.data as { data: { rows: any[]; totals: { totalCost: number; totalUnits: number } } };
+  },
+  async reportInactiveHoldings() {
+    const r = await api.get('/api/uniforms/reports/inactive-holdings');
+    return r.data as { data: InactiveHolder[] };
   },
   async statsSummary() {
     const r = await api.get('/api/uniforms/stats/summary');

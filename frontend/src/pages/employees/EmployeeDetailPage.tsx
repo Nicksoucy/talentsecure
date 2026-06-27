@@ -7,8 +7,11 @@ import {
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditIcon from '@mui/icons-material/Edit';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useSnackbar } from 'notistack';
 import { employeeService } from '@/services/employee.service';
+import type { UniformOffboardingWarning } from '@/services/employee.service';
+import { uniformService } from '@/services/uniform.service';
 import { usePerms } from '@/hooks/usePerms';
 import UniformFichePanel from '../uniformes/components/UniformFichePanel';
 
@@ -28,7 +31,7 @@ export default function EmployeeDetailPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
-  const { canViewUniforms, canWriteEmployees } = usePerms();
+  const { canViewUniforms, canWriteUniforms, canWriteEmployees } = usePerms();
 
   const { data, isLoading } = useQuery({
     queryKey: ['employee', id],
@@ -38,6 +41,7 @@ export default function EmployeeDetailPage() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [form, setForm] = useState<any>({});
+  const [warning, setWarning] = useState<UniformOffboardingWarning | null>(null);
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
 
   const saveMut = useMutation({
@@ -51,13 +55,38 @@ export default function EmployeeDetailPage() {
       if (!form.hasBSP) payload.bspNumber = null;
       return employeeService.updateEmployee(id!, payload);
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['employee', id] });
       qc.invalidateQueries({ queryKey: ['employees'] });
+      qc.invalidateQueries({ queryKey: ['uniform-fiche', id] });
       enqueueSnackbar('Employé mis à jour', { variant: 'success' });
       setEditOpen(false);
+      // Fin d'emploi avec uniformes encore détenus → avertissement non bloquant.
+      if (res?.uniformWarning && res.uniformWarning.totalPieces > 0) {
+        setWarning(res.uniformWarning);
+      }
     },
     onError: (err: any) => enqueueSnackbar(err?.response?.data?.error || 'Erreur lors de la mise à jour', { variant: 'error' }),
+  });
+
+  const closeTerminationMut = useMutation({
+    // allSettled : une remise en échec ne doit pas laisser les autres non clôturées.
+    mutationFn: async (issuanceIds: string[]) => {
+      const results = await Promise.allSettled(issuanceIds.map((iid) => uniformService.closeTermination(iid)));
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      if (failed === issuanceIds.length) throw new Error('all-failed');
+      return { failed, total: issuanceIds.length };
+    },
+    onSuccess: ({ failed, total }) => {
+      qc.invalidateQueries({ queryKey: ['uniform-fiche', id] });
+      qc.invalidateQueries({ queryKey: ['rep-inactive-holdings'] });
+      enqueueSnackbar(
+        failed > 0 ? `${total - failed}/${total} remise(s) clôturée(s) — ${failed} en échec` : 'Fin d’emploi clôturée — dette figée',
+        { variant: failed > 0 ? 'warning' : 'success' },
+      );
+      setWarning(null);
+    },
+    onError: () => enqueueSnackbar('Erreur lors de la clôture', { variant: 'error' }),
   });
 
   if (isLoading) {
@@ -162,6 +191,55 @@ export default function EmployeeDetailPage() {
           <Button variant="contained" disabled={!canSave || saveMut.isPending} onClick={() => saveMut.mutate()}>
             {saveMut.isPending ? 'Enregistrement…' : 'Enregistrer'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Avertissement fin d'emploi : uniformes encore détenus */}
+      <Dialog open={!!warning} onClose={() => setWarning(null)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <WarningAmberIcon color="warning" /> Uniformes encore détenus
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" gutterBottom>
+            {e.firstName} {e.lastName} est maintenant <strong>inactif</strong> mais détient encore{' '}
+            <strong>{warning?.totalPieces} pièce(s)</strong>.
+            {warning?.deadline && (
+              <> Échéance de retour fixée au <strong>{fmtDate(warning.deadline)}</strong> (5 jours ouvrables).</>
+            )}
+          </Typography>
+          {warning && warning.owed > 0 && (
+            <Typography variant="body2" color="error" gutterBottom>
+              Montant à risque/dû : <strong>$ {Number(warning.owed).toFixed(2)}</strong>
+            </Typography>
+          )}
+          {warning && warning.holdings.length > 0 && (
+            <Stack spacing={0.5} sx={{ mt: 1 }}>
+              {warning.holdings.map((h) => (
+                <Typography key={h.variantId} variant="body2" color="text.secondary">
+                  • {h.quantity}× {h.itemName}{h.size && h.size !== 'Unique' ? ` (${h.size})` : ''}
+                </Typography>
+              ))}
+            </Stack>
+          )}
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+            Récupérez les pièces (Retour) ou clôturez la fin d’emploi pour figer la dette à prélever sur la dernière paie.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ flexWrap: 'wrap', gap: 1 }}>
+          <Button onClick={() => setWarning(null)}>Plus tard</Button>
+          <Button variant="outlined" onClick={() => navigate(`/uniformes/retours?employeeId=${id}`)}>
+            Aller au retour
+          </Button>
+          {canWriteUniforms && warning && warning.activeIssuanceIds.length > 0 && (
+            <Button
+              variant="contained"
+              color="warning"
+              disabled={closeTerminationMut.isPending}
+              onClick={() => closeTerminationMut.mutate(warning.activeIssuanceIds)}
+            >
+              {closeTerminationMut.isPending ? 'Clôture…' : 'Clôturer fin d’emploi'}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>

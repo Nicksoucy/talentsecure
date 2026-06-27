@@ -149,6 +149,23 @@ export interface AmountOwed {
   owed: number;
 }
 
+/** Ancien employé (INACTIF) détenant encore des uniformes (rapport offboarding). */
+export interface InactiveHolder {
+  employee: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    terminationDate: string | null;
+    uniformReturnDeadlineAt: string | null;
+  };
+  holdings: Holding[];
+  totalPieces: number;
+  owed: number;
+  charged: number;
+  settled: number;
+  activeIssuanceIds: string[];
+}
+
 export interface SignPayload {
   kind: 'pret' | 'retour';
   alreadySigned: boolean;
