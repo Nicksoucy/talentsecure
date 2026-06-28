@@ -6,6 +6,13 @@ import * as ctrl from '../controllers/uniform.controller';
 import * as iss from '../controllers/uniform-issuance.controller';
 import * as ret from '../controllers/uniform-return.controller';
 import * as wash from '../controllers/uniform-wash-batch.controller';
+import { validate } from '../middleware/validation.middleware';
+import {
+  replenishVariantSchema,
+  adjustVariantSchema,
+  transferVariantSchema,
+  createSettlementSchema,
+} from '../validation/uniform.validation';
 
 const router = Router();
 
@@ -90,9 +97,9 @@ router.get('/variants', ctrl.listVariants);
 router.get('/variants/by-barcode/:barcode', ctrl.getVariantByBarcode);
 router.get('/variants/:variantId/label', ctrl.variantLabel);
 router.get('/variants/:variantId/qr', ctrl.variantQr);
-router.post('/variants/:variantId/replenish', ctrl.replenishVariant);
-router.post('/variants/:variantId/adjust', ctrl.adjustVariant);
-router.post('/variants/:variantId/transfer', ctrl.transferVariant);
+router.post('/variants/:variantId/replenish', validate({ body: replenishVariantSchema }), ctrl.replenishVariant);
+router.post('/variants/:variantId/adjust', validate({ body: adjustVariantSchema }), ctrl.adjustVariant);
+router.post('/variants/:variantId/transfer', validate({ body: transferVariantSchema }), ctrl.transferVariant);
 router.put('/variants/:variantId', ctrl.updateVariant);
 router.delete('/variants/:variantId', ctrl.deleteVariant);
 
@@ -146,6 +153,6 @@ router.post('/wash-batches/:id/cancel', wash.cancel);
 // Fiche agent & règlements
 router.get('/employees/:employeeId/holdings', ret.getHoldings);
 router.get('/employees/:employeeId/fiche', ctrl.employeeFiche);
-router.post('/employees/:employeeId/settlements', ctrl.createSettlement);
+router.post('/employees/:employeeId/settlements', validate({ body: createSettlementSchema }), ctrl.createSettlement);
 
 export default router;
