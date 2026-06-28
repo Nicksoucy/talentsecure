@@ -40,7 +40,6 @@ jest.mock('../services/stripe.service', () => ({
 }));
 
 // app importé APRÈS le mock pour que le controller capte le service mocké.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 import { createApp } from '../app';
 
 const ENDPOINT = '/api/webhooks/stripe';
