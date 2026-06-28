@@ -198,9 +198,10 @@ describe('Catalogues — /api/catalogues', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ clientId });
       expect(res.status).toBe(400);
-      // Validation au bord (P2-A) : enveloppe ERREUR_VALIDATION, champ dans `details`.
+      // Validation au bord (P2-A) : enveloppe ERREUR_VALIDATION, le champ manquant
+      // (title) est listé dans `details` (message Zod = « Required » quand absent).
       expect(res.body.code).toBe('ERREUR_VALIDATION');
-      expect(JSON.stringify(res.body.details)).toMatch(/requis/i);
+      expect(res.body.details.some((d: any) => d.field === 'title')).toBe(true);
     });
 
     it('clientId inexistant → 404', async () => {
