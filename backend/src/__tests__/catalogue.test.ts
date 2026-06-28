@@ -198,7 +198,9 @@ describe('Catalogues — /api/catalogues', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ clientId });
       expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/requis/i);
+      // Validation au bord (P2-A) : enveloppe ERREUR_VALIDATION, champ dans `details`.
+      expect(res.body.code).toBe('ERREUR_VALIDATION');
+      expect(JSON.stringify(res.body.details)).toMatch(/requis/i);
     });
 
     it('clientId inexistant → 404', async () => {
