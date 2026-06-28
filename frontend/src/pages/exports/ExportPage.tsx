@@ -88,7 +88,7 @@ const ExportPage = () => {
         accessToken
       );
 
-      const blob = new Blob([response.data], { type: response.headers['content-type'] || 'application/octet-stream' });
+      const blob = new Blob([response.data], { type: (response.headers['content-type'] as string) || 'application/octet-stream' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       const disposition = response.headers['content-disposition'];

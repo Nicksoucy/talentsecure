@@ -223,8 +223,22 @@ export const updateClient = async (
 ) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
     const userId = req.user!.id;
+
+    // Sécurité — allowlist explicite des champs modifiables (anti mass-assignment).
+    // On ne propage JAMAIS req.body brut : id/password/isActive/relations sont
+    // exclus et ne peuvent donc pas être écrasés via cet endpoint.
+    const ALLOWED_UPDATE_FIELDS = [
+      'name', 'companyName', 'email', 'phone', 'address', 'city', 'province',
+      'postalCode', 'billingEmail', 'defaultPricePerCandidate', 'discountPercent',
+      'paymentTerms', 'taxNumber', 'notes',
+    ] as const;
+    const updateData: Record<string, any> = {};
+    for (const key of ALLOWED_UPDATE_FIELDS) {
+      if (Object.prototype.hasOwnProperty.call(req.body ?? {}, key)) {
+        updateData[key] = req.body[key];
+      }
+    }
 
     // Check if client exists
     const existingClient = await prisma.client.findUnique({
