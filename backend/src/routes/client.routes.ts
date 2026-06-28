@@ -12,6 +12,11 @@ import {
 import { authenticateStaff, authorizeRoles } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
 import { loginLimiter } from '../middleware/rate-limit.middleware';
+import {
+  registerClientSchema,
+  createClientSchema,
+  updateClientSchema,
+} from '../validation/client.validation';
 
 // Validation schemas
 const uuidParam = z.object({
@@ -28,7 +33,7 @@ const router = express.Router();
 // S3 — inscription publique rate-limitée (anti-abus / création en masse).
 // NB : le compte reste isActive:true (auto-activé). Pour exiger une approbation
 // manuelle, passer isActive:false dans registerClient + écran d'approbation admin.
-router.post('/register', loginLimiter, registerClient);
+router.post('/register', loginLimiter, validate({ body: registerClientSchema }), registerClient);
 
 // All other routes require authentication
 router.use(authenticateStaff);
@@ -55,6 +60,7 @@ router.get('/:id', validate({ params: uuidParam }), getClientById);
 router.post(
   '/',
   authorizeRoles('ADMIN', 'SALES', 'RH_RECRUITER'),
+  validate({ body: createClientSchema }),
   createClient
 );
 
@@ -66,7 +72,7 @@ router.post(
 router.put(
   '/:id',
   authorizeRoles('ADMIN', 'SALES', 'RH_RECRUITER'),
-  validate({ params: uuidParam }),
+  validate({ params: uuidParam, body: updateClientSchema }),
   updateClient
 );
 

@@ -12,6 +12,8 @@ import {
   adjustVariantSchema,
   transferVariantSchema,
   createSettlementSchema,
+  createIssuanceSchema,
+  createReturnSchema,
 } from '../validation/uniform.validation';
 
 const router = Router();
@@ -120,7 +122,7 @@ router.post('/items/:id/variants', ctrl.createVariant);
 
 // Remises (prêts)
 router.get('/issuances', iss.listIssuances);
-router.post('/issuances', iss.createIssuance);
+router.post('/issuances', validate({ body: createIssuanceSchema }), iss.createIssuance);
 router.get('/issuances/:id', iss.getIssuance);
 router.put('/issuances/:id', iss.updateIssuance);
 router.post('/issuances/:id/finalize', iss.finalizeIssuance);
@@ -132,7 +134,7 @@ router.get('/issuances/:id/pdf', iss.getIssuancePdfUrl);
 router.post('/issuances/:id/upload-pdf', pdfUpload.single('pdf'), iss.uploadIssuancePdf);
 
 // Retours
-router.post('/returns', ret.createReturn);
+router.post('/returns', validate({ body: createReturnSchema }), ret.createReturn);
 router.get('/returns/:id', ret.getReturn);
 router.post('/returns/:id/finalize', ret.finalizeReturn);
 router.post('/returns/:id/send-sms', ret.sendReturnSms);

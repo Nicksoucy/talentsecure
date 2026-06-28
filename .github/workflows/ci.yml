@@ -47,6 +47,8 @@ jobs:
         run: npx tsc --noEmit
       - name: Architecture (dependency-cruiser — pas de cycles)
         run: npm run depcruise
+      - name: Routes mutantes validées (garde P2-A)
+        run: npm run check:routes
       - name: Lint (bloquant)
         run: npm run lint
       - name: Préparer la base de test
