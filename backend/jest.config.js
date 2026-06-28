@@ -17,12 +17,11 @@ module.exports = {
     '/__tests__/',
   ],
   // Seuils de couverture = plancher anti-régression (appliqués par
-  // `npm run test:coverage`, lancé en CI). Valeurs de DÉPART volontairement
-  // basses : à RELEVER ~3 % sous la couverture réelle qu'affichera le 1er run
-  // `test:coverage` en CI (la base de test locale est trop lente pour mesurer
-  // ici). But premier : empêcher l'effondrement silencieux de la couverture.
+  // `npm run test:coverage`, lancé en CI). Calés à ~3 % sous la couverture
+  // réelle mesurée en CI le 2026-06-28 (stmts 48.2 / branch 34.8 / funcs 42.6
+  // / lines 48.1). À RELEVER au fur et à mesure que la couverture monte.
   coverageThreshold: {
-    global: { statements: 35, branches: 25, functions: 30, lines: 35 },
+    global: { statements: 45, branches: 31, functions: 39, lines: 45 },
   },
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
