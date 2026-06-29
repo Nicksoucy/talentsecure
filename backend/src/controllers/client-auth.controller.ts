@@ -100,15 +100,18 @@ export const clientRefreshToken = async (
       return res.status(401).json({ error: 'Client non trouvé' });
     }
 
-    // Generate new access token
-    const newAccessToken = generateAccessToken({
+    // Nouveau access token + ROTATION du refresh token (P2-C).
+    const tokenPayload = {
       userId: client.id,
       email: client.email,
       role: 'CLIENT',
-    });
+    };
+    const newAccessToken = generateAccessToken(tokenPayload);
+    const newRefreshToken = generateRefreshToken(tokenPayload);
 
     res.json({
       accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
     });
   } catch (error) {
     res.status(401).json({ error: 'Refresh token invalide ou expiré' });
