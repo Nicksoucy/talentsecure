@@ -185,7 +185,9 @@ describe('Prospects — /api/prospects', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ clientId: seededClientId });
       expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/prospectIds requis/i);
+      // Validation au bord (P2-A) : enveloppe ERREUR_VALIDATION, champ `prospectIds` dans `details`.
+      expect(res.body.code).toBe('ERREUR_VALIDATION');
+      expect(res.body.details.some((d: any) => d.field === 'prospectIds')).toBe(true);
     });
 
     it('POST /bulk-assign-to-client vers un client inexistant → 404', async () => {

@@ -177,7 +177,7 @@ router.post('/advanced-search', validate({ body: advancedSearchSchema }), advanc
  * @desc    Parse natural language search query
  * @access  Private (All authenticated users)
  */
-router.post('/ai-search', parseNaturalLanguageSearch);
+router.post('/ai-search', validate({ body: z.object({ query: z.string().min(1, 'query requise') }) }), parseNaturalLanguageSearch);
 
 /**
  * @route   POST /api/candidates
