@@ -110,3 +110,47 @@ export const createVariantSchema = z
     emplacement: z.string().optional().nullable(),
   })
   .passthrough();
+
+/** Réordonnancement (POST /items/reorder, /items/:id/variants/reorder) : ids non vide. */
+export const reorderSchema = z
+  .object({
+    ids: z.array(z.string()).min(1, 'ids requis'),
+  })
+  .passthrough();
+
+/** MAJ morceau (PUT /items/:id) — tout optionnel, coercion des nombres. */
+export const updateItemSchema = z
+  .object({
+    name: z.string().max(200).optional(),
+    type: z.string().optional(),
+    defaultReplacementCost: z.coerce.number().nonnegative().optional().nullable(),
+    sortOrder: z.coerce.number().int().optional(),
+  })
+  .passthrough();
+
+/** MAJ grandeur (PUT /variants/:variantId) — tout optionnel, coercion des nombres. */
+export const updateVariantSchema = z
+  .object({
+    size: z.string().max(50).optional().nullable(),
+    replacementCost: z.coerce.number().nonnegative().optional().nullable(),
+    reorderThreshold: z.coerce.number().int().optional().nullable(),
+    sku: z.string().max(100).optional().nullable(),
+    emplacement: z.string().optional().nullable(),
+  })
+  .passthrough();
+
+/** MAJ remise (PUT /issuances/:id) — tout optionnel. */
+export const updateIssuanceSchema = z
+  .object({
+    notes: z.string().optional().nullable(),
+    lines: z.array(z.object({}).passthrough()).optional(),
+  })
+  .passthrough();
+
+/** Feuille d'étiquettes (POST /labels) — tout optionnel (non-bloquant). */
+export const labelsSheetSchema = z
+  .object({
+    variantIds: z.array(z.string()).optional(),
+    format: z.string().optional(),
+  })
+  .passthrough();

@@ -16,6 +16,11 @@ import {
   createReturnSchema,
   createItemSchema,
   createVariantSchema,
+  reorderSchema,
+  updateItemSchema,
+  updateVariantSchema,
+  updateIssuanceSchema,
+  labelsSheetSchema,
 } from '../validation/uniform.validation';
 
 const router = Router();
@@ -67,6 +72,7 @@ router.use(authenticateJWT);
 router.post(
   '/issuances/draft',
   authorizeRoles('ADMIN', 'RH_RECRUITER', 'MAGASIN', 'MAGASIN_GESTION'),
+  validate({ body: createIssuanceSchema }),
   iss.createIssuance,
 );
 
@@ -94,7 +100,7 @@ router.get('/movements', ctrl.listMovements);
 router.get('/inventory/export', ctrl.exportInventoryXlsx);
 
 // Étiquettes
-router.post('/labels', ctrl.labelsSheet);
+router.post('/labels', validate({ body: labelsSheetSchema }), ctrl.labelsSheet);
 
 // Variantes
 router.get('/variants', ctrl.listVariants);
@@ -104,29 +110,29 @@ router.get('/variants/:variantId/qr', ctrl.variantQr);
 router.post('/variants/:variantId/replenish', validate({ body: replenishVariantSchema }), ctrl.replenishVariant);
 router.post('/variants/:variantId/adjust', validate({ body: adjustVariantSchema }), ctrl.adjustVariant);
 router.post('/variants/:variantId/transfer', validate({ body: transferVariantSchema }), ctrl.transferVariant);
-router.put('/variants/:variantId', ctrl.updateVariant);
+router.put('/variants/:variantId', validate({ body: updateVariantSchema }), ctrl.updateVariant);
 router.delete('/variants/:variantId', ctrl.deleteVariant);
 
 // Catalogue — morceaux
 router.get('/items', ctrl.listItems);
 router.post('/items', validate({ body: createItemSchema }), ctrl.createItem);
-router.post('/items/reorder', ctrl.reorderItems);
+router.post('/items/reorder', validate({ body: reorderSchema }), ctrl.reorderItems);
 router.get('/items/:id', ctrl.getItem);
 router.post('/items/:id/image', imageUpload.single('image'), ctrl.uploadItemImage);
-router.put('/items/:id', ctrl.updateItem);
+router.put('/items/:id', validate({ body: updateItemSchema }), ctrl.updateItem);
 router.delete('/items/:id', ctrl.deleteItem);
 router.get('/items/:id/variants', (req, res, next) => {
   (req.query as any).itemId = req.params.id;
   return ctrl.listVariants(req, res, next);
 });
-router.post('/items/:id/variants/reorder', ctrl.reorderVariants);
+router.post('/items/:id/variants/reorder', validate({ body: reorderSchema }), ctrl.reorderVariants);
 router.post('/items/:id/variants', validate({ body: createVariantSchema }), ctrl.createVariant);
 
 // Remises (prêts)
 router.get('/issuances', iss.listIssuances);
 router.post('/issuances', validate({ body: createIssuanceSchema }), iss.createIssuance);
 router.get('/issuances/:id', iss.getIssuance);
-router.put('/issuances/:id', iss.updateIssuance);
+router.put('/issuances/:id', validate({ body: updateIssuanceSchema }), iss.updateIssuance);
 router.post('/issuances/:id/finalize', iss.finalizeIssuance);
 router.post('/issuances/:id/send-sms', iss.sendIssuanceSms);
 router.post('/issuances/:id/counter-sign', iss.counterSignIssuance);
