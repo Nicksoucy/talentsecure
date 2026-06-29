@@ -184,7 +184,9 @@ describe('Contacts (cycle de vie) — /api/contacts', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ fromSection: 'wizard', fromId: prospectId, toSection: 'employee' });
       expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/section invalide/i);
+      // Validation au bord (P2-A) : enveloppe ERREUR_VALIDATION, champ `fromSection` dans `details`.
+      expect(res.body.code).toBe('ERREUR_VALIDATION');
+      expect(res.body.details.some((d: any) => d.field === 'fromSection')).toBe(true);
     });
 
     it('fromId manquant → 400', async () => {
@@ -193,7 +195,9 @@ describe('Contacts (cycle de vie) — /api/contacts', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ fromSection: 'prospect', toSection: 'employee' });
       expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/fromId requis/i);
+      // Validation au bord (P2-A) : enveloppe ERREUR_VALIDATION, champ `fromId` dans `details`.
+      expect(res.body.code).toBe('ERREUR_VALIDATION');
+      expect(res.body.details.some((d: any) => d.field === 'fromId')).toBe(true);
     });
 
     it('source introuvable → 404 (propagé depuis le service)', async () => {
