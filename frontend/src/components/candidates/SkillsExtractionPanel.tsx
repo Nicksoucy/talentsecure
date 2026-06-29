@@ -33,7 +33,6 @@ import {
 import { useMutation } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 import { skillsService, ExtractedSkill } from '@/services/skills.service';
-import { useAuthStore } from '@/store/authStore';
 
 interface SkillsExtractionPanelProps {
   candidateId: string;
@@ -62,7 +61,6 @@ export default function SkillsExtractionPanel({
   hasCv,
   onSkillsUpdated,
 }: SkillsExtractionPanelProps) {
-  const { accessToken } = useAuthStore();
   const { enqueueSnackbar } = useSnackbar();
   const [extractedSkills, setExtractedSkills] = useState<ExtractedSkill[]>([]);
   const [showResults, setShowResults] = useState(false);
@@ -79,7 +77,7 @@ export default function SkillsExtractionPanel({
 
   // Extract skills mutation
   const extractMutation = useMutation({
-    mutationFn: () => skillsService.extractSkills(candidateId, 'gpt-3.5-turbo', accessToken!),
+    mutationFn: () => skillsService.extractSkills(candidateId, 'gpt-3.5-turbo'),
     onSuccess: (data) => {
       if (data.success) {
         setExtractedSkills(data.skillsFound);
@@ -115,7 +113,7 @@ export default function SkillsExtractionPanel({
         level: skill.level,
         yearsExperience: skill.yearsExperience,
       }));
-      return skillsService.saveSkills(candidateId, skills, accessToken!);
+      return skillsService.saveSkills(candidateId, skills);
     },
     onSuccess: () => {
       enqueueSnackbar('Compétences sauvegardées avec succès!', { variant: 'success' });
