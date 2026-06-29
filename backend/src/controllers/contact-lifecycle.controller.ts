@@ -3,6 +3,7 @@ import { prisma } from '../config/database';
 import { findContactEverywhere, ContactSection } from '../utils/candidateMatch';
 import { moveContact } from '../services/contact-move.service';
 import { searchTableIds, hasSearchTokens } from '../utils/search';
+import { ApiError } from '../utils/apiError';
 
 const VALID: ContactSection[] = ['employee', 'candidate', 'prospect'];
 
@@ -121,10 +122,10 @@ export const moveContactController = async (req: Request, res: Response, next: N
     const { fromSection, fromId, toSection } = req.body || {};
 
     if (!VALID.includes(fromSection) || !VALID.includes(toSection)) {
-      return res.status(400).json({ error: 'Section invalide (employee | candidate | prospect)' });
+      throw new ApiError(400, 'Section invalide (employee | candidate | prospect)');
     }
     if (!fromId) {
-      return res.status(400).json({ error: 'fromId requis' });
+      throw new ApiError(400, 'fromId requis');
     }
 
     const result = await moveContact({

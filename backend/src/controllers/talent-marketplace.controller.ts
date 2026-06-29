@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
+import { ApiError } from '../utils/apiError';
 
 /**
  * Search talents by city (public marketplace for clients)
@@ -14,7 +15,7 @@ export const searchTalentsByCity = async (
         const { city, minRating, hasVehicle, available24_7, availableDays, availableNights, availableWeekends, mode } = req.query;
 
         if (!city) {
-            return res.status(400).json({ error: 'Ville requise' });
+            throw new ApiError(400, 'Ville requise');
         }
 
         // Specific logic for CV Only mode (Prospects)
@@ -281,7 +282,7 @@ export const getTalentDetail = async (req: Request, res: Response, next: NextFun
             },
         });
 
-        if (!candidate) return res.status(404).json({ error: 'Candidat non disponible' });
+        if (!candidate) throw new ApiError(404, 'Candidat non disponible');
 
         const isPurchased = clientId
             ? !!(await prisma.clientPurchase.findUnique({
@@ -319,8 +320,8 @@ export const getTalentVideoUrl = async (req: Request, res: Response, next: NextF
             where: { id, ...MARKETPLACE_WHERE },
             select: { videoStoragePath: true },
         });
-        if (!candidate) return res.status(404).json({ error: 'Candidat non disponible' });
-        if (!candidate.videoStoragePath) return res.status(404).json({ error: 'Aucune vidéo' });
+        if (!candidate) throw new ApiError(404, 'Candidat non disponible');
+        if (!candidate.videoStoragePath) throw new ApiError(404, 'Aucune vidéo');
 
         const { getR2SignedUrl } = require('../services/video.service');
         const videoUrl = await getR2SignedUrl(candidate.videoStoragePath, 3600);

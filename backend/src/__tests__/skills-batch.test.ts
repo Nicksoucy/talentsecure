@@ -31,9 +31,11 @@ describe('batchExtractSkills controller', () => {
 
     await batchExtractSkills(req, res as any, next);
 
-    expect(res.status).toHaveBeenCalledWith(400);
+    // P2-B : le controller throw une ApiError(400) routée vers next(error)
+    // (le handler global produit la réponse), au lieu de res.status(400).json.
     expect(mockBatch).not.toHaveBeenCalled();
-    expect(next).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+    expect(res.status).not.toHaveBeenCalled();
   });
 
   it('délègue au service et mappe résultats + résumé dans la réponse', async () => {

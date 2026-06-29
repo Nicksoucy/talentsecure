@@ -5,6 +5,7 @@ import { buildExtractedSkillsFilters, fetchExtractedSkillsResults } from '../ser
 import { aiExtractionService } from '../services/ai-extraction.service';
 import { skillsService } from '../services/skills.service';
 import { prisma } from '../config/database';
+import { ApiError } from '../utils/apiError';
 
 // ============================================
 // SKILLS MANAGEMENT (CRUD)
@@ -86,7 +87,7 @@ export const getSkillById = async (req: Request, res: Response, next: NextFuncti
     });
 
     if (!skill) {
-      return res.status(404).json({ error: 'CompÃ©tence non trouvÃ©e' });
+      throw new ApiError(404, 'CompÃ©tence non trouvÃ©e');
     }
 
     res.json({ skill });
@@ -110,7 +111,7 @@ export const createSkill = async (req: Request, res: Response, next: NextFunctio
     });
 
     if (existing) {
-      return res.status(400).json({ error: 'Une compÃ©tence avec ce nom existe dÃ©jÃ ' });
+      throw new ApiError(400, 'Une compÃ©tence avec ce nom existe dÃ©jÃ ');
     }
 
     const skill = await prisma.skill.create({
@@ -148,7 +149,7 @@ export const updateSkill = async (req: Request, res: Response, next: NextFunctio
     });
 
     if (!existing) {
-      return res.status(404).json({ error: 'CompÃ©tence non trouvÃ©e' });
+      throw new ApiError(404, 'CompÃ©tence non trouvÃ©e');
     }
 
     // If changing name, check for duplicates
@@ -158,7 +159,7 @@ export const updateSkill = async (req: Request, res: Response, next: NextFunctio
       });
 
       if (duplicate) {
-        return res.status(400).json({ error: 'Une compÃ©tence avec ce nom existe dÃ©jÃ ' });
+        throw new ApiError(400, 'Une compÃ©tence avec ce nom existe dÃ©jÃ ');
       }
     }
 
@@ -200,7 +201,7 @@ export const deleteSkill = async (req: Request, res: Response, next: NextFunctio
     });
 
     if (!skill) {
-      return res.status(404).json({ error: 'CompÃ©tence non trouvÃ©e' });
+      throw new ApiError(404, 'CompÃ©tence non trouvÃ©e');
     }
 
     // Soft delete - just mark as inactive
@@ -366,7 +367,7 @@ export const addCandidateSkill = async (req: Request, res: Response, next: NextF
     });
 
     if (!candidate) {
-      return res.status(404).json({ error: 'Candidat non trouvÃ©' });
+      throw new ApiError(404, 'Candidat non trouvÃ©');
     }
 
     // Check if skill exists
@@ -375,7 +376,7 @@ export const addCandidateSkill = async (req: Request, res: Response, next: NextF
     });
 
     if (!skill) {
-      return res.status(404).json({ error: 'CompÃ©tence non trouvÃ©e' });
+      throw new ApiError(404, 'CompÃ©tence non trouvÃ©e');
     }
 
     // Check if candidate already has this skill
@@ -389,7 +390,7 @@ export const addCandidateSkill = async (req: Request, res: Response, next: NextF
     });
 
     if (existing) {
-      return res.status(400).json({ error: 'Le candidat possÃ¨de dÃ©jÃ  cette compÃ©tence' });
+      throw new ApiError(400, 'Le candidat possÃ¨de dÃ©jÃ  cette compÃ©tence');
     }
 
     const candidateSkill = await prisma.candidateSkill.create({
@@ -437,7 +438,7 @@ export const updateCandidateSkill = async (req: Request, res: Response, next: Ne
     });
 
     if (!candidateSkill) {
-      return res.status(404).json({ error: 'CompÃ©tence non trouvÃ©e pour ce candidat' });
+      throw new ApiError(404, 'CompÃ©tence non trouvÃ©e pour ce candidat');
     }
 
     const updated = await prisma.candidateSkill.update({
@@ -487,7 +488,7 @@ export const removeCandidateSkill = async (req: Request, res: Response, next: Ne
     });
 
     if (!candidateSkill) {
-      return res.status(404).json({ error: 'CompÃ©tence non trouvÃ©e pour ce candidat' });
+      throw new ApiError(404, 'CompÃ©tence non trouvÃ©e pour ce candidat');
     }
 
     await prisma.candidateSkill.delete({
@@ -521,7 +522,7 @@ export const searchCandidatesBySkills = async (
     const { skillIds, level, minYearsExperience, onlyVerified } = req.body;
 
     if (!skillIds || skillIds.length === 0) {
-      return res.status(400).json({ error: 'Au moins une compÃ©tence est requise' });
+      throw new ApiError(400, 'Au moins une compÃ©tence est requise');
     }
 
     const where: any = {
@@ -626,7 +627,7 @@ export const extractSkillsFromCandidate = async (
           ...prospect,
         } as any;
       } else {
-        return res.status(404).json({ error: 'Candidat non trouvé' });
+        throw new ApiError(404, 'Candidat non trouvé');
       }
     }
 
@@ -733,7 +734,7 @@ export const batchExtractSkills = async (req: Request, res: Response, next: Next
     const { candidateIds, model, overwrite = false } = req.body;
 
     if (!candidateIds || candidateIds.length === 0) {
-      return res.status(400).json({ error: 'Au moins un candidat est requis' });
+      throw new ApiError(400, 'Au moins un candidat est requis');
     }
 
     // Delegate to service
@@ -772,7 +773,7 @@ export const extractSkillsWithAI = async (req: Request, res: Response, next: Nex
     });
 
     if (!candidate) {
-      return res.status(404).json({ error: 'Candidat non trouvÃ©' });
+      throw new ApiError(404, 'Candidat non trouvÃ©');
     }
 
     // Get candidate text
@@ -851,7 +852,7 @@ export const extractSkillsHybrid = async (req: Request, res: Response, next: Nex
     });
 
     if (!candidate) {
-      return res.status(404).json({ error: 'Candidat non trouvÃ©' });
+      throw new ApiError(404, 'Candidat non trouvÃ©');
     }
 
     // Get candidate text

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { getCache, setCache, deleteCache } from '../config/cache';
+import { ApiError } from '../utils/apiError';
 
 const CLIENT_DETAIL_CACHE_PREFIX = 'clients:detail';
 
@@ -131,7 +132,7 @@ export const updateContact = async (
         });
 
         if (!existingContact) {
-            return res.status(404).json({ error: 'Contact non trouvé' });
+            throw new ApiError(404, 'Contact non trouvé');
         }
 
         // Handle primary contact switch
@@ -189,7 +190,7 @@ export const deleteContact = async (
         });
 
         if (!existingContact) {
-            return res.status(404).json({ error: 'Contact non trouvé' });
+            throw new ApiError(404, 'Contact non trouvé');
         }
 
         const contact = await prisma.contact.update({

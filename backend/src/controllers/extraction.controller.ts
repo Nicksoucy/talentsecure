@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { aiExtractionService } from '../services/ai-extraction.service';
 import { cvExtractionService } from '../services/cv-extraction.service';
 import { prisma } from '../config/database';
+import { ApiError } from '../utils/apiError';
 
 /**
  * Extract skills for a candidate using AI
@@ -17,13 +18,13 @@ export const extractCandidateSkills = async (req: Request, res: Response, next: 
         });
 
         if (!candidate) {
-            return res.status(404).json({ error: 'Candidat non trouvé' });
+            throw new ApiError(404, 'Candidat non trouvé');
         }
 
         // Get candidate CV text
         const cvText = await cvExtractionService.getCandidateText(id, false);
         if (!cvText || cvText.trim().length === 0) {
-            return res.status(400).json({ error: 'Aucun texte trouvé dans le CV du candidat' });
+            throw new ApiError(400, 'Aucun texte trouvé dans le CV du candidat');
         }
 
         // Extract skills
@@ -61,13 +62,13 @@ export const extractProspectSkills = async (req: Request, res: Response, next: N
         });
 
         if (!prospect) {
-            return res.status(404).json({ error: 'Prospect non trouvé' });
+            throw new ApiError(404, 'Prospect non trouvé');
         }
 
         // Get prospect CV text
         const cvText = await cvExtractionService.getCandidateText(id, true);
         if (!cvText || cvText.trim().length === 0) {
-            return res.status(400).json({ error: 'Aucun texte trouvé dans le CV du prospect' });
+            throw new ApiError(400, 'Aucun texte trouvé dans le CV du prospect');
         }
 
         // Extract skills
