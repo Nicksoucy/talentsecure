@@ -835,7 +835,7 @@ export const getSignPayload = async (req: Request, res: Response, next: NextFunc
     const found = await findByToken(req.params.token);
     if (!found) throw new ApiError(404, 'Lien de signature invalide');
     if (isTokenExpired(found.record.signTokenExpiresAt)) {
-      return res.status(410).json({ error: 'Ce lien a expiré' });
+      throw new ApiError(410, 'Ce lien a expiré');
     }
     const employee = await prisma.employee.findUnique({ where: { id: found.record.employeeId } });
     const division = (found.record as any).division as string | undefined;
@@ -883,7 +883,7 @@ export const submitSign = async (req: Request, res: Response, next: NextFunction
     const found = await findByToken(req.params.token);
     if (!found) throw new ApiError(404, 'Lien de signature invalide');
     if (isTokenExpired(found.record.signTokenExpiresAt)) {
-      return res.status(410).json({ error: 'Ce lien a expiré' });
+      throw new ApiError(410, 'Ce lien a expiré');
     }
 
     let storedPdfKey: string | null = null;

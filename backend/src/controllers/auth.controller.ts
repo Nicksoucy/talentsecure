@@ -4,6 +4,7 @@ import { prisma } from '../config/database';
 import { hashPassword } from '../utils/password';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../utils/jwt';
 import { User } from '@prisma/client';
+import { ApiError } from '../utils/apiError';
 
 /**
  * Register new user (Admin only via separate flow)
@@ -22,7 +23,7 @@ export const register = async (
     });
 
     if (existingUser) {
-      return res.status(400).json({ error: 'Cet email est déjà utilisé' });
+      throw new ApiError(400, 'Cet email est déjà utilisé');
     }
 
     // Hash password
@@ -187,7 +188,7 @@ export const getProfile = async (
 ) => {
   try {
     if (!req.user) {
-      return res.status(401).json({ error: 'Non authentifié' });
+      throw new ApiError(401, 'Non authentifié');
     }
 
     const user = await prisma.user.findUnique({
@@ -205,7 +206,7 @@ export const getProfile = async (
     });
 
     if (!user) {
-      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+      throw new ApiError(404, 'Utilisateur non trouvé');
     }
 
     res.json({ user });

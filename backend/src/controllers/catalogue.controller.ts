@@ -9,6 +9,7 @@ import { getCache, setCache } from '../config/cache';
 import { buildCacheKey } from '../utils/cache';
 import { invalidateCaches } from '../utils/cacheInvalidation';
 import logger from '../config/logger';
+import { ApiError } from '../utils/apiError';
 
 const CATALOGUE_LIST_CACHE_PREFIX = 'catalogues:list';
 const CATALOGUE_DETAIL_CACHE_PREFIX = 'catalogues:detail';
@@ -161,7 +162,7 @@ export const getCatalogueById = async (
     });
 
     if (!catalogue) {
-      return res.status(404).json({ error: 'Catalogue non trouvé' });
+      throw new ApiError(404, 'Catalogue non trouvé');
     }
 
     await setCache(cacheKey, catalogue, 300);
@@ -197,9 +198,7 @@ export const createCatalogue = async (
 
     // Validate required fields
     if (!clientId || !title) {
-      return res.status(400).json({
-        error: 'Client ID et titre sont requis',
-      });
+      throw new ApiError(400, 'Client ID et titre sont requis');
     }
 
     // Check if client exists
@@ -208,7 +207,7 @@ export const createCatalogue = async (
     });
 
     if (!client) {
-      return res.status(404).json({ error: 'Client non trouvé' });
+      throw new ApiError(404, 'Client non trouvé');
     }
 
     // Create catalogue with items
@@ -311,7 +310,7 @@ export const updateCatalogue = async (
     });
 
     if (!existingCatalogue) {
-      return res.status(404).json({ error: 'Catalogue non trouvé' });
+      throw new ApiError(404, 'Catalogue non trouvé');
     }
 
     // Update catalogue
@@ -416,16 +415,14 @@ export const deleteCatalogue = async (
     });
 
     if (!catalogue) {
-      return res.status(404).json({ error: 'Catalogue non trouvé' });
+      throw new ApiError(404, 'Catalogue non trouvé');
     }
 
     // D2 (audit) — la suppression est un HARD delete qui cascade les
     // catalogue_payments (pièces financières). On refuse de détruire un
     // catalogue déjà payé : à archiver plutôt qu'à supprimer.
     if ((catalogue as any).isPaid) {
-      return res.status(409).json({
-        error: 'Ce catalogue a un paiement enregistré : suppression refusée. Archivez-le plutôt.',
-      });
+      throw new ApiError(409, 'Ce catalogue a un paiement enregistré : suppression refusée. Archivez-le plutôt.');
     }
 
     // Delete catalogue
@@ -490,7 +487,7 @@ export const generateCataloguePDF = async (
     });
 
     if (!catalogue) {
-      return res.status(404).json({ error: 'Catalogue non trouvé' });
+      throw new ApiError(404, 'Catalogue non trouvé');
     }
 
     // Create temp directory if it doesn't exist
@@ -664,7 +661,7 @@ export const generateShareLink = async (
     });
 
     if (!catalogue) {
-      return res.status(404).json({ error: 'Catalogue non trouvé' });
+      throw new ApiError(404, 'Catalogue non trouvé');
     }
 
     // Import token utilities
@@ -751,13 +748,13 @@ export const getCatalogueByToken = async (
     });
 
     if (!catalogue) {
-      return res.status(404).json({ error: 'Catalogue non trouvé' });
+      throw new ApiError(404, 'Catalogue non trouvé');
     }
 
     // Check if token has expired
     const { isTokenExpired } = await import('../utils/token');
     if (isTokenExpired(catalogue.shareTokenExpiresAt)) {
-      return res.status(410).json({ error: 'Ce lien a expiré' });
+      throw new ApiError(410, 'Ce lien a expiré');
     }
 
     // Update view tracking

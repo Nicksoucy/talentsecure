@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import logger from '../config/logger';
+import { ApiError } from '../utils/apiError';
 
 /**
  * ADMIN ONLY: Re-convertir les candidats auto-convertis en prospects
@@ -16,9 +17,7 @@ export const revertAutoConvertedCandidates = async (
   try {
     // SÉCURITÉ: Vérifier que l'utilisateur est admin
     if (req.user?.role !== 'ADMIN') {
-      return res.status(403).json({
-        error: 'Accès refusé: seuls les administrateurs peuvent exécuter cette action',
-      });
+      throw new ApiError(403, 'Accès refusé: seuls les administrateurs peuvent exécuter cette action');
     }
 
     logger.info('Admin: searching for auto-converted candidates');
@@ -167,9 +166,7 @@ export const revertSingleCandidateToProspect = async (
   try {
     // SÉCURITÉ: Vérifier que l'utilisateur est admin
     if (req.user?.role !== 'ADMIN') {
-      return res.status(403).json({
-        error: 'Accès refusé: seuls les administrateurs peuvent exécuter cette action',
-      });
+      throw new ApiError(403, 'Accès refusé: seuls les administrateurs peuvent exécuter cette action');
     }
 
     const { id } = req.params;
@@ -180,9 +177,7 @@ export const revertSingleCandidateToProspect = async (
     });
 
     if (!candidate || candidate.isDeleted) {
-      return res.status(404).json({
-        error: 'Candidat non trouvé',
-      });
+      throw new ApiError(404, 'Candidat non trouvé');
     }
 
     logger.info('Admin: reverting single candidate', {
@@ -281,9 +276,7 @@ export const findAutoConvertedCandidates = async (
   try {
     // SÉCURITÉ: Vérifier que l'utilisateur est admin
     if (req.user?.role !== 'ADMIN') {
-      return res.status(403).json({
-        error: 'Accès refusé: seuls les administrateurs peuvent exécuter cette action',
-      });
+      throw new ApiError(403, 'Accès refusé: seuls les administrateurs peuvent exécuter cette action');
     }
 
     const autoConvertedCandidates = await prisma.candidate.findMany({
@@ -327,17 +320,13 @@ export const revertBatchCandidatesToProspects = async (
   try {
     // SÉCURITÉ: Vérifier que l'utilisateur est admin
     if (req.user?.role !== 'ADMIN') {
-      return res.status(403).json({
-        error: 'Accès refusé: seuls les administrateurs peuvent exécuter cette action',
-      });
+      throw new ApiError(403, 'Accès refusé: seuls les administrateurs peuvent exécuter cette action');
     }
 
     const { ids } = req.body;
 
     if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({
-        error: 'Liste d\'IDs invalide ou vide',
-      });
+      throw new ApiError(400, 'Liste d\'IDs invalide ou vide');
     }
 
     logger.info('Admin: reverting batch of candidates', { count: ids.length });

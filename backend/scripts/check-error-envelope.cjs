@@ -15,8 +15,11 @@ const path = require('path');
 
 const DIR = path.join(__dirname, '..', 'src', 'controllers');
 // Plafond courant — À BAISSER à chaque migration de controller vers ApiError.
-// Départ 181 ; employee.controller migré (-5) → 176.
-const BASELINE = 176;
+// Départ 181 → 176 (employee) → 52 : migration en masse de 22 controllers vers
+// `throw new ApiError(...)` (handler global + alias `error` rétro-compatible).
+// Reste 52 : handlers sans next(error) (cv-proxy stream, webhooks res.status(500)
+// en catch), réponses multi-clés (409/403 avec hint), et 5xx.
+const BASELINE = 52;
 
 const re = /\.json\(\s*\{\s*error\b/g;
 

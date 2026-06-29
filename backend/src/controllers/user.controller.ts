@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { hashPassword } from '../utils/password';
+import { ApiError } from '../utils/apiError';
 
 const actorId = (req: Request): string => (req.user as any)?.id;
 
@@ -41,7 +42,7 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
   try {
     const { email, password, firstName, lastName, role } = req.body;
     const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-    if (existing) return res.status(400).json({ error: 'Cet email est déjà utilisé' });
+    if (existing) throw new ApiError(400, 'Cet email est déjà utilisé');
 
     const hashed = await hashPassword(password);
     const user = await prisma.user.create({
@@ -69,18 +70,18 @@ export const updateUser = async (req: Request, res: Response, next: NextFunction
     const { id } = req.params;
     const { firstName, lastName, email, role, isActive } = req.body;
     const target = await prisma.user.findUnique({ where: { id } });
-    if (!target) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    if (!target) throw new ApiError(404, 'Utilisateur introuvable');
     const me = actorId(req);
 
     // Garde-fous : pas de rétrogradation/désactivation de soi-même ni du dernier admin actif.
     const removingAdminRights = (role !== undefined && role !== 'ADMIN') || isActive === false;
     if (target.role === 'ADMIN' && removingAdminRights) {
       if (target.id === me) {
-        return res.status(400).json({ error: 'Vous ne pouvez pas retirer vos propres droits administrateur ni vous désactiver.' });
+        throw new ApiError(400, 'Vous ne pouvez pas retirer vos propres droits administrateur ni vous désactiver.');
       }
       const activeAdmins = await prisma.user.count({ where: { role: 'ADMIN', isActive: true } });
       if (activeAdmins <= 1) {
-        return res.status(400).json({ error: 'Impossible : il doit rester au moins un administrateur actif.' });
+        throw new ApiError(400, 'Impossible : il doit rester au moins un administrateur actif.');
       }
     }
 
@@ -90,7 +91,7 @@ export const updateUser = async (req: Request, res: Response, next: NextFunction
     if (email !== undefined) {
       const lower = email.toLowerCase();
       const dup = await prisma.user.findFirst({ where: { email: lower, id: { not: id } } });
-      if (dup) return res.status(400).json({ error: 'Cet email est déjà utilisé' });
+      if (dup) throw new ApiError(400, 'Cet email est déjà utilisé');
       data.email = lower;
     }
     if (role !== undefined) data.role = role;
@@ -112,7 +113,7 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
     const { id } = req.params;
     const { password } = req.body;
     const target = await prisma.user.findUnique({ where: { id } });
-    if (!target) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    if (!target) throw new ApiError(404, 'Utilisateur introuvable');
 
     const hashed = await hashPassword(password);
     await prisma.user.update({ where: { id }, data: { password: hashed } });
