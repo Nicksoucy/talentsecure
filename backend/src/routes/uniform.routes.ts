@@ -14,6 +14,8 @@ import {
   createSettlementSchema,
   createIssuanceSchema,
   createReturnSchema,
+  createItemSchema,
+  createVariantSchema,
 } from '../validation/uniform.validation';
 
 const router = Router();
@@ -107,7 +109,7 @@ router.delete('/variants/:variantId', ctrl.deleteVariant);
 
 // Catalogue — morceaux
 router.get('/items', ctrl.listItems);
-router.post('/items', ctrl.createItem);
+router.post('/items', validate({ body: createItemSchema }), ctrl.createItem);
 router.post('/items/reorder', ctrl.reorderItems);
 router.get('/items/:id', ctrl.getItem);
 router.post('/items/:id/image', imageUpload.single('image'), ctrl.uploadItemImage);
@@ -118,7 +120,7 @@ router.get('/items/:id/variants', (req, res, next) => {
   return ctrl.listVariants(req, res, next);
 });
 router.post('/items/:id/variants/reorder', ctrl.reorderVariants);
-router.post('/items/:id/variants', ctrl.createVariant);
+router.post('/items/:id/variants', validate({ body: createVariantSchema }), ctrl.createVariant);
 
 // Remises (prêts)
 router.get('/issuances', iss.listIssuances);

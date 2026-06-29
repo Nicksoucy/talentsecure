@@ -86,3 +86,27 @@ export const createReturnSchema = z
     lines: z.array(z.object({}).passthrough()).optional(),
   })
   .passthrough();
+
+/** Création d'un morceau (POST /items). division + name requis (NOT NULL). */
+export const createItemSchema = z
+  .object({
+    division: z.string().min(1, 'division requise'),
+    name: z.string().min(1, 'name requis').max(200),
+    type: z.string().optional(),
+    isOneSize: z.boolean().optional(),
+    defaultReplacementCost: z.coerce.number().nonnegative().optional().nullable(),
+    sortOrder: z.coerce.number().int().optional(),
+  })
+  .passthrough();
+
+/** Création d'une grandeur (POST /items/:id/variants). `size` a un défaut côté
+ *  controller → tout optionnel ; on coerce juste les nombres. */
+export const createVariantSchema = z
+  .object({
+    size: z.string().max(50).optional().nullable(),
+    replacementCost: z.coerce.number().nonnegative().optional().nullable(),
+    reorderThreshold: z.coerce.number().int().optional().nullable(),
+    sku: z.string().max(100).optional().nullable(),
+    emplacement: z.string().optional().nullable(),
+  })
+  .passthrough();

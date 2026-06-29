@@ -37,7 +37,6 @@ const ALLOWLIST = new Set([
   'catalogue.routes.ts POST /:id/generate',
   'catalogue.routes.ts POST /:id/share',
   'client.routes.ts POST /:id/reactivate',
-  'contact-lifecycle.routes.ts POST /move',
   'employee.routes.ts POST /promote/:candidateId',
   'employee.routes.ts POST /promote-prospect/:prospectId',
   'extraction.routes.ts POST /candidates/:id/extract',
@@ -51,25 +50,14 @@ const ALLOWLIST = new Set([
   'prospect.routes.ts POST /export-zip',
   'prospect.routes.ts POST /:id/contact',
   'prospect.routes.ts POST /:id/convert',
-  'skills.routes.ts POST /',
-  'skills.routes.ts PUT /:id',
-  'skills.routes.ts POST /search-candidates',
-  'skills.routes.ts POST /candidates/:candidateId/skills',
-  'skills.routes.ts PUT /candidates/:candidateId/skills/:skillId',
-  'skills.routes.ts POST /extract/batch',
-  'skills.routes.ts POST /extract/:candidateId',
-  'skills.routes.ts POST /extract/:candidateId/ai',
-  'skills.routes.ts POST /extract/:candidateId/hybrid',
   'talent-marketplace.routes.ts POST /talents/:id/checkout',
   'uniform.routes.ts POST /sign/:token',
   'uniform.routes.ts POST /issuances/draft',
   'uniform.routes.ts POST /labels',
   'uniform.routes.ts PUT /variants/:variantId',
-  'uniform.routes.ts POST /items',
   'uniform.routes.ts POST /items/reorder',
   'uniform.routes.ts PUT /items/:id',
   'uniform.routes.ts POST /items/:id/variants/reorder',
-  'uniform.routes.ts POST /items/:id/variants',
   'uniform.routes.ts PUT /issuances/:id',
   'uniform.routes.ts POST /issuances/:id/finalize',
   'uniform.routes.ts POST /issuances/:id/send-sms',
@@ -134,7 +122,15 @@ function hasBodyValidation(call) {
   let idx = call.indexOf('validate(');
   while (idx !== -1) {
     const args = balancedCall(call, call.indexOf('(', idx));
-    if (/\bbody\s*:/.test(args)) return true;
+    const inner = args.slice(1, -1).trim(); // contenu entre les parenthèses
+    if (inner.startsWith('{')) {
+      // littéral d'objet → doit contenir une clé `body:`
+      if (/\bbody\s*:/.test(inner)) return true;
+    } else if (inner.length) {
+      // schéma passé par variable, ex. `validate(createSkillSchema)` (= { body }) →
+      // on suppose qu'il valide le body (impossible de résoudre la variable ici).
+      return true;
+    }
     idx = call.indexOf('validate(', idx + 'validate('.length);
   }
   return false;
