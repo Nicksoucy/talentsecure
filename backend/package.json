@@ -21,6 +21,7 @@
     "typecheck": "tsc --noEmit",
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",
     "check:routes": "node scripts/check-route-validation.cjs",
+    "check:errors": "node scripts/check-error-envelope.cjs",
     "test:db:push": "prisma db push --skip-generate --force-reset"
   },
   "keywords": [

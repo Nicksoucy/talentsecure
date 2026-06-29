@@ -49,6 +49,8 @@ jobs:
         run: npm run depcruise
       - name: Routes mutantes validées (garde P2-A)
         run: npm run check:routes
+      - name: Enveloppe d'erreur — plafond ratchet (garde P2-B)
+        run: npm run check:errors
       - name: Lint (bloquant)
         run: npm run lint
       - name: Préparer la base de test
