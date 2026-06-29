@@ -69,7 +69,7 @@ describe('ExportPage', () => {
     expect(screen.getByText(/Montréal, QC/)).toBeInTheDocument();
     // Confiance formatée en pourcentage (0.92 → « 92 % »).
     expect(screen.getByText('92 %')).toBeInTheDocument();
-    expect(searchSkills).toHaveBeenCalledWith('cariste', undefined, undefined, undefined, 'tok-123');
+    expect(searchSkills).toHaveBeenCalledWith('cariste', undefined, undefined, undefined);
   });
 
   it('n\'affiche pas le tableau si l\'aperçu échoue, mais garde la page rendue', async () => {
@@ -97,8 +97,7 @@ describe('ExportPage', () => {
     await waitFor(() => expect(exportSkills).toHaveBeenCalledTimes(1));
     expect(exportSkills).toHaveBeenCalledWith(
       'csv',
-      expect.objectContaining({ query: 'cariste', limit: 250 }),
-      'tok-123'
+      expect.objectContaining({ query: 'cariste', limit: 250 })
     );
   });
 

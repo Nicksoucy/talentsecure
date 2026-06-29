@@ -1,6 +1,4 @@
-﻿import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import api from './api';
 
 export interface ExtractedSkill {
   skillName: string;
@@ -24,96 +22,50 @@ export interface ExtractionResult {
   errorMessage?: string;
 }
 
+// P2-C : passe par l'instance `api` partagée (injection du token + refresh
+// single-in-flight via les intercepteurs) au lieu d'axios nu + headers manuels.
+// Les méthodes ne prennent donc plus de paramètre `accessToken`.
 export const skillsService = {
-  /**
-   * Extract skills from a candidate's CV using AI
-   */
+  /** Extract skills from a candidate's CV using AI */
   extractSkills: async (
     candidateId: string,
     model: 'gpt-3.5-turbo' | 'gpt-4' = 'gpt-3.5-turbo',
-    accessToken: string,
-    mode: 'merge' | 'replace' = 'merge' // Added mode
+    mode: 'merge' | 'replace' = 'merge'
   ): Promise<ExtractionResult> => {
-    const response = await axios.post(
-      `${API_URL}/api/skills/extract/${candidateId}`,
-      { model, mode },
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
+    const response = await api.post(`/api/skills/extract/${candidateId}`, { model, mode });
     return response.data;
   },
 
-  /**
-   * Save extracted skills to a candidate
-   */
+  /** Save extracted skills to a candidate */
   saveSkills: async (
     candidateId: string,
-    skills: Array<{
-      name: string;
-      level: string;
-      yearsExperience?: number;
-    }>,
-    accessToken: string
+    skills: Array<{ name: string; level: string; yearsExperience?: number }>
   ) => {
-    const response = await axios.post(
-      `${API_URL}/api/skills/${candidateId}/save`,
-      { skills },
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
+    const response = await api.post(`/api/skills/${candidateId}/save`, { skills });
     return response.data;
   },
 
-  /**
-   * Get skills for a candidate
-   */
-  getCandidateSkills: async (candidateId: string, accessToken: string) => {
-    const response = await axios.get(
-      `${API_URL}/api/skills/${candidateId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
+  /** Get skills for a candidate */
+  getCandidateSkills: async (candidateId: string) => {
+    const response = await api.get(`/api/skills/${candidateId}`);
     return response.data;
   },
 
-  /**
-   * Batch extract skills from multiple candidates
-   */
+  /** Batch extract skills from multiple candidates */
   batchExtractSkills: async (
     candidateIds: string[],
-    model: 'gpt-3.5-turbo' | 'gpt-4' = 'gpt-3.5-turbo',
-    accessToken: string
+    model: 'gpt-3.5-turbo' | 'gpt-4' = 'gpt-3.5-turbo'
   ) => {
-    const response = await axios.post(
-      `${API_URL}/api/skills/extract/batch`,
-      { candidateIds, model },
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
+    const response = await api.post(`/api/skills/extract/batch`, { candidateIds, model });
     return response.data;
   },
 
-  /**
-   * Search extracted skills across all candidates
-   */
+  /** Search extracted skills across all candidates */
   searchSkills: async (
     query: string,
     category?: string,
     minConfidence?: number,
-    excludeSecurity?: boolean,
-    accessToken?: string
+    excludeSecurity?: boolean
   ) => {
     const params = new URLSearchParams();
     if (query) params.append('q', query);
@@ -121,20 +73,13 @@ export const skillsService = {
     if (minConfidence) params.append('minConfidence', minConfidence.toString());
     if (excludeSecurity) params.append('excludeSecurity', 'true');
 
-    const response = await axios.get(
-      `${API_URL}/api/skills/search?${params.toString()}`,
-      {
-        headers: accessToken ? {
-          Authorization: `Bearer ${accessToken}`,
-        } : {},
-      }
-    );
+    const response = await api.get(`/api/skills/search?${params.toString()}`);
     return response.data;
   },
+
   exportSkills: async (
     format: 'csv' | 'excel' | 'pdf',
-    params: { query?: string; category?: string; minConfidence?: number; limit?: number } = {},
-    accessToken?: string
+    params: { query?: string; category?: string; minConfidence?: number; limit?: number } = {}
   ) => {
     const queryParams: Record<string, string> = {};
     if (params.query) queryParams.q = params.query;
@@ -146,32 +91,17 @@ export const skillsService = {
       queryParams.limit = params.limit.toString();
     }
 
-    const response = await axios.get(`${API_URL}/api/exports/skills/${format}`, {
+    const response = await api.get(`/api/exports/skills/${format}`, {
       params: queryParams,
       responseType: 'blob',
-      headers: accessToken
-        ? {
-          Authorization: `Bearer ${accessToken}`,
-        }
-        : undefined,
     });
 
     return response;
   },
 
-  /**
-   * Get prospect skills distribution stats
-   */
-  getProspectSkillsDistribution: async (accessToken: string) => {
-    const response = await axios.get(`${API_URL}/api/skills/prospect-stats`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
+  /** Get prospect skills distribution stats */
+  getProspectSkillsDistribution: async () => {
+    const response = await api.get(`/api/skills/prospect-stats`);
     return response.data;
-  }
+  },
 };
-
-
-
-
