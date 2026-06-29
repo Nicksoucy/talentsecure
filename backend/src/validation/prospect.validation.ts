@@ -32,3 +32,19 @@ export const updateProspectSchema = z
     postalCode: opt(20),
   })
   .passthrough();
+
+/** Assignation en masse à un client (POST /bulk-assign-to-client). Miroir des
+ *  gardes : prospectIds non vide + clientId requis. */
+export const bulkAssignSchema = z
+  .object({
+    prospectIds: z.array(z.string()).min(1, 'prospectIds requis'),
+    clientId: z.string().min(1, 'clientId requis'),
+  })
+  .passthrough();
+
+/** Export ZIP (POST /export-zip). Garde : prospectIds non vide. */
+export const exportZipSchema = z
+  .object({
+    prospectIds: z.array(z.string()).min(1, 'prospectIds requis'),
+  })
+  .passthrough();
