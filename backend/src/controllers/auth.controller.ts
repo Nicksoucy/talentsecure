@@ -156,15 +156,21 @@ export const refreshToken = async (
       return res.status(401).json({ error: 'Utilisateur non trouvé ou inactif' });
     }
 
-    // Generate new access token
-    const newAccessToken = generateAccessToken({
+    // Nouveau access token + ROTATION du refresh token (P2-C) : un refresh
+    // token utilisé est remplacé, ce qui réduit la fenêtre de rejeu en cas de
+    // fuite. (La révocation côté serveur — tokenVersion — reste à faire : elle
+    // nécessite une colonne DB, bloquée sur le baseline Neon.)
+    const tokenPayload = {
       userId: user.id,
       email: user.email,
       role: user.role,
-    });
+    };
+    const newAccessToken = generateAccessToken(tokenPayload);
+    const newRefreshToken = generateRefreshToken(tokenPayload);
 
     res.json({
       accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
     });
   } catch (error) {
     res.status(401).json({ error: 'Refresh token invalide ou expiré' });
