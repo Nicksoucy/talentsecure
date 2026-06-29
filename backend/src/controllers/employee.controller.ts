@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
+import { ApiError } from '../utils/apiError';
 import { findContactEverywhere } from '../utils/candidateMatch';
 import { resolveSearchIds, hasSearchTokens } from '../utils/search';
 import { addBusinessDays } from '../utils/business-days';
@@ -82,7 +83,7 @@ export const getEmployeeById = async (req: Request, res: Response, next: NextFun
     const { id } = req.params;
     const employee = await prisma.employee.findUnique({ where: { id } });
     if (!employee || employee.isDeleted) {
-      return res.status(404).json({ error: 'Employé non trouvé' });
+      throw new ApiError(404, 'Employé non trouvé');
     }
     res.json({ data: employee });
   } catch (error) {
@@ -133,7 +134,7 @@ export const updateEmployee = async (req: Request, res: Response, next: NextFunc
     const { id } = req.params;
     const existing = await prisma.employee.findUnique({ where: { id } });
     if (!existing || existing.isDeleted) {
-      return res.status(404).json({ error: 'Employé non trouvé' });
+      throw new ApiError(404, 'Employé non trouvé');
     }
 
     const data = buildEmployeeData(req.body, true);
@@ -222,7 +223,7 @@ export const deleteEmployee = async (req: Request, res: Response, next: NextFunc
     const { id } = req.params;
     const existing = await prisma.employee.findUnique({ where: { id } });
     if (!existing || existing.isDeleted) {
-      return res.status(404).json({ error: 'Employé non trouvé' });
+      throw new ApiError(404, 'Employé non trouvé');
     }
     await prisma.employee.update({
       where: { id },
@@ -247,7 +248,7 @@ export const promoteCandidateToEmployee = async (req: Request, res: Response, ne
 
     const candidate = await prisma.candidate.findUnique({ where: { id: candidateId } });
     if (!candidate || candidate.isDeleted) {
-      return res.status(404).json({ error: 'Candidat non trouvé' });
+      throw new ApiError(404, 'Candidat non trouvé');
     }
 
     // Déjà employé ? (par email/téléphone)
@@ -335,7 +336,7 @@ export const promoteProspectToEmployee = async (req: Request, res: Response, nex
 
     const prospect = await prisma.prospectCandidate.findUnique({ where: { id: prospectId } });
     if (!prospect || prospect.isDeleted) {
-      return res.status(404).json({ error: 'Candidat potentiel non trouvé' });
+      throw new ApiError(404, 'Candidat potentiel non trouvé');
     }
 
     // Déjà employé ? (par email/téléphone)
