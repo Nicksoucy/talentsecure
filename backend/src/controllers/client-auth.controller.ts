@@ -45,12 +45,14 @@ export const clientLogin = async (
       userId: client.id, // We use userId field but it's actually clientId
       email: client.email,
       role: 'CLIENT', // Special role for clients
+      tokenVersion: client.tokenVersion,
     });
 
     const refreshToken = generateRefreshToken({
       userId: client.id,
       email: client.email,
       role: 'CLIENT',
+      tokenVersion: client.tokenVersion,
     });
 
     res.json({
@@ -101,11 +103,18 @@ export const clientRefreshToken = async (
       return res.status(401).json({ error: 'Client non trouvé' });
     }
 
+    // P2-C — révocation client : refuse de rafraîchir si la version est périmée.
+    // On throw → le catch existant renvoie 401 (pas de nouvelle réponse {error}).
+    if ((payload.tokenVersion ?? 0) !== client.tokenVersion) {
+      throw new Error('Session révoquée');
+    }
+
     // Nouveau access token + ROTATION du refresh token (P2-C).
     const tokenPayload = {
       userId: client.id,
       email: client.email,
       role: 'CLIENT',
+      tokenVersion: client.tokenVersion,
     };
     const newAccessToken = generateAccessToken(tokenPayload);
     const newRefreshToken = generateRefreshToken(tokenPayload);

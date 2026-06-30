@@ -136,6 +136,7 @@ model User {
   id        String   @id @default(uuid())
   email     String   @unique
   password  String? // Null si OAuth uniquement
+  tokenVersion Int   @default(0) // P2-C : révocation — incrémenté au logout/changement de mdp ; les tokens portant une version ≠ sont rejetés
   firstName String
   lastName  String
   role      UserRole @default(RH_RECRUITER)
@@ -421,6 +422,7 @@ model Client {
   companyName String?
   email       String  @unique
   password    String? // Mot de passe pour login client
+  tokenVersion Int    @default(0) // P2-C : révocation (cf. User.tokenVersion)
   phone       String?
   address     String?
   city        String?
