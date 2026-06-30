@@ -323,6 +323,16 @@ describe('Authentication', () => {
       expect(response.body).toHaveProperty('message', 'Déconnexion réussie');
     });
 
+    it('révoque le token après logout (P2-C) : le même token est rejeté', async () => {
+      // Le logout ci-dessus a incrémenté tokenVersion ; ce token (version périmée)
+      // ne doit plus authentifier AUCUNE requête (révocation immédiate).
+      const response = await request(app)
+        .get('/api/auth/profile')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(401);
+    });
+
     it('should reject logout without authentication', async () => {
       const response = await request(app)
         .post('/api/auth/logout');

@@ -91,12 +91,14 @@ export const login = async (
         userId: user.id,
         email: user.email,
         role: user.role,
+        tokenVersion: user.tokenVersion,
       });
 
       const refreshToken = generateRefreshToken({
         userId: user.id,
         email: user.email,
         role: user.role,
+        tokenVersion: user.tokenVersion,
       });
 
       // Log audit
@@ -157,14 +159,19 @@ export const refreshToken = async (
       return res.status(401).json({ error: 'Utilisateur non trouvé ou inactif' });
     }
 
+    // P2-C — révocation : un refresh token dont la version est périmée (logout /
+    // changement de mot de passe) est refusé. On throw → le catch renvoie 401.
+    if ((payload.tokenVersion ?? 0) !== user.tokenVersion) {
+      throw new Error('Session révoquée');
+    }
+
     // Nouveau access token + ROTATION du refresh token (P2-C) : un refresh
-    // token utilisé est remplacé, ce qui réduit la fenêtre de rejeu en cas de
-    // fuite. (La révocation côté serveur — tokenVersion — reste à faire : elle
-    // nécessite une colonne DB, bloquée sur le baseline Neon.)
+    // token utilisé est remplacé, ce qui réduit la fenêtre de rejeu en cas de fuite.
     const tokenPayload = {
       userId: user.id,
       email: user.email,
       role: user.role,
+      tokenVersion: user.tokenVersion,
     };
     const newAccessToken = generateAccessToken(tokenPayload);
     const newRefreshToken = generateRefreshToken(tokenPayload);
@@ -225,6 +232,13 @@ export const logout = async (
 ) => {
   try {
     if (req.user) {
+      // P2-C — révocation effective : on incrémente tokenVersion, ce qui invalide
+      // IMMÉDIATEMENT tous les tokens (access + refresh) émis pour cet utilisateur.
+      await prisma.user.update({
+        where: { id: req.user.id },
+        data: { tokenVersion: { increment: 1 } },
+      });
+
       // Log audit
       await prisma.auditLog.create({
         data: {
@@ -264,12 +278,14 @@ export const googleCallback = async (
         userId: user.id,
         email: user.email,
         role: user.role,
+        tokenVersion: user.tokenVersion,
       });
 
       const refreshToken = generateRefreshToken({
         userId: user.id,
         email: user.email,
         role: user.role,
+        tokenVersion: user.tokenVersion,
       });
 
       // Log audit

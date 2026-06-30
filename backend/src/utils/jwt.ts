@@ -4,6 +4,9 @@ interface JWTPayload {
   userId: string;
   email: string;
   role: string;
+  // P2-C — version de session : un token n'est valide que si sa version
+  // correspond au `tokenVersion` courant de l'utilisateur (révocation au logout).
+  tokenVersion?: number;
 }
 
 export const generateAccessToken = (payload: JWTPayload): string => {
