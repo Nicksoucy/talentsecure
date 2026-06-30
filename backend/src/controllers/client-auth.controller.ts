@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { comparePassword } from '../utils/password';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../utils/jwt';
+import { ApiError } from '../utils/apiError';
 
 /**
  * Client login with email/password
@@ -15,7 +16,7 @@ export const clientLogin = async (
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email et mot de passe requis' });
+      throw new ApiError(400, 'Email et mot de passe requis');
     }
 
     // Find client by email
@@ -24,19 +25,19 @@ export const clientLogin = async (
     });
 
     if (!client) {
-      return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+      throw new ApiError(401, 'Email ou mot de passe incorrect');
     }
 
     // Check if client has a password set
     if (!client.password) {
-      return res.status(401).json({ error: 'Aucun mot de passe configuré pour ce compte' });
+      throw new ApiError(401, 'Aucun mot de passe configuré pour ce compte');
     }
 
     // Verify password
     const isPasswordValid = await comparePassword(password, client.password);
 
     if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Email ou mot de passe incorrect' });
+      throw new ApiError(401, 'Email ou mot de passe incorrect');
     }
 
     // Generate tokens with clientId instead of userId
@@ -44,12 +45,14 @@ export const clientLogin = async (
       userId: client.id, // We use userId field but it's actually clientId
       email: client.email,
       role: 'CLIENT', // Special role for clients
+      tokenVersion: client.tokenVersion,
     });
 
     const refreshToken = generateRefreshToken({
       userId: client.id,
       email: client.email,
       role: 'CLIENT',
+      tokenVersion: client.tokenVersion,
     });
 
     res.json({
@@ -100,15 +103,25 @@ export const clientRefreshToken = async (
       return res.status(401).json({ error: 'Client non trouvé' });
     }
 
-    // Generate new access token
-    const newAccessToken = generateAccessToken({
+    // P2-C — révocation client : refuse de rafraîchir si la version est périmée.
+    // On throw → le catch existant renvoie 401 (pas de nouvelle réponse {error}).
+    if ((payload.tokenVersion ?? 0) !== client.tokenVersion) {
+      throw new Error('Session révoquée');
+    }
+
+    // Nouveau access token + ROTATION du refresh token (P2-C).
+    const tokenPayload = {
       userId: client.id,
       email: client.email,
       role: 'CLIENT',
-    });
+      tokenVersion: client.tokenVersion,
+    };
+    const newAccessToken = generateAccessToken(tokenPayload);
+    const newRefreshToken = generateRefreshToken(tokenPayload);
 
     res.json({
       accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
     });
   } catch (error) {
     res.status(401).json({ error: 'Refresh token invalide ou expiré' });
@@ -126,7 +139,7 @@ export const getClientProfile = async (
   try {
     // req.user is set by the authenticateJWT middleware
     if (!req.user || req.user.role !== 'CLIENT') {
-      return res.status(401).json({ error: 'Non authentifié' });
+      throw new ApiError(401, 'Non authentifié');
     }
 
     const client = await prisma.client.findUnique({
@@ -146,7 +159,7 @@ export const getClientProfile = async (
     });
 
     if (!client) {
-      return res.status(404).json({ error: 'Client non trouvé' });
+      throw new ApiError(404, 'Client non trouvé');
     }
 
     res.json({ client });
@@ -166,7 +179,7 @@ export const getClientCatalogues = async (
   try {
     // req.user is set by the authenticateJWT middleware
     if (!req.user || req.user.role !== 'CLIENT') {
-      return res.status(401).json({ error: 'Non authentifié' });
+      throw new ApiError(401, 'Non authentifié');
     }
 
     const catalogues = await prisma.catalogue.findMany({
@@ -217,7 +230,7 @@ export const getClientCatalogueById = async (
 
     // req.user is set by the authenticateJWT middleware
     if (!req.user || req.user.role !== 'CLIENT') {
-      return res.status(401).json({ error: 'Non authentifié' });
+      throw new ApiError(401, 'Non authentifié');
     }
 
     const catalogue = await prisma.catalogue.findFirst({
@@ -245,7 +258,7 @@ export const getClientCatalogueById = async (
     });
 
     if (!catalogue) {
-      return res.status(404).json({ error: 'Catalogue non trouvé' });
+      throw new ApiError(404, 'Catalogue non trouvé');
     }
 
     // Update view tracking
@@ -309,7 +322,7 @@ export const getCatalogueStatsByCity = async (
 
     // req.user is set by the authenticateJWT middleware
     if (!req.user || req.user.role !== 'CLIENT') {
-      return res.status(401).json({ error: 'Non authentifié' });
+      throw new ApiError(401, 'Non authentifié');
     }
 
     // Verify the catalogue belongs to this client
@@ -333,7 +346,7 @@ export const getCatalogueStatsByCity = async (
     });
 
     if (!catalogue) {
-      return res.status(404).json({ error: 'Catalogue non trouvé' });
+      throw new ApiError(404, 'Catalogue non trouvé');
     }
 
     // Group candidates by city and count them
@@ -370,7 +383,7 @@ export const getAllCandidatesStatsByCity = async (
   try {
     // req.user is set by the authenticateJWT middleware
     if (!req.user || req.user.role !== 'CLIENT') {
-      return res.status(401).json({ error: 'Non authentifié' });
+      throw new ApiError(401, 'Non authentifié');
     }
 
     // Get all active candidates (entire talent pool)
@@ -420,7 +433,7 @@ export const getProspectsOnlyStatsByCity = async (
   try {
     // req.user is set by the authenticateJWT middleware
     if (!req.user || req.user.role !== 'CLIENT') {
-      return res.status(401).json({ error: 'Non authentifié' });
+      throw new ApiError(401, 'Non authentifié');
     }
 
     // Get all prospects that haven't been converted to candidates yet

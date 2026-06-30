@@ -7,6 +7,7 @@ import { processCVUpload, deleteCV, getCVSignedUrl, getLocalCVPath } from '../se
 import { useR2 } from '../services/r2.service';
 import { optimizeImage } from '../services/image.service';
 import { invalidateCaches } from '../utils/cacheInvalidation';
+import { ApiError } from '../utils/apiError';
 
 const CANDIDATE_CACHE_PREFIX = 'candidates:list';
 const CANDIDATE_STATS_CACHE_KEY = 'candidates:stats';
@@ -30,7 +31,7 @@ export const uploadCandidateCV = async (
     const userId = req.user!.id;
 
     if (!req.file) {
-      return res.status(400).json({ error: 'Aucun fichier fourni' });
+      throw new ApiError(400, 'Aucun fichier fourni');
     }
 
     // Vérifier que le candidat existe
@@ -41,7 +42,7 @@ export const uploadCandidateCV = async (
     if (!candidate || candidate.isDeleted) {
       // Supprimer le fichier uploadé si le candidat n'existe pas
       await deleteFile(req.file.path);
-      return res.status(404).json({ error: 'Candidat non trouvé' });
+      throw new ApiError(404, 'Candidat non trouvé');
     }
 
     // Supprimer l'ancien CV s'il existe
@@ -112,7 +113,7 @@ export const downloadCandidateCV = async (
     });
 
     if (!candidate || candidate.isDeleted || !candidate.cvStoragePath) {
-      return res.status(404).json({ error: 'CV non trouvé' });
+      throw new ApiError(404, 'CV non trouvé');
     }
 
     if (useR2) {
@@ -127,7 +128,7 @@ export const downloadCandidateCV = async (
 
       // Vérifier que le fichier existe
       if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ error: 'Fichier CV introuvable' });
+        throw new ApiError(404, 'Fichier CV introuvable');
       }
 
       // Envoyer le fichier
@@ -157,11 +158,11 @@ export const deleteCandidateCV = async (
     });
 
     if (!candidate || candidate.isDeleted) {
-      return res.status(404).json({ error: 'Candidat non trouvé' });
+      throw new ApiError(404, 'Candidat non trouvé');
     }
 
     if (!candidate.cvStoragePath) {
-      return res.status(404).json({ error: 'Aucun CV à supprimer' });
+      throw new ApiError(404, 'Aucun CV à supprimer');
     }
 
     // Supprimer le fichier (R2 ou local)

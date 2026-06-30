@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore';
 import { resetStores } from '@/test/resetStores';
 import { makeUser } from '@/test/factories';
 import { employeeService } from '@/services/employee.service';
+import { uniformService } from '@/services/uniform.service';
 import type { Employee } from '@/types';
 import EmployeeDetailPage from './EmployeeDetailPage';
 
@@ -24,8 +25,16 @@ vi.mock('../uniformes/components/UniformFichePanel', () => ({
   default: () => <div data-testid="uniform-fiche-panel" />,
 }));
 
+// L'avertissement fin d'emploi appelle uniformService.closeTermination → mocké.
+vi.mock('@/services/uniform.service', () => ({
+  uniformService: {
+    closeTermination: vi.fn(),
+  },
+}));
+
 const getEmployeeById = vi.mocked(employeeService.getEmployeeById);
 const updateEmployee = vi.mocked(employeeService.updateEmployee);
+const closeTermination = vi.mocked(uniformService.closeTermination);
 
 function makeEmployee(overrides: Partial<Employee> = {}): Employee {
   return {
@@ -146,5 +155,89 @@ describe('EmployeeDetailPage', () => {
       expect(screen.queryByRole('button', { name: /modifier/i })).not.toBeInTheDocument()
     );
     expect(updateEmployee).not.toHaveBeenCalled();
+  });
+
+  // -------------------------------------------------------------------------
+  // Avertissement offboarding : fin d'emploi avec uniformes encore détenus
+  // -------------------------------------------------------------------------
+  it("affiche l'avertissement uniformes quand la sauvegarde renvoie uniformWarning", async () => {
+    getEmployeeById.mockResolvedValue({ data: makeEmployee() });
+    updateEmployee.mockResolvedValue({
+      data: makeEmployee({ status: 'INACTIF' }),
+      message: 'ok',
+      uniformWarning: {
+        totalPieces: 2,
+        owed: 60,
+        deadline: '2099-01-15T00:00:00.000Z',
+        activeIssuanceIds: ['iss-1'],
+        holdings: [
+          { variantId: 'v1', itemId: 'i1', itemName: 'Chemise', division: 'SECURITE', type: 'UNIFORME', size: 'M', barcode: 'b1', replacementCost: 30, quantity: 2 },
+        ],
+      },
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /modifier/i }));
+    await user.click(await screen.findByRole('button', { name: /enregistrer/i }));
+
+    // Le dialogue d'avertissement apparaît avec le détail des pièces.
+    expect(await screen.findByText(/uniformes encore détenus/i)).toBeInTheDocument();
+    expect(screen.getByText(/2× Chemise \(M\)/)).toBeInTheDocument();
+  });
+
+  it("« Clôturer fin d'emploi » appelle closeTermination pour chaque remise active", async () => {
+    getEmployeeById.mockResolvedValue({ data: makeEmployee() });
+    updateEmployee.mockResolvedValue({
+      data: makeEmployee({ status: 'INACTIF' }),
+      message: 'ok',
+      uniformWarning: {
+        totalPieces: 1, owed: 0, deadline: null,
+        activeIssuanceIds: ['iss-1', 'iss-2'],
+        holdings: [
+          { variantId: 'v1', itemId: 'i1', itemName: 'Ceinture', division: 'SECURITE', type: 'UNIFORME', size: 'Unique', barcode: 'b1', replacementCost: 15, quantity: 1 },
+        ],
+      },
+    });
+    closeTermination.mockResolvedValue({} as never);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /modifier/i }));
+    await user.click(await screen.findByRole('button', { name: /enregistrer/i }));
+    await user.click(await screen.findByRole('button', { name: /clôturer fin d’emploi/i }));
+
+    await waitFor(() => expect(closeTermination).toHaveBeenCalledTimes(2));
+    expect(closeTermination).toHaveBeenCalledWith('iss-1');
+    expect(closeTermination).toHaveBeenCalledWith('iss-2');
+    // Le dialogue d'avertissement se ferme après la clôture (setWarning(null)).
+    await waitFor(() => expect(screen.queryByText(/uniformes encore détenus/i)).not.toBeInTheDocument());
+  });
+
+  it('clôture partielle : une remise échoue, les autres sont quand même tentées (allSettled)', async () => {
+    getEmployeeById.mockResolvedValue({ data: makeEmployee() });
+    updateEmployee.mockResolvedValue({
+      data: makeEmployee({ status: 'INACTIF' }),
+      message: 'ok',
+      uniformWarning: {
+        totalPieces: 2, owed: 0, deadline: null,
+        activeIssuanceIds: ['iss-1', 'iss-2'],
+        holdings: [
+          { variantId: 'v1', itemId: 'i1', itemName: 'Ceinture', division: 'SECURITE', type: 'UNIFORME', size: 'Unique', barcode: 'b1', replacementCost: 15, quantity: 2 },
+        ],
+      },
+    });
+    // iss-1 réussit, iss-2 échoue → allSettled tente quand même les deux.
+    closeTermination.mockResolvedValueOnce({} as never).mockRejectedValueOnce(new Error('boom'));
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /modifier/i }));
+    await user.click(await screen.findByRole('button', { name: /enregistrer/i }));
+    await user.click(await screen.findByRole('button', { name: /clôturer fin d’emploi/i }));
+
+    await waitFor(() => expect(closeTermination).toHaveBeenCalledTimes(2));
+    expect(closeTermination).toHaveBeenCalledWith('iss-1');
+    expect(closeTermination).toHaveBeenCalledWith('iss-2');
   });
 });

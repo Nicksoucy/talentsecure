@@ -10,6 +10,7 @@ import { haversineKm, boundingBox, buildGeoMapPoints } from '../utils/geo';
 import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
 import { createCandidateVideoTx } from '../services/candidate-video.service';
 import { resolveSearchIds, hasSearchTokens } from '../utils/search';
+import { ApiError } from '../utils/apiError';
 
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
 const PROSPECT_STATS_CACHE_KEY = 'prospects:stats';
@@ -214,7 +215,7 @@ export const getProspectById = async (
     });
 
     if (!prospect || prospect.isDeleted) {
-      return res.status(404).json({ error: 'Candidat potentiel non trouvé' });
+      throw new ApiError(404, 'Candidat potentiel non trouvé');
     }
 
     res.json({ data: prospect });
@@ -331,7 +332,7 @@ export const updateProspect = async (
     });
 
     if (!existingProspect || existingProspect.isDeleted) {
-      return res.status(404).json({ error: 'Candidat potentiel non trouvé' });
+      throw new ApiError(404, 'Candidat potentiel non trouvé');
     }
 
     // Re-géocode si l'adresse change (code postal d'abord, sinon centre-ville).
@@ -479,9 +480,7 @@ export const convertToCandidate = async (
     // GARDE-FOU CRITIQUE: Cette fonction NE PEUT être appelée que par un utilisateur humain authentifié
     // L'IA ne doit JAMAIS convertir automatiquement un prospect en candidat
     if (!userId || !req.user) {
-      return res.status(403).json({
-        error: 'Accès refusé: seul un utilisateur authentifié peut convertir un prospect en candidat',
-      });
+      throw new ApiError(403, 'Accès refusé: seul un utilisateur authentifié peut convertir un prospect en candidat');
     }
 
     // PROTECTION: Interdire les conversions automatiques (détection de patterns d'IA)
@@ -502,7 +501,7 @@ export const convertToCandidate = async (
     });
 
     if (!prospect || prospect.isDeleted) {
-      return res.status(404).json({ error: 'Candidat potentiel non trouvé' });
+      throw new ApiError(404, 'Candidat potentiel non trouvé');
     }
 
     if (prospect.isConverted) {
@@ -514,9 +513,7 @@ export const convertToCandidate = async (
 
     // Validate required fields
     if (!prospect.phone || prospect.phone.trim() === '') {
-      return res.status(400).json({
-        error: 'Le numéro de téléphone du prospect est requis pour la conversion'
-      });
+      throw new ApiError(400, 'Le numéro de téléphone du prospect est requis pour la conversion');
     }
 
     // Helper: Sanitize date fields (empty strings → null, YYYY-MM-DD → ISO-8601 DateTime)
@@ -1037,7 +1034,7 @@ export const getProspectExtractionHistory = async (
     });
 
     if (!prospect || prospect.isDeleted) {
-      return res.status(404).json({ error: 'Prospect non trouvé' });
+      throw new ApiError(404, 'Prospect non trouvé');
     }
 
     // Get extraction logs
@@ -1103,7 +1100,7 @@ export const getProspectCvUrl = async (req: Request, res: Response, next: NextFu
       where: { id },
       select: { cvStoragePath: true, cvUrl: true },
     });
-    if (!prospect) return res.status(404).json({ error: 'Prospect non trouvé' });
+    if (!prospect) throw new ApiError(404, 'Prospect non trouvé');
 
     if (prospect.cvStoragePath) {
       const { getSignedFileUrl } = require('../services/r2.service');
@@ -1113,7 +1110,7 @@ export const getProspectCvUrl = async (req: Request, res: Response, next: NextFu
     if (prospect.cvUrl) {
       return res.json({ success: true, data: { url: prospect.cvUrl } });
     }
-    return res.status(404).json({ error: 'Aucun CV' });
+    throw new ApiError(404, 'Aucun CV');
   } catch (error) {
     next(error);
   }
@@ -1130,14 +1127,14 @@ export const getProspectVideoUrl = async (req: Request, res: Response, next: Nex
       where: { id },
       select: { videoStoragePath: true, videoUrl: true, videoUploadedAt: true },
     });
-    if (!prospect) return res.status(404).json({ error: 'Prospect non trouvé' });
+    if (!prospect) throw new ApiError(404, 'Prospect non trouvé');
 
     if (prospect.videoStoragePath) {
       const { getSignedFileUrl } = require('../services/r2.service');
       const url = await getSignedFileUrl(prospect.videoStoragePath, 3600);
       return res.json({ success: true, data: { videoUrl: url, videoUploadedAt: prospect.videoUploadedAt, expiresIn: 3600 } });
     }
-    return res.status(404).json({ error: 'Aucune vidéo' });
+    throw new ApiError(404, 'Aucune vidéo');
   } catch (error) {
     next(error);
   }

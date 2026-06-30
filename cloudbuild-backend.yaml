@@ -14,18 +14,43 @@ steps:
     id: 'prisma-generate'
     waitFor: ['npm-ci']
 
-  # Run unit tests that don't require a live Postgres (env validator, rate-limit,
-  # token util, skill normalization, ai-extraction). DB-dependent tests are
-  # skipped for now — wiring them in CI requires a postgres service container,
-  # tracked for Sprint 5+.
-  - name: 'node:20-alpine'
-    entrypoint: 'npm'
-    args: ['run', 'test:ci']
-    dir: 'backend'
-    id: 'unit-tests'
-    waitFor: ['prisma-generate']
+  # Postgres éphémère sur le réseau Cloud Build : permet d'exécuter la suite
+  # COMPLÈTE (intégration HTTP+DB) plutôt qu'un sous-ensemble. Le garde anti-prod
+  # de src/__tests__/setup.ts accepte l'URL *_test ci-dessous.
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'run'
+      - '-d'
+      - '--network=cloudbuild'
+      - '--name=tspg'
+      - '-e'
+      - 'POSTGRES_USER=postgres'
+      - '-e'
+      - 'POSTGRES_PASSWORD=postgres'
+      - '-e'
+      - 'POSTGRES_DB=talentsecure_test'
+      - 'postgres:16'
+    id: 'start-postgres'
+    waitFor: ['npm-ci']
 
-  # Build the container image — only after tests have passed
+  # Suite de tests COMPLÈTE (= le même `npm test` que la CI GitHub). Le déploiement
+  # n'est atteint QUE si elle passe : la porte de déploiement = la porte de merge.
+  - name: 'node:20-alpine'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - >-
+        until node -e "require('net').connect(5432,'tspg').on('connect',function(){process.exit(0)}).on('error',function(){process.exit(1)})" 2>/dev/null; do echo "waiting for postgres..."; sleep 1; done &&
+        npx prisma db push --skip-generate --force-reset &&
+        npx prisma db execute --file prisma/migrations/20260620000000_add_search_text/migration.sql --schema prisma/schema.prisma &&
+        npm test
+    dir: 'backend'
+    env:
+      - 'DATABASE_URL=postgresql://postgres:postgres@tspg:5432/talentsecure_test'
+    id: 'tests'
+    waitFor: ['prisma-generate', 'start-postgres']
+
+  # Build the container image — only after the FULL suite has passed
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
@@ -36,7 +61,7 @@ steps:
       - 'backend/Dockerfile'
       - './backend'
     id: 'build-image'
-    waitFor: ['unit-tests']
+    waitFor: ['tests']
 
   # Push the container image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'

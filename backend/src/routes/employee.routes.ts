@@ -12,6 +12,7 @@ import {
 } from '../controllers/employee.controller';
 import { authenticateJWT, authorizeReadWrite } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
+import { createEmployeeSchema, updateEmployeeSchema } from '../validation/employee.validation';
 
 const uuidParam = z.object({ id: z.string().uuid('ID invalide') });
 const candidateIdParam = z.object({ candidateId: z.string().uuid('ID invalide') });
@@ -27,7 +28,7 @@ router.use(authorizeReadWrite(['ADMIN', 'RH_RECRUITER', 'SALES', 'MAGASIN', 'MAG
 
 router.get('/', getEmployees);
 router.get('/stats/summary', getEmployeesStats);
-router.post('/', createEmployee);
+router.post('/', validate({ body: createEmployeeSchema }), createEmployee);
 
 // Promouvoir un candidat en employé
 router.post('/promote/:candidateId', validate({ params: candidateIdParam }), promoteCandidateToEmployee);
@@ -36,7 +37,7 @@ router.post('/promote/:candidateId', validate({ params: candidateIdParam }), pro
 router.post('/promote-prospect/:prospectId', validate({ params: prospectIdParam }), promoteProspectToEmployee);
 
 router.get('/:id', validate({ params: uuidParam }), getEmployeeById);
-router.put('/:id', validate({ params: uuidParam }), updateEmployee);
+router.put('/:id', validate({ params: uuidParam, body: updateEmployeeSchema }), updateEmployee);
 router.delete('/:id', validate({ params: uuidParam }), deleteEmployee);
 
 export default router;

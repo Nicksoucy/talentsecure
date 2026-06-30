@@ -14,6 +14,7 @@ import { buildGeoMapPoints } from '../utils/geo';
 import { Parser } from 'json2csv';
 import { candidateService } from '../services/candidate.service';
 import { aiExtractionService } from '../services/ai-extraction.service';
+import { ApiError } from '../utils/apiError';
 
 const CANDIDATE_LIST_CACHE_PREFIX = 'candidates:list';
 const CANDIDATE_STATS_CACHE_KEY = 'candidates:stats';
@@ -40,7 +41,7 @@ export const parseNaturalLanguageSearch = async (
     const { query } = req.body;
 
     if (!query) {
-      return res.status(400).json({ error: 'Query string is required' });
+      throw new ApiError(400, 'Query string is required');
     }
 
     const filters = await aiExtractionService.parseSearchQuery(query);
@@ -193,7 +194,7 @@ export const getCandidateById = async (
     });
 
     if (!candidate || candidate.isDeleted) {
-      return res.status(404).json({ error: 'Candidat non trouvé' });
+      throw new ApiError(404, 'Candidat non trouvé');
     }
 
     res.json({ data: candidate });
@@ -400,7 +401,7 @@ export const updateCandidate = async (
     });
 
     if (!existingCandidate || existingCandidate.isDeleted) {
-      return res.status(404).json({ error: 'Candidat non trouvé' });
+      throw new ApiError(404, 'Candidat non trouvé');
     }
 
     // Update candidate (exclude nested relations for now)

@@ -147,8 +147,10 @@ describe("Remises d'uniforme — /api/uniforms/issuances", () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ employeeId });
       expect(res.status).toBe(400);
-      // Le handler global (errorResponse) sérialise ApiError dans `message`.
-      expect(res.body.message).toMatch(/division/i);
+      // Validation au bord (P2-A) : 400 ERREUR_VALIDATION, le champ manquant
+      // est détaillé dans `details` (le `message` top-level est générique).
+      expect(res.body.code).toBe('ERREUR_VALIDATION');
+      expect(JSON.stringify(res.body.details)).toMatch(/division/i);
     });
 
     it('employeeId inexistant → 404 (agent introuvable)', async () => {

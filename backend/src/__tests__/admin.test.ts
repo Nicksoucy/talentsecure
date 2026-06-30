@@ -221,7 +221,9 @@ describe('Admin — /api/admin', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({});
       expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/invalide|vide/i);
+      // Validation au bord (P2-A) : enveloppe ERREUR_VALIDATION, champ `ids` dans `details`.
+      expect(res.body.code).toBe('ERREUR_VALIDATION');
+      expect(res.body.details.some((d: any) => d.field === 'ids')).toBe(true);
     });
 
     it('liste vide → 400 (validation)', async () => {

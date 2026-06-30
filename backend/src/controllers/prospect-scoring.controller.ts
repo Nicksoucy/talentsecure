@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
+import { ApiError } from '../utils/apiError';
 
 /**
  * GET /api/prospects/:id/analysis
@@ -14,7 +15,7 @@ export const getProspectAnalysis = async (req: Request, res: Response, next: Nex
             where: { prospectId: id },
         });
         if (!analysis) {
-            return res.status(404).json({ error: 'Aucune analyse pour ce prospect' });
+            throw new ApiError(404, 'Aucune analyse pour ce prospect');
         }
         res.json({ analysis });
     } catch (error) {

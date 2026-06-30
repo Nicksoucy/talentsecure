@@ -1,0 +1,156 @@
+import { z } from 'zod';
+
+/**
+ * Validation des mutations STOCK / ARGENT du module uniformes.
+ *
+ * Principe : NON-BLOQUANT par construction.
+ *  - `.passthrough()` conserve les champs non listés (pas de strip → on ne
+ *    casse aucun payload existant).
+ *  - `z.coerce.number()` tolère les nombres envoyés en chaîne ("5" → 5), ce qui
+ *    évite que des opérations arithmétiques de stock reçoivent une string.
+ *  - Les bornes (positive / ≥ 0) reflètent EXACTEMENT les gardes inline déjà
+ *    présentes dans les controllers (replenish/adjust/transfer/settlement), qui
+ *    sont CONSERVÉES en défense en profondeur. Le seul changement de
+ *    comportement est une réponse 400 d'enveloppe cohérente (ERREUR_VALIDATION)
+ *    au lieu d'un throw ad hoc, plus la coercion numérique.
+ *
+ * Périmètre : mutations scalaires de stock/argent. Les corps imbriqués
+ * (issuances avec `lines[]`, returns, wash-batches, items) restent à couvrir
+ * dans un suivi vérifié par la suite d'intégration en CI.
+ */
+
+export const replenishVariantSchema = z
+  .object({
+    quantity: z.coerce.number().int().positive('Quantité positive requise'),
+    reason: z.string().max(500).optional(),
+    location: z.string().optional(),
+  })
+  .passthrough();
+
+export const adjustVariantSchema = z
+  .object({
+    // setTo OU quantity (le controller gère l'un ou l'autre) → tous deux optionnels.
+    quantity: z.coerce.number().int().optional(),
+    setTo: z.coerce.number().int().min(0, 'setTo doit être un entier ≥ 0').optional(),
+    reason: z.string().max(500).optional(),
+    location: z.string().optional(),
+  })
+  .passthrough();
+
+export const transferVariantSchema = z
+  .object({
+    quantity: z.coerce.number().int().positive('Quantité positive requise'),
+    from: z.string().min(1, 'Emplacement source requis'),
+    to: z.string().min(1, 'Emplacement cible requis'),
+    reason: z.string().max(500).optional(),
+  })
+  .passthrough();
+
+export const createSettlementSchema = z
+  .object({
+    amount: z.coerce.number().positive('Montant positif requis'),
+    method: z.string().max(50).optional(),
+    notes: z.string().max(2000).optional(),
+  })
+  .passthrough();
+
+/** Création d'une remise (POST /issuances). Reflète EXACTEMENT les gardes inline
+ *  du controller : employeeId + division requis, sourceLocation ∈ {BACK_OFFICE,
+ *  FRONT_OFFICE}. Le reste (dueReturnAt/notes/champs de ligne) reste passthrough
+ *  → aucun payload valide ne casse, seules les mêmes entrées invalides sont
+ *  rejetées (mais via une enveloppe 400 cohérente). */
+export const createIssuanceSchema = z
+  .object({
+    employeeId: z.string().min(1, 'employeeId requis'),
+    division: z.string().min(1, 'division requise'),
+    sourceLocation: z.enum(['BACK_OFFICE', 'FRONT_OFFICE']).optional(),
+    lines: z
+      .array(
+        z
+          .object({
+            variantId: z.string().optional().nullable(),
+            quantity: z.coerce.number().int().optional(),
+            unitCost: z.coerce.number().optional().nullable(),
+            sourceLocation: z.string().optional().nullable(),
+          })
+          .passthrough(),
+      )
+      .optional(),
+  })
+  .passthrough();
+
+/** Création d'un retour (POST /returns). Garde du controller : issuanceId requis. */
+export const createReturnSchema = z
+  .object({
+    issuanceId: z.string().min(1, 'issuanceId requis'),
+    lines: z.array(z.object({}).passthrough()).optional(),
+  })
+  .passthrough();
+
+/** Création d'un morceau (POST /items). division + name requis (NOT NULL). */
+export const createItemSchema = z
+  .object({
+    division: z.string().min(1, 'division requise'),
+    name: z.string().min(1, 'name requis').max(200),
+    type: z.string().optional(),
+    isOneSize: z.boolean().optional(),
+    defaultReplacementCost: z.coerce.number().nonnegative().optional().nullable(),
+    sortOrder: z.coerce.number().int().optional(),
+  })
+  .passthrough();
+
+/** Création d'une grandeur (POST /items/:id/variants). `size` a un défaut côté
+ *  controller → tout optionnel ; on coerce juste les nombres. */
+export const createVariantSchema = z
+  .object({
+    size: z.string().max(50).optional().nullable(),
+    replacementCost: z.coerce.number().nonnegative().optional().nullable(),
+    reorderThreshold: z.coerce.number().int().optional().nullable(),
+    sku: z.string().max(100).optional().nullable(),
+    emplacement: z.string().optional().nullable(),
+  })
+  .passthrough();
+
+/** Réordonnancement (POST /items/reorder, /items/:id/variants/reorder) : ids non vide. */
+export const reorderSchema = z
+  .object({
+    ids: z.array(z.string()).min(1, 'ids requis'),
+  })
+  .passthrough();
+
+/** MAJ morceau (PUT /items/:id) — tout optionnel, coercion des nombres. */
+export const updateItemSchema = z
+  .object({
+    name: z.string().max(200).optional(),
+    type: z.string().optional(),
+    defaultReplacementCost: z.coerce.number().nonnegative().optional().nullable(),
+    sortOrder: z.coerce.number().int().optional(),
+  })
+  .passthrough();
+
+/** MAJ grandeur (PUT /variants/:variantId) — tout optionnel, coercion des nombres. */
+export const updateVariantSchema = z
+  .object({
+    size: z.string().max(50).optional().nullable(),
+    replacementCost: z.coerce.number().nonnegative().optional().nullable(),
+    reorderThreshold: z.coerce.number().int().optional().nullable(),
+    sku: z.string().max(100).optional().nullable(),
+    emplacement: z.string().optional().nullable(),
+  })
+  .passthrough();
+
+/** MAJ remise (PUT /issuances/:id) — tout optionnel. */
+export const updateIssuanceSchema = z
+  .object({
+    notes: z.string().optional().nullable(),
+    lines: z.array(z.object({}).passthrough()).optional(),
+  })
+  .passthrough();
+
+/** Feuille d'étiquettes (POST /labels) — tout optionnel (non-bloquant). */
+export const labelsSheetSchema = z
+  .object({
+    variantIds: z.array(z.string()).optional(),
+    format: z.string().optional(),
+  })
+  .passthrough();

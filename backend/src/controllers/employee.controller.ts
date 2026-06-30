@@ -1,7 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
+import { ApiError } from '../utils/apiError';
 import { findContactEverywhere } from '../utils/candidateMatch';
 import { resolveSearchIds, hasSearchTokens } from '../utils/search';
+import { addBusinessDays } from '../utils/business-days';
+import {
+  computeHoldings,
+  computeAmountOwed,
+  getActiveIssuancesForEmployee,
+} from '../services/uniform-stock.service';
+import { UNIFORM_RETURN_DEADLINE_BUSINESS_DAYS } from '../constants/uniform';
 
 /**
  * Liste des employés (avec pagination, recherche, filtre statut).
@@ -75,7 +83,7 @@ export const getEmployeeById = async (req: Request, res: Response, next: NextFun
     const { id } = req.params;
     const employee = await prisma.employee.findUnique({ where: { id } });
     if (!employee || employee.isDeleted) {
-      return res.status(404).json({ error: 'Employé non trouvé' });
+      throw new ApiError(404, 'Employé non trouvé');
     }
     res.json({ data: employee });
   } catch (error) {
@@ -126,13 +134,85 @@ export const updateEmployee = async (req: Request, res: Response, next: NextFunc
     const { id } = req.params;
     const existing = await prisma.employee.findUnique({ where: { id } });
     if (!existing || existing.isDeleted) {
-      return res.status(404).json({ error: 'Employé non trouvé' });
+      throw new ApiError(404, 'Employé non trouvé');
     }
-    const employee = await prisma.employee.update({
-      where: { id },
-      data: buildEmployeeData(req.body, true),
+
+    const data = buildEmployeeData(req.body, true);
+
+    // Transitions de statut → offboarding uniformes.
+    const becomingInactive = existing.status === 'ACTIF' && data.status === 'INACTIF';
+    const becomingActive = existing.status === 'INACTIF' && data.status === 'ACTIF';
+
+    let deadline: Date | null = null;
+    if (becomingInactive) {
+      // Ancre la fin d'emploi + échéance de retour (5 jours ouvrables), sans
+      // écraser des valeurs déjà posées (ex: réenregistrement).
+      deadline =
+        existing.uniformReturnDeadlineAt ??
+        addBusinessDays(new Date(), UNIFORM_RETURN_DEADLINE_BUSINESS_DAYS);
+      data.terminationDate = existing.terminationDate ?? new Date();
+      data.uniformReturnDeadlineAt = deadline;
+    } else if (becomingActive) {
+      // Réactivation : on efface les ancres de fin d'emploi.
+      data.terminationDate = null;
+      data.uniformReturnDeadlineAt = null;
+    }
+
+    const employee = await prisma.employee.update({ where: { id }, data });
+
+    // À la fin d'emploi : propage l'échéance aux remises actives SANS date butoir
+    // (ferme l'angle mort des remises invisibles à la surveillance des retards) et
+    // renvoie un avertissement non bloquant si l'employé détient encore des pièces.
+    let uniformWarning:
+      | {
+          totalPieces: number;
+          owed: number;
+          holdings: Awaited<ReturnType<typeof computeHoldings>>;
+          activeIssuanceIds: string[];
+          deadline: string | null;
+        }
+      | undefined;
+
+    if (becomingInactive) {
+      const active = await getActiveIssuancesForEmployee(id);
+      const missingDue = active.filter((a) => !a.dueReturnAt).map((a) => a.id);
+      if (missingDue.length > 0 && deadline) {
+        await prisma.uniformIssuance.updateMany({
+          where: { id: { in: missingDue } },
+          data: { dueReturnAt: deadline },
+        });
+      }
+      const holdings = await computeHoldings(id);
+      if (holdings.length > 0) {
+        const owed = await computeAmountOwed(id);
+        uniformWarning = {
+          totalPieces: holdings.reduce((s, h) => s + h.quantity, 0),
+          owed: owed.owed,
+          holdings,
+          activeIssuanceIds: active.map((a) => a.id),
+          deadline: deadline ? deadline.toISOString() : null,
+        };
+      }
+    } else if (becomingActive && existing.uniformReturnDeadlineAt) {
+      // Réembauche : on annule UNIQUEMENT les échéances que la fin d'emploi avait
+      // propagées (dueReturnAt == ancienne échéance de retour), pour ne pas laisser
+      // les anciens prêts déclencher des alertes de retard sur un employé réactivé.
+      // Les date butoir fixées manuellement (valeur différente) sont préservées.
+      await prisma.uniformIssuance.updateMany({
+        where: {
+          employeeId: id,
+          status: { in: ['ISSUED', 'PARTIALLY_RETURNED'] },
+          dueReturnAt: existing.uniformReturnDeadlineAt,
+        },
+        data: { dueReturnAt: null },
+      });
+    }
+
+    res.json({
+      message: 'Employé mis à jour',
+      data: employee,
+      ...(uniformWarning ? { uniformWarning } : {}),
     });
-    res.json({ message: 'Employé mis à jour', data: employee });
   } catch (error) {
     next(error);
   }
@@ -143,7 +223,7 @@ export const deleteEmployee = async (req: Request, res: Response, next: NextFunc
     const { id } = req.params;
     const existing = await prisma.employee.findUnique({ where: { id } });
     if (!existing || existing.isDeleted) {
-      return res.status(404).json({ error: 'Employé non trouvé' });
+      throw new ApiError(404, 'Employé non trouvé');
     }
     await prisma.employee.update({
       where: { id },
@@ -168,7 +248,7 @@ export const promoteCandidateToEmployee = async (req: Request, res: Response, ne
 
     const candidate = await prisma.candidate.findUnique({ where: { id: candidateId } });
     if (!candidate || candidate.isDeleted) {
-      return res.status(404).json({ error: 'Candidat non trouvé' });
+      throw new ApiError(404, 'Candidat non trouvé');
     }
 
     // Déjà employé ? (par email/téléphone)
@@ -256,7 +336,7 @@ export const promoteProspectToEmployee = async (req: Request, res: Response, nex
 
     const prospect = await prisma.prospectCandidate.findUnique({ where: { id: prospectId } });
     if (!prospect || prospect.isDeleted) {
-      return res.status(404).json({ error: 'Candidat potentiel non trouvé' });
+      throw new ApiError(404, 'Candidat potentiel non trouvé');
     }
 
     // Déjà employé ? (par email/téléphone)

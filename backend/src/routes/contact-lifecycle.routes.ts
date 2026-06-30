@@ -6,6 +6,8 @@ import {
   searchPeople,
 } from '../controllers/contact-lifecycle.controller';
 import { authenticateStaff } from '../middleware/auth';
+import { validate } from '../middleware/validation.middleware';
+import { moveContactSchema } from '../validation/contact-lifecycle.validation';
 
 const router = Router();
 
@@ -21,6 +23,6 @@ router.get('/search-count', searchPeopleCount);
 router.get('/search', searchPeople);
 
 // POST /api/contacts/move { fromSection, fromId, toSection }
-router.post('/move', moveContactController);
+router.post('/move', validate({ body: moveContactSchema }), moveContactController);
 
 export default router;

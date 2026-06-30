@@ -340,3 +340,75 @@ export async function auditVariantStock(variantId: string): Promise<{
     byLocation,
   };
 }
+
+// ===========================================================================
+// Offboarding — uniformes détenus par les anciens employés (status INACTIF).
+// ===========================================================================
+
+/**
+ * Remises actives (non clôturées) d'un employé = celles encore susceptibles de
+ * porter des pièces à récupérer (ISSUED ou PARTIALLY_RETURNED). Utilisé par la
+ * transition de fin d'emploi (propagation d'échéance) et la clôture en masse.
+ */
+export async function getActiveIssuancesForEmployee(
+  employeeId: string,
+): Promise<Array<{ id: string; dueReturnAt: Date | null }>> {
+  return prisma.uniformIssuance.findMany({
+    where: { employeeId, status: { in: ['ISSUED', 'PARTIALLY_RETURNED'] } },
+    select: { id: true, dueReturnAt: true },
+  });
+}
+
+export interface InactiveHolder {
+  employee: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    terminationDate: Date | null;
+    uniformReturnDeadlineAt: Date | null;
+  };
+  holdings: Holding[];
+  totalPieces: number;
+  owed: number;
+  charged: number;
+  settled: number;
+  activeIssuanceIds: string[];
+}
+
+/**
+ * Liste les anciens employés (INACTIF, non supprimés) qui détiennent ENCORE des
+ * uniformes (Σ remises non-brouillon − Σ retours finalisés > 0). C'est le signal
+ * propre pour cibler les régularisations : après une clôture de fin d'emploi,
+ * `computeHoldings` retombe à 0 et l'employé disparaît de cette liste.
+ */
+export async function listOutstandingByInactiveEmployees(): Promise<InactiveHolder[]> {
+  const employees = await prisma.employee.findMany({
+    where: { status: 'INACTIF', isDeleted: false },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      terminationDate: true,
+      uniformReturnDeadlineAt: true,
+    },
+    orderBy: [{ uniformReturnDeadlineAt: 'asc' }, { lastName: 'asc' }],
+  });
+
+  const out: InactiveHolder[] = [];
+  for (const emp of employees) {
+    const holdings = await computeHoldings(emp.id);
+    if (holdings.length === 0) continue;
+    const owed = await computeAmountOwed(emp.id);
+    const active = await getActiveIssuancesForEmployee(emp.id);
+    out.push({
+      employee: emp,
+      holdings,
+      totalPieces: holdings.reduce((s, h) => s + h.quantity, 0),
+      owed: owed.owed,
+      charged: owed.charged,
+      settled: owed.settled,
+      activeIssuanceIds: active.map((a) => a.id),
+    });
+  }
+  return out;
+}

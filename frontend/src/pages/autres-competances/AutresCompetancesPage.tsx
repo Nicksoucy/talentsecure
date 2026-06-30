@@ -166,7 +166,7 @@ const AutresCompetancesPage = () => {
   // Extract skills mutation
   const extractMutation = useMutation({
     mutationFn: ({ candidateId, mode }: { candidateId: string, mode?: 'merge' | 'replace' }) =>
-      skillsService.extractSkills(candidateId, 'gpt-3.5-turbo', accessToken!, mode),
+      skillsService.extractSkills(candidateId, 'gpt-3.5-turbo', mode),
     onSuccess: (data, variables) => {
       const { candidateId } = variables;
       if (data.success) {
@@ -195,7 +195,7 @@ const AutresCompetancesPage = () => {
   // Save skills mutation
   const saveMutation = useMutation({
     mutationFn: ({ candidateId, skills }: { candidateId: string, skills: any[] }) => {
-      return skillsService.saveSkills(candidateId, skills, accessToken!);
+      return skillsService.saveSkills(candidateId, skills);
     },
     onSuccess: () => {
       enqueueSnackbar('Compétences sauvegardées avec succès!', { variant: 'success' });
@@ -213,7 +213,7 @@ const AutresCompetancesPage = () => {
   // Batch extract mutation
   const batchExtractMutation = useMutation({
     mutationFn: (candidateIds: string[]) =>
-      skillsService.batchExtractSkills(candidateIds, 'gpt-3.5-turbo', accessToken!),
+      skillsService.batchExtractSkills(candidateIds, 'gpt-3.5-turbo'),
     onSuccess: (data) => {
       setBatchResults(data);
       setShowBatchDialog(true);
@@ -377,8 +377,7 @@ const AutresCompetancesPage = () => {
         '', // Empty query to get all skills
         undefined, // category
         0.3, // Lower confidence threshold to get more results
-        true, // excludeSecurity - EXCLUDE security skills
-        accessToken!
+        true // excludeSecurity - EXCLUDE security skills
       );
       setSearchResults(results.results || []);
     } catch (error: any) {
@@ -395,8 +394,7 @@ const AutresCompetancesPage = () => {
         skillSearchQuery,
         undefined,
         0.3,
-        true, // excludeSecurity - EXCLUDE security skills
-        accessToken!
+        true // excludeSecurity - EXCLUDE security skills
       );
       setSearchResults(results.results || []);
     } catch (error: any) {
