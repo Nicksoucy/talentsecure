@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Stack, Paper, TextField, MenuItem, Autocomplete, Button, Alert, Card,
-  CardContent, ToggleButtonGroup, ToggleButton, Divider, Chip, Grid,
+  CardContent, ToggleButtonGroup, ToggleButton, Divider, Chip, Grid, LinearProgress,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
@@ -12,6 +12,7 @@ import SendIcon from '@mui/icons-material/Send';
 import LocalLaundryServiceIcon from '@mui/icons-material/LocalLaundryService';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
+import { getApiErrorMessage } from '@/utils/apiError';
 import { invalidateUniformCaches } from '@/utils/uniformCache';
 import { employeeService } from '@/services/employee.service';
 import { usePerms } from '@/hooks/usePerms';
@@ -43,6 +44,11 @@ export default function UniformReturnsPage() {
   const [pieces, setPieces] = useState<Piece[]>([]);
   const [returnId, setReturnId] = useState<string | null>(null);
   const [washBatchId, setWashBatchId] = useState<string | null>(null);
+  const [issuanceLoading, setIssuanceLoading] = useState(false);
+  const [issuanceLoadError, setIssuanceLoadError] = useState<string | null>(null);
+  // Pourquoi 0 pièce après chargement : remise importée sans lignes détaillées
+  // (PDF historique) vs remise dont tout a déjà été retourné.
+  const [emptyReason, setEmptyReason] = useState<'NO_LINES' | 'ALL_RETURNED' | null>(null);
 
   const [searchParams] = useSearchParams();
   useEffect(() => {
@@ -64,34 +70,54 @@ export default function UniformReturnsPage() {
     () => (issuances.data?.data || []).filter((i) => ['ISSUED', 'PARTIALLY_RETURNED'].includes(i.status)),
     [issuances.data],
   );
+  const draftIssuancesCount = useMemo(
+    () => (issuances.data?.data || []).filter((i) => i.status === 'DRAFT').length,
+    [issuances.data],
+  );
 
   // Charge l'émission et génère N cartes par variante (1 par pièce détenue).
   const loadIssuance = async (id: string) => {
     setIssuanceId(id);
-    const { data } = await uniformService.getIssuance(id);
-    const returnedMap = new Map<string, number>();
-    (data as any).returns?.forEach((ret: any) => {
-      if (ret.status !== 'RETURNED') return;
-      ret.lines.forEach((rl: any) => {
-        if (rl.variantId) returnedMap.set(rl.variantId, (returnedMap.get(rl.variantId) || 0) + rl.quantity);
-      });
-    });
-    const newPieces: Piece[] = [];
-    (data.lines || []).forEach((l) => {
-      if (!l.variantId) return;
-      const remaining = l.quantity - (returnedMap.get(l.variantId) || 0);
-      for (let i = 0; i < remaining; i++) {
-        newPieces.push({
-          key: `${l.variantId}-${i}`,
-          variantId: l.variantId,
-          name: l.variant?.item?.name || 'Pièce',
-          size: l.variant?.size || '—',
-          unitCost: Number(l.unitCostSnapshot),
-          condition: null,
+    setPieces([]);
+    setEmptyReason(null);
+    setIssuanceLoadError(null);
+    setIssuanceLoading(true);
+    try {
+      const { data } = await uniformService.getIssuance(id);
+      const returnedMap = new Map<string, number>();
+      (data as any).returns?.forEach((ret: any) => {
+        if (ret.status !== 'RETURNED') return;
+        ret.lines.forEach((rl: any) => {
+          if (rl.variantId) returnedMap.set(rl.variantId, (returnedMap.get(rl.variantId) || 0) + rl.quantity);
         });
+      });
+      const newPieces: Piece[] = [];
+      (data.lines || []).forEach((l) => {
+        if (!l.variantId) return;
+        const remaining = l.quantity - (returnedMap.get(l.variantId) || 0);
+        for (let i = 0; i < remaining; i++) {
+          newPieces.push({
+            key: `${l.variantId}-${i}`,
+            variantId: l.variantId,
+            name: l.variant?.item?.name || 'Pièce',
+            size: l.variant?.size || '—',
+            unitCost: Number(l.unitCostSnapshot),
+            condition: null,
+          });
+        }
+      });
+      setPieces(newPieces);
+      if (newPieces.length === 0) {
+        const detailedLines = (data.lines || []).filter((l) => l.variantId);
+        setEmptyReason(detailedLines.length === 0 ? 'NO_LINES' : 'ALL_RETURNED');
       }
-    });
-    setPieces(newPieces);
+    } catch (e) {
+      const msg = getApiErrorMessage(e, 'Échec du chargement de la remise');
+      setIssuanceLoadError(msg);
+      enqueueSnackbar(msg, { variant: 'error' });
+    } finally {
+      setIssuanceLoading(false);
+    }
   };
 
   const setCondition = (key: string, condition: UniformItemCondition | null) => {
@@ -141,7 +167,7 @@ export default function UniformReturnsPage() {
         { variant: 'success' },
       );
     },
-    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
+    onError: (e: any) => enqueueSnackbar(getApiErrorMessage(e), { variant: 'error' }),
   });
 
   // Signature
@@ -153,7 +179,7 @@ export default function UniformReturnsPage() {
     onSuccess: () => enqueueSnackbar('SMS envoyé', { variant: 'success' }),
     onError: (e: any) =>
       enqueueSnackbar(
-        e?.response?.data?.message || e?.response?.data?.error || 'Échec SMS — utilisez la signature au comptoir',
+        getApiErrorMessage(e, 'Échec SMS — utilisez la signature au comptoir'),
         { variant: 'warning', autoHideDuration: 12000 }
       ),
   });
@@ -168,7 +194,7 @@ export default function UniformReturnsPage() {
       enqueueSnackbar('Signature enregistrée', { variant: 'success' });
       navigate(`/employees/${employee.id}`);
     },
-    onError: (e: any) => enqueueSnackbar(e?.response?.data?.error || 'Erreur', { variant: 'error' }),
+    onError: (e: any) => enqueueSnackbar(getApiErrorMessage(e), { variant: 'error' }),
   });
 
   if (!canWriteUniforms) {
@@ -186,22 +212,44 @@ export default function UniformReturnsPage() {
             options={employees.data?.data || []}
             getOptionLabel={(o: any) => `${o.firstName} ${o.lastName}`}
             value={employee}
-            onChange={(_, v) => { setEmployee(v); setIssuanceId(''); setPieces([]); setReturnId(null); }}
+            onChange={(_, v) => { setEmployee(v); setIssuanceId(''); setPieces([]); setReturnId(null); setEmptyReason(null); setIssuanceLoadError(null); }}
             onInputChange={(_, v) => setEmpSearch(v)}
             renderInput={(params) => <TextField {...params} label="Agent" size="small" />}
             isOptionEqualToValue={(o: any, v: any) => o.id === v?.id}
             disabled={!!returnId}
           />
           <TextField select size="small" label="Remise" value={issuanceId} onChange={(e) => loadIssuance(e.target.value)} sx={{ minWidth: { xs: 0, md: 280 }, width: { xs: '100%', md: 'auto' } }} disabled={!employee || !!returnId}>
+            {employee && issuances.isLoading && <MenuItem disabled value="">Chargement des remises…</MenuItem>}
             {activeIssuances.map((i) => (
               <MenuItem key={i.id} value={i.id}>
                 {new Date(i.issuedAt || i.createdAt).toLocaleDateString('fr-CA')} — {i.division === 'SIGNALISATION' ? 'Signalisation' : 'Sécurité'} ({i.itemsCount} pièces)
               </MenuItem>
             ))}
-            {employee && activeIssuances.length === 0 && <MenuItem disabled value="">Aucune remise active</MenuItem>}
+            {employee && issuances.isSuccess && activeIssuances.length === 0 && <MenuItem disabled value="">Aucune remise active</MenuItem>}
           </TextField>
         </Stack>
+        {employee && issuances.isError && (
+          <Alert
+            severity="error"
+            sx={{ mt: 2 }}
+            action={<Button color="inherit" size="small" onClick={() => issuances.refetch()}>Réessayer</Button>}
+          >
+            Impossible de charger les remises de cet agent : {getApiErrorMessage(issuances.error)}
+          </Alert>
+        )}
+        {employee && issuances.isSuccess && activeIssuances.length === 0 && draftIssuancesCount > 0 && (
+          <Alert
+            severity="warning"
+            sx={{ mt: 2 }}
+            action={<Button color="inherit" size="small" onClick={() => navigate('/uniformes/remises/brouillons')}>Voir les brouillons</Button>}
+          >
+            Cet agent a {draftIssuancesCount} remise{draftIssuancesCount > 1 ? 's' : ''} en <strong>brouillon</strong> — un
+            brouillon doit d'abord être finalisé (onglet PLANIFIÉES) avant de pouvoir être retourné.
+          </Alert>
+        )}
       </Paper>
+
+      {issuanceLoading && <LinearProgress sx={{ mb: 2 }} />}
 
       {pieces.length > 0 && !returnId && (
         <Paper sx={{ p: 2, mb: 2 }}>
@@ -292,7 +340,21 @@ export default function UniformReturnsPage() {
         </Paper>
       )}
 
-      {pieces.length === 0 && employee && issuanceId && (
+      {issuanceLoadError && issuanceId && !returnId && (
+        <Alert
+          severity="error"
+          action={<Button color="inherit" size="small" onClick={() => loadIssuance(issuanceId)}>Réessayer</Button>}
+        >
+          {issuanceLoadError}
+        </Alert>
+      )}
+      {pieces.length === 0 && employee && issuanceId && !issuanceLoading && !issuanceLoadError && emptyReason === 'NO_LINES' && (
+        <Alert severity="warning">
+          Remise importée d'un PDF historique <strong>sans pièces détaillées</strong> — complétez les pièces de la
+          remise avant de faire le retour.
+        </Alert>
+      )}
+      {pieces.length === 0 && employee && issuanceId && !issuanceLoading && !issuanceLoadError && emptyReason === 'ALL_RETURNED' && (
         <Alert severity="info">Aucune pièce à retourner pour cette remise (déjà tout retourné).</Alert>
       )}
 
