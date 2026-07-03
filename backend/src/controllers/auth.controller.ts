@@ -4,6 +4,7 @@ import { prisma } from '../config/database';
 import { hashPassword } from '../utils/password';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../utils/jwt';
 import { User } from '@prisma/client';
+import { ApiError } from '../utils/apiError';
 
 /**
  * Register new user (Admin only via separate flow)
@@ -22,7 +23,7 @@ export const register = async (
     });
 
     if (existingUser) {
-      return res.status(400).json({ error: 'Cet email est déjà utilisé' });
+      throw new ApiError(400, 'Cet email est déjà utilisé');
     }
 
     // Hash password
@@ -90,12 +91,14 @@ export const login = async (
         userId: user.id,
         email: user.email,
         role: user.role,
+        tokenVersion: user.tokenVersion,
       });
 
       const refreshToken = generateRefreshToken({
         userId: user.id,
         email: user.email,
         role: user.role,
+        tokenVersion: user.tokenVersion,
       });
 
       // Log audit
@@ -156,15 +159,26 @@ export const refreshToken = async (
       return res.status(401).json({ error: 'Utilisateur non trouvé ou inactif' });
     }
 
-    // Generate new access token
-    const newAccessToken = generateAccessToken({
+    // P2-C — révocation : un refresh token dont la version est périmée (logout /
+    // changement de mot de passe) est refusé. On throw → le catch renvoie 401.
+    if ((payload.tokenVersion ?? 0) !== user.tokenVersion) {
+      throw new Error('Session révoquée');
+    }
+
+    // Nouveau access token + ROTATION du refresh token (P2-C) : un refresh
+    // token utilisé est remplacé, ce qui réduit la fenêtre de rejeu en cas de fuite.
+    const tokenPayload = {
       userId: user.id,
       email: user.email,
       role: user.role,
-    });
+      tokenVersion: user.tokenVersion,
+    };
+    const newAccessToken = generateAccessToken(tokenPayload);
+    const newRefreshToken = generateRefreshToken(tokenPayload);
 
     res.json({
       accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
     });
   } catch (error) {
     res.status(401).json({ error: 'Refresh token invalide ou expiré' });
@@ -181,7 +195,7 @@ export const getProfile = async (
 ) => {
   try {
     if (!req.user) {
-      return res.status(401).json({ error: 'Non authentifié' });
+      throw new ApiError(401, 'Non authentifié');
     }
 
     const user = await prisma.user.findUnique({
@@ -199,7 +213,7 @@ export const getProfile = async (
     });
 
     if (!user) {
-      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+      throw new ApiError(404, 'Utilisateur non trouvé');
     }
 
     res.json({ user });
@@ -218,6 +232,13 @@ export const logout = async (
 ) => {
   try {
     if (req.user) {
+      // P2-C — révocation effective : on incrémente tokenVersion, ce qui invalide
+      // IMMÉDIATEMENT tous les tokens (access + refresh) émis pour cet utilisateur.
+      await prisma.user.update({
+        where: { id: req.user.id },
+        data: { tokenVersion: { increment: 1 } },
+      });
+
       // Log audit
       await prisma.auditLog.create({
         data: {
@@ -257,12 +278,14 @@ export const googleCallback = async (
         userId: user.id,
         email: user.email,
         role: user.role,
+        tokenVersion: user.tokenVersion,
       });
 
       const refreshToken = generateRefreshToken({
         userId: user.id,
         email: user.email,
         role: user.role,
+        tokenVersion: user.tokenVersion,
       });
 
       // Log audit

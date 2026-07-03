@@ -46,7 +46,6 @@ jest.mock('../services/r2.service', () => ({
 }));
 
 import { createApp } from '../app';
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const surveySync = require('../services/survey-sync.service');
 
 const PROSPECT_URL = '/api/webhooks/gohighlevel/prospect';
@@ -136,7 +135,6 @@ describe('Webhooks GoHighLevel — /api/webhooks', () => {
       expect(inDb?.phone).toBe('5145551234');
       expect(inDb?.source).toBe('form-cv');
       // Pas de video_url → aucun appel R2/téléchargement.
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const r2 = require('../services/r2.service');
       expect(r2.uploadBufferToR2).not.toHaveBeenCalled();
     });

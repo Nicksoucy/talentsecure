@@ -3,7 +3,7 @@ import { UniformStockLocation } from '@prisma/client';
 import ExcelJS from 'exceljs';
 import { prisma } from '../config/database';
 import { ApiError } from '../utils/apiError';
-import { applyMovement, transferStock, computeHoldings, computeAmountOwed } from '../services/uniform-stock.service';
+import { applyMovement, transferStock, computeHoldings, computeAmountOwed, listOutstandingByInactiveEmployees } from '../services/uniform-stock.service';
 import { generateUniqueBarcode, renderLabelsPdf, LabelData, parseScannedCode, renderQrPng, labelPayload } from '../services/uniform-barcode.service';
 import { generateIssuancePdf, generateReturnPdf } from '../services/uniform-pdf.service';
 import { uploadBufferToR2, getSignedFileUrl } from '../services/r2.service';
@@ -698,6 +698,22 @@ export const reportLosses = async (_req: Request, res: Response, next: NextFunct
 };
 
 /**
+ * Rapport offboarding — anciens employés (INACTIF) détenant ENCORE des uniformes.
+ * Comble l'angle mort des autres rapports : `reportOverdue` est piloté par la
+ * date butoir, `reportLosses` par la dette déjà chargée. Ici on liste les
+ * ex-employés avec pièces toujours sorties, leur échéance de retour et le montant
+ * à risque/dû, avec les remises actives pour la clôture en un clic.
+ */
+export const reportInactiveHoldings = async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await listOutstandingByInactiveEmployees();
+    res.json({ data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Exporte l'inventaire complet en .xlsx (2 feuilles : Sécurité, Signalisation),
  * format proche du fichier source XGuard : Pièce | QT | (taille | empl.) × 9.
  */
@@ -819,7 +835,7 @@ export const getSignPayload = async (req: Request, res: Response, next: NextFunc
     const found = await findByToken(req.params.token);
     if (!found) throw new ApiError(404, 'Lien de signature invalide');
     if (isTokenExpired(found.record.signTokenExpiresAt)) {
-      return res.status(410).json({ error: 'Ce lien a expiré' });
+      throw new ApiError(410, 'Ce lien a expiré');
     }
     const employee = await prisma.employee.findUnique({ where: { id: found.record.employeeId } });
     const division = (found.record as any).division as string | undefined;
@@ -867,7 +883,7 @@ export const submitSign = async (req: Request, res: Response, next: NextFunction
     const found = await findByToken(req.params.token);
     if (!found) throw new ApiError(404, 'Lien de signature invalide');
     if (isTokenExpired(found.record.signTokenExpiresAt)) {
-      return res.status(410).json({ error: 'Ce lien a expiré' });
+      throw new ApiError(410, 'Ce lien a expiré');
     }
 
     let storedPdfKey: string | null = null;

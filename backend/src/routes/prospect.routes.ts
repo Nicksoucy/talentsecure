@@ -26,6 +26,12 @@ import { getProspectAnalysis } from '../controllers/prospect-scoring.controller'
 import { proxyCv } from '../controllers/cv-proxy.controller';
 import { authenticateStaff, authorizeRoles } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
+import {
+  createProspectSchema,
+  updateProspectSchema,
+  bulkAssignSchema,
+  exportZipSchema,
+} from '../validation/prospect.validation';
 
 // Validation schemas
 const uuidParam = z.object({
@@ -156,6 +162,7 @@ router.post(
 router.post(
   '/bulk-assign-to-client',
   authorizeRoles('ADMIN', 'RH_RECRUITER', 'SALES'),
+  validate({ body: bulkAssignSchema }),
   bulkAssignProspectsToClient
 );
 
@@ -167,6 +174,7 @@ router.post(
 router.post(
   '/export-zip',
   authorizeRoles('ADMIN', 'RH_RECRUITER', 'SALES'),
+  validate({ body: exportZipSchema }),
   exportProspectsZip
 );
 
@@ -178,6 +186,7 @@ router.post(
 router.post(
   '/',
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
+  validate({ body: createProspectSchema }),
   createProspect
 );
 
@@ -240,7 +249,7 @@ router.get('/:id', validate({ params: uuidParam }), getProspectById);
 router.put(
   '/:id',
   authorizeRoles('ADMIN', 'RH_RECRUITER'),
-  validate({ params: uuidParam }),
+  validate({ params: uuidParam, body: updateProspectSchema }),
   updateProspect
 );
 

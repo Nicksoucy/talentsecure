@@ -48,7 +48,7 @@ const ExportPage = () => {
       }
       setIsLoadingPreview(true);
       try {
-        const data = await skillsService.searchSkills(query, category || undefined, minConfidence || undefined, undefined, accessToken);
+        const data = await skillsService.searchSkills(query, category || undefined, minConfidence || undefined, undefined);
         if (!cancelled) {
           setPreview(data.results || []);
         }
@@ -84,11 +84,10 @@ const ExportPage = () => {
           category: category || undefined,
           minConfidence: minConfidence || undefined,
           limit,
-        },
-        accessToken
+        }
       );
 
-      const blob = new Blob([response.data], { type: response.headers['content-type'] || 'application/octet-stream' });
+      const blob = new Blob([response.data], { type: (response.headers['content-type'] as string) || 'application/octet-stream' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       const disposition = response.headers['content-disposition'];

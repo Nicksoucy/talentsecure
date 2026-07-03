@@ -1,5 +1,7 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { authenticateJWT, authorizeRoles } from '../middleware/auth';
+import { validate } from '../middleware/validation.middleware';
 import {
   revertAutoConvertedCandidates,
   findAutoConvertedCandidates,
@@ -8,6 +10,8 @@ import {
 } from '../controllers/admin.controller';
 
 const router = Router();
+
+const revertBatchSchema = z.object({ ids: z.array(z.string()).min(1, 'liste d\'ids invalide') }).passthrough();
 
 // ADMIN ONLY: every route below is gated by JWT auth + ADMIN role check.
 // Without the role check, any authenticated user (RH_RECRUITER, SALES, CLIENT)
@@ -36,6 +40,6 @@ router.post('/revert-candidate-to-prospect/:id', adminGuard, revertSingleCandida
  * POST /api/admin/revert-batch-candidates-to-prospects
  * Re-convertit PLUSIEURS candidats en prospects (Batch)
  */
-router.post('/revert-batch-candidates-to-prospects', adminGuard, revertBatchCandidatesToProspects);
+router.post('/revert-batch-candidates-to-prospects', adminGuard, validate({ body: revertBatchSchema }), revertBatchCandidatesToProspects);
 
 export default router;

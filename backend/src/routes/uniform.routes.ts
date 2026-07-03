@@ -6,6 +6,22 @@ import * as ctrl from '../controllers/uniform.controller';
 import * as iss from '../controllers/uniform-issuance.controller';
 import * as ret from '../controllers/uniform-return.controller';
 import * as wash from '../controllers/uniform-wash-batch.controller';
+import { validate } from '../middleware/validation.middleware';
+import {
+  replenishVariantSchema,
+  adjustVariantSchema,
+  transferVariantSchema,
+  createSettlementSchema,
+  createIssuanceSchema,
+  createReturnSchema,
+  createItemSchema,
+  createVariantSchema,
+  reorderSchema,
+  updateItemSchema,
+  updateVariantSchema,
+  updateIssuanceSchema,
+  labelsSheetSchema,
+} from '../validation/uniform.validation';
 
 const router = Router();
 
@@ -56,6 +72,7 @@ router.use(authenticateJWT);
 router.post(
   '/issuances/draft',
   authorizeRoles('ADMIN', 'RH_RECRUITER', 'MAGASIN', 'MAGASIN_GESTION'),
+  validate({ body: createIssuanceSchema }),
   iss.createIssuance,
 );
 
@@ -74,6 +91,7 @@ router.get('/stats/summary', ctrl.statsSummary);
 router.get('/reports/stock', ctrl.reportStock);
 router.get('/reports/overdue', ctrl.reportOverdue);
 router.get('/reports/losses', ctrl.reportLosses);
+router.get('/reports/inactive-holdings', ctrl.reportInactiveHoldings);
 
 // Inventaire — mouvements
 router.get('/movements', ctrl.listMovements);
@@ -82,39 +100,39 @@ router.get('/movements', ctrl.listMovements);
 router.get('/inventory/export', ctrl.exportInventoryXlsx);
 
 // Étiquettes
-router.post('/labels', ctrl.labelsSheet);
+router.post('/labels', validate({ body: labelsSheetSchema }), ctrl.labelsSheet);
 
 // Variantes
 router.get('/variants', ctrl.listVariants);
 router.get('/variants/by-barcode/:barcode', ctrl.getVariantByBarcode);
 router.get('/variants/:variantId/label', ctrl.variantLabel);
 router.get('/variants/:variantId/qr', ctrl.variantQr);
-router.post('/variants/:variantId/replenish', ctrl.replenishVariant);
-router.post('/variants/:variantId/adjust', ctrl.adjustVariant);
-router.post('/variants/:variantId/transfer', ctrl.transferVariant);
-router.put('/variants/:variantId', ctrl.updateVariant);
+router.post('/variants/:variantId/replenish', validate({ body: replenishVariantSchema }), ctrl.replenishVariant);
+router.post('/variants/:variantId/adjust', validate({ body: adjustVariantSchema }), ctrl.adjustVariant);
+router.post('/variants/:variantId/transfer', validate({ body: transferVariantSchema }), ctrl.transferVariant);
+router.put('/variants/:variantId', validate({ body: updateVariantSchema }), ctrl.updateVariant);
 router.delete('/variants/:variantId', ctrl.deleteVariant);
 
 // Catalogue — morceaux
 router.get('/items', ctrl.listItems);
-router.post('/items', ctrl.createItem);
-router.post('/items/reorder', ctrl.reorderItems);
+router.post('/items', validate({ body: createItemSchema }), ctrl.createItem);
+router.post('/items/reorder', validate({ body: reorderSchema }), ctrl.reorderItems);
 router.get('/items/:id', ctrl.getItem);
 router.post('/items/:id/image', imageUpload.single('image'), ctrl.uploadItemImage);
-router.put('/items/:id', ctrl.updateItem);
+router.put('/items/:id', validate({ body: updateItemSchema }), ctrl.updateItem);
 router.delete('/items/:id', ctrl.deleteItem);
 router.get('/items/:id/variants', (req, res, next) => {
   (req.query as any).itemId = req.params.id;
   return ctrl.listVariants(req, res, next);
 });
-router.post('/items/:id/variants/reorder', ctrl.reorderVariants);
-router.post('/items/:id/variants', ctrl.createVariant);
+router.post('/items/:id/variants/reorder', validate({ body: reorderSchema }), ctrl.reorderVariants);
+router.post('/items/:id/variants', validate({ body: createVariantSchema }), ctrl.createVariant);
 
 // Remises (prêts)
 router.get('/issuances', iss.listIssuances);
-router.post('/issuances', iss.createIssuance);
+router.post('/issuances', validate({ body: createIssuanceSchema }), iss.createIssuance);
 router.get('/issuances/:id', iss.getIssuance);
-router.put('/issuances/:id', iss.updateIssuance);
+router.put('/issuances/:id', validate({ body: updateIssuanceSchema }), iss.updateIssuance);
 router.post('/issuances/:id/finalize', iss.finalizeIssuance);
 router.post('/issuances/:id/send-sms', iss.sendIssuanceSms);
 router.post('/issuances/:id/counter-sign', iss.counterSignIssuance);
@@ -124,7 +142,7 @@ router.get('/issuances/:id/pdf', iss.getIssuancePdfUrl);
 router.post('/issuances/:id/upload-pdf', pdfUpload.single('pdf'), iss.uploadIssuancePdf);
 
 // Retours
-router.post('/returns', ret.createReturn);
+router.post('/returns', validate({ body: createReturnSchema }), ret.createReturn);
 router.get('/returns/:id', ret.getReturn);
 router.post('/returns/:id/finalize', ret.finalizeReturn);
 router.post('/returns/:id/send-sms', ret.sendReturnSms);
@@ -145,6 +163,6 @@ router.post('/wash-batches/:id/cancel', wash.cancel);
 // Fiche agent & règlements
 router.get('/employees/:employeeId/holdings', ret.getHoldings);
 router.get('/employees/:employeeId/fiche', ctrl.employeeFiche);
-router.post('/employees/:employeeId/settlements', ctrl.createSettlement);
+router.post('/employees/:employeeId/settlements', validate({ body: createSettlementSchema }), ctrl.createSettlement);
 
 export default router;

@@ -72,6 +72,12 @@ passport.use(
             return done(null, false);
           }
 
+          // P2-C — révocation : rejette un token dont la version ne correspond
+          // plus au tokenVersion courant du client (incrémenté au logout/mdp).
+          if ((payload.tokenVersion ?? 0) !== client.tokenVersion) {
+            return done(null, false);
+          }
+
           // Return client as user with CLIENT role
           return done(null, {
             id: client.id,
@@ -92,6 +98,12 @@ passport.use(
         }
 
         if (!user.isActive) {
+          return done(null, false);
+        }
+
+        // P2-C — révocation : rejette un token dont la version ne correspond plus
+        // au tokenVersion courant (incrémenté au logout).
+        if ((payload.tokenVersion ?? 0) !== user.tokenVersion) {
           return done(null, false);
         }
 

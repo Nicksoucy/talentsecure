@@ -1,5 +1,22 @@
 import api from './api';
 import { Employee } from '@/types';
+import type { Holding } from '@/types/uniform';
+
+/** Avertissement non bloquant renvoyé quand un employé passe INACTIF en
+ *  détenant encore des uniformes (offboarding). */
+export interface UniformOffboardingWarning {
+  totalPieces: number;
+  owed: number;
+  holdings: Holding[];
+  activeIssuanceIds: string[];
+  deadline: string | null;
+}
+
+export interface UpdateEmployeeResponse {
+  data: Employee;
+  message: string;
+  uniformWarning?: UniformOffboardingWarning;
+}
 
 interface GetEmployeesParams {
   search?: string;
@@ -44,7 +61,7 @@ export const employeeService = {
     return response.data;
   },
 
-  async updateEmployee(id: string, data: Partial<Employee>): Promise<{ data: Employee; message: string }> {
+  async updateEmployee(id: string, data: Partial<Employee>): Promise<UpdateEmployeeResponse> {
     const response = await api.put(`/api/employees/${id}`, data);
     return response.data;
   },

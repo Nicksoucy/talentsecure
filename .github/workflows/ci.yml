@@ -47,16 +47,19 @@ jobs:
         run: npx tsc --noEmit
       - name: Architecture (dependency-cruiser — pas de cycles)
         run: npm run depcruise
-      - name: Lint (informatif)
+      - name: Routes mutantes validées (garde P2-A)
+        run: npm run check:routes
+      - name: Enveloppe d'erreur — plafond ratchet (garde P2-B)
+        run: npm run check:errors
+      - name: Lint (bloquant)
         run: npm run lint
-        continue-on-error: true
       - name: Préparer la base de test
         # db push (jamais migrate deploy) + colonne générée searchText (hors schema.prisma).
         run: |
           npx prisma db push --skip-generate --force-reset
           npx prisma db execute --file prisma/migrations/20260620000000_add_search_text/migration.sql --schema prisma/schema.prisma
-      - name: Tests
-        run: npm test
+      - name: Tests (+ seuils de couverture)
+        run: npm run test:coverage
 
   frontend:
     name: Frontend (type-check + tests)

@@ -3,6 +3,7 @@ import { prisma } from '../config/database';
 import { getCache, setCache } from '../config/cache';
 import { buildCacheKey } from '../utils/cache';
 import { invalidateCaches } from '../utils/cacheInvalidation';
+import { ApiError } from '../utils/apiError';
 
 const CLIENT_LIST_CACHE_PREFIX = 'clients:list';
 const CLIENT_DETAIL_CACHE_PREFIX = 'clients:detail';
@@ -133,7 +134,7 @@ export const getClientById = async (
     });
 
     if (!client) {
-      return res.status(404).json({ error: 'Client non trouvé' });
+      throw new ApiError(404, 'Client non trouvé');
     }
 
     const payload = { data: stripClientSecret(client) };
@@ -172,7 +173,7 @@ export const createClient = async (
     });
 
     if (existingClient) {
-      return res.status(400).json({ error: 'Un client avec cet email existe déjà' });
+      throw new ApiError(400, 'Un client avec cet email existe déjà');
     }
 
     // Create client
@@ -223,8 +224,22 @@ export const updateClient = async (
 ) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
     const userId = req.user!.id;
+
+    // Sécurité — allowlist explicite des champs modifiables (anti mass-assignment).
+    // On ne propage JAMAIS req.body brut : id/password/isActive/relations sont
+    // exclus et ne peuvent donc pas être écrasés via cet endpoint.
+    const ALLOWED_UPDATE_FIELDS = [
+      'name', 'companyName', 'email', 'phone', 'address', 'city', 'province',
+      'postalCode', 'billingEmail', 'defaultPricePerCandidate', 'discountPercent',
+      'paymentTerms', 'taxNumber', 'notes',
+    ] as const;
+    const updateData: Record<string, any> = {};
+    for (const key of ALLOWED_UPDATE_FIELDS) {
+      if (Object.prototype.hasOwnProperty.call(req.body ?? {}, key)) {
+        updateData[key] = req.body[key];
+      }
+    }
 
     // Check if client exists
     const existingClient = await prisma.client.findUnique({
@@ -232,7 +247,7 @@ export const updateClient = async (
     });
 
     if (!existingClient) {
-      return res.status(404).json({ error: 'Client non trouvé' });
+      throw new ApiError(404, 'Client non trouvé');
     }
 
     // If email is being changed, check if it's already taken
@@ -242,7 +257,7 @@ export const updateClient = async (
       });
 
       if (emailTaken) {
-        return res.status(400).json({ error: 'Cet email est déjà utilisé par un autre client' });
+        throw new ApiError(400, 'Cet email est déjà utilisé par un autre client');
       }
     }
 
@@ -366,9 +381,7 @@ export const registerClient = async (
 
     // Validate required fields
     if (!name || !email || !password) {
-      return res.status(400).json({
-        error: 'Nom, email et mot de passe sont requis'
-      });
+      throw new ApiError(400, 'Nom, email et mot de passe sont requis');
     }
 
     // Check if client already exists
@@ -377,9 +390,7 @@ export const registerClient = async (
     });
 
     if (existingClient) {
-      return res.status(400).json({
-        error: 'Un compte avec cet email existe déjà'
-      });
+      throw new ApiError(400, 'Un compte avec cet email existe déjà');
     }
 
     // Hash password

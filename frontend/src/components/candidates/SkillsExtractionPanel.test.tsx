@@ -71,7 +71,7 @@ describe('SkillsExtractionPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: /extraire avec ai/i }));
 
     await waitFor(() =>
-      expect(svc.extractSkills).toHaveBeenCalledWith('cand-1', 'gpt-3.5-turbo', 'tok-123')
+      expect(svc.extractSkills).toHaveBeenCalledWith('cand-1', 'gpt-3.5-turbo')
     );
 
     const dialog = await screen.findByRole('dialog');
@@ -122,8 +122,7 @@ describe('SkillsExtractionPanel', () => {
     await waitFor(() =>
       expect(svc.saveSkills).toHaveBeenCalledWith(
         'cand-1',
-        [{ name: 'Patrouille de sécurité', level: 'ADVANCED', yearsExperience: 5 }],
-        'tok-123'
+        [{ name: 'Patrouille de sécurité', level: 'ADVANCED', yearsExperience: 5 }]
       )
     );
     await waitFor(() => expect(onSkillsUpdated).toHaveBeenCalledTimes(1));

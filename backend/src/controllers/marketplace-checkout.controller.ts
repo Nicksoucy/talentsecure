@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { getStripe, getClientAppUrl } from '../services/stripe.service';
+import { ApiError } from '../utils/apiError';
 
 const MARKETPLACE_WHERE = {
   isActive: true,
@@ -16,19 +17,19 @@ export const createCandidateCheckout = async (req: Request, res: Response, next:
   try {
     const { id } = req.params;
     const clientId = (req as any).client?.id;
-    if (!clientId) return res.status(401).json({ error: 'Non authentifié' });
+    if (!clientId) throw new ApiError(401, 'Non authentifié');
 
     const candidate = await prisma.candidate.findFirst({
       where: { id, ...MARKETPLACE_WHERE },
       select: { id: true, firstName: true, city: true },
     });
-    if (!candidate) return res.status(404).json({ error: 'Candidat non disponible' });
+    if (!candidate) throw new ApiError(404, 'Candidat non disponible');
 
     // Déjà acheté ?
     const existing = await prisma.clientPurchase
       .findUnique({ where: { clientId_candidateId: { clientId, candidateId: id } } })
       .catch(() => null);
-    if (existing) return res.status(400).json({ error: 'Ce candidat est déjà acheté.' });
+    if (existing) throw new ApiError(400, 'Ce candidat est déjà acheté.');
 
     // Prix (CityPricing évalué, sinon défaut)
     const cityPricing = candidate.city

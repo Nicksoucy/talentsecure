@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { Decimal } from '@prisma/client/runtime/library';
+import { ApiError } from '../utils/apiError';
 
 /**
  * Get pricing for a specific city
@@ -51,7 +52,7 @@ export const getCurrentWishlist = async (
 ) => {
   try {
     if (!req.user || (req.user.role as string) !== 'CLIENT') {
-      return res.status(401).json({ error: 'Non authentifié' });
+      throw new ApiError(401, 'Non authentifié');
     }
 
     // Find or create draft wishlist
@@ -99,26 +100,22 @@ export const addWishlistItem = async (
 ) => {
   try {
     if (!req.user || (req.user.role as string) !== 'CLIENT') {
-      return res.status(401).json({ error: 'Non authentifié' });
+      throw new ApiError(401, 'Non authentifié');
     }
 
     const { city, province, type, quantity, notes } = req.body;
 
     // Validation
     if (!city || !type || !quantity || quantity < 1) {
-      return res.status(400).json({
-        error: 'Ville, type et quantité valide requis'
-      });
+      throw new ApiError(400, 'Ville, type et quantité valide requis');
     }
 
     if (type !== 'EVALUATED' && type !== 'CV_ONLY') {
-      return res.status(400).json({
-        error: 'Type invalide. Doit être EVALUATED ou CV_ONLY'
-      });
+      throw new ApiError(400, 'Type invalide. Doit être EVALUATED ou CV_ONLY');
     }
 
     // Get pricing for the city
-    let cityPricing = await prisma.cityPricing.findUnique({
+    const cityPricing = await prisma.cityPricing.findUnique({
       where: { city },
     });
 
@@ -235,14 +232,14 @@ export const updateWishlistItem = async (
 ) => {
   try {
     if (!req.user || (req.user.role as string) !== 'CLIENT') {
-      return res.status(401).json({ error: 'Non authentifié' });
+      throw new ApiError(401, 'Non authentifié');
     }
 
     const { id } = req.params;
     const { quantity } = req.body;
 
     if (!quantity || quantity < 1) {
-      return res.status(400).json({ error: 'Quantité invalide' });
+      throw new ApiError(400, 'Quantité invalide');
     }
 
     // Find item and verify ownership
@@ -254,17 +251,15 @@ export const updateWishlistItem = async (
     });
 
     if (!item) {
-      return res.status(404).json({ error: 'Item non trouvé' });
+      throw new ApiError(404, 'Item non trouvé');
     }
 
     if (item.wishlist.clientId !== req.user.id) {
-      return res.status(403).json({ error: 'Non autorisé' });
+      throw new ApiError(403, 'Non autorisé');
     }
 
     if (item.wishlist.status !== 'DRAFT') {
-      return res.status(400).json({
-        error: 'Impossible de modifier une demande déjà soumise'
-      });
+      throw new ApiError(400, 'Impossible de modifier une demande déjà soumise');
     }
 
     // Update item
@@ -324,7 +319,7 @@ export const removeWishlistItem = async (
 ) => {
   try {
     if (!req.user || (req.user.role as string) !== 'CLIENT') {
-      return res.status(401).json({ error: 'Non authentifié' });
+      throw new ApiError(401, 'Non authentifié');
     }
 
     const { id } = req.params;
@@ -338,17 +333,15 @@ export const removeWishlistItem = async (
     });
 
     if (!item) {
-      return res.status(404).json({ error: 'Item non trouvé' });
+      throw new ApiError(404, 'Item non trouvé');
     }
 
     if (item.wishlist.clientId !== req.user.id) {
-      return res.status(403).json({ error: 'Non autorisé' });
+      throw new ApiError(403, 'Non autorisé');
     }
 
     if (item.wishlist.status !== 'DRAFT') {
-      return res.status(400).json({
-        error: 'Impossible de modifier une demande déjà soumise'
-      });
+      throw new ApiError(400, 'Impossible de modifier une demande déjà soumise');
     }
 
     // Delete item
@@ -402,7 +395,7 @@ export const clearWishlist = async (
 ) => {
   try {
     if (!req.user || (req.user.role as string) !== 'CLIENT') {
-      return res.status(401).json({ error: 'Non authentifié' });
+      throw new ApiError(401, 'Non authentifié');
     }
 
     // Find draft wishlist
@@ -414,7 +407,7 @@ export const clearWishlist = async (
     });
 
     if (!wishlist) {
-      return res.status(404).json({ error: 'Panier non trouvé' });
+      throw new ApiError(404, 'Panier non trouvé');
     }
 
     // Delete all items
@@ -455,7 +448,7 @@ export const submitWishlist = async (
 ) => {
   try {
     if (!req.user || (req.user.role as string) !== 'CLIENT') {
-      return res.status(401).json({ error: 'Non authentifié' });
+      throw new ApiError(401, 'Non authentifié');
     }
 
     // Find draft wishlist
@@ -470,11 +463,11 @@ export const submitWishlist = async (
     });
 
     if (!wishlist) {
-      return res.status(404).json({ error: 'Panier non trouvé' });
+      throw new ApiError(404, 'Panier non trouvé');
     }
 
     if (wishlist.items.length === 0) {
-      return res.status(400).json({ error: 'Le panier est vide' });
+      throw new ApiError(400, 'Le panier est vide');
     }
 
     // Update status to SUBMITTED
@@ -522,7 +515,7 @@ export const getAvailableCandidatesCount = async (
 ) => {
   try {
     if (!req.user || (req.user.role as string) !== 'CLIENT') {
-      return res.status(401).json({ error: 'Non authentifié' });
+      throw new ApiError(401, 'Non authentifié');
     }
 
     const { city } = req.params;
@@ -587,7 +580,7 @@ export const getAllWishlists = async (
 ) => {
   try {
     if (!req.user || (req.user.role as string) !== 'ADMIN') {
-      return res.status(403).json({ error: 'Accès interdit - Admin uniquement' });
+      throw new ApiError(403, 'Accès interdit - Admin uniquement');
     }
 
     const { status, clientId, startDate, endDate } = req.query;
@@ -674,7 +667,7 @@ export const getWishlistById = async (
 ) => {
   try {
     if (!req.user || (req.user.role as string) !== 'ADMIN') {
-      return res.status(403).json({ error: 'Accès interdit - Admin uniquement' });
+      throw new ApiError(403, 'Accès interdit - Admin uniquement');
     }
 
     const { id } = req.params;
@@ -703,7 +696,7 @@ export const getWishlistById = async (
     });
 
     if (!wishlist) {
-      return res.status(404).json({ error: 'Wishlist non trouvée' });
+      throw new ApiError(404, 'Wishlist non trouvée');
     }
 
     res.json({ wishlist });
@@ -723,7 +716,7 @@ export const updateWishlistStatus = async (
 ) => {
   try {
     if (!req.user || (req.user.role as string) !== 'ADMIN') {
-      return res.status(403).json({ error: 'Accès interdit - Admin uniquement' });
+      throw new ApiError(403, 'Accès interdit - Admin uniquement');
     }
 
     const { id } = req.params;
@@ -732,7 +725,7 @@ export const updateWishlistStatus = async (
     // Validate status
     const validStatuses = ['DRAFT', 'SUBMITTED', 'APPROVED', 'PAID', 'DELIVERED', 'CANCELLED'];
     if (!validStatuses.includes(status)) {
-      return res.status(400).json({ error: 'Status invalide' });
+      throw new ApiError(400, 'Status invalide');
     }
 
     // Get existing wishlist
@@ -741,7 +734,7 @@ export const updateWishlistStatus = async (
     });
 
     if (!existingWishlist) {
-      return res.status(404).json({ error: 'Wishlist non trouvée' });
+      throw new ApiError(404, 'Wishlist non trouvée');
     }
 
     // Update wishlist
@@ -783,7 +776,7 @@ export const deleteWishlist = async (
 ) => {
   try {
     if (!req.user || (req.user.role as string) !== 'ADMIN') {
-      return res.status(403).json({ error: 'Accès interdit - Admin uniquement' });
+      throw new ApiError(403, 'Accès interdit - Admin uniquement');
     }
 
     const { id } = req.params;
@@ -794,7 +787,7 @@ export const deleteWishlist = async (
     });
 
     if (!existingWishlist) {
-      return res.status(404).json({ error: 'Wishlist non trouvée' });
+      throw new ApiError(404, 'Wishlist non trouvée');
     }
 
     // Instead of deleting, mark as cancelled

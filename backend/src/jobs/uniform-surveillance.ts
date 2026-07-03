@@ -7,8 +7,13 @@
  */
 import { prisma } from '../config/database';
 import { notify } from '../services/notification.service';
-import { computeAmountOwed } from '../services/uniform-stock.service';
-import { businessDaysBetween } from '../utils/business-days';
+import { computeAmountOwed, computeHoldings } from '../services/uniform-stock.service';
+import { closeTerminationCore, notifyTerminationClosed } from '../services/uniform-termination.service';
+import { businessDaysBetween, addBusinessDays } from '../utils/business-days';
+import {
+  UNIFORM_AUTOCLOSE_GRACE_BUSINESS_DAYS,
+  UNIFORM_RETURN_DEADLINE_BUSINESS_DAYS,
+} from '../constants/uniform';
 
 const today = () => new Date().toISOString().split('T')[0];
 
@@ -35,6 +40,9 @@ export async function checkReturnsDueSoon(): Promise<number> {
     const businessDaysToDue = businessDaysBetween(iss.dueReturnAt!, now);
     if (businessDaysToDue > 1) continue; // pas encore dans la fenêtre de 24h ouvrables
     const employee = await prisma.employee.findUnique({ where: { id: iss.employeeId } });
+    // Les anciens employés (INACTIF) sont gérés par checkInactiveEmployeesWithHoldings
+    // (rappel → escalade → clôture auto) : on évite la double-escalade ici.
+    if (employee?.status === 'INACTIF') continue;
     const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Agent';
     await notify({
       type: 'UNIFORM_RETURN_DUE_SOON',
@@ -68,6 +76,9 @@ export async function checkReturnsOverdue(): Promise<number> {
   for (const iss of overdue) {
     const daysOverdue = businessDaysBetween(now, iss.dueReturnAt!);
     const employee = await prisma.employee.findUnique({ where: { id: iss.employeeId } });
+    // Anciens employés (INACTIF) : gérés par checkInactiveEmployeesWithHoldings
+    // (escalade RH+PAIE + clôture auto). On évite la double-escalade RH/PAIE ici.
+    if (employee?.status === 'INACTIF') continue;
     const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Agent';
     await notify({
       type: 'UNIFORM_RETURN_OVERDUE',
@@ -373,6 +384,118 @@ export async function checkDuplicateActiveIssuances(): Promise<number> {
 }
 
 // =============================================================================
+// 11. Anciens employés (INACTIF) détenant ENCORE des uniformes
+// =============================================================================
+// Comble l'angle mort du retour des uniformes des employés qui quittent :
+//   - avant l'échéance de retour  → rappel RH ;
+//   - après l'échéance (dans la grâce) → alerte ⚠️ RH + PAIE (montant à risque) ;
+//   - après l'échéance + délai de grâce → CLÔTURE AUTOMATIQUE des remises actives
+//     (pièces NOT_RETURNED, dette figée), via closeTerminationCore.
+// Idempotent : après clôture, computeHoldings retombe à 0 → l'employé sort de la
+// liste ; les rappels sont dédupliqués par jour (dedupKey avec date).
+export async function checkInactiveEmployeesWithHoldings(): Promise<number> {
+  const now = new Date();
+  const employees = await prisma.employee.findMany({
+    where: { status: 'INACTIF', isDeleted: false },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      terminationDate: true,
+      uniformReturnDeadlineAt: true,
+    },
+  });
+
+  let count = 0;
+  for (const emp of employees) {
+    const holdings = await computeHoldings(emp.id);
+    if (holdings.length === 0) continue;
+
+    const totalPieces = holdings.reduce((s, h) => s + h.quantity, 0);
+    const owed = await computeAmountOwed(emp.id);
+    const employeeName = `${emp.firstName} ${emp.lastName}`;
+
+    // Échéance manquante (données héritées : INACTIF avant cette feature, créé
+    // INACTIF en direct, ou transition hors updateEmployee) → on la rétablit ici
+    // (ancre = terminationDate sinon maintenant + 5 j ouvrables) et on persiste,
+    // sinon l'employé resterait coincé en rappel quotidien sans escalade ni
+    // clôture automatique.
+    let deadline = emp.uniformReturnDeadlineAt;
+    if (!deadline) {
+      const anchor = emp.terminationDate ?? now;
+      deadline = addBusinessDays(anchor, UNIFORM_RETURN_DEADLINE_BUSINESS_DAYS);
+      await prisma.employee.update({
+        where: { id: emp.id },
+        data: { terminationDate: emp.terminationDate ?? anchor, uniformReturnDeadlineAt: deadline },
+      });
+    }
+
+    const pastDeadline = now > deadline;
+    const graceEnd = addBusinessDays(deadline, UNIFORM_AUTOCLOSE_GRACE_BUSINESS_DAYS);
+    const pastGrace = now > graceEnd;
+
+    // --- Clôture automatique : échéance + grâce dépassées --------------------
+    if (pastGrace) {
+      const active = await prisma.uniformIssuance.findMany({
+        where: { employeeId: emp.id, status: { in: ['ISSUED', 'PARTIALLY_RETURNED'] } },
+        include: { lines: { include: { variant: true } }, returns: { include: { lines: true } } },
+      });
+      let closedAny = false;
+      for (const iss of active) {
+        const closed = await closeTerminationCore(
+          iss,
+          null,
+          'Clôture automatique — fin d’emploi, délai de retour dépassé',
+        );
+        if (closed) { count++; closedAny = true; }
+      }
+      // Une SEULE notif de dette par employé, avec le montant FINAL (pas un cumul
+      // partiel croissant remise par remise).
+      if (closedAny) await notifyTerminationClosed(emp.id);
+      continue;
+    }
+
+    // --- Rappel / escalade ----------------------------------------------------
+    await notify({
+      type: 'UNIFORM_INACTIVE_EMPLOYEE_HAS_HOLDINGS',
+      channels: ['EMAIL', 'IN_APP'],
+      audience: 'RH',
+      dedupKey: `inactive-holdings-${emp.id}-${today()}`,
+      title: pastDeadline
+        ? `⚠️ Ancien employé — uniformes non retournés : ${employeeName}`
+        : `Ancien employé détient des uniformes — ${employeeName}`,
+      message: `${totalPieces} pièce(s) toujours détenue(s)${
+        deadline ? ` · échéance ${deadline.toISOString().split('T')[0]}` : ''
+      } · Montant à risque/dû : ${owed.owed.toFixed(2)} $`,
+      link: `/employees/${emp.id}`,
+      payload: {
+        employeeId: emp.id,
+        totalPieces,
+        owed: owed.owed,
+        deadline: deadline ? deadline.toISOString() : null,
+        overdue: pastDeadline,
+      },
+    });
+
+    // Échéance dépassée + dette → PAIE doit prélever sur la dernière paie.
+    if (pastDeadline && owed.owed > 0) {
+      await notify({
+        type: 'UNIFORM_INACTIVE_EMPLOYEE_HAS_HOLDINGS',
+        channels: ['EMAIL'],
+        audience: 'PAIE',
+        dedupKey: `inactive-holdings-paie-${emp.id}-${today()}`,
+        title: `Prélèvement uniforme — ${employeeName}`,
+        message: `Ancien employé · ${totalPieces} pièce(s) non retournée(s) · Montant : ${owed.owed.toFixed(2)} $`,
+        link: `/employees/${emp.id}`,
+        payload: { employeeId: emp.id, totalPieces, owed: owed.owed },
+      });
+    }
+    count++;
+  }
+  return count;
+}
+
+// =============================================================================
 // Orchestrateur
 // =============================================================================
 export interface SurveillanceResult {
@@ -386,6 +509,7 @@ export interface SurveillanceResult {
   debtAging: number;
   inactiveStock: number;
   duplicateActive: number;
+  inactiveHoldings: number;
 }
 
 export async function surveillanceJob(): Promise<SurveillanceResult> {
@@ -400,6 +524,7 @@ export async function surveillanceJob(): Promise<SurveillanceResult> {
     debtAging,
     inactiveStock,
     duplicateActive,
+    inactiveHoldings,
   ] = await Promise.all([
     checkReturnsDueSoon().catch((e) => { console.error('checkReturnsDueSoon:', e); return 0; }),
     checkReturnsOverdue().catch((e) => { console.error('checkReturnsOverdue:', e); return 0; }),
@@ -411,7 +536,8 @@ export async function surveillanceJob(): Promise<SurveillanceResult> {
     checkDebtAging().catch((e) => { console.error('checkDebtAging:', e); return 0; }),
     checkInactiveVariantsWithStock().catch((e) => { console.error('checkInactiveVariantsWithStock:', e); return 0; }),
     checkDuplicateActiveIssuances().catch((e) => { console.error('checkDuplicateActiveIssuances:', e); return 0; }),
+    checkInactiveEmployeesWithHoldings().catch((e) => { console.error('checkInactiveEmployeesWithHoldings:', e); return 0; }),
   ]);
 
-  return { dueSoon, overdue, washStagnant, lowStock, sigExpiring, sigExpired, employerSignPending, debtAging, inactiveStock, duplicateActive };
+  return { dueSoon, overdue, washStagnant, lowStock, sigExpiring, sigExpired, employerSignPending, debtAging, inactiveStock, duplicateActive, inactiveHoldings };
 }

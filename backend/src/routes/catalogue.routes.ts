@@ -13,6 +13,7 @@ import {
 import { authenticateStaff, authorizeRoles } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
 import { publicShareLimiter } from '../middleware/rate-limit.middleware';
+import { createCatalogueSchema, updateCatalogueSchema } from '../validation/catalogue.validation';
 
 // Validation schemas
 const uuidParam = z.object({
@@ -55,6 +56,7 @@ router.get('/:id', validate({ params: uuidParam }), getCatalogueById);
 router.post(
   '/',
   authorizeRoles('ADMIN', 'SALES', 'RH_RECRUITER'),
+  validate({ body: createCatalogueSchema }),
   createCatalogue
 );
 
@@ -66,7 +68,7 @@ router.post(
 router.put(
   '/:id',
   authorizeRoles('ADMIN', 'SALES', 'RH_RECRUITER'),
-  validate({ params: uuidParam }),
+  validate({ params: uuidParam, body: updateCatalogueSchema }),
   updateCatalogue
 );
 

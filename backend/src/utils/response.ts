@@ -21,6 +21,11 @@ export const errorResponse = (res: Response, error: ApiError, requestId?: string
     success: false,
     code: error.errorCode,
     message: error.message,
+    // Alias rétro-compatible (P2-B) : pont de migration pour basculer les ~150
+    // réponses ad hoc `res.json({ error })` vers ApiError sans casser les
+    // consommateurs/tests qui lisent encore `error`. À RETIRER une fois tout le
+    // code (front + tests) aligné sur `message`/`code`.
+    error: error.message,
   };
 
   if (error.details?.length) {
