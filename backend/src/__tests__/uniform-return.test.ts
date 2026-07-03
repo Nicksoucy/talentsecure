@@ -391,4 +391,109 @@ describe('Uniformes — retours /api/uniforms/returns', () => {
       expect(second.status).toBe(400);
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Retour tardif — remise CLOSED_TERMINATION (pièces rapportées après clôture)
+  // -----------------------------------------------------------------------
+  describe('retour tardif (remise CLOSED_TERMINATION)', () => {
+    // Employé dédié : isole la dette (computeAmountOwed) des autres tests.
+    let lateEmployeeId: string;
+    let lateIssuanceId: string;
+
+    beforeAll(async () => {
+      const emp = await prisma.employee.create({
+        data: { firstName: 'Ancien', lastName: 'Tardif', phone: '5145550001', city: 'Montréal', status: 'INACTIF' },
+      });
+      lateEmployeeId = emp.id;
+
+      // Remise clôturée fin d'emploi : 2 S dehors, facturées NOT_RETURNED à 25 $
+      // (dette figée = 50 $), comme le ferait closeTerminationCore.
+      const issuance = await prisma.uniformIssuance.create({
+        data: {
+          employeeId: lateEmployeeId,
+          division: 'SECURITE',
+          status: 'CLOSED_TERMINATION',
+          issuedAt: new Date(),
+          lines: { create: [{ variantId, quantity: 2, unitCostSnapshot: 25 }] },
+        },
+      });
+      lateIssuanceId = issuance.id;
+      await prisma.uniformReturn.create({
+        data: {
+          issuanceId: issuance.id,
+          employeeId: lateEmployeeId,
+          status: 'RETURNED',
+          returnedAt: new Date(),
+          notes: 'Clôture fin d’emploi — pièces non retournées',
+          lines: { create: [{ variantId, quantity: 2, condition: 'NOT_RETURNED', unitReplacementCost: 25 }] },
+        },
+      });
+    });
+
+    it('createReturn sur remise clôturée → isLateReturn=true et coûts de ligne forcés à 0', async () => {
+      const res = await request(app)
+        .post('/api/uniforms/returns')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ issuanceId: lateIssuanceId, lines: [{ variantId, quantity: 1, condition: 'GOOD', unitReplacementCost: 25 }] });
+      expect(res.status).toBe(201);
+      expect(res.body.data.isLateReturn).toBe(true);
+      // Coût 0 : la dette est déjà figée par les lignes NOT_RETURNED de la
+      // clôture — sinon computeAmountOwed facturerait une 2ᵉ fois.
+      expect(Number(res.body.data.lines[0].unitReplacementCost)).toBe(0);
+      // Nettoyage : ce brouillon ne doit pas polluer le test de finalisation.
+      await prisma.uniformReturn.delete({ where: { id: res.body.data.id } });
+    });
+
+    it('finalize : crédit de dette pour GOOD, rien pour DAMAGED, remise reste clôturée', async () => {
+      // Dette figée avant : 2 × 25 = 50 $. Retour tardif : 1 GOOD + 1 DAMAGED.
+      const created = await request(app)
+        .post('/api/uniforms/returns')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          issuanceId: lateIssuanceId,
+          lines: [
+            { variantId, quantity: 1, condition: 'GOOD' },
+            { variantId, quantity: 1, condition: 'DAMAGED' },
+          ],
+        });
+      expect(created.status).toBe(201);
+
+      const res = await request(app)
+        .post(`/api/uniforms/returns/${created.body.data.id}/finalize`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.message).toMatch(/tardif/i);
+      // Seule la pièce GOOD crédite, au coût facturé à la clôture (25 $).
+      expect(Number(res.body.data.settledAmount)).toBe(25);
+
+      // Règlement automatique créé, méthode dédiée.
+      const settlements = await prisma.uniformDebtSettlement.findMany({
+        where: { employeeId: lateEmployeeId },
+      });
+      expect(settlements).toHaveLength(1);
+      expect(Number(settlements[0].amount)).toBe(25);
+      expect(settlements[0].method).toBe('RETOUR TARDIF');
+
+      // La dette FACTURÉE reste 50 $ (la ligne DAMAGED du retour tardif est à
+      // 0 $ — pas de double facturation) ; solde = 50 − 25 = 25 $.
+      const lines = await prisma.uniformReturnLine.findMany({
+        where: { return: { employeeId: lateEmployeeId, status: 'RETURNED' } },
+      });
+      const charged = lines
+        .filter((l) => ['DAMAGED', 'LOST', 'NOT_RETURNED'].includes(l.condition))
+        .reduce((s, l) => s + l.quantity * Number(l.unitReplacementCost), 0);
+      expect(charged).toBe(50);
+
+      // La remise reste CLOSED_TERMINATION (refreshParentStatus la saute).
+      const parent = await prisma.uniformIssuance.findUnique({ where: { id: lateIssuanceId } });
+      expect(parent?.status).toBe('CLOSED_TERMINATION');
+
+      // Mouvements de stock du retour tardif : GOOD → IN + WASH_IN ;
+      // DAMAGED → IN + DAMAGED. Net 0 sur quantityOnHand.
+      const movements = await prisma.uniformStockMovement.findMany({
+        where: { returnId: created.body.data.id },
+      });
+      expect([...movements.map((m) => m.type)].sort()).toEqual(['DAMAGED', 'IN', 'IN', 'WASH_IN']);
+    });
+  });
 });

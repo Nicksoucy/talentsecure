@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { UniformItemCondition } from '@prisma/client';
 import { prisma } from '../config/database';
 import { ApiError } from '../utils/apiError';
-import { applyMovement, computeHoldings } from '../services/uniform-stock.service';
+import { applyMovement, computeAmountOwed, computeHoldings } from '../services/uniform-stock.service';
 import { generateReturnPdf } from '../services/uniform-pdf.service';
 import { uploadBufferToR2, getSignedFileUrl } from '../services/r2.service';
 import { uploadSignaturePng } from '../utils/signature';
@@ -56,20 +56,28 @@ export const createReturn = async (req: Request, res: Response, next: NextFuncti
     const issuance = await prisma.uniformIssuance.findUnique({ where: { id: issuanceId } });
     if (!issuance) throw new ApiError(404, 'Remise introuvable');
 
+    // Retour tardif : remise clôturée à la fin d'emploi. La dette est DÉJÀ figée
+    // par les lignes NOT_RETURNED de la clôture — les lignes de ce retour portent
+    // donc un coût 0 (sinon computeAmountOwed facturerait une 2ᵉ fois). Les
+    // pièces revenues en bon état créditeront la dette à la finalisation.
+    const isLateReturn = issuance.status === 'CLOSED_TERMINATION';
+
     const lineData = await buildReturnLines(lines || []);
     if (lineData.length === 0) throw new ApiError(400, 'Ajoutez au moins une pièce à retourner');
+    if (isLateReturn) lineData.forEach((l) => { l.unitReplacementCost = 0; });
 
     const ret = await prisma.uniformReturn.create({
       data: {
         issuanceId,
         employeeId: issuance.employeeId,
+        isLateReturn,
         notes: notes ?? null,
         createdById: userId(req),
         lines: { create: lineData },
       },
       include: { lines: { include: { variant: { include: { item: true } } } } },
     });
-    res.status(201).json({ message: 'Retour créé (brouillon)', data: ret });
+    res.status(201).json({ message: isLateReturn ? 'Retour tardif créé (brouillon)' : 'Retour créé (brouillon)', data: ret });
   } catch (error) {
     next(error);
   }
@@ -88,6 +96,70 @@ export const getReturn = async (req: Request, res: Response, next: NextFunction)
     next(error);
   }
 };
+
+/**
+ * Crédite la dette d'un employé après un RETOUR TARDIF (remise CLOSED_TERMINATION) :
+ * chaque pièce revenue en BON état est valorisée au coût facturé à la clôture
+ * (lignes NOT_RETURNED de la remise) et un règlement automatique est créé,
+ * plafonné au solde dû (jamais de crédit excédentaire). DAMAGED ne crédite rien :
+ * la pièce doit être remplacée de toute façon.
+ *
+ * @returns le montant crédité (0 si rien à créditer).
+ */
+async function settleLateReturn(
+  ret: { id: string; issuanceId: string; employeeId: string; lines: { variantId: string | null; quantity: number; condition: UniformItemCondition }[] },
+  createdById?: string,
+): Promise<number> {
+  const goodByVariant = new Map<string, number>();
+  for (const l of ret.lines) {
+    if (l.condition === 'GOOD' && l.variantId) {
+      goodByVariant.set(l.variantId, (goodByVariant.get(l.variantId) || 0) + l.quantity);
+    }
+  }
+  if (goodByVariant.size === 0) return 0;
+
+  // Coût facturé à la clôture, par variante.
+  const closureLines = await prisma.uniformReturnLine.findMany({
+    where: { return: { issuanceId: ret.issuanceId, status: 'RETURNED' }, condition: 'NOT_RETURNED' },
+  });
+  const costByVariant = new Map<string, number>();
+  for (const cl of closureLines) {
+    if (cl.variantId && !costByVariant.has(cl.variantId)) {
+      costByVariant.set(cl.variantId, Number(cl.unitReplacementCost));
+    }
+  }
+
+  let credit = 0;
+  for (const [variantId, qty] of goodByVariant) credit += qty * (costByVariant.get(variantId) ?? 0);
+  if (credit <= 0) return 0;
+
+  const { owed } = await computeAmountOwed(ret.employeeId);
+  const amount = Math.min(credit, owed);
+  if (amount <= 0) return 0;
+
+  await prisma.uniformDebtSettlement.create({
+    data: {
+      employeeId: ret.employeeId,
+      amount,
+      method: 'RETOUR TARDIF',
+      notes: `Retour tardif ${ret.id} — remise ${ret.issuanceId} : crédit des pièces rapportées en bon état`,
+      createdById: createdById ?? null,
+    },
+  });
+
+  const after = await computeAmountOwed(ret.employeeId);
+  notify({
+    type: 'UNIFORM_SETTLEMENT_RECORDED',
+    channels: ['IN_APP'],
+    audience: 'RH',
+    title: 'Retour tardif — dette créditée',
+    message: `${amount.toFixed(2)} $ crédités (pièces rapportées en bon état) — solde restant : ${after.owed.toFixed(2)} $`,
+    link: `/employees/${ret.employeeId}`,
+    payload: { returnId: ret.id, employeeId: ret.employeeId, amount, owedAfter: after.owed },
+  }).catch((e) => console.error('notify failed:', e));
+
+  return amount;
+}
 
 /** Recalcule le statut de la remise parente après un retour. */
 async function refreshParentStatus(issuanceId: string) {
@@ -229,6 +301,12 @@ export const finalizeReturn = async (req: Request, res: Response, next: NextFunc
 
     await refreshParentStatus(ret.issuanceId);
 
+    // Retour tardif : crédite la dette figée pour les pièces revenues en bon état.
+    let settledAmount = 0;
+    if (ret.isLateReturn) {
+      settledAmount = await settleLateReturn(ret, userId(req));
+    }
+
     try {
       const pdf = await generateReturnPdf(ret.id);
       const { key } = await uploadBufferToR2(pdf, `forms/returns/${ret.id}.pdf`, 'application/pdf');
@@ -251,7 +329,9 @@ export const finalizeReturn = async (req: Request, res: Response, next: NextFunc
         payload: { batchId: washBatchId, returnId: ret.id, goodCount, washBatchIsNew },
       }).catch((e) => console.error('notify failed:', e));
     }
-    if (damagedCount > 0 || lostCount > 0) {
+    // Retour tardif : pas de notif « dette à confirmer » — la dette est déjà
+    // figée depuis la clôture ; le crédit éventuel a sa propre notif (règlement).
+    if ((damagedCount > 0 || lostCount > 0) && !ret.isLateReturn) {
       notify({
         type: 'UNIFORM_RETURN_DAMAGED',
         channels: ['IN_APP', 'EMAIL'],
@@ -264,8 +344,8 @@ export const finalizeReturn = async (req: Request, res: Response, next: NextFunc
     }
 
     res.json({
-      message: 'Retour finalisé',
-      data: { ...updated, washBatchId, goodCount, damagedCount, lostCount },
+      message: ret.isLateReturn ? 'Retour tardif finalisé' : 'Retour finalisé',
+      data: { ...updated, washBatchId, goodCount, damagedCount, lostCount, settledAmount },
     });
   } catch (error) {
     next(error);

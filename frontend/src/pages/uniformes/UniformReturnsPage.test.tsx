@@ -39,6 +39,7 @@ import UniformReturnsPage from './UniformReturnsPage';
 const listIssuances = vi.mocked(uniformService.listIssuances);
 const getIssuance = vi.mocked(uniformService.getIssuance);
 const createReturn = vi.mocked(uniformService.createReturn);
+const finalizeReturn = vi.mocked(uniformService.finalizeReturn);
 const getEmployees = vi.mocked(employeeService.getEmployees);
 const getEmployeeById = vi.mocked(employeeService.getEmployeeById);
 
@@ -177,6 +178,98 @@ describe('UniformReturnsPage', () => {
       await screen.findByText(/aucune pièce à retourner pour cette remise/i)
     ).toBeInTheDocument();
     expect(screen.queryByText('Pièce 1/2')).not.toBeInTheDocument();
+  });
+
+  it("auto-sélectionne l'unique remise active et charge ses pièces sans clic", async () => {
+    renderWithProviders(<UniformReturnsPage />, {
+      route: '/uniformes/retours?employeeId=emp-1',
+    });
+    await screen.findByDisplayValue('Marie Lavoie');
+
+    // Aucune interaction avec le menu « Remise » : la seule remise active
+    // est chargée automatiquement et les cartes-pièces apparaissent.
+    expect(await screen.findByText('Pièce 1/2')).toBeInTheDocument();
+    expect(getIssuance).toHaveBeenCalledWith('iss-1');
+  });
+
+  it('retour tardif : remise clôturée listée, pièces NOT_RETURNED, sans option Perdu', async () => {
+    const user = userEvent.setup();
+    listIssuances.mockResolvedValue({
+      data: [makeIssuance({ status: 'CLOSED_TERMINATION' })],
+      pagination: {},
+    } as never);
+    getIssuance.mockResolvedValue({
+      data: makeIssuance({
+        status: 'CLOSED_TERMINATION',
+        // @ts-expect-error forme libre côté page (any) — clôture fin d'emploi
+        returns: [
+          {
+            status: 'RETURNED',
+            isLateReturn: false,
+            lines: [{ variantId: 'var-1', quantity: 2, condition: 'NOT_RETURNED', unitReplacementCost: 60 }],
+          },
+        ],
+      }),
+    } as never);
+
+    renderWithProviders(<UniformReturnsPage />, {
+      route: '/uniformes/retours?employeeId=emp-1',
+    });
+    await screen.findByDisplayValue('Marie Lavoie');
+
+    // Pas d'auto-sélection pour une remise clôturée : choix explicite.
+    await user.click(screen.getByRole('combobox', { name: /remise/i }));
+    await user.click(await screen.findByRole('option', { name: /clôturée \(retour tardif\)/i }));
+
+    // Les 2 pièces facturées NOT_RETURNED à la clôture redeviennent retournables.
+    expect(await screen.findByText('Pièce 1/2')).toBeInTheDocument();
+    expect(screen.getByText('Pièce 2/2')).toBeInTheDocument();
+    expect(screen.getByText(/retour tardif/i, { selector: 'strong' })).toBeInTheDocument();
+    // Pas de « Perdu » : une pièce non rapportée reste simplement dehors.
+    expect(screen.queryByRole('button', { name: /^perdu$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /finaliser le retour tardif/i })).toBeInTheDocument();
+  });
+
+  it('retour tardif finalisé : le snackbar affiche le montant crédité sur la dette', async () => {
+    const user = userEvent.setup();
+    listIssuances.mockResolvedValue({
+      data: [makeIssuance({ status: 'CLOSED_TERMINATION' })],
+      pagination: {},
+    } as never);
+    getIssuance.mockResolvedValue({
+      data: makeIssuance({
+        status: 'CLOSED_TERMINATION',
+        // @ts-expect-error forme libre côté page (any)
+        returns: [
+          {
+            status: 'RETURNED',
+            isLateReturn: false,
+            lines: [{ variantId: 'var-1', quantity: 1, condition: 'NOT_RETURNED', unitReplacementCost: 60 }],
+          },
+        ],
+      }),
+    } as never);
+    createReturn.mockResolvedValue({ data: { id: 'ret-9' } } as never);
+    finalizeReturn.mockResolvedValue({ data: { washBatchId: null, settledAmount: 60 } } as never);
+
+    renderWithProviders(<UniformReturnsPage />, {
+      route: '/uniformes/retours?employeeId=emp-1',
+    });
+    await screen.findByDisplayValue('Marie Lavoie');
+
+    await user.click(screen.getByRole('combobox', { name: /remise/i }));
+    await user.click(await screen.findByRole('option', { name: /clôturée/i }));
+    await screen.findByText('Pièce 1/1');
+    await user.click(screen.getByRole('button', { name: /tout marquer bon/i }));
+    await user.click(screen.getByRole('button', { name: /finaliser le retour tardif/i }));
+
+    expect(await screen.findByText(/60\.00 \$ crédités sur la dette/i)).toBeInTheDocument();
+    expect(createReturn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        issuanceId: 'iss-1',
+        lines: [expect.objectContaining({ variantId: 'var-1', quantity: 1, condition: 'GOOD' })],
+      }),
+    );
   });
 
   it("affiche l'erreur (et pas « Aucune remise active ») quand le chargement des remises échoue", async () => {

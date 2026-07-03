@@ -1446,6 +1446,10 @@ model UniformReturn {
   status     UniformIssuanceStatus @default(DRAFT)
   notes      String?               @db.Text
   returnedAt DateTime?
+  // Retour tardif : pièces rapportées APRÈS la clôture de fin d'emploi
+  // (remise CLOSED_TERMINATION). Lignes à coût 0 (dette déjà figée) ; les
+  // pièces en bon état créditent la dette via un règlement automatique.
+  isLateReturn Boolean @default(false)
 
   employeeSignatureStoragePath String?
   employerSignatureStoragePath String?
