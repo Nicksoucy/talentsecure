@@ -2,18 +2,18 @@
 
 Ce guide explique comment importer tous les contacts existants de GoHighLevel dans TalentSecure.
 
-## Étape 1: Obtenir les Clés API GoHighLevel
+## Étape 1: Obtenir les identifiants GoHighLevel (API v2)
 
-### 1.1 Obtenir l'API Key
+> ⚠️ L'API v1 (« API Key » JWT) est **dépréciée** par GHL et cesse de fonctionner.
+> On utilise désormais un **Private Integration Token (PIT)** de l'API v2.
 
-1. Connecte-toi à ton compte GoHighLevel
-2. Va dans **Settings** (Paramètres) → **API Key** ou **Integrations**
-3. Cherche "API Key" ou "API Access"
-4. Copie ta clé API (elle ressemble à: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`)
+### 1.1 Créer un Private Integration Token
 
-**Alternative si tu ne trouves pas:**
-- Va sur https://marketplace.gohighlevel.com/oauth/chooselocation
-- Clique sur "Create API Key" ou "Generate New API Key"
+1. Connecte-toi au **sous-compte « Xguard »** dans GoHighLevel
+2. Va dans **Settings** → **Private Integrations**
+3. Clique **Create new Integration**, nomme-la (ex. `TalentSecure Import`)
+4. Sélectionne les scopes : `contacts.readonly`, `contacts.write`
+5. Copie le token généré (il commence par `pit-…`) — **il ne s'affiche qu'une seule fois**
 
 ### 1.2 Obtenir le Location ID
 
@@ -25,24 +25,26 @@ Le Location ID est l'identifiant unique de ton "location" dans GoHighLevel.
 3. Elle ressemble à: `https://app.gohighlevel.com/v2/location/XXXXXX/dashboard`
 4. Le `XXXXXX` est ton Location ID
 
-**Méthode 2 - Via l'API:**
-Une fois que tu as ton API Key, tu peux récupérer ton Location ID avec cette commande:
+**Méthode 2 - Vérifier le token (API v2):**
+Une fois le PIT et le Location ID en main, valide-les avec cette commande
+(doit renvoyer `200` et un contact) :
 
 ```bash
-curl -X GET "https://rest.gohighlevel.com/v1/locations/" \
-  -H "Authorization: Bearer TON_API_KEY"
+curl -X GET "https://services.leadconnectorhq.com/contacts/?locationId=TON_LOCATION_ID&limit=1" \
+  -H "Authorization: Bearer TON_PIT_TOKEN" \
+  -H "Version: 2021-07-28"
 ```
 
-Le premier `id` dans la réponse est ton Location ID.
+Un `401`/`403` signifie un token invalide/révoqué ou un scope manquant.
 
 ## Étape 2: Configurer les Variables d'Environnement
 
 Édite ton fichier `.env` local:
 
 ```bash
-# GoHighLevel API (pour import de contacts)
-GOHIGHLEVEL_API_KEY=ta-vraie-api-key-ici
-GOHIGHLEVEL_LOCATION_ID=ton-location-id-ici
+# GoHighLevel API v2 (Private Integration Token)
+GHL_PIT_TOKEN=pit-ton-token-ici
+GHL_LOCATION_ID=ton-location-id-ici
 ```
 
 ## Étape 3: Exécuter l'Import
@@ -51,14 +53,14 @@ GOHIGHLEVEL_LOCATION_ID=ton-location-id-ici
 
 ```bash
 cd C:\Recrutement\talentsecure\backend
-npx tsx src/scripts/import-gohighlevel-contacts.ts
+npx tsx src/scripts/archive/import-gohighlevel-contacts.ts
 ```
 
 ### Option B: Import avec Nettoyage (supprime d'abord les prospects de test)
 
 ```bash
 cd C:\Recrutement\talentsecure\backend
-npx tsx src/scripts/import-gohighlevel-contacts.ts --clean
+npx tsx src/scripts/archive/import-gohighlevel-contacts.ts --clean
 ```
 
 ## Ce que Fait le Script
@@ -105,13 +107,13 @@ Le script va afficher:
 
 ## Troubleshooting
 
-### Erreur: "GOHIGHLEVEL_API_KEY non définie"
-- Vérifie que ton fichier `.env` contient bien `GOHIGHLEVEL_API_KEY`
+### Erreur: "GHL_PIT_TOKEN est requis" au démarrage
+- Vérifie que ton fichier `.env` contient bien `GHL_PIT_TOKEN`
 - Assure-toi qu'il n'y a pas d'espace avant ou après le `=`
 
-### Erreur: "401 Unauthorized"
-- Ton API Key est invalide ou expirée
-- Régénère une nouvelle API Key dans GoHighLevel
+### Erreur: "401 Unauthorized" / "403 Forbidden"
+- Le PIT est invalide/révoqué, ou il manque un scope (`contacts.readonly`)
+- Régénère un Private Integration Token dans GHL (Settings → Private Integrations)
 
 ### Erreur: "Location not found"
 - Ton Location ID est incorrect

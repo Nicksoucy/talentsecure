@@ -1,20 +1,15 @@
 /**
  * Envoi de SMS via GoHighLevel (LeadConnector).
  *
- * Réutilise la même connexion/headers que l'intégration GHL existante
- * (survey-sync.service.ts / tag-employees-ghl.ts). L'envoi sortant
- * (conversations/messages) est NOUVEAU : il requiert le scope d'écriture sur la
+ * Réutilise la config GHL centralisée (config/ghl.ts : base v2, PIT, headers).
+ * L'envoi sortant (conversations/messages) requiert le scope d'écriture sur la
  * location + un numéro SMS provisionné. Si le contact GHL est introuvable, on
  * lève une 422 pour que l'UI bascule sur la signature au comptoir.
  */
 import axios from 'axios';
 import { ApiError } from '../utils/apiError';
 import { lastTenDigits } from '../utils/phone';
-
-const GHL_TOKEN = process.env.GHL_PIT_TOKEN || 'pit-7de455ab-c46e-47a4-af9e-0b07a6c3a1ee';
-const GHL_LOCATION = process.env.GHL_LOCATION_ID || 'dfkLurZY2ADWAUZl4zYc';
-const GHL_BASE = 'https://services.leadconnectorhq.com';
-const H = { Authorization: `Bearer ${GHL_TOKEN}`, Version: '2021-07-28' };
+import { GHL_BASE, GHL_LOCATION_ID as GHL_LOCATION, GHL_HEADERS as H } from '../config/ghl';
 
 /**
  * Génère les variantes plausibles d'un numéro pour la recherche GHL.

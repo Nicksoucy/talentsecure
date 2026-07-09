@@ -13,11 +13,7 @@
  */
 import axios from 'axios';
 import { ApiError } from '../utils/apiError';
-
-const GHL_TOKEN = process.env.GHL_PIT_TOKEN || 'pit-7de455ab-c46e-47a4-af9e-0b07a6c3a1ee';
-const GHL_LOCATION = process.env.GHL_LOCATION_ID || 'dfkLurZY2ADWAUZl4zYc';
-const GHL_BASE = 'https://services.leadconnectorhq.com';
-const H = { Authorization: `Bearer ${GHL_TOKEN}`, Version: '2021-07-28' };
+import { GHL_BASE, GHL_LOCATION_ID as GHL_LOCATION, GHL_HEADERS as H } from '../config/ghl';
 
 /** Recherche un contact GHL par email. Retourne le contactId ou null. */
 export async function findContactByEmail(email: string): Promise<string | null> {

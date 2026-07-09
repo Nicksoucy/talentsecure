@@ -5,6 +5,7 @@ import { findMatchingEmployee, findMatchingCandidate } from '../utils/candidateM
 import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
 import { resolveProspectCoordinates } from './cityGeocode.service';
 import logger from '../config/logger';
+import { GHL_BASE, GHL_LOCATION_ID as GHL_LOCATION, GHL_HEADERS as H, GHL_SURVEY_ID as SURVEY_ID } from '../config/ghl';
 
 /**
  * Synchronisation du survey GHL "Recrutement - Candidature + Vidéo 30s".
@@ -15,14 +16,6 @@ import logger from '../config/logger';
  * on ne (re)crée pas de prospect (on lie/masque comme ailleurs).
  */
 
-const GHL_TOKEN = process.env.GHL_PIT_TOKEN || 'pit-7de455ab-c46e-47a4-af9e-0b07a6c3a1ee';
-const GHL_LOCATION = process.env.GHL_LOCATION_ID || 'dfkLurZY2ADWAUZl4zYc';
-const GHL_BASE = 'https://services.leadconnectorhq.com';
-const SURVEY_ID = process.env.GHL_SURVEY_ID || '7R37monCgHPJyTiinjn3';
-const CV_FIELD = process.env.GHL_SURVEY_CV_FIELD || '2byZbDiiDflJ7pWGVNnC';
-const VIDEO_FIELD = process.env.GHL_SURVEY_VIDEO_FIELD || 'FiITjfHeL2205bkCXNq2';
-
-const H = { Authorization: `Bearer ${GHL_TOKEN}`, Version: '2021-07-28' };
 const DOC_OR_IMG = ['pdf', 'wordprocessingml', 'msword', 'image/'];
 
 export interface SyncSummary {

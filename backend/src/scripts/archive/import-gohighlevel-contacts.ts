@@ -6,6 +6,7 @@ import { promisify } from 'util';
 import { pipeline } from 'stream';
 import dotenv from 'dotenv';
 import { findMatchingCandidate, findMatchingEmployee } from '../utils/candidateMatch';
+import { GHL_BASE, GHL_LOCATION_ID, GHL_HEADERS } from '../../config/ghl';
 
 dotenv.config();
 
@@ -108,16 +109,10 @@ async function downloadCV(cvUrl: string, prospectId: string): Promise<string | n
 }
 
 async function fetchGoHighLevelContacts(): Promise<GoHighLevelContact[]> {
-  const apiKey = process.env.GOHIGHLEVEL_API_KEY;
-  const locationId = process.env.GOHIGHLEVEL_LOCATION_ID;
-
-  if (!apiKey) {
-    throw new Error('GOHIGHLEVEL_API_KEY non définie dans .env');
-  }
-
-  if (!locationId) {
-    throw new Error('GOHIGHLEVEL_LOCATION_ID non définie dans .env');
-  }
+  // Migré vers le Private Integration Token v2 (config/ghl.ts). L'ancienne clé
+  // v1 GOHIGHLEVEL_API_KEY est retirée : elle ne fonctionne plus après la
+  // dépréciation de l'API v1 par GHL.
+  const locationId = GHL_LOCATION_ID;
 
   console.log('📡 Récupération des contacts depuis GoHighLevel...');
 
@@ -142,12 +137,9 @@ async function fetchGoHighLevelContacts(): Promise<GoHighLevelContact[]> {
       console.log(`  📄 Page ${pageCount}: Récupération...`);
 
       const response = await axios.get(
-        `https://services.leadconnectorhq.com/contacts/`,
+        `${GHL_BASE}/contacts/`,
         {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            Version: '2021-07-28',
-          },
+          headers: GHL_HEADERS,
           params,
         }
       );
