@@ -18,6 +18,9 @@ async function main() {
   const where: any = {
     isDeleted: false,
     lat: { not: null },
+    // Uniquement les points à l'adresse EXACTE (voir fillMissingContactFieldsFromCoords :
+    // les centroïdes postal/ville fabriqueraient une ville/CP faussement précis).
+    geocodeSource: 'address',
     OR: [{ city: null }, { city: '' }, { postalCode: null }, { postalCode: '' }],
   };
   if (!includeInactifs) where.status = 'ACTIF';

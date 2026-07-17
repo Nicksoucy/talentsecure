@@ -111,9 +111,16 @@ export async function fillMissingContactFieldsFromCoords(
 ): Promise<{ city?: string; postalCode?: string } | null> {
   const emp = await prisma.employee.findUnique({
     where: { id: employeeId },
-    select: { lat: true, lng: true, city: true, postalCode: true },
+    select: { lat: true, lng: true, city: true, postalCode: true, geocodeSource: true },
   });
   if (!emp || emp.lat == null || emp.lng == null) return null;
+
+  // On ne fiabilise QUE les points À L'ADRESSE EXACTE. Un centroïde de secteur
+  // postal (source 'postal') ou de centre-ville (source 'city') n'est PAS le
+  // domicile de l'agent : un géocodage inverse y fabriquerait une ville/CP
+  // faussement précis (le CP du centre-ville, une municipalité voisine). Garde
+  // unique protégeant tous les appelants (contrôleur fire-and-forget + backfill).
+  if (emp.geocodeSource !== 'address') return null;
 
   const needCity = !(emp.city || '').trim();
   const needPostal = !(emp.postalCode || '').trim();
@@ -122,6 +129,13 @@ export async function fillMissingContactFieldsFromCoords(
   const rev = await nominatimReverse(emp.lat, emp.lng);
   const addr = rev?.address;
   if (!addr) return null;
+
+  // Garde province : les bornes QC englobent la région d'Ottawa (Ontario) —
+  // une adresse ontarienne peut passer le géocodage direct puis, en inverse,
+  // renvoyer une ville/CP ontariens. On ne remplit que depuis un résultat
+  // clairement québécois (sinon on préfère un champ vide à une valeur hors-QC).
+  const state = String(addr.state || '').toLowerCase();
+  if (!state.includes('quebec') && !state.includes('québec')) return null;
 
   const data: { city?: string; postalCode?: string } = {};
   if (needCity) {
