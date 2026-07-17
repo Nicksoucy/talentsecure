@@ -68,7 +68,7 @@
     "passport-local": "^1.0.0",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
-    "pdfkit": "^0.14.0",
+    "pdfkit": "^0.19.1",
     "redis": "^4.6.12",
     "sharp": "^0.33.2",
     "stripe": "^22.1.1",
