@@ -4,6 +4,7 @@ import {
   getEmployees,
   getEmployeeById,
   getEmployeesStats,
+  getEmployeesMapPoints,
   createEmployee,
   updateEmployee,
   deleteEmployee,
@@ -28,6 +29,8 @@ router.use(authorizeReadWrite(['ADMIN', 'RH_RECRUITER', 'SALES', 'MAGASIN', 'MAG
 
 router.get('/', getEmployees);
 router.get('/stats/summary', getEmployeesStats);
+// Points carte des agents actifs (déclaré avant /:id — sa validation uuid 400erait).
+router.get('/stats/map-points', getEmployeesMapPoints);
 router.post('/', validate({ body: createEmployeeSchema }), createEmployee);
 
 // Promouvoir un candidat en employé

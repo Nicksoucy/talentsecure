@@ -59,26 +59,45 @@ export interface GeoPersonRow {
   geocodeSource: string | null;
   postalCode: string | null;
   city: string | null;
+  /** Nom affichable — requis seulement pour les libellés par noms (employés). */
+  name?: string | null;
 }
 
 export interface GeoMapPoint {
   lat: number;
   lng: number;
   count: number;
-  source: string; // 'postal' | 'city'
+  source: string; // 'address' | 'postal' | 'city'
   label: string;
 }
 
+export interface GeoMapPointsOptions {
+  /**
+   * Sources dont le libellé du point = noms des personnes (ex. ['address'] pour
+   * la carte des agents : un pin à l'adresse exacte porte le nom de l'agent).
+   */
+  nameLabelSources?: string[];
+  /** Nombre max de noms affichés avant « +N » (défaut 3). */
+  maxNames?: number;
+}
+
 /**
- * Regroupe des personnes géocodées par coordonnées EXACTES — centroïde du
- * secteur postal (FSA, source 'postal') ou centre-ville (source 'city') — et
- * produit les points de la carte (libellé = secteur FSA · ville dominante).
+ * Regroupe des personnes géocodées par coordonnées EXACTES — adresse (source
+ * 'address'), centroïde du secteur postal (FSA, source 'postal') ou centre-ville
+ * (source 'city') — et produit les points de la carte (libellé = secteur FSA ·
+ * ville dominante, ou noms des personnes pour les sources de opts.nameLabelSources).
  * Renvoie aussi le nombre de personnes non géolocalisées.
  */
-export function buildGeoMapPoints(rows: GeoPersonRow[]): {
+export function buildGeoMapPoints(
+  rows: GeoPersonRow[],
+  opts?: GeoMapPointsOptions
+): {
   points: GeoMapPoint[];
   unplaced: number;
 } {
+  const nameSources = new Set(opts?.nameLabelSources ?? []);
+  const maxNames = opts?.maxNames ?? 3;
+
   interface PointGroup {
     lat: number;
     lng: number;
@@ -86,6 +105,7 @@ export function buildGeoMapPoints(rows: GeoPersonRow[]): {
     source: string;
     fsa: string | null;
     cities: Map<string, number>;
+    names: string[];
   }
   const groups = new Map<string, PointGroup>();
   let unplaced = 0;
@@ -105,10 +125,12 @@ export function buildGeoMapPoints(rows: GeoPersonRow[]): {
         source: p.geocodeSource || 'city',
         fsa: null,
         cities: new Map(),
+        names: [],
       };
       groups.set(key, g);
     }
     g.count++;
+    if (nameSources.size > 0 && p.name) g.names.push(p.name);
     const ville = canonicalCity(p.city || '');
     if (ville) g.cities.set(ville, (g.cities.get(ville) || 0) + 1);
     if (!g.fsa && p.postalCode) {
@@ -128,10 +150,18 @@ export function buildGeoMapPoints(rows: GeoPersonRow[]): {
           topN = n;
         }
       }
-      const label =
-        g.source === 'postal'
-          ? `Secteur ${g.fsa ?? '?'}${topCity ? ` · ${topCity}` : ''}`
-          : `${topCity || 'Ville inconnue'} (centre-ville approx.)`;
+      let label: string;
+      if (nameSources.has(g.source) && g.names.length > 0) {
+        const shown = g.names.slice(0, maxNames);
+        const rest = g.count - shown.length;
+        label = rest > 0 ? `${shown.join(', ')} +${rest}` : shown.join(', ');
+      } else if (g.source === 'postal') {
+        label = `Secteur ${g.fsa ?? '?'}${topCity ? ` · ${topCity}` : ''}`;
+      } else if (g.source === 'address') {
+        label = topCity ? `Adresse exacte · ${topCity}` : 'Adresse exacte';
+      } else {
+        label = `${topCity || 'Ville inconnue'} (centre-ville approx.)`;
+      }
       return { lat: g.lat, lng: g.lng, count: g.count, source: g.source, label };
     })
     .sort((a, b) => b.count - a.count);

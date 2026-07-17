@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-prisma-reset.cjs\"",
+            "timeout": 10,
+            "statusMessage": "Garde anti-reset prod…"
+          }
+        ]
+      }
+    ]
+  }
+}

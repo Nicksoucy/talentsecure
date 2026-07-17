@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useSnackbar } from 'notistack';
 import {
@@ -6,6 +6,7 @@ import {
   Box,
   Card,
   CardContent,
+  Collapse,
   Typography,
   Table,
   TableBody,
@@ -33,13 +34,29 @@ import {
   Tooltip,
   Link,
 } from '@mui/material';
-import { Search as SearchIcon, Badge as BadgeIcon, Add as AddIcon, Checkroom as CheckroomIcon } from '@mui/icons-material';
+import {
+  Search as SearchIcon,
+  Badge as BadgeIcon,
+  Add as AddIcon,
+  Checkroom as CheckroomIcon,
+  Map as MapIcon,
+} from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { employeeService } from '@/services/employee.service';
 import { useAuthStore } from '@/store/authStore';
 import ContactConflictDialog from '@/components/ContactConflictDialog';
 import { contactService, ContactConflict } from '@/services/contact.service';
 import CrossTableHint from '@/components/CrossTableHint';
+
+const EmployeesMap = lazy(() => import('@/components/map/EmployeesMap'));
+
+/** Rayon actif : point (carte) + rayon, avec un libellé optionnel pour la chip. */
+interface NearFilter {
+  lat: number;
+  lng: number;
+  radiusKm: number;
+  label?: string;
+}
 
 function formatDate(d?: string) {
   if (!d) return '—';
@@ -58,6 +75,9 @@ export default function EmployeesPage() {
   // pour ne pas refaire une requête à chaque frappe.
   const [debouncedSearch, setDebouncedSearch] = useState(initialQ);
   const [status, setStatus] = useState<'' | 'ACTIF' | 'INACTIF'>('');
+  // Carte des agents actifs (repliée par défaut) + filtre par rayon depuis la carte.
+  const [showMap, setShowMap] = useState(false);
+  const [nearFilter, setNearFilter] = useState<NearFilter | null>(null);
   const pageSize = 20;
   const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
@@ -122,7 +142,7 @@ export default function EmployeesPage() {
   }, [search]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['employees', page, debouncedSearch, status],
+    queryKey: ['employees', page, debouncedSearch, status, nearFilter],
     queryFn: () =>
       employeeService.getEmployees({
         page,
@@ -131,9 +151,31 @@ export default function EmployeesPage() {
         status: status || undefined,
         sortBy: 'createdAt',
         sortOrder: 'desc',
+        near: nearFilter
+          ? { lat: nearFilter.lat, lng: nearFilter.lng, radiusKm: nearFilter.radiusKm }
+          : undefined,
       }),
     placeholderData: keepPreviousData,
   });
+
+  // Recherche par rayon autour d'un POINT de la carte (déposé, recherché, ou
+  // « Voir ces agents » d'un pin) : filtre la liste sur ce rayon, triée du plus
+  // proche au plus loin (colonne Distance).
+  const handleNearbySelect = (
+    center: { lat: number; lng: number },
+    radiusKm: number,
+    label?: string
+  ) => {
+    setNearFilter({ lat: center.lat, lng: center.lng, radiusKm, label });
+    setShowMap(false);
+    setPage(1);
+    enqueueSnackbar(
+      label
+        ? `Agents à ce point — ${label}`
+        : `Agents dans un rayon de ${radiusKm} km — liste triée par distance`,
+      { variant: 'success', autoHideDuration: 6000 }
+    );
+  };
 
   const { data: statsData } = useQuery({
     queryKey: ['employees', 'stats'],
@@ -155,16 +197,40 @@ export default function EmployeesPage() {
             Employés
           </Typography>
         </Box>
-        {isUniformStaff && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => { setForm({ ...EMPTY_FORM }); setDupChecked('idle'); setAddOpen(true); }}
+            variant="outlined"
+            startIcon={<MapIcon />}
+            onClick={() => setShowMap(!showMap)}
           >
-            Ajouter un employé
+            {showMap ? 'Masquer la carte' : 'Afficher la carte'}
           </Button>
-        )}
+          {isUniformStaff && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => { setForm({ ...EMPTY_FORM }); setDupChecked('idle'); setAddOpen(true); }}
+            >
+              Ajouter un employé
+            </Button>
+          )}
+        </Box>
       </Box>
+
+      {/* Carte des agents actifs (adresse exacte) — chargée seulement à l'ouverture. */}
+      <Collapse in={showMap} mountOnEnter>
+        <Box sx={{ mb: 3 }}>
+          <Suspense
+            fallback={
+              <Box display="flex" justifyContent="center" alignItems="center" height={200}>
+                <CircularProgress />
+              </Box>
+            }
+          >
+            <EmployeesMap onNearbySelect={handleNearbySelect} />
+          </Suspense>
+        </Box>
+      </Collapse>
 
       {/* Stats */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -220,6 +286,14 @@ export default function EmployeesPage() {
               <MenuItem value="INACTIF">Inactif</MenuItem>
             </Select>
           </FormControl>
+          {nearFilter && (
+            <Chip
+              color="primary"
+              label={`≤ ${nearFilter.radiusKm} km${nearFilter.label ? ` — ${nearFilter.label}` : ''}`}
+              onDelete={() => { setNearFilter(null); setPage(1); }}
+              sx={{ alignSelf: 'center' }}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -235,6 +309,7 @@ export default function EmployeesPage() {
               <TableCell>Email</TableCell>
               <TableCell>Téléphone</TableCell>
               <TableCell>Ville</TableCell>
+              {nearFilter && <TableCell>Distance</TableCell>}
               <TableCell>Poste</TableCell>
               <TableCell>Mandat</TableCell>
               <TableCell>Embauche</TableCell>
@@ -245,13 +320,13 @@ export default function EmployeesPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={isUniformStaff ? 9 : 8} align="center" sx={{ py: 6 }}>
+                <TableCell colSpan={8 + (isUniformStaff ? 1 : 0) + (nearFilter ? 1 : 0)} align="center" sx={{ py: 6 }}>
                   <CircularProgress />
                 </TableCell>
               </TableRow>
             ) : employees.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={isUniformStaff ? 9 : 8} align="center" sx={{ py: 6 }}>
+                <TableCell colSpan={8 + (isUniformStaff ? 1 : 0) + (nearFilter ? 1 : 0)} align="center" sx={{ py: 6 }}>
                   <Typography color="text.secondary">Aucun employé</Typography>
                 </TableCell>
               </TableRow>
@@ -276,6 +351,9 @@ export default function EmployeesPage() {
                   <TableCell>{e.email || '—'}</TableCell>
                   <TableCell>{e.phone}</TableCell>
                   <TableCell>{e.city || '—'}</TableCell>
+                  {nearFilter && (
+                    <TableCell>{e.distanceKm != null ? `${e.distanceKm} km` : '—'}</TableCell>
+                  )}
                   <TableCell>{e.position || '—'}</TableCell>
                   <TableCell>{e.assignment || '—'}</TableCell>
                   <TableCell>{formatDate(e.hireDate)}</TableCell>

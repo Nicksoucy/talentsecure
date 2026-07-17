@@ -37,34 +37,53 @@ const QC_BOUNDS = { latMin: 44.9, latMax: 62.7, lngMin: -79.9, lngMax: -57.0 };
 const PLACE_CLASSES = new Set(['place', 'boundary']);
 
 /**
- * Géocode une ville en requête STRUCTURÉE limitée au QUÉBEC (city + state=Québec
- * + country=Canada). Ne renvoie un résultat que s'il existe une ville de ce nom
- * AU QUÉBEC ; sinon null (villes étrangères ou hors-QC → non placées).
+ * Appel Nominatim PARTAGÉ (utilisé aussi par addressGeocode.service) : throttle
+ * global au process (~1 req/s, politique OSM), User-Agent identifiant, timeout
+ * 8 s. Retourne le premier résultat brut, ou null (erreur → warn + null).
  */
-async function geocodeNominatim(city: string): Promise<{ lat: number; lng: number } | null> {
+export async function nominatimSearch(
+  params: Record<string, string | number>
+): Promise<any | null> {
   const wait = lastNominatimAt + NOMINATIM_MIN_INTERVAL_MS - Date.now();
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastNominatimAt = Date.now();
 
   try {
     const res = await axios.get('https://nominatim.openstreetmap.org/search', {
-      params: { city, state: 'Québec', country: 'Canada', format: 'json', limit: 1, addressdetails: 1 },
+      params: { format: 'json', limit: 1, addressdetails: 1, ...params },
       headers: { 'User-Agent': 'TalentSecure/1.0 (nick@darkhorseads.com)' },
       timeout: 8000,
     });
-    const hit = Array.isArray(res.data) ? res.data[0] : null;
-    if (!hit || !hit.lat || !hit.lon) return null;
-    if (hit.class && !PLACE_CLASSES.has(hit.class)) return null; // pas une rue
-    const lat = parseFloat(hit.lat);
-    const lng = parseFloat(hit.lon);
-    if (lat < QC_BOUNDS.latMin || lat > QC_BOUNDS.latMax || lng < QC_BOUNDS.lngMin || lng > QC_BOUNDS.lngMax) {
-      return null; // hors Québec → rejeté
-    }
-    return { lat, lng };
+    return Array.isArray(res.data) ? res.data[0] || null : null;
   } catch (e: any) {
-    logger.warn(`[geocode] échec Nominatim pour "${city}": ${e?.message}`);
+    logger.warn(`[geocode] échec Nominatim (${JSON.stringify(params)}): ${e?.message}`);
     return null;
   }
+}
+
+/** Vrai si (lat,lng) tombe dans les bornes approximatives du Québec. */
+export function isInQuebecBounds(lat: number, lng: number): boolean {
+  return (
+    lat >= QC_BOUNDS.latMin &&
+    lat <= QC_BOUNDS.latMax &&
+    lng >= QC_BOUNDS.lngMin &&
+    lng <= QC_BOUNDS.lngMax
+  );
+}
+
+/**
+ * Géocode une ville en requête STRUCTURÉE limitée au QUÉBEC (city + state=Québec
+ * + country=Canada). Ne renvoie un résultat que s'il existe une ville de ce nom
+ * AU QUÉBEC ; sinon null (villes étrangères ou hors-QC → non placées).
+ */
+async function geocodeNominatim(city: string): Promise<{ lat: number; lng: number } | null> {
+  const hit = await nominatimSearch({ city, state: 'Québec', country: 'Canada' });
+  if (!hit || !hit.lat || !hit.lon) return null;
+  if (hit.class && !PLACE_CLASSES.has(hit.class)) return null; // pas une rue
+  const lat = parseFloat(hit.lat);
+  const lng = parseFloat(hit.lon);
+  if (!isInQuebecBounds(lat, lng)) return null; // hors Québec → rejeté
+  return { lat, lng };
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -82,22 +101,7 @@ function mapState(state: string | undefined): ProvinceClass | null {
   return 'other-CA';
 }
 
-async function nominatimFirstHit(params: Record<string, string>): Promise<any | null> {
-  const wait = lastNominatimAt + NOMINATIM_MIN_INTERVAL_MS - Date.now();
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-  lastNominatimAt = Date.now();
-  try {
-    const res = await axios.get('https://nominatim.openstreetmap.org/search', {
-      params: { ...params, format: 'json', limit: 1, addressdetails: 1 },
-      headers: { 'User-Agent': 'TalentSecure/1.0 (nick@darkhorseads.com)' },
-      timeout: 8000,
-    });
-    return Array.isArray(res.data) ? res.data[0] || null : null;
-  } catch (e: any) {
-    logger.warn(`[classify] échec Nominatim (${JSON.stringify(params)}): ${e?.message}`);
-    return null;
-  }
-}
+const nominatimFirstHit = nominatimSearch;
 
 /**
  * Classe une ville : QC / ON / other-CA / foreign / unknown.

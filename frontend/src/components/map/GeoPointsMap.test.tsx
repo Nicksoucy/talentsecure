@@ -129,6 +129,28 @@ describe('GeoPointsMap', () => {
     ).toBeInTheDocument();
   });
 
+  it("affiche les points source 'address' avec la légende « adresse exacte » (carte des agents)", async () => {
+    mockPointsResponse([
+      { lat: 45.5, lng: -73.55, count: 1, source: 'address', label: 'Jean Tremblay' },
+      { lat: 46.8, lng: -71.3, count: 8, source: 'city', label: 'Québec (centre-ville)' },
+    ]);
+    renderMap({ unitSingular: 'agent', unitPlural: 'agents' });
+
+    expect(await screen.findByTestId('map')).toBeInTheDocument();
+    // Le pin à l'adresse exacte porte le nom de l'agent.
+    expect(screen.getByText('Jean Tremblay')).toBeInTheDocument();
+    // La légende gagne l'entrée verte SEULEMENT quand des points 'address' existent.
+    expect(screen.getByText(/Pastille verte = adresse exacte/i)).toBeInTheDocument();
+  });
+
+  it("sans point 'address' : pas d'entrée « adresse exacte » dans la légende", async () => {
+    mockPointsResponse();
+    renderMap();
+
+    await screen.findByTestId('map');
+    expect(screen.queryByText(/adresse exacte/i)).not.toBeInTheDocument();
+  });
+
   it("affiche un message d'erreur si le chargement des points échoue", async () => {
     mockGet.mockRejectedValue(new Error('boom'));
     renderMap();

@@ -26,6 +26,8 @@ interface GetEmployeesParams {
   limit?: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  /** Recherche par rayon autour d'un point (carte) → nearLat/nearLng/nearRadiusKm. */
+  near?: { lat: number; lng: number; radiusKm: number } | null;
 }
 
 interface EmployeesResponse {
@@ -40,7 +42,15 @@ interface EmployeesResponse {
 
 export const employeeService = {
   async getEmployees(params?: GetEmployeesParams): Promise<EmployeesResponse> {
-    const response = await api.get('/api/employees', { params });
+    // `near` (point + rayon) → nearLat/nearLng/nearRadiusKm pour l'API.
+    const { near, ...rest } = params || {};
+    const query: Record<string, unknown> = { ...rest };
+    if (near) {
+      query.nearLat = near.lat;
+      query.nearLng = near.lng;
+      query.nearRadiusKm = near.radiusKm;
+    }
+    const response = await api.get('/api/employees', { params: query });
     return response.data;
   },
 

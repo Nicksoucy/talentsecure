@@ -33,15 +33,16 @@ L.Icon.Default.mergeOptions({
 });
 
 /**
- * Un point = toutes les personnes partageant les mêmes coordonnées : centroïde
- * du secteur postal (FSA, source 'postal') ou centre-ville (source 'city' =
- * pas de code postal, position approximative).
+ * Un point = toutes les personnes partageant les mêmes coordonnées : adresse
+ * exacte (source 'address' — carte des agents), centroïde du secteur postal
+ * (FSA, source 'postal') ou centre-ville (source 'city' = pas de code postal,
+ * position approximative).
  */
 interface MapPoint {
   lat: number;
   lng: number;
   count: number;
-  source: string; // 'postal' | 'city'
+  source: string; // 'address' | 'postal' | 'city'
   label: string;
 }
 
@@ -65,7 +66,8 @@ export interface GeoPointsMapProps {
 }
 
 // Pastille ronde : taille + couleur selon le nombre de personnes. Les points
-// « centre-ville approx. » (sans code postal) sont orange pour les distinguer.
+// « centre-ville approx. » (sans code postal) sont orange, et ceux placés à
+// l'adresse exacte (carte des agents) sont verts, pour les distinguer.
 const makeCountIcon = (count: number, source: string = 'postal') => {
   let dimension = 36;
   let color = '#2196f3';
@@ -83,6 +85,7 @@ const makeCountIcon = (count: number, source: string = 'postal') => {
     color = '#64b5f6';
   }
   if (source === 'city') color = '#fb8c00'; // position approximative (centre-ville)
+  if (source === 'address') color = '#2e7d32'; // adresse exacte (précision rue)
 
   return L.divIcon({
     html: `<div style="background-color:${color};width:${dimension}px;height:${dimension}px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:13px;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">${count}</div>`,
@@ -440,8 +443,9 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
 
       <Box sx={{ mt: 1, px: 1, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
         <Typography variant="caption" color="text.secondary">
-          Pastille bleue = position au code postal (secteur) · orange = centre-ville
-          approximatif ({unitPlural} sans code postal)
+          {points.some((p) => p.source === 'address') ? 'Pastille verte = adresse exacte · bleue' : 'Pastille bleue'} = position au
+          code postal (secteur) · orange = centre-ville approximatif ({unitPlural} sans code
+          postal)
         </Typography>
         {unplaced > 0 && (
           <Typography variant="caption" color="text.secondary">

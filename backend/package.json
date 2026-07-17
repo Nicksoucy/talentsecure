@@ -12,6 +12,8 @@
     "prisma:studio": "prisma studio",
     "backfill:geocode": "ts-node src/scripts/backfillProspectGeocodes.ts",
     "backfill:geocode-candidates": "ts-node src/scripts/backfillCandidateGeocodes.ts",
+    "backfill:geocode-employees": "ts-node src/scripts/backfillEmployeeGeocodes.ts",
+    "import:agendrix": "ts-node src/scripts/import-agendrix-employees.ts",
     "backfill:experience-months": "ts-node src/scripts/backfillExperienceMonths.ts",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -22,7 +24,7 @@
     "depcruise": "depcruise src --config .dependency-cruiser.cjs",
     "check:routes": "node scripts/check-route-validation.cjs",
     "check:errors": "node scripts/check-error-envelope.cjs",
-    "test:db:push": "prisma db push --skip-generate --force-reset"
+    "test:db:push": "node scripts/assert-test-db.cjs && prisma db push --skip-generate --force-reset"
   },
   "keywords": [
     "talentsecure",
