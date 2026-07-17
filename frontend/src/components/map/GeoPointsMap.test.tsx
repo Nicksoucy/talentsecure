@@ -162,6 +162,46 @@ describe('GeoPointsMap', () => {
     expect(screen.queryByTestId('map')).not.toBeInTheDocument();
   });
 
+  it('couche mandats : masquée par défaut (pas de fetch sitesUrl, pas de pin rose)', async () => {
+    const SITES_URL = '/api/mandates/stats/map-points';
+    mockGet.mockImplementation((url: string) => {
+      if (url === POINTS_URL) return Promise.resolve({ data: { data: { points: samplePoints, unplaced: 0 } } });
+      if (url === SITES_URL) return Promise.resolve({ data: { data: { points: [{ lat: 45.5, lng: -73.55, count: 1, source: 'address', label: '333 Sherbrooke Est' }], unplaced: 0 } } });
+      return Promise.resolve({ data: { pagination: { total: 0 } } });
+    });
+
+    renderMap({ sitesUrl: SITES_URL });
+    await screen.findByTestId('map');
+
+    // La case existe mais est décochée → sitesUrl jamais appelé, mandat absent.
+    const checkbox = screen.getByRole('checkbox', { name: /afficher les mandats/i });
+    expect(checkbox).not.toBeChecked();
+    expect(mockGet).not.toHaveBeenCalledWith(SITES_URL);
+    expect(screen.queryByText('333 Sherbrooke Est')).not.toBeInTheDocument();
+  });
+
+  it('couche mandats : cocher la case charge les pins roses et la légende', async () => {
+    const SITES_URL = '/api/mandates/stats/map-points';
+    mockGet.mockImplementation((url: string) => {
+      if (url === POINTS_URL) return Promise.resolve({ data: { data: { points: samplePoints, unplaced: 0 } } });
+      if (url === SITES_URL) return Promise.resolve({ data: { data: { points: [{ lat: 45.5, lng: -73.55, count: 2, source: 'address', label: 'YHU Poste 1, YHU Poste 2' }], unplaced: 0 } } });
+      return Promise.resolve({ data: { pagination: { total: 0 } } });
+    });
+
+    const user = userEvent.setup();
+    renderMap({ sitesUrl: SITES_URL });
+    await screen.findByTestId('map');
+
+    await user.click(screen.getByRole('checkbox', { name: /afficher les mandats/i }));
+
+    // Le mandat (regroupé) apparaît avec son libellé de noms + le compteur rose.
+    expect(await screen.findByText('YHU Poste 1, YHU Poste 2')).toBeInTheDocument();
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith(SITES_URL));
+    expect(screen.getByText(/2 mandats à cette adresse/i)).toBeInTheDocument();
+    // Entrée de légende rose.
+    expect(screen.getByText(/rose = mandat/i)).toBeInTheDocument();
+  });
+
   it('localise une recherche par code postal et dépose un point', async () => {
     const resolved = { lat: 45.51, lng: -73.57 };
     mockGet.mockImplementation((url: string) => {

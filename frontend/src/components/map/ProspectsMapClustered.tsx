@@ -20,6 +20,7 @@ const ProspectsMapClustered: React.FC<ProspectsMapClusteredProps> = ({ onNearbyS
     listUrl="/api/prospects"
     unitSingular="CV"
     unitPlural="CV"
+    sitesUrl="/api/mandates/stats/map-points"
     onNearbySelect={onNearbySelect}
   />
 );
