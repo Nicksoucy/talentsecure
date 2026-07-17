@@ -30,6 +30,21 @@ let lastNominatimAt = 0;
 const NOMINATIM_MIN_INTERVAL_MS = 1100;
 const MAX_GEOCODE_PER_CYCLE = 20;
 
+/**
+ * Réserve le prochain créneau d'appel Nominatim de façon ATOMIQUE (pas de yield
+ * entre lire et écrire lastNominatimAt) puis attend jusqu'à ce créneau. Sérialise
+ * correctement les appels concurrents (contrôleur fire-and-forget + backfill) :
+ * sans ça, deux chaînes pouvaient lire la même valeur périmée et taper l'API
+ * simultanément, violant la politique OSM ~1 req/s.
+ */
+async function throttleNominatim(): Promise<void> {
+  const now = Date.now();
+  const slot = Math.max(now, lastNominatimAt + NOMINATIM_MIN_INTERVAL_MS);
+  lastNominatimAt = slot; // réservé AVANT tout await
+  const wait = slot - now;
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+}
+
 // Bornes approximatives du QUÉBEC — filet pour rejeter tout résultat hors-QC
 // (villes étrangères ET villes canadiennes hors-Québec : on reste au Québec).
 const QC_BOUNDS = { latMin: 44.9, latMax: 62.7, lngMin: -79.9, lngMax: -57.0 };
@@ -44,9 +59,7 @@ const PLACE_CLASSES = new Set(['place', 'boundary']);
 export async function nominatimSearch(
   params: Record<string, string | number>
 ): Promise<any | null> {
-  const wait = lastNominatimAt + NOMINATIM_MIN_INTERVAL_MS - Date.now();
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-  lastNominatimAt = Date.now();
+  await throttleNominatim();
 
   try {
     const res = await axios.get('https://nominatim.openstreetmap.org/search', {
@@ -57,6 +70,26 @@ export async function nominatimSearch(
     return Array.isArray(res.data) ? res.data[0] || null : null;
   } catch (e: any) {
     logger.warn(`[geocode] échec Nominatim (${JSON.stringify(params)}): ${e?.message}`);
+    return null;
+  }
+}
+
+/**
+ * Géocodage INVERSE Nominatim (lat/lng → adresse structurée) — même throttle
+ * partagé (~1 req/s). Retourne l'objet brut avec `.address`, ou null.
+ */
+export async function nominatimReverse(lat: number, lng: number): Promise<any | null> {
+  await throttleNominatim();
+
+  try {
+    const res = await axios.get('https://nominatim.openstreetmap.org/reverse', {
+      params: { lat, lon: lng, format: 'json', addressdetails: 1, zoom: 18 },
+      headers: { 'User-Agent': 'TalentSecure/1.0 (nick@darkhorseads.com)' },
+      timeout: 8000,
+    });
+    return res.data && res.data.address ? res.data : null;
+  } catch (e: any) {
+    logger.warn(`[geocode] échec Nominatim reverse (${lat},${lng}): ${e?.message}`);
     return null;
   }
 }
