@@ -233,7 +233,8 @@ describe('EmployeesPage', () => {
       expect(screen.queryByText('≤ 25 km — Jean Tremblay')).not.toBeInTheDocument();
     });
     // Dernier appel : sans filtre near.
-    const lastCall = svc.getEmployees.mock.calls.at(-1)![0];
+    const calls = svc.getEmployees.mock.calls;
+    const lastCall = calls[calls.length - 1][0];
     expect(lastCall.near).toBeUndefined();
     // La colonne Distance disparaît avec le filtre.
     expect(screen.queryByText('Distance')).not.toBeInTheDocument();
