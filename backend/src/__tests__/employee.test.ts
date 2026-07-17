@@ -5,6 +5,15 @@ import { createApp } from '../app';
 import { hashPassword } from '../utils/password';
 import { generateAccessToken } from '../utils/jwt';
 
+// Le contrôleur employé déclenche un géocodage Nominatim EN ARRIÈRE-PLAN
+// (fire-and-forget) après create/update/promotion. On ne mocke QUE cette
+// fonction réseau — le reste du module (clé de cache, résolutions pures) reste
+// réel pour que l'endpoint map-points fonctionne normalement.
+jest.mock('../services/addressGeocode.service', () => ({
+  ...jest.requireActual('../services/addressGeocode.service'),
+  geocodeEmployeeById: jest.fn().mockResolvedValue(null),
+}));
+
 /**
  * Employés — /api/employees (back-office).
  *
@@ -281,6 +290,99 @@ describe('Employees — /api/employees', () => {
       await request(app).put(`/api/employees/${emp.id}`).set('Authorization', `Bearer ${rhToken}`).send({ status: 'ACTIF' });
       const after = await prisma.uniformIssuance.findUnique({ where: { id: iss.id } });
       expect(after?.dueReturnAt?.toISOString()).toBe(manual.toISOString());
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /stats/map-points — carte des agents actifs
+  // -------------------------------------------------------------------------
+  describe('GET /stats/map-points (getEmployeesMapPoints)', () => {
+    beforeAll(async () => {
+      // Deux agents ACTIFS à la MÊME adresse exacte (regroupés, libellé = noms),
+      // un au centre-ville, un INACTIF géocodé (exclu) et un supprimé (exclu).
+      await prisma.employee.createMany({
+        data: [
+          { firstName: 'Jean', lastName: 'Cartier', phone: '5145559901', status: 'ACTIF', lat: 45.5, lng: -73.55, geocodeSource: 'address', postalCode: 'H1V 2E8', city: 'Montréal' },
+          { firstName: 'Marie', lastName: 'Cartier', phone: '5145559902', status: 'ACTIF', lat: 45.5, lng: -73.55, geocodeSource: 'address', postalCode: 'H1V 2E8', city: 'Montréal' },
+          { firstName: 'Ville', lastName: 'Approx', phone: '5145559903', status: 'ACTIF', lat: 45.61, lng: -73.61, geocodeSource: 'city', city: 'Montréal' },
+          { firstName: 'Inactif', lastName: 'Geocode', phone: '5145559904', status: 'INACTIF', lat: 45.71, lng: -73.71, geocodeSource: 'address' },
+          { firstName: 'Sup', lastName: 'PrimeGeo', phone: '5145559905', status: 'ACTIF', isDeleted: true, deletedAt: new Date(), lat: 45.81, lng: -73.81, geocodeSource: 'address' },
+        ],
+      });
+    });
+
+    it('sans token → 401', async () => {
+      const res = await request(app).get('/api/employees/stats/map-points');
+      expect(res.status).toBe(401);
+    });
+
+    it('SALES → 200 : ACTIFS seulement, regroupés par coordonnées, libellé = noms des agents', async () => {
+      const res = await request(app)
+        .get('/api/employees/stats/map-points')
+        .set('Authorization', `Bearer ${salesToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+
+      const points = res.body.data.points as Array<{ lat: number; lng: number; count: number; source: string; label: string }>;
+      // Pin « adresse exacte » : 2 agents mêmes coordonnées → 1 point, noms au libellé.
+      const addr = points.find((p) => p.lat === 45.5 && p.lng === -73.55)!;
+      expect(addr).toBeDefined();
+      expect(addr.count).toBe(2);
+      expect(addr.source).toBe('address');
+      expect(addr.label.split(', ').sort()).toEqual(['Jean Cartier', 'Marie Cartier']);
+      // Pin « centre-ville » présent.
+      expect(points.some((p) => p.lat === 45.61 && p.source === 'city')).toBe(true);
+      // INACTIF et supprimé exclus malgré leurs coordonnées.
+      expect(points.some((p) => p.lat === 45.71 || p.lat === 45.81)).toBe(false);
+      // Les employés ACTIFS sans coordonnées comptent en « non placés ».
+      expect(typeof res.body.data.unplaced).toBe('number');
+      expect(res.body.data.unplaced).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // GET / — recherche par rayon (nearLat/nearLng/nearRadiusKm)
+  // -------------------------------------------------------------------------
+  describe('GET / — recherche par rayon', () => {
+    beforeAll(async () => {
+      // Coordonnées région de Québec (loin des seeds montréalais du map-points).
+      await prisma.employee.createMany({
+        data: [
+          { firstName: 'Centre', lastName: 'Rayon', phone: '4185550001', status: 'ACTIF', lat: 46.81, lng: -71.21, geocodeSource: 'address', city: 'Québec' },
+          { firstName: 'Proche', lastName: 'Rayon', phone: '4185550002', status: 'ACTIF', lat: 46.83, lng: -71.24, geocodeSource: 'address', city: 'Québec' },
+          { firstName: 'Loin', lastName: 'Rayon', phone: '4185550003', status: 'ACTIF', lat: 47.5, lng: -72.5, geocodeSource: 'address', city: 'Shawinigan' },
+        ],
+      });
+    });
+
+    it('retourne les employés du rayon triés par distance croissante, avec distanceKm', async () => {
+      const res = await request(app)
+        .get('/api/employees?nearLat=46.81&nearLng=-71.21&nearRadiusKm=10')
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+
+      const names = res.body.data.map((e: any) => `${e.firstName} ${e.lastName}`);
+      expect(names).toContain('Centre Rayon');
+      expect(names).toContain('Proche Rayon');
+      expect(names).not.toContain('Loin Rayon'); // ~120 km → hors rayon
+
+      // Tri croissant + distanceKm arrondie à 0,1 km.
+      const distances = res.body.data.map((e: any) => e.distanceKm);
+      expect(distances[0]).toBe(0);
+      expect(distances[1]).toBeGreaterThan(0);
+      expect(distances[1]).toBeLessThanOrEqual(10);
+      expect([...distances].sort((a: number, b: number) => a - b)).toEqual(distances);
+      expect(res.body.pagination.total).toBe(2);
+      // L'indicateur de brouillons reste exposé dans la branche rayon.
+      expect(res.body.data[0].draftIssuanceCount).toBeDefined();
+    });
+
+    it('combine le rayon avec le filtre de statut', async () => {
+      const res = await request(app)
+        .get('/api/employees?nearLat=46.81&nearLng=-71.21&nearRadiusKm=10&status=INACTIF')
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.pagination.total).toBe(0);
     });
   });
 });

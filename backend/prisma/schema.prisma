@@ -1103,6 +1103,13 @@ model Employee {
   province   String  @default("QC")
   postalCode String?
 
+  // Géolocalisation (carte des agents actifs + recherche par rayon).
+  // Précision adresse d'abord (Nominatim), repli centroïde FSA puis centre-ville.
+  lat           Float?
+  lng           Float?
+  geocodedAt    DateTime?
+  geocodeSource String? // 'address' | 'postal' | 'city'
+
   // Emploi
   status         EmployeeStatus @default(ACTIF)
   hireDate       DateTime? // Date d'embauche
@@ -1148,6 +1155,7 @@ model Employee {
   @@index([lastName])
   @@index([city])
   @@index([convertedFromCandidateId])
+  @@index([lat, lng])
   @@map("employees")
 }
 

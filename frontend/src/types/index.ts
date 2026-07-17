@@ -293,6 +293,11 @@ export interface Employee {
   videoStoragePath?: string;
   notes?: string;
   convertedFromCandidateId?: string;
+  // Géolocalisation (carte des agents actifs) — voir addressGeocode.service.
+  lat?: number | null;
+  lng?: number | null;
+  geocodedAt?: string | null;
+  geocodeSource?: string | null; // 'address' | 'postal' | 'city'
   isDeleted: boolean;
   deletedAt?: string;
   createdAt: string;
@@ -300,6 +305,8 @@ export interface Employee {
   // Nombre de remises d'uniforme en BROUILLON (DRAFT) préparées pour cet employé.
   // Fourni par la liste /api/employees pour afficher l'indicateur dans le tableau.
   draftIssuanceCount?: number;
+  // Distance au point de recherche (recherche par rayon), arrondie à 0,1 km.
+  distanceKm?: number;
 }
 
 // API Response types

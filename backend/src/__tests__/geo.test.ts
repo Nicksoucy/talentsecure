@@ -3,6 +3,7 @@ import type { Express } from 'express';
 import { prisma, cleanDatabase } from './setup';
 import { createApp } from '../app';
 import { generateAccessToken } from '../utils/jwt';
+import { buildGeoMapPoints } from '../utils/geo';
 
 // Filet anti-réseau : pour une ville INCONNUE, le service déclenche un géocodage
 // Nominatim EN ARRIÈRE-PLAN (non awaité). On mocke axios pour qu'aucun appel
@@ -119,5 +120,72 @@ describe('Routes géo — /api/geo/resolve', () => {
     expect(res.status).toBe(404);
     expect(res.body.success).toBe(false);
     expect(res.body.error).toMatch(/introuvable/i);
+  });
+});
+
+/**
+ * buildGeoMapPoints — libellés par NOMS pour les sources listées dans
+ * opts.nameLabelSources (carte des agents : pins à l'adresse exacte nommés).
+ * Le comportement historique (sans opts) reste inchangé pour candidats/prospects.
+ */
+describe('buildGeoMapPoints — libellés par noms (agents)', () => {
+  const at = (lat: number, lng: number, source: string, name?: string, postalCode: string | null = null) => ({
+    lat, lng, geocodeSource: source, postalCode, city: 'Montréal', name,
+  });
+
+  it('sans opts : libellés historiques (Secteur FSA / centre-ville), noms ignorés', () => {
+    const { points } = buildGeoMapPoints([
+      at(45.5, -73.55, 'postal', 'Jean Tremblay', 'H1V 2E8'),
+      at(45.6, -73.6, 'city', 'Marie Roy'),
+    ]);
+    const postal = points.find((p) => p.source === 'postal')!;
+    const city = points.find((p) => p.source === 'city')!;
+    expect(postal.label).toBe('Secteur H1V · Montréal');
+    expect(city.label).toBe('Montréal (centre-ville approx.)');
+  });
+
+  it("source 'address' + nameLabelSources : libellé = noms, plafonné à 3 puis « +N »", () => {
+    const rows = [
+      at(45.5, -73.55, 'address', 'Jean Tremblay'),
+      at(45.5, -73.55, 'address', 'Marie Roy'),
+      at(45.5, -73.55, 'address', 'Luc Bélanger'),
+      at(45.5, -73.55, 'address', 'Anne Côté'),
+      at(45.51, -73.56, 'address', 'Seul Agent'),
+    ];
+    const { points, unplaced } = buildGeoMapPoints(rows, { nameLabelSources: ['address'] });
+    expect(unplaced).toBe(0);
+    const grouped = points.find((p) => p.count === 4)!;
+    expect(grouped.source).toBe('address');
+    expect(grouped.label).toBe('Jean Tremblay, Marie Roy, Luc Bélanger +1');
+    const solo = points.find((p) => p.count === 1)!;
+    expect(solo.label).toBe('Seul Agent');
+  });
+
+  it("mixte : avec opts ['address'], les points 'postal' gardent le libellé secteur", () => {
+    const { points } = buildGeoMapPoints(
+      [
+        at(45.5, -73.55, 'address', 'Jean Tremblay'),
+        at(45.6, -73.6, 'postal', 'Marie Roy', 'H2X 1Y4'),
+      ],
+      { nameLabelSources: ['address'] }
+    );
+    expect(points.find((p) => p.source === 'address')!.label).toBe('Jean Tremblay');
+    expect(points.find((p) => p.source === 'postal')!.label).toBe('Secteur H2X · Montréal');
+  });
+
+  it("source 'address' SANS noms fournis → libellé « Adresse exacte · ville »", () => {
+    const { points } = buildGeoMapPoints([at(45.5, -73.55, 'address')], {
+      nameLabelSources: ['address'],
+    });
+    expect(points[0].label).toBe('Adresse exacte · Montréal');
+  });
+
+  it('personnes sans coordonnées comptées dans unplaced', () => {
+    const { points, unplaced } = buildGeoMapPoints([
+      at(45.5, -73.55, 'address', 'Jean Tremblay'),
+      { lat: null, lng: null, geocodeSource: null, postalCode: null, city: 'Montréal', name: 'Non Placé' },
+    ]);
+    expect(points).toHaveLength(1);
+    expect(unplaced).toBe(1);
   });
 });

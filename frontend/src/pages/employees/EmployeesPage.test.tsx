@@ -19,6 +19,18 @@ vi.mock('@/services/contact.service', () => ({
 vi.mock('@/components/CrossTableHint', () => ({ default: () => null }));
 vi.mock('@/components/ContactConflictDialog', () => ({ default: () => null }));
 
+// Carte des agents (Leaflet) : stub léger qui expose un bouton déclenchant
+// onNearbySelect comme le ferait « Voir ces agents » sur un pin.
+vi.mock('@/components/map/EmployeesMap', () => ({
+  default: ({ onNearbySelect }: any) => (
+    <div data-testid="employees-map">
+      <button onClick={() => onNearbySelect({ lat: 45.5, lng: -73.55 }, 25, 'Jean Tremblay')}>
+        mock-nearby
+      </button>
+    </div>
+  ),
+}));
+
 import EmployeesPage from './EmployeesPage';
 import { employeeService } from '@/services/employee.service';
 import { contactService } from '@/services/contact.service';
@@ -161,5 +173,69 @@ describe('EmployeesPage', () => {
         ),
       { timeout: 2000 }
     );
+  });
+
+  it('« Afficher la carte » monte la carte des agents (lazy) puis le libellé bascule', async () => {
+    svc.getEmployees.mockResolvedValue(pageResponse([makeEmployee()]));
+    const user = userEvent.setup();
+
+    renderWithProviders(<EmployeesPage />);
+    await screen.findByText('Marie Gagnon');
+
+    // La carte n'est pas montée tant que le bouton n'a pas été cliqué.
+    expect(screen.queryByTestId('employees-map')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /afficher la carte/i }));
+
+    expect(await screen.findByTestId('employees-map')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /masquer la carte/i })).toBeInTheDocument();
+  });
+
+  it('« Voir ces agents » depuis la carte : chip de rayon, colonne Distance et requête near', async () => {
+    svc.getEmployees.mockResolvedValue(pageResponse([makeEmployee({ distanceKm: 2.3 })]));
+    const user = userEvent.setup();
+
+    renderWithProviders(<EmployeesPage />);
+    await screen.findByText('Marie Gagnon');
+
+    await user.click(screen.getByRole('button', { name: /afficher la carte/i }));
+    await user.click(await screen.findByRole('button', { name: 'mock-nearby' }));
+
+    // Chip du filtre par rayon (avec le libellé du pin cliqué).
+    expect(await screen.findByText('≤ 25 km — Jean Tremblay')).toBeInTheDocument();
+    // Colonne Distance visible avec la valeur renvoyée par l'API.
+    expect(screen.getByText('Distance')).toBeInTheDocument();
+    expect(await screen.findByText('2.3 km')).toBeInTheDocument();
+
+    // Le service est rappelé avec le point + rayon.
+    await waitFor(() =>
+      expect(svc.getEmployees).toHaveBeenCalledWith(
+        expect.objectContaining({ near: { lat: 45.5, lng: -73.55, radiusKm: 25 }, page: 1 })
+      )
+    );
+  });
+
+  it('supprimer la chip de rayon relance la requête SANS le filtre near', async () => {
+    svc.getEmployees.mockResolvedValue(pageResponse([makeEmployee({ distanceKm: 2.3 })]));
+    const user = userEvent.setup();
+
+    renderWithProviders(<EmployeesPage />);
+    await screen.findByText('Marie Gagnon');
+    await user.click(screen.getByRole('button', { name: /afficher la carte/i }));
+    await user.click(await screen.findByRole('button', { name: 'mock-nearby' }));
+    const chip = await screen.findByText('≤ 25 km — Jean Tremblay');
+
+    // La croix de la chip MUI (icône CancelIcon dans le même conteneur).
+    const cancel = chip.parentElement!.querySelector('svg') as unknown as Element;
+    await user.click(cancel as any);
+
+    await waitFor(() => {
+      expect(screen.queryByText('≤ 25 km — Jean Tremblay')).not.toBeInTheDocument();
+    });
+    // Dernier appel : sans filtre near.
+    const lastCall = svc.getEmployees.mock.calls.at(-1)![0];
+    expect(lastCall.near).toBeUndefined();
+    // La colonne Distance disparaît avec le filtre.
+    expect(screen.queryByText('Distance')).not.toBeInTheDocument();
   });
 });
