@@ -13,6 +13,7 @@
     "backfill:geocode": "ts-node src/scripts/backfillProspectGeocodes.ts",
     "backfill:geocode-candidates": "ts-node src/scripts/backfillCandidateGeocodes.ts",
     "backfill:geocode-employees": "ts-node src/scripts/backfillEmployeeGeocodes.ts",
+    "backfill:employee-contact": "ts-node src/scripts/backfillEmployeeContactFromCoords.ts",
     "import:agendrix": "ts-node src/scripts/import-agendrix-employees.ts",
     "backfill:experience-months": "ts-node src/scripts/backfillExperienceMonths.ts",
     "test": "jest",

@@ -13,7 +13,9 @@ jest.mock('axios', () => ({
 }));
 
 import axios from 'axios';
+import { prisma, cleanDatabase } from './setup';
 import {
+  fillMissingContactFieldsFromCoords,
   geocodeStreetAddress,
   resolveEmployeeCoordinates,
 } from '../services/addressGeocode.service';
@@ -114,4 +116,68 @@ describe('addressGeocode — resolveEmployeeCoordinates (chaîne de repli)', () 
     expect(geo).toBeNull();
     expect(axiosGet).not.toHaveBeenCalled();
   });
+});
+
+describe('addressGeocode — fillMissingContactFieldsFromCoords (géocodage inverse)', () => {
+  const REVERSE_HIT = {
+    address: { city: 'Québec', postcode: 'g1e4z3' },
+  };
+
+  beforeAll(async () => {
+    await cleanDatabase();
+  });
+
+  beforeEach(() => {
+    axiosGet.mockReset();
+    axiosGet.mockResolvedValue({ data: REVERSE_HIT });
+  });
+
+  it('complète ville ET code postal manquants (CP normalisé « G1E 4Z3 »)', async () => {
+    const emp = await prisma.employee.create({
+      data: { firstName: 'Sans', lastName: 'Ville', phone: '4185551001', lat: 46.86, lng: -71.2, geocodeSource: 'address' },
+    });
+    const res = await fillMissingContactFieldsFromCoords(emp.id);
+    expect(res).toEqual({ city: 'Québec', postalCode: 'G1E 4Z3' });
+    const after = await prisma.employee.findUnique({ where: { id: emp.id } });
+    expect(after?.city).toBe('Québec');
+    expect(after?.postalCode).toBe('G1E 4Z3');
+    // Le reverse est bien parti vers l'endpoint /reverse.
+    expect(String(axiosGet.mock.calls[0][0])).toContain('/reverse');
+  }, 15000);
+
+  it("n'écrase JAMAIS une valeur existante (ville présente → seul le CP est ajouté)", async () => {
+    const emp = await prisma.employee.create({
+      data: { firstName: 'Ville', lastName: 'Presente', phone: '4185551002', city: 'Lévis', lat: 46.8, lng: -71.18, geocodeSource: 'address' },
+    });
+    const res = await fillMissingContactFieldsFromCoords(emp.id);
+    expect(res).toEqual({ postalCode: 'G1E 4Z3' });
+    const after = await prisma.employee.findUnique({ where: { id: emp.id } });
+    expect(after?.city).toBe('Lévis'); // conservée
+  }, 15000);
+
+  it('fiche complète → null sans appel réseau', async () => {
+    const emp = await prisma.employee.create({
+      data: { firstName: 'Deja', lastName: 'Complet', phone: '4185551003', city: 'Québec', postalCode: 'G1E 4Z3', lat: 46.8, lng: -71.2 },
+    });
+    expect(await fillMissingContactFieldsFromCoords(emp.id)).toBeNull();
+    expect(axiosGet).not.toHaveBeenCalled();
+  });
+
+  it('sans coordonnées → null sans appel réseau', async () => {
+    const emp = await prisma.employee.create({
+      data: { firstName: 'Pas', lastName: 'Place', phone: '4185551004' },
+    });
+    expect(await fillMissingContactFieldsFromCoords(emp.id)).toBeNull();
+    expect(axiosGet).not.toHaveBeenCalled();
+  });
+
+  it('reverse sans résultat exploitable → null, fiche intacte', async () => {
+    axiosGet.mockResolvedValue({ data: {} });
+    const emp = await prisma.employee.create({
+      data: { firstName: 'Rien', lastName: 'Trouve', phone: '4185551005', lat: 46.8, lng: -71.2 },
+    });
+    expect(await fillMissingContactFieldsFromCoords(emp.id)).toBeNull();
+    const after = await prisma.employee.findUnique({ where: { id: emp.id } });
+    expect(after?.city).toBeNull();
+  }, 15000);
 });

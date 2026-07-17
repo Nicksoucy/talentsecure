@@ -11,8 +11,10 @@
 import { prisma } from '../config/database';
 import logger from '../config/logger';
 import { invalidateCaches } from '../utils/cacheInvalidation';
+import { canonicalCity } from '../utils/cityNormalize';
 import {
   isInQuebecBounds,
+  nominatimReverse,
   nominatimSearch,
   resolveCityCoordinates,
   resolvePostalCoordinates,
@@ -96,10 +98,52 @@ export async function resolveEmployeeCoordinates(
   return null;
 }
 
+const CANADIAN_POSTAL_RE = /^[A-Za-z]\d[A-Za-z]\s?\d[A-Za-z]\d$/;
+
+/**
+ * Complète la ville et le code postal MANQUANTS d'un employé géolocalisé, par
+ * géocodage INVERSE de ses coordonnées (cas : adresse Agendrix sans ville
+ * détectable, mais point exact trouvé). N'écrase JAMAIS une valeur existante.
+ * Retourne les champs écrits, ou null si rien à faire / rien trouvé.
+ */
+export async function fillMissingContactFieldsFromCoords(
+  employeeId: string
+): Promise<{ city?: string; postalCode?: string } | null> {
+  const emp = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { lat: true, lng: true, city: true, postalCode: true },
+  });
+  if (!emp || emp.lat == null || emp.lng == null) return null;
+
+  const needCity = !(emp.city || '').trim();
+  const needPostal = !(emp.postalCode || '').trim();
+  if (!needCity && !needPostal) return null;
+
+  const rev = await nominatimReverse(emp.lat, emp.lng);
+  const addr = rev?.address;
+  if (!addr) return null;
+
+  const data: { city?: string; postalCode?: string } = {};
+  if (needCity) {
+    const raw = addr.city || addr.town || addr.village || addr.municipality || addr.suburb || '';
+    const city = canonicalCity(raw);
+    if (city) data.city = city;
+  }
+  if (needPostal && addr.postcode && CANADIAN_POSTAL_RE.test(String(addr.postcode).trim())) {
+    const compact = String(addr.postcode).trim().toUpperCase().replace(/\s+/g, '');
+    data.postalCode = `${compact.slice(0, 3)} ${compact.slice(3)}`;
+  }
+  if (Object.keys(data).length === 0) return null;
+
+  await prisma.employee.update({ where: { id: employeeId }, data });
+  return data;
+}
+
 /**
  * Géocode un employé et persiste lat/lng/geocodedAt/geocodeSource, puis invalide
- * le cache des points de carte. Ne throw jamais → sûr en fire-and-forget depuis
- * les contrôleurs (la réponse HTTP n'attend pas Nominatim).
+ * le cache des points de carte. Complète aussi ville/code postal manquants par
+ * géocodage inverse quand un point a été trouvé. Ne throw jamais → sûr en
+ * fire-and-forget depuis les contrôleurs (la réponse HTTP n'attend pas Nominatim).
  */
 export async function geocodeEmployeeById(employeeId: string): Promise<EmployeeGeocode | null> {
   try {
@@ -119,6 +163,9 @@ export async function geocodeEmployeeById(employeeId: string): Promise<EmployeeG
         geocodeSource: geo?.source ?? null,
       },
     });
+    if (geo) {
+      await fillMissingContactFieldsFromCoords(employeeId).catch(() => null);
+    }
     await invalidateCaches({ statKeys: [EMPLOYEE_MAPPOINTS_CACHE_KEY] });
     return geo;
   } catch (e: any) {

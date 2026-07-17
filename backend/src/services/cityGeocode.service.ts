@@ -61,6 +61,28 @@ export async function nominatimSearch(
   }
 }
 
+/**
+ * Géocodage INVERSE Nominatim (lat/lng → adresse structurée) — même throttle
+ * partagé (~1 req/s). Retourne l'objet brut avec `.address`, ou null.
+ */
+export async function nominatimReverse(lat: number, lng: number): Promise<any | null> {
+  const wait = lastNominatimAt + NOMINATIM_MIN_INTERVAL_MS - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastNominatimAt = Date.now();
+
+  try {
+    const res = await axios.get('https://nominatim.openstreetmap.org/reverse', {
+      params: { lat, lon: lng, format: 'json', addressdetails: 1, zoom: 18 },
+      headers: { 'User-Agent': 'TalentSecure/1.0 (nick@darkhorseads.com)' },
+      timeout: 8000,
+    });
+    return res.data && res.data.address ? res.data : null;
+  } catch (e: any) {
+    logger.warn(`[geocode] échec Nominatim reverse (${lat},${lng}): ${e?.message}`);
+    return null;
+  }
+}
+
 /** Vrai si (lat,lng) tombe dans les bornes approximatives du Québec. */
 export function isInQuebecBounds(lat: number, lng: number): boolean {
   return (
