@@ -19,6 +19,8 @@ import {
   TextField,
   Stack,
   Slider,
+  FormControlLabel,
+  Checkbox,
 } from '@mui/material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -63,6 +65,11 @@ export interface GeoPointsMapProps {
     radiusKm: number,
     label?: string
   ) => void;
+  /**
+   * Endpoint optionnel des MANDATS (sites XGuard) : active une couche ROSE
+   * togglable par-dessus les personnes (ex. /api/mandates/stats/map-points).
+   */
+  sitesUrl?: string;
 }
 
 // Pastille ronde : taille + couleur selon le nombre de personnes. Les points
@@ -113,6 +120,29 @@ const dropIcon = L.divIcon({
   iconAnchor: [10, 10],
 });
 
+// Marqueur ROSE des MANDATS (sites) : goutte losange, distincte des pastilles
+// rondes des personnes. Pas de compteur (un site n'est pas une personne).
+const SITE_COLOR = '#e91e63';
+const makeSiteIcon = () =>
+  L.divIcon({
+    html: `<div style="width:18px;height:18px;background:${SITE_COLOR};border:3px solid white;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 5px rgba(0,0,0,0.35);"></div>`,
+    className: 'ts-site-pin',
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+    popupAnchor: [0, -10],
+  });
+
+// Icône d'un cluster de MANDATS : le NOMBRE de sites regroupés (rose).
+const siteClusterIcon = (cluster: any) => {
+  const count = cluster.getChildCount();
+  return L.divIcon({
+    html: `<div style="background:${SITE_COLOR};width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:13px;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">${count}</div>`,
+    className: 'ts-site-cluster',
+    iconSize: L.point(34, 34, true),
+    iconAnchor: [17, 17],
+  });
+};
+
 /** Rayon « point exact » pour Voir ces personnes (le secteur cliqué). */
 const SECTOR_RADIUS_KM = 0.05;
 
@@ -141,11 +171,17 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
   unitSingular,
   unitPlural,
   onNearbySelect,
+  sitesUrl,
 }) => {
   const [points, setPoints] = useState<MapPoint[]>([]);
   const [unplaced, setUnplaced] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Couche des mandats (sites) — masquée par défaut, chargée à la 1re activation.
+  const [sites, setSites] = useState<MapPoint[]>([]);
+  const [showSites, setShowSites] = useState(false);
+  const [sitesLoaded, setSitesLoaded] = useState(false);
 
   // Recherche par point + rayon.
   const mapRef = useRef<L.Map | null>(null);
@@ -175,6 +211,16 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
 
     fetchPoints();
   }, [pointsUrl]);
+
+  // Mandats : chargés paresseusement la 1re fois qu'on coche « Afficher les mandats ».
+  useEffect(() => {
+    if (!sitesUrl || !showSites || sitesLoaded) return;
+    api
+      .get(sitesUrl)
+      .then((r) => setSites(r.data.data.points ?? []))
+      .catch((err) => console.error('Error fetching mandate points:', err))
+      .finally(() => setSitesLoaded(true));
+  }, [sitesUrl, showSites, sitesLoaded]);
 
   // Compteur dans le rayon (aperçu) : recalculé au changement point/rayon.
   // Debounce : le slider émet en continu pendant le glissement — on n'appelle
@@ -271,6 +317,24 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
               {searching ? '…' : 'Localiser'}
             </Button>
           </Stack>
+
+          {sitesUrl && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={showSites}
+                  onChange={(e) => setShowSites(e.target.checked)}
+                  sx={{ color: SITE_COLOR, '&.Mui-checked': { color: SITE_COLOR } }}
+                />
+              }
+              label={
+                <Typography variant="caption">
+                  Afficher les mandats (sites) en rose
+                </Typography>
+              }
+            />
+          )}
 
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
@@ -438,6 +502,36 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
               </Marker>
             ))}
           </MarkerClusterGroup>
+
+          {/* Couche ROSE des MANDATS (sites) — togglable, cluster séparé. Popup
+              = nom(s) du mandat seulement ; aucune donnée sensible (les
+              descriptions/secrets ne sont jamais côté client). */}
+          {showSites && sites.length > 0 && (
+            <MarkerClusterGroup
+              chunkedLoading
+              showCoverageOnHover={false}
+              maxClusterRadius={50}
+              disableClusteringAtZoom={12}
+              iconCreateFunction={siteClusterIcon}
+            >
+              {sites.map((s) => (
+                <Marker key={`site|${s.lat}|${s.lng}`} position={[s.lat, s.lng]} icon={makeSiteIcon()}>
+                  <Popup>
+                    <Box>
+                      <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                        {s.label}
+                      </Typography>
+                      <Chip
+                        label={`${s.count} mandat${s.count > 1 ? 's' : ''} à cette adresse`}
+                        size="small"
+                        sx={{ bgcolor: SITE_COLOR, color: 'white' }}
+                      />
+                    </Box>
+                  </Popup>
+                </Marker>
+              ))}
+            </MarkerClusterGroup>
+          )}
         </MapContainer>
       </Paper>
 
@@ -445,7 +539,7 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
         <Typography variant="caption" color="text.secondary">
           {points.some((p) => p.source === 'address') ? 'Pastille verte = adresse exacte · bleue' : 'Pastille bleue'} = position au
           code postal (secteur) · orange = centre-ville approximatif ({unitPlural} sans code
-          postal)
+          postal){showSites && sites.length > 0 ? ' · ◆ rose = mandat (site)' : ''}
         </Typography>
         {unplaced > 0 && (
           <Typography variant="caption" color="text.secondary">

@@ -1160,6 +1160,41 @@ model Employee {
 }
 
 // ===========================================================================
+// MANDATS — sites/postes de sécurité XGuard (source : export Agendrix
+// « Ressources »). Affichés en couche rose sur les cartes (candidats/prospects/
+// employés) pour visualiser la proximité personnes ↔ sites. On ne stocke QUE
+// l'identité + l'adresse géocodée : la colonne « Description » de l'export
+// (mots de passe, codes de portes) n'est JAMAIS importée.
+// ===========================================================================
+model Mandate {
+  id String @id @default(uuid())
+
+  // Identifiant Agendrix (GAR-001528 / S00136 / TEC-000001) — clé de dédup import.
+  externalId String @unique
+  name       String
+
+  // Adresse + géolocalisation (même stack que Employee).
+  address    String?
+  city       String?
+  province   String  @default("QC")
+  postalCode String?
+
+  lat           Float?
+  lng           Float?
+  geocodedAt    DateTime?
+  geocodeSource String? // 'address' | 'postal' | 'city'
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([isDeleted])
+  @@index([lat, lng])
+  @@map("mandates")
+}
+
+// ===========================================================================
 // UNIFORMES — Prêt / retour d'uniformes & équipements aux agents.
 // Reproduit les 2 formulaires papier XGuard (Prêt / Retour d'uniforme).
 // Le lien aux employés se fait par employeeId (String) SANS relation/FK Prisma
