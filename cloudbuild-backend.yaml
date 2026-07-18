@@ -98,9 +98,13 @@ steps:
       - '--concurrency=40'
       - '--max-instances=10'
       - '--timeout=600'
-      # V2 — destinataires email pour les notifications (RH, paie, fin d'emploi, etc.)
-      # Non-sensibles : on les met en clair via --update-env-vars (préserve les autres envs).
-      - '--update-env-vars=EMAIL_RH=rh@xguard.ca,EMAIL_PAIE=paie@xguard.ca,EMAIL_PROVIDER=ghl'
+      # V2 — destinataires email + identifiants GHL NON secrets (location, survey).
+      # --update-env-vars préserve les autres envs ET les secrets liés hors-band.
+      - '--update-env-vars=EMAIL_RH=rh@xguard.ca,EMAIL_PAIE=paie@xguard.ca,EMAIL_PROVIDER=ghl,GHL_LOCATION_ID=dfkLurZY2ADWAUZl4zYc,GHL_SURVEY_ID=7R37monCgHPJyTiinjn3'
+      # SECRETS GHL — liés via Secret Manager (O6). À exécuter UNE FOIS, hors de ce
+      # build (le secret doit exister avant ; --update-env-vars ci-dessus le préserve) :
+      #   gcloud run services update talentsecure-backend --region=northamerica-northeast1 \
+      #     --update-secrets=GHL_PIT_TOKEN=GHL_PIT_TOKEN:latest,GOHIGHLEVEL_WEBHOOK_SECRET=GOHIGHLEVEL_WEBHOOK_SECRET:latest
     id: 'deploy-service'
 
 images:

@@ -11,6 +11,7 @@ import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
 import { createCandidateVideoTx } from '../services/candidate-video.service';
 import { resolveSearchIds, hasSearchTokens } from '../utils/search';
 import { ApiError } from '../utils/apiError';
+import { GHL_BASE, GHL_LOCATION_ID, GHL_HEADERS } from '../config/ghl';
 
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
 const PROSPECT_STATS_CACHE_KEY = 'prospects:stats';
@@ -1162,10 +1163,8 @@ export const refreshProspectVideoFromGhl = async (req: Request, res: Response, n
     const phone = (prospect.phone || '').trim();
     if (!email && !phone) return res.status(400).json({ error: 'Pas d\'email ni téléphone pour chercher dans GHL' });
 
-    const GHL_BASE = 'https://services.leadconnectorhq.com';
-    const TOKEN = process.env.GHL_PIT_TOKEN || 'pit-7de455ab-c46e-47a4-af9e-0b07a6c3a1ee';
-    const LOC = process.env.GHL_LOCATION_ID || 'dfkLurZY2ADWAUZl4zYc';
-    const ghlH = { Authorization: `Bearer ${TOKEN}`, Version: '2021-07-28' };
+    const LOC = GHL_LOCATION_ID;
+    const ghlH = GHL_HEADERS;
 
     // 1) Trouver le contact GHL
     const axios = require('axios');
