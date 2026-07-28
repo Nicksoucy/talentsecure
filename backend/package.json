@@ -18,6 +18,7 @@
     "import:agendrix": "ts-node src/scripts/import-agendrix-employees.ts",
     "import:mandates": "ts-node src/scripts/import-mandates.ts",
     "import:contract-cvs": "ts-node src/scripts/import-contract-cvs.ts",
+    "backfill:geocode-contract": "ts-node src/scripts/backfillContractGeocodes.ts",
     "backfill:experience-months": "ts-node src/scripts/backfillExperienceMonths.ts",
     "test": "jest",
     "test:watch": "jest --watch",
