@@ -1195,6 +1195,49 @@ model Mandate {
 }
 
 // ===========================================================================
+// LEADS DE CONTRAT — rattache une personne (prospect / candidat / employé) à
+// un contrat client (ex. « PSB »). C'est le SEUL mécanisme de tag de la base :
+// il permet d'afficher une couche colorée dédiée sur les cartes et une puce
+// dans les listes, SANS toucher aux tables de personnes.
+//
+// Choix volontaires :
+//  - PAS de relation ni de FK Prisma (même esprit que Uniform ↔ Employee) :
+//    une FK transformerait une suppression de personne en cascade ou en erreur
+//    de contrainte. Les jointures sont explicites dans les services.
+//  - personType + personId plutôt que 3 colonnes : le même tag marche pour les
+//    3 sections du cycle de vie, y compris après un déplacement.
+//  - removedAt plutôt qu'un delete : un dé-tag est toujours réversible.
+//
+// Tag périmé (la personne a changé de section → nouvel id) : sans danger, les
+// lectures filtrent isDeleted/isConverted, donc un tag orphelin ne produit
+// simplement aucun point. matchEmail/matchPhoneDigits permettent de le
+// re-rattacher sans relire les CV.
+// ===========================================================================
+model ContractLead {
+  id String @id @default(uuid())
+
+  contractCode String // 'PSB' — normalisé en MAJUSCULES
+  personType   String // 'prospect' | 'candidate' | 'employee'
+  personId     String // id dans la table correspondante (PAS de FK)
+
+  // Provenance : d'où vient ce tag, et de quoi le reconstruire.
+  sourceCvFile     String?
+  matchEmail       String?
+  matchPhoneDigits String? // 10 derniers chiffres (lastTenDigits)
+  note             String?
+
+  addedAt   DateTime  @default(now())
+  removedAt DateTime? // dé-tag réversible — jamais de suppression dure
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([contractCode, personType, personId])
+  @@index([contractCode, removedAt])
+  @@index([personType, personId])
+  @@map("contract_leads")
+}
+
+// ===========================================================================
 // UNIFORMES — Prêt / retour d'uniformes & équipements aux agents.
 // Reproduit les 2 formulaires papier XGuard (Prêt / Retour d'uniforme).
 // Le lien aux employés se fait par employeeId (String) SANS relation/FK Prisma

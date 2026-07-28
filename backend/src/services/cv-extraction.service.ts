@@ -436,8 +436,9 @@ export class CVExtractionService {
 
   /**
    * Extract text from PDF file
+   * (public : réutilisé par l'import de lots de CV, scripts/import-contract-cvs)
    */
-  private async extractTextFromPDF(filePath: string): Promise<string> {
+  async extractTextFromPDF(filePath: string): Promise<string> {
     try {
       // Check if file exists
       if (!fs.existsSync(filePath)) {
@@ -461,8 +462,9 @@ export class CVExtractionService {
   /**
    * Extraction du texte d'un CV Word (.docx) via mammoth.
    * (.doc binaire ancien non supporté — mammoth ne lit que le format .docx XML.)
+   * (public : réutilisé par l'import de lots de CV, scripts/import-contract-cvs)
    */
-  private async extractTextFromDocx(filePath: string): Promise<string> {
+  async extractTextFromDocx(filePath: string): Promise<string> {
     try {
       if (!fs.existsSync(filePath)) {
         console.warn(`DOCX file not found: ${filePath}`);

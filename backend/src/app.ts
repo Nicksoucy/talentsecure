@@ -32,6 +32,7 @@ import prospectRoutes from './routes/prospect.routes';
 import geoRoutes from './routes/geo.routes';
 import employeeRoutes from './routes/employee.routes';
 import mandateRoutes from './routes/mandate.routes';
+import contractRoutes from './routes/contract.routes';
 import contactLifecycleRoutes from './routes/contact-lifecycle.routes';
 import webhookRoutes from './routes/webhook.routes';
 import adminRoutes from './routes/admin.routes';
@@ -157,6 +158,7 @@ export function createApp(): Express {
   app.use('/api/geo', geoRoutes);
   app.use('/api/employees', employeeRoutes);
   app.use('/api/mandates', mandateRoutes);
+  app.use('/api/contracts', contractRoutes);
   app.use('/api/contacts', contactLifecycleRoutes);
   app.use('/api/webhooks', webhookRoutes);
   app.use('/api/admin', adminRoutes);

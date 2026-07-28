@@ -62,6 +62,8 @@ import { ContactConflict } from '@/services/contact.service';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import CrossTableHint from '@/components/CrossTableHint';
 import { prospectService } from '@/services/prospect.service';
+import { contractService } from '@/services/contract.service';
+import { CONTRACT_COLOR } from '@/components/map/layerColors';
 import { downloadProspectsCsv } from './prospectsCsv';
 import ProspectsDialogs from './ProspectsDialogs';
 import { employeeService } from '@/services/employee.service';
@@ -97,6 +99,7 @@ export default function ProspectsPage() {
     isContacted: '',
     isConverted: '',
     hasVideo: '',
+    contractCode: '', // contrat client (ex. PSB) — '' = tous
     submissionDateStart: '',
     submissionDateEnd: '',
   });
@@ -224,6 +227,7 @@ export default function ProspectsPage() {
         near: filters.near || undefined,
         isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
         isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
+        contractCode: filters.contractCode || undefined,
         hasVideo: filters.hasVideo === '' ? undefined : filters.hasVideo === 'true',
         submissionDateStart: filters.submissionDateStart || undefined,
         submissionDateEnd: filters.submissionDateEnd || undefined,
@@ -238,6 +242,34 @@ export default function ProspectsPage() {
     queryKey: ['prospects', 'stats'],
     queryFn: () => prospectService.getProspectsStats(),
   });
+
+  /**
+   * Ouvre l'aperçu du CV. Les CV importés (lot de contrat) n'ont que
+   * cvStoragePath — leur URL R2 est signée à la demande par le backend, il faut
+   * donc la demander avant d'ouvrir le dialogue.
+   */
+  const openCvPreview = async (prospect: ProspectCandidate) => {
+    const prospectName = `${prospect.firstName} ${prospect.lastName}`;
+    if (prospect.cvUrl) {
+      setCvPreviewDialog({ open: true, cvUrl: prospect.cvUrl, prospectName });
+      return;
+    }
+    try {
+      const res = await prospectService.getCvUrl(prospect.id);
+      setCvPreviewDialog({ open: true, cvUrl: res.data.url, prospectName });
+    } catch {
+      enqueueSnackbar('CV introuvable ou lien expiré', { variant: 'error' });
+    }
+  };
+
+  // Contrats existants (alimente le filtre « Contrat »). Une erreur ici ne doit
+  // pas casser la page : on retombe sur une liste vide, filtre inutilisable.
+  const { data: contractsData } = useQuery({
+    queryKey: ['contracts'],
+    queryFn: () => contractService.getContracts(),
+    retry: false,
+  });
+  const contracts = contractsData ?? [];
 
   // Mark as contacted mutation
   const markContactedMutation = useMutation({
@@ -386,6 +418,7 @@ export default function ProspectsPage() {
         near: filters.near || undefined,
         isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
         isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
+        contractCode: filters.contractCode || undefined,
       });
 
       const allIds = response.data.map((p: ProspectCandidate) => p.id);
@@ -417,6 +450,7 @@ export default function ProspectsPage() {
           near: filters.near || undefined,
           isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
           isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
+          contractCode: filters.contractCode || undefined,
         });
         prospectsToContact = response.data.map((p: ProspectCandidate) => p.id);
       } else {
@@ -503,6 +537,7 @@ export default function ProspectsPage() {
           near: filters.near || undefined,
           isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
           isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
+          contractCode: filters.contractCode || undefined,
         });
         prospectsToExport = response.data;
       } else {
@@ -709,6 +744,23 @@ export default function ProspectsPage() {
                 </FormControl>
               </Grid>
               <Grid item xs={12} md={4}>
+                <FormControl fullWidth>
+                  <InputLabel>Contrat</InputLabel>
+                  <Select
+                    label="Contrat"
+                    value={filters.contractCode}
+                    onChange={(e) => { setFilters({ ...filters, contractCode: e.target.value }); setPage(1); }}
+                  >
+                    <MenuItem value="">Tous</MenuItem>
+                    {contracts.map((c) => (
+                      <MenuItem key={c.code} value={c.code}>
+                        {c.code} ({c.total})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
                   type="date"
@@ -900,6 +952,14 @@ export default function ProspectsPage() {
                             />
                           )}
                           {prospect.firstName} {prospect.lastName}
+                          {prospect.contracts?.map((code) => (
+                            <Chip
+                              key={code}
+                              label={code}
+                              size="small"
+                              sx={{ bgcolor: CONTRACT_COLOR, color: 'white', height: 20 }}
+                            />
+                          ))}
                         </Box>
                       </TableCell>
                       <TableCell>{prospect.email || 'N/A'}</TableCell>
@@ -917,17 +977,13 @@ export default function ProspectsPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {prospect.cvUrl ? (
+                        {prospect.cvUrl || prospect.cvStoragePath ? (
                           <Chip
                             icon={<CheckCircleIcon />}
                             label="Voir"
                             color="success"
                             size="small"
-                            onClick={() => setCvPreviewDialog({
-                              open: true,
-                              cvUrl: prospect.cvUrl,
-                              prospectName: `${prospect.firstName} ${prospect.lastName}`,
-                            })}
+                            onClick={() => openCvPreview(prospect)}
                             sx={{ cursor: 'pointer' }}
                           />
                         ) : (

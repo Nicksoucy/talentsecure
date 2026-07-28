@@ -25,6 +25,12 @@ import {
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../../services/api';
+import {
+  CONTRACT_PALETTE,
+  SITE_COLOR,
+  readContractColor,
+  saveContractColor,
+} from './layerColors';
 
 // Fix for default marker icons in Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -70,6 +76,15 @@ export interface GeoPointsMapProps {
    * togglable par-dessus les personnes (ex. /api/mandates/stats/map-points).
    */
   sitesUrl?: string;
+  /**
+   * Endpoint optionnel des LEADS D'UN CONTRAT : active une couche colorée
+   * togglable (ex. /api/contracts/PSB/map-points). Ces pins portent des
+   * PERSONNES (prospects, candidats ou employés taguées sur ce contrat), donc
+   * le libellé est leur nom.
+   */
+  contractUrl?: string;
+  /** Nom du contrat affiché dans la case à cocher et la légende (défaut PSB). */
+  contractLabel?: string;
 }
 
 // Pastille ronde : taille + couleur selon le nombre de personnes. Les points
@@ -122,7 +137,7 @@ const dropIcon = L.divIcon({
 
 // Marqueur ROSE des MANDATS (sites) : goutte losange, distincte des pastilles
 // rondes des personnes. Pas de compteur (un site n'est pas une personne).
-const SITE_COLOR = '#e91e63';
+// (SITE_COLOR vit désormais dans layerColors.ts, avec les autres couches.)
 const makeSiteIcon = () =>
   L.divIcon({
     html: `<div style="width:18px;height:18px;background:${SITE_COLOR};border:3px solid white;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 5px rgba(0,0,0,0.35);"></div>`,
@@ -138,6 +153,36 @@ const siteClusterIcon = (cluster: any) => {
   return L.divIcon({
     html: `<div style="background:${SITE_COLOR};width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:13px;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">${count}</div>`,
     className: 'ts-site-cluster',
+    iconSize: L.point(34, 34, true),
+    iconAnchor: [17, 17],
+  });
+};
+
+// Marqueur des LEADS DE CONTRAT : losange, couleur choisie par l'utilisateur.
+// PLEIN = personne placée à son adresse exacte ; EN CONTOUR = position
+// approximative (secteur postal ou centre-ville). La précision se voit donc
+// d'un coup d'œil — on ne fait jamais passer un centre-ville pour une adresse.
+const makeContractIcon = (color: string, source: string) => {
+  const exact = source === 'address';
+  const fill = exact ? color : 'transparent';
+  return L.divIcon({
+    html: `<div style="width:18px;height:18px;background:${fill};border:3px solid ${
+      exact ? 'white' : color
+    };box-shadow:0 2px 5px rgba(0,0,0,0.35);transform:rotate(45deg);"></div>`,
+    className: 'ts-contract-pin',
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+    popupAnchor: [0, -10],
+  });
+};
+
+// Icône d'un cluster de LEADS DE CONTRAT : nombre de points regroupés.
+// Curryfiée car la couleur est un état (sélecteur utilisateur).
+const contractClusterIcon = (color: string) => (cluster: any) => {
+  const count = cluster.getChildCount();
+  return L.divIcon({
+    html: `<div style="background:${color};width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-weight:bold;font-size:13px;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">${count}</div>`,
+    className: 'ts-contract-cluster',
     iconSize: L.point(34, 34, true),
     iconAnchor: [17, 17],
   });
@@ -172,6 +217,8 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
   unitPlural,
   onNearbySelect,
   sitesUrl,
+  contractUrl,
+  contractLabel = 'PSB',
 }) => {
   const [points, setPoints] = useState<MapPoint[]>([]);
   const [unplaced, setUnplaced] = useState(0);
@@ -182,6 +229,17 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
   const [sites, setSites] = useState<MapPoint[]>([]);
   const [showSites, setShowSites] = useState(false);
   const [sitesLoaded, setSitesLoaded] = useState(false);
+
+  // Couche des leads de contrat — même schéma, plus la couleur choisie.
+  const [contractPins, setContractPins] = useState<MapPoint[]>([]);
+  const [showContract, setShowContract] = useState(false);
+  const [contractLoaded, setContractLoaded] = useState(false);
+  const [contractColor, setContractColor] = useState<string>(() => readContractColor());
+
+  const pickContractColor = (value: string) => {
+    setContractColor(value);
+    saveContractColor(value);
+  };
 
   // Recherche par point + rayon.
   const mapRef = useRef<L.Map | null>(null);
@@ -221,6 +279,18 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
       .catch((err) => console.error('Error fetching mandate points:', err))
       .finally(() => setSitesLoaded(true));
   }, [sitesUrl, showSites, sitesLoaded]);
+
+  // Leads de contrat : chargés paresseusement au 1er cochage. L'erreur est
+  // avalée volontairement — un endpoint contrat cassé ne doit jamais empêcher
+  // la carte principale de fonctionner.
+  useEffect(() => {
+    if (!contractUrl || !showContract || contractLoaded) return;
+    api
+      .get(contractUrl)
+      .then((r) => setContractPins(r.data.data.points ?? []))
+      .catch((err) => console.error('Error fetching contract points:', err))
+      .finally(() => setContractLoaded(true));
+  }, [contractUrl, showContract, contractLoaded]);
 
   // Compteur dans le rayon (aperçu) : recalculé au changement point/rayon.
   // Debounce : le slider émet en continu pendant le glissement — on n'appelle
@@ -334,6 +404,52 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
                 </Typography>
               }
             />
+          )}
+
+          {contractUrl && (
+            <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={showContract}
+                    onChange={(e) => setShowContract(e.target.checked)}
+                    sx={{ color: contractColor, '&.Mui-checked': { color: contractColor } }}
+                  />
+                }
+                label={
+                  <Typography variant="caption">
+                    Afficher les candidats du contrat {contractLabel}
+                  </Typography>
+                }
+              />
+              {/* Sélecteur de couleur : le choix est mémorisé par navigateur,
+                  donc modifiable sans redéploiement. */}
+              {showContract && (
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  {CONTRACT_PALETTE.map((c) => (
+                    <Box
+                      key={c.value}
+                      component="button"
+                      type="button"
+                      title={c.name}
+                      aria-label={`Couleur ${c.name}`}
+                      onClick={() => pickContractColor(c.value)}
+                      sx={{
+                        width: 16,
+                        height: 16,
+                        p: 0,
+                        borderRadius: '50%',
+                        bgcolor: c.value,
+                        cursor: 'pointer',
+                        border: contractColor === c.value ? '2px solid #212121' : '2px solid white',
+                        boxShadow: '0 0 0 1px rgba(0,0,0,0.25)',
+                      }}
+                    />
+                  ))}
+                </Stack>
+              )}
+            </Stack>
           )}
 
           <Stack
@@ -532,6 +648,60 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
               ))}
             </MarkerClusterGroup>
           )}
+
+          {/* Couche des LEADS DE CONTRAT — togglable, cluster séparé pour ne
+              jamais se fondre dans les pastilles de personnes. Le libellé du
+              popup est le nom des personnes à cette position. */}
+          {showContract && contractPins.length > 0 && (
+            <MarkerClusterGroup
+              chunkedLoading
+              showCoverageOnHover={false}
+              maxClusterRadius={50}
+              disableClusteringAtZoom={12}
+              iconCreateFunction={contractClusterIcon(contractColor)}
+            >
+              {contractPins.map((c) => (
+                <Marker
+                  key={`contract|${c.lat}|${c.lng}`}
+                  position={[c.lat, c.lng]}
+                  icon={makeContractIcon(contractColor, c.source)}
+                >
+                  <Popup>
+                    <Box>
+                      <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                        {c.label}
+                      </Typography>
+                      <Chip
+                        label={`Contrat ${contractLabel} — ${c.count} personne${c.count > 1 ? 's' : ''}`}
+                        size="small"
+                        sx={{ bgcolor: contractColor, color: 'white', mb: 1 }}
+                      />
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {c.source === 'address'
+                          ? 'Adresse exacte'
+                          : c.source === 'postal'
+                            ? 'Position approximative (secteur postal)'
+                            : 'Position approximative (centre-ville)'}
+                      </Typography>
+                      {onNearbySelect && (
+                        <Button
+                          variant="contained"
+                          size="small"
+                          fullWidth
+                          sx={{ mt: 1 }}
+                          onClick={() =>
+                            onNearbySelect({ lat: c.lat, lng: c.lng }, SECTOR_RADIUS_KM, c.label)
+                          }
+                        >
+                          Voir ces {unitPlural}
+                        </Button>
+                      )}
+                    </Box>
+                  </Popup>
+                </Marker>
+              ))}
+            </MarkerClusterGroup>
+          )}
         </MapContainer>
       </Paper>
 
@@ -540,6 +710,9 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
           {points.some((p) => p.source === 'address') ? 'Pastille verte = adresse exacte · bleue' : 'Pastille bleue'} = position au
           code postal (secteur) · orange = centre-ville approximatif ({unitPlural} sans code
           postal){showSites && sites.length > 0 ? ' · ◆ rose = mandat (site)' : ''}
+          {showContract && contractPins.length > 0
+            ? ` · ◆ ${contractLabel} (plein = adresse exacte, contour = approximatif)`
+            : ''}
         </Typography>
         {unplaced > 0 && (
           <Typography variant="caption" color="text.secondary">

@@ -266,6 +266,7 @@ export interface ProspectCandidate {
   createdAt: string;
   updatedAt: string;
   _count?: { skills: number }; // présent quand l'API inclut le compteur de compétences
+  contracts?: string[]; // codes des contrats clients rattachés (ex. ['PSB'])
 }
 
 export interface Employee {

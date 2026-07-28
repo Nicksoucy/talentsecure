@@ -22,6 +22,8 @@ const EmployeesMap: React.FC<EmployeesMapProps> = ({ onNearbySelect }) => (
     unitSingular="agent"
     unitPlural="agents"
     sitesUrl="/api/mandates/stats/map-points"
+    contractUrl="/api/contracts/PSB/map-points"
+    contractLabel="PSB"
     onNearbySelect={onNearbySelect}
   />
 );
