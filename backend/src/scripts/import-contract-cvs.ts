@@ -387,7 +387,6 @@ async function main() {
       email: p.email,
       phone: p.phone,
     });
-    if (p.precision !== 'none') geocodeTargets.push({ section: 'prospect', id: created.id });
   }
   console.log(`  ${toCreate.length} personne(s) créée(s).`);
 
@@ -404,19 +403,33 @@ async function main() {
   }
   console.log(`  ${toTag.length} personne(s) existante(s) taguée(s) (fiches inchangées).`);
 
-  await invalidateContractCaches();
+  // Best-effort : sans Redis joignable (CACHE_ENABLED=true et serveur absent),
+  // une invalidation bloquante suspendrait l'import juste avant le géocodage.
+  // Un cache périmé se résorbe seul en 5 min ; un import figé, non.
+  await invalidateContractCaches().catch(() => {
+    console.warn('  ⚠️ invalidation du cache impossible (Redis injoignable) — TTL de 5 min prendra le relais.');
+  });
 
   // ── Géocodage (rejouable) ────────────────────────────────────────────
+  // On repart de l'état RÉEL de la base (toute personne taguée sans
+  // coordonnées), pas de la liste des créations de ce run : un import
+  // interrompu se rattrape ainsi avec `npm run backfill:geocode-contract`.
   if (SKIP_GEOCODE) {
     console.log('\nGéocodage ignoré (--skip-geocode).');
-  } else if (geocodeTargets.length > 0) {
-    console.log(`\n=== GÉOCODAGE (${geocodeTargets.length} adresse(s), ~1,1 s chacune) ===`);
-    const tally = await geocodeContractPeople(geocodeTargets, (done, total) =>
-      console.log(`  … ${done}/${total}`)
-    );
-    console.log(
-      `  rue : ${tally.address} · secteur : ${tally.postal} · ville : ${tally.city} · non résolus : ${tally.unresolved}`
-    );
+    console.log(`À rattraper avec : npm run backfill:geocode-contract -- --code ${CODE}`);
+  } else {
+    const pending = await findContractPeopleNeedingGeocode(CODE);
+    if (pending.length === 0) {
+      console.log('\nGéocodage : rien à faire.');
+    } else {
+      console.log(`\n=== GÉOCODAGE (${pending.length} adresse(s), ~1,1 s chacune) ===`);
+      const tally = await geocodeContractPeople(pending, (done, total) =>
+        console.log(`  … ${done}/${total}`)
+      );
+      console.log(
+        `  rue : ${tally.address} · secteur : ${tally.postal} · ville : ${tally.city} · non résolus : ${tally.unresolved}`
+      );
+    }
   }
 
   console.log('\n=== TERMINÉ ===');

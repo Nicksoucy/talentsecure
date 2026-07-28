@@ -92,6 +92,65 @@ export async function geocodeContractPerson(
 }
 
 /**
+ * Personnes taguées sur un contrat qui n'ont pas encore de coordonnées, toutes
+ * sections confondues.
+ *
+ * C'est CE qui rend la phase de géocodage rejouable : on repart de l'état réel
+ * de la base, et non de la liste des personnes créées par un run précédent. Un
+ * import interrompu (réseau, Redis, Ctrl-C) se rattrape donc en relançant le
+ * backfill, sans rien recréer.
+ */
+export async function findContractPeopleNeedingGeocode(
+  contractCode: string,
+  includeApproximate = false
+): Promise<{ section: ContactSection; id: string }[]> {
+  const tags = await prisma.contractLead.findMany({
+    where: { contractCode: contractCode.trim().toUpperCase(), removedAt: null },
+    select: { personType: true, personId: true },
+  });
+
+  const byType = { prospect: [] as string[], candidate: [] as string[], employee: [] as string[] };
+  for (const t of tags) {
+    if (t.personType === 'prospect' || t.personType === 'candidate' || t.personType === 'employee') {
+      byType[t.personType].push(t.personId);
+    }
+  }
+
+  // Sans coordonnées ; avec --all, on retente aussi les positions approximatives
+  // (utile après que les RH ont complété des adresses de rue).
+  const needs = includeApproximate
+    ? { OR: [{ lat: null }, { geocodeSource: { not: 'address' } }] }
+    : { lat: null };
+
+  const [prospects, candidates, employees] = await Promise.all([
+    byType.prospect.length
+      ? prisma.prospectCandidate.findMany({
+          where: { id: { in: byType.prospect }, isDeleted: false, ...needs },
+          select: { id: true },
+        })
+      : Promise.resolve([]),
+    byType.candidate.length
+      ? prisma.candidate.findMany({
+          where: { id: { in: byType.candidate }, isDeleted: false, ...needs },
+          select: { id: true },
+        })
+      : Promise.resolve([]),
+    byType.employee.length
+      ? prisma.employee.findMany({
+          where: { id: { in: byType.employee }, isDeleted: false, ...needs },
+          select: { id: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  return [
+    ...prospects.map((p) => ({ section: 'prospect' as ContactSection, id: p.id })),
+    ...candidates.map((c) => ({ section: 'candidate' as ContactSection, id: c.id })),
+    ...employees.map((e) => ({ section: 'employee' as ContactSection, id: e.id })),
+  ];
+}
+
+/**
  * Géocode toutes les personnes d'un contrat qui n'ont pas encore de position à
  * l'adresse exacte. Rejouable : à relancer après que les RH ont complété les
  * adresses manquantes. Renvoie le décompte par précision obtenue.
