@@ -28,6 +28,7 @@ import {
   Edit as EditIcon,
 } from '@mui/icons-material';
 import { prospectService } from '@/services/prospect.service';
+import { CONTRACT_COLOR } from '@/components/map/layerColors';
 import { DetailPageSkeleton } from '@/components/skeletons';
 import CVPreview from '@/components/CVPreview';
 import ProspectVideoPlayer from '@/components/video/ProspectVideoPlayer';
@@ -121,6 +122,14 @@ export default function ProspectDetailPage() {
         <Typography variant="h4" component="h1">
           {prospect.firstName} {prospect.lastName}
         </Typography>
+        {prospect.contracts?.map((code) => (
+          <Chip
+            key={code}
+            label={`Contrat ${code}`}
+            size="small"
+            sx={{ ml: 1.5, bgcolor: CONTRACT_COLOR, color: 'white' }}
+          />
+        ))}
         <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
           <Button
             variant="outlined"

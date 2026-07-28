@@ -2,6 +2,7 @@ import { prisma } from '../config/database';
 import { ContactSection } from '../utils/candidateMatch';
 import { canonicalCity } from '../utils/cityNormalize';
 import { createCandidateVideoTx } from './candidate-video.service';
+import { carryOverTags } from './contractLeads.service';
 
 /**
  * Déplace un contact d'une section à une autre (les 6 sens).
@@ -188,6 +189,11 @@ export async function moveContact(opts: {
 
     return created;
   });
+
+  // Report des tags de contrat vers la nouvelle fiche. VOLONTAIREMENT hors de
+  // la transaction et sans throw : perdre un tag est bénin (l'import est
+  // idempotent et le repose), annuler un déplacement de personne ne l'est pas.
+  await carryOverTags({ section: fromSection, id: fromId }, { section: toSection, id: result.id });
 
   return { section: toSection, id: result.id, firstName: result.firstName, lastName: result.lastName };
 }

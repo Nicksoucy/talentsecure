@@ -11,6 +11,12 @@ import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
 import { createCandidateVideoTx } from '../services/candidate-video.service';
 import { resolveSearchIds, hasSearchTokens } from '../utils/search';
 import { ApiError } from '../utils/apiError';
+import {
+  attachContractCodes,
+  carryOverTags,
+  mergeIdFilter,
+  prospectIdsForContract,
+} from '../services/contractLeads.service';
 
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
 const PROSPECT_STATS_CACHE_KEY = 'prospects:stats';
@@ -141,6 +147,15 @@ export const getProspects = async (
       where.id = { in: await resolveSearchIds('prospect_candidates', String(searchRaw)) };
     }
 
+    // Filtre « contrat » (ex. PSB) : pas de FK vers contract_leads, donc on
+    // résout en liste d'ids. mergeIdFilter INTERSECTE avec un éventuel filtre
+    // d'ids déjà posé par la recherche — l'écraser ferait disparaître le texte
+    // recherché sans le dire.
+    const contractCodeRaw = req.query.contractCode;
+    if (contractCodeRaw && String(contractCodeRaw).trim()) {
+      mergeIdFilter(where, await prospectIdsForContract(String(contractCodeRaw)));
+    }
+
     // ── Recherche par RAYON autour d'un point (nearLat/nearLng/nearRadiusKm) ──
     // Filtre la liste sur les prospects géolocalisés à ≤ rayon du point, triés du
     // plus proche au plus loin (distanceKm), puis pagine en mémoire.
@@ -151,7 +166,7 @@ export const getProspects = async (
       const sorted = await findProspectsNear(where, { lat: nearLat, lng: nearLng }, nearRadiusKm);
       const total = sorted.length;
       const nearPayload = {
-        data: sorted.slice(skip, skip + Number(limit)),
+        data: await attachContractCodes('prospect', sorted.slice(skip, skip + Number(limit))),
         pagination: {
           total,
           page: Number(page),
@@ -182,7 +197,9 @@ export const getProspects = async (
     ]);
 
     const responsePayload = {
-      data: prospects,
+      // Puce « PSB » des listes. Dégrade en [] si contract_leads est
+      // indisponible : jamais d'erreur sur ce chemin chaud.
+      data: await attachContractCodes('prospect', prospects),
       pagination: {
         total,
         page: Number(page),
@@ -218,7 +235,8 @@ export const getProspectById = async (
       throw new ApiError(404, 'Candidat potentiel non trouvé');
     }
 
-    res.json({ data: prospect });
+    const [enriched] = await attachContractCodes('prospect', [prospect as typeof prospect & { contracts?: string[] }]);
+    res.json({ data: enriched });
   } catch (error) {
     next(error);
   }
@@ -720,6 +738,10 @@ export const convertToCandidate = async (
     } catch (e) {
       console.error('⚠️ Transfert compétences prospect→candidat échoué (conversion conservée):', (e as Error).message);
     }
+
+    // Les tags de contrat suivent la personne vers sa fiche candidat (sinon le
+    // pin disparaîtrait de la couche à la conversion). Ne throw jamais.
+    await carryOverTags({ section: 'prospect', id: prospect.id }, { section: 'candidate', id: candidate.id });
 
     await invalidateProspectCaches();
 

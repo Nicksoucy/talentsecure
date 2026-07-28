@@ -6,6 +6,11 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-key-for-test
 process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'test-refresh-secret-for-testing-only';
 // Les jobs cron ne doivent jamais démarrer en test.
 process.env.DISABLE_SCHEDULER = 'true';
+// Le cache Redis non plus : en CI la variable est absente (cache désactivé),
+// mais en local backend/.env porte CACHE_ENABLED=true. Sans Redis en écoute,
+// chaque getCache/setCache reste alors bloqué jusqu'au timeout Jest. On force
+// donc la désactivation ici — dotenv n'écrase pas une variable déjà définie.
+process.env.CACHE_ENABLED = 'false';
 
 // Base de TEST — garde-fou anti-catastrophe.
 // On n'accepte qu'une URL qui RESSEMBLE à une base de test (localhost/_test).

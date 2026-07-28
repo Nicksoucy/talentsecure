@@ -9,6 +9,7 @@ interface GetProspectsParams {
   isContacted?: boolean;
   isConverted?: boolean;
   hasVideo?: boolean;
+  contractCode?: string; // filtre par contrat client (ex. PSB)
   includeProcessed?: boolean; // NOUVEAU : filtrage dynamique
   submissionDateStart?: string;
   submissionDateEnd?: string;
