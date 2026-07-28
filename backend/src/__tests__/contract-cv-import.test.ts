@@ -214,13 +214,56 @@ describe('parseCvContact', () => {
     expect(p.address).not.toContain('4000');
   });
 
-  it('signale une adresse trouvée hors en-tête sans l\'utiliser', () => {
+  it('signale une adresse trop peu étayée sans l\'utiliser', () => {
     const noHeaderAddr = ['HUGO REYES', 'hugo@gmail.com', '', 'EXPÉRIENCE', '7058, Rue Employeur, Montréal'].join('\n');
     const p = parseCvContact(noHeaderAddr, 'CVHugoReyes.pdf')!;
     expect(p.address).toBeNull();
     expect(p.precision).toBe('none');
     expect(p.suspectStreetOutsideHeader).toContain('7058');
-    expect(p.warnings.join(' ')).toContain('hors en-tête');
+    expect(p.warnings.join(' ')).toContain('peu fiable');
+  });
+
+  /**
+   * RÉGRESSION — mise en page à DEUX COLONNES.
+   *
+   * Le bloc de coordonnées de droite est linéarisé APRÈS le corps du CV. La
+   * première version, qui ne lisait que l'en-tête, jetait ces adresses comme
+   * « employeur » : 10 personnes du lot PSB se sont retrouvées sans pin, dont
+   * celle-ci, dont l'adresse était pourtant collée à son téléphone et à son
+   * courriel.
+   */
+  it('utilise le bloc de coordonnées même situé bas dans le document', () => {
+    const twoColumn = [
+      'ABDOU AZIZ GUEYE',
+      'Agent de sécurité certifié',
+      'Monteur de structures en aérospatial',
+      'Agent de sécurité certifié (BSP) actuellement en formation.',
+      'FORMATIONS',
+      'DEP – Montage de structures en aérospatiale (en cours)',
+      "École des métiers de l'aérospatiale de Montréal",
+      '438-543-6521',
+      '1860 Rue Wolfe, H2L 3J8,',
+      'Montréal, Québec',
+      'gueyeabdouaziz23@gmail.com',
+    ].join('\n');
+
+    const p = parseCvContact(twoColumn, 'CVABDOUGUEYE.pdf')!;
+    expect(p.address).toContain('1860');
+    expect(p.postalCode).toBe('H2L 3J8');
+    expect(p.precision).toBe('street');
+  });
+
+  it('écarte toujours une adresse entourée de marqueurs d\'employeur', () => {
+    const employer = [
+      'JEAN HERODE FERON',
+      'jeanherodeferon@gmail.com',
+      'EXPÉRIENCE PROFESSIONNELLE',
+      'Commis — 2019 - 2022',
+      'Magasin Amielectroplus inc., 4701 rue de Charleroi, Montréal-Nord, QC H1H 3K3',
+    ].join('\n');
+    const p = parseCvContact(employer, 'CVJeanHerodeFeron.pdf')!;
+    expect(p.address).toBeNull();
+    expect(p.precision).toBe('none');
   });
 
   it('retombe sur le code postal puis sur la ville, sans jamais inventer', () => {
