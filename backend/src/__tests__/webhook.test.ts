@@ -140,6 +140,76 @@ describe('Webhooks GoHighLevel — /api/webhooks', () => {
     });
   });
 
+  describe('POST /gohighlevel/prospect — vidéo téléversée sur /ma-video', () => {
+    /**
+     * La course que ce webhook doit absorber : le candidat est redirigé vers
+     * /ma-video dès l'envoi du formulaire et peut terminer sa vidéo AVANT que
+     * ce webhook n'arrive. L'upload attend alors dans pending_video_uploads.
+     */
+    it('un upload en attente est rattaché au prospect créé', async () => {
+      await prisma.pendingVideoUpload.create({
+        data: {
+          ghlContactId: 'contactEnAttente1',
+          email: 'course@test.com',
+          phone: '+15145556001',
+          storagePath: 'videos/inbox/contactEnAttente1/presentation.mp4',
+        },
+      });
+
+      const res = await request(app)
+        .post(PROSPECT_URL)
+        .set('x-webhook-secret', WEBHOOK_SECRET)
+        .send({ first_name: 'Course', phone: '514-555-6001', email: 'course@test.com' });
+
+      expect(res.status).toBe(201);
+      const inDb = await prisma.prospectCandidate.findUnique({ where: { id: res.body.prospectId } });
+      expect(inDb?.videoStoragePath).toBe('videos/inbox/contactEnAttente1/presentation.mp4');
+    });
+
+    it("le téléversement direct l'emporte sur l'ancien champ vidéo de GHL", async () => {
+      await prisma.pendingVideoUpload.create({
+        data: {
+          ghlContactId: 'contactEnAttente2',
+          email: 'priorite@test.com',
+          storagePath: 'videos/inbox/contactEnAttente2/grande-video.mp4',
+        },
+      });
+
+      const res = await request(app)
+        .post(PROSPECT_URL)
+        .set('x-webhook-secret', WEBHOOK_SECRET)
+        .send({
+          first_name: 'Priorite',
+          phone: '5145556002',
+          email: 'priorite@test.com',
+          video_url: 'https://ghl.example/petite-video-50mo.mp4',
+        });
+
+      expect(res.status).toBe(201);
+      const inDb = await prisma.prospectCandidate.findUnique({ where: { id: res.body.prospectId } });
+      expect(inDb?.videoStoragePath).toBe('videos/inbox/contactEnAttente2/grande-video.mp4');
+      // Le fichier plafonné à 50 Mo n'est même pas téléchargé.
+      const r2 = require('../services/r2.service');
+      expect(r2.uploadBufferToR2).not.toHaveBeenCalled();
+    });
+
+    it('un échec de réclamation ne fait pas échouer la création du prospect', async () => {
+      const pendingService = require('../services/pending-video.service');
+      const spy = jest
+        .spyOn(pendingService, 'claimForProspect')
+        .mockRejectedValueOnce(new Error('base indisponible'));
+
+      const res = await request(app)
+        .post(PROSPECT_URL)
+        .set('x-webhook-secret', WEBHOOK_SECRET)
+        .send({ first_name: 'Resilient', phone: '5145556003' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.prospectId).toBeDefined();
+      spy.mockRestore();
+    });
+  });
+
   describe('POST /gohighlevel/prospect — doublon (409)', () => {
     it('même téléphone qu’un prospect existant non supprimé → 409', async () => {
       await prisma.prospectCandidate.create({

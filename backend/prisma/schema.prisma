@@ -340,6 +340,38 @@ model CandidateVideo {
   @@map("candidate_videos")
 }
 
+// Vidéo de présentation téléversée par le candidat sur la page publique
+// /ma-video, avant que le webhook GHL n'ait créé sa fiche ProspectCandidate.
+//
+// La redirection du formulaire GHL est instantanée, le webhook arrive après :
+// l'upload doit aboutir sans prospect existant, puis être « réclamé » à la
+// création du prospect (webhook, synchro survey, ou balayage cron).
+//
+// Pas de relation Prisma vers ProspectCandidate : la ligne existe justement
+// avant lui. `claimedByProspectId` est une référence souple.
+model PendingVideoUpload {
+  id           String  @id @default(uuid())
+  ghlContactId String  @unique
+  email        String?
+  phone        String?
+
+  storagePath  String // Clé R2 (videos/inbox/{contactId}/…)
+  originalName String?
+  contentType  String?
+  sizeBytes    Int? // Plafonné à 500 Mo côté applicatif — tient dans un int32
+
+  claimedByProspectId String?
+  claimedAt           DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([phone])
+  @@index([claimedAt])
+  @@map("pending_video_uploads")
+}
+
 model Availability {
   id          String           @id @default(uuid())
   candidateId String

@@ -4,6 +4,8 @@ import { uploadBufferToR2 } from '../services/r2.service';
 import { findMatchingEmployee, findMatchingCandidate } from '../utils/candidateMatch';
 import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
 import { resolveProspectCoordinates } from './cityGeocode.service';
+import { getGhlLocationId, ghlRequest } from './ghl.client';
+import { claimForProspect } from './pending-video.service';
 import logger from '../config/logger';
 
 /**
@@ -15,14 +17,8 @@ import logger from '../config/logger';
  * on ne (re)crée pas de prospect (on lie/masque comme ailleurs).
  */
 
-const GHL_TOKEN = process.env.GHL_PIT_TOKEN || 'pit-7de455ab-c46e-47a4-af9e-0b07a6c3a1ee';
-const GHL_LOCATION = process.env.GHL_LOCATION_ID || 'dfkLurZY2ADWAUZl4zYc';
-const GHL_BASE = 'https://services.leadconnectorhq.com';
 const SURVEY_ID = process.env.GHL_SURVEY_ID || '7R37monCgHPJyTiinjn3';
-const CV_FIELD = process.env.GHL_SURVEY_CV_FIELD || '2byZbDiiDflJ7pWGVNnC';
-const VIDEO_FIELD = process.env.GHL_SURVEY_VIDEO_FIELD || 'FiITjfHeL2205bkCXNq2';
 
-const H = { Authorization: `Bearer ${GHL_TOKEN}`, Version: '2021-07-28' };
 const DOC_OR_IMG = ['pdf', 'wordprocessingml', 'msword', 'image/'];
 
 export interface SyncSummary {
@@ -114,10 +110,9 @@ async function fetchAllSubmissions(): Promise<any[]> {
   // Pagination : on sort par `break` quand il n'y a plus de page.
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const url = `${GHL_BASE}/surveys/submissions?locationId=${GHL_LOCATION}&surveyId=${SURVEY_ID}&limit=50&page=${page}`;
-    const res = await fetch(url, { headers: H });
-    if (!res.ok) throw new Error(`GHL submissions ${res.status}`);
-    const data: any = await res.json();
+    const data = await ghlRequest<any>('/surveys/submissions', {
+      query: { locationId: getGhlLocationId(), surveyId: SURVEY_ID, limit: 50, page },
+    });
     all.push(...(data.submissions || []));
     if (!data.meta?.nextPage) break;
     page++;
@@ -238,10 +233,29 @@ export async function syncOneSubmission(sub: any): Promise<{ status: string; det
 
   if (existing) {
     await prisma.prospectCandidate.update({ where: { id: existing.id }, data: baseData });
+    await tryClaimPublicVideo(existing.id, email, phone, videoStoragePath || existing.videoStoragePath);
     return { status: 'updated', detail: `${name}` };
   }
-  await prisma.prospectCandidate.create({ data: baseData });
+  const created = await prisma.prospectCandidate.create({ data: baseData });
+  await tryClaimPublicVideo(created.id, email, phone, videoStoragePath);
   return { status: 'created', detail: `${name}` };
+}
+
+/**
+ * Réclame la vidéo éventuellement téléversée sur /ma-video avant que la fiche
+ * n'existe. Best-effort : la synchro ne doit jamais échouer là-dessus.
+ */
+async function tryClaimPublicVideo(
+  prospectId: string,
+  email: string | null,
+  phone: string | null,
+  existingVideoPath?: string | null
+): Promise<void> {
+  try {
+    await claimForProspect({ id: prospectId, email, phone, videoStoragePath: existingVideoPath ?? null });
+  } catch (e: any) {
+    logger.warn(`[survey-sync] réclamation vidéo publique échouée: ${e.message}`);
+  }
 }
 
 /** Synchronise toute le survey (bouton manuel / backfill / cron). */

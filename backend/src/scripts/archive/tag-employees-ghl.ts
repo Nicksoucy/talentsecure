@@ -8,16 +8,18 @@
  *   --apply        applique réellement (sinon dry-run)
  *   --limit=N      ne traiter que les N premiers (échantillon)
  */
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
+import { getGhlLocationId, getGhlToken } from '../../services/ghl.client';
 
 const prisma = new PrismaClient();
 const APPLY = process.argv.includes('--apply');
 const limitArg = process.argv.find((a) => a.startsWith('--limit='));
 const LIMIT = limitArg ? parseInt(limitArg.split('=')[1], 10) : 0;
 
-const TOKEN = 'pit-7de455ab-c46e-47a4-af9e-0b07a6c3a1ee';
-const LOC = 'dfkLurZY2ADWAUZl4zYc';
+const TOKEN = getGhlToken();
+const LOC = getGhlLocationId();
 const BASE = 'https://services.leadconnectorhq.com';
 const H = { Authorization: `Bearer ${TOKEN}`, Version: '2021-07-28' };
 

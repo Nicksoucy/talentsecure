@@ -7,10 +7,12 @@
  *
  * Jobs :
  *   - Toutes les 5 min : dispatchPendingNotifications (email + in-app)
+ *   - Toutes les 15 min : sweepUnclaimed (vidéos publiques en attente)
  *   - Toutes les heures (à xx:00) : surveillanceJob (10 checks)
  */
 import cron from 'node-cron';
 import { dispatchPendingNotifications } from '../services/notification.service';
+import { sweepUnclaimed } from '../services/pending-video.service';
 import { surveillanceJob } from './uniform-surveillance';
 
 let started = false;
@@ -34,6 +36,20 @@ export function startScheduler() {
     }
   });
 
+  // Vidéos publiques en attente, toutes les 15 minutes. Filet pour les uploads
+  // dont le webhook GHL est arrivé en retard (ou jamais) : sans ça, la vidéo
+  // reste orpheline dans R2 et personne ne la voit.
+  cron.schedule('*/15 * * * *', async () => {
+    try {
+      const result = await sweepUnclaimed();
+      if (result.claimed > 0) {
+        console.log(`[scheduler] vidéos en attente: ${result.claimed}/${result.scanned} rattachée(s)`);
+      }
+    } catch (e) {
+      console.error('[scheduler] pending video sweep error:', e);
+    }
+  });
+
   // Surveillance toutes les heures à minute 0
   cron.schedule('0 * * * *', async () => {
     try {
@@ -45,5 +61,7 @@ export function startScheduler() {
     }
   });
 
-  console.log('[scheduler] started — dispatch every 5min, surveillance hourly');
+  console.log(
+    '[scheduler] started — dispatch every 5min, pending videos every 15min, surveillance hourly'
+  );
 }

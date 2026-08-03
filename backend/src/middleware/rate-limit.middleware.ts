@@ -47,3 +47,16 @@ export const publicShareLimiter = rateLimit({
   message: 'Trop de requêtes. Réessayez dans une minute.',
   skip: skipInTests,
 });
+
+// 10 req / minute / IP sur le téléversement public de vidéo. Chaque appel
+// touche l'API GHL (validation du contact) et peut émettre une URL présignée
+// vers R2 : deux ressources qu'on ne veut pas voir marteler. Assez large pour
+// un candidat qui reprend sa vidéo deux ou trois fois.
+export const videoUploadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Trop de requêtes. Réessayez dans une minute.',
+  skip: skipInTests,
+});

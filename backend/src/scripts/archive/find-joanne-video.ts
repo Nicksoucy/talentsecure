@@ -1,10 +1,12 @@
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
+import { getGhlLocationId, getGhlToken } from '../../services/ghl.client';
 
 const prisma = new PrismaClient();
 const GHL_BASE = 'https://services.leadconnectorhq.com';
-const TOKEN = 'pit-7de455ab-c46e-47a4-af9e-0b07a6c3a1ee';
-const LOC = 'dfkLurZY2ADWAUZl4zYc';
+const TOKEN = getGhlToken();
+const LOC = getGhlLocationId();
 const H = { Authorization: `Bearer ${TOKEN}`, Version: '2021-07-28' };
 
 (async () => {
