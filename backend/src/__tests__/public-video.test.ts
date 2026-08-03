@@ -97,7 +97,7 @@ describe('Téléversement vidéo public — /api/public/video', () => {
       ghlClient.getContactById.mockResolvedValue(null);
       const res = await request(app).get(SESSION_URL).query({ c: CONTACT_ID });
       expect(res.status).toBe(404);
-      expect(res.body.error).toBe('LIEN_INVALIDE');
+      expect(res.body.code).toBe('LIEN_INVALIDE');
     });
 
     it("contact appartenant à une AUTRE location → 404 (pas d'accès croisé)", async () => {
@@ -119,7 +119,7 @@ describe('Téléversement vidéo public — /api/public/video', () => {
       ghlClient.getContactById.mockRejectedValue(new Error('GHL_PIT_TOKEN absent'));
       const res = await request(app).get(SESSION_URL).query({ c: CONTACT_ID });
       expect(res.status).toBe(503);
-      expect(res.body.error).toBe('SERVICE_INDISPONIBLE');
+      expect(res.body.code).toBe('SERVICE_INDISPONIBLE');
     });
 
     it('lien valide → prénom + aucune vidéo encore reçue', async () => {
@@ -251,7 +251,7 @@ describe('Téléversement vidéo public — /api/public/video', () => {
       r2.headObjectInR2.mockResolvedValue(null);
       const res = await request(app).post(COMPLETE_URL).send({ c: CONTACT_ID, key });
       expect(res.status).toBe(400);
-      expect(res.body.error).toBe('TELEVERSEMENT_INTROUVABLE');
+      expect(res.body.code).toBe('TELEVERSEMENT_INTROUVABLE');
     });
 
     it('fichier vide → 400 et suppression de R2', async () => {
@@ -265,7 +265,7 @@ describe('Téléversement vidéo public — /api/public/video', () => {
       r2.readObjectPrefix.mockResolvedValue(Buffer.from('%PDF-1.7 pas une video du tout'));
       const res = await request(app).post(COMPLETE_URL).send({ c: CONTACT_ID, key });
       expect(res.status).toBe(400);
-      expect(res.body.error).toBe('FICHIER_NON_VIDEO');
+      expect(res.body.code).toBe('FICHIER_NON_VIDEO');
       expect(r2.deleteFileFromR2).toHaveBeenCalledWith(key);
     });
 

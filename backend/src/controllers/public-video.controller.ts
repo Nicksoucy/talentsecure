@@ -32,6 +32,7 @@ import {
   useR2,
 } from '../services/r2.service';
 import { isLikelyVideo } from '../utils/ghlFetch';
+import { ApiError } from '../utils/apiError';
 import { recordUpload } from '../services/pending-video.service';
 import { findMatchingProspect } from '../utils/candidateMatch';
 import { MAX_VIDEO_BYTES, normalizeMimeType } from '../validation/public-video.validation';
@@ -60,11 +61,12 @@ const EXT_BY_MIME: Record<string, string> = {
 };
 
 /** Réponse unique pour tous les liens refusés : pas d'oracle d'énumération. */
-function invalidLink(res: Response) {
-  return res.status(404).json({
-    error: 'LIEN_INVALIDE',
-    message: "Ce lien n'est plus valide. Demandez-nous un nouveau lien pour envoyer votre vidéo.",
-  });
+function invalidLinkError(): ApiError {
+  return new ApiError(
+    404,
+    "Ce lien n'est plus valide. Demandez-nous un nouveau lien pour envoyer votre vidéo.",
+    'LIEN_INVALIDE'
+  );
 }
 
 /**
@@ -72,11 +74,12 @@ function invalidLink(res: Response) {
  * le candidat croirait que son lien est mort et abandonnerait, alors que le
  * problème est chez nous et se résoudra tout seul.
  */
-function ghlUnavailable(res: Response) {
-  return res.status(503).json({
-    error: 'SERVICE_INDISPONIBLE',
-    message: 'Notre service est momentanément indisponible. Réessayez dans quelques minutes.',
-  });
+function ghlUnavailableError(): ApiError {
+  return new ApiError(
+    503,
+    'Notre service est momentanément indisponible. Réessayez dans quelques minutes.',
+    'SERVICE_INDISPONIBLE'
+  );
 }
 
 function contactIdFrom(req: Request): string {
@@ -125,9 +128,9 @@ async function resolveContact(contactId: string): Promise<ContactLookup> {
   return { ok: true, contact };
 }
 
-/** Traduit un échec de résolution en réponse HTTP. */
-function rejectLookup(res: Response, reason: 'invalid' | 'unavailable') {
-  return reason === 'unavailable' ? ghlUnavailable(res) : invalidLink(res);
+/** Traduit un échec de résolution en erreur d'API. */
+function lookupError(reason: 'invalid' | 'unavailable'): ApiError {
+  return reason === 'unavailable' ? ghlUnavailableError() : invalidLinkError();
 }
 
 /** True si ce contact a déjà une vidéo (en attente ou déjà rattachée). */
@@ -159,7 +162,7 @@ export const getVideoSession = async (req: Request, res: Response, next: NextFun
   try {
     const contactId = contactIdFrom(req);
     const lookup = await resolveContact(contactId);
-    if (!lookup.ok) return rejectLookup(res, lookup.reason);
+    if (!lookup.ok) throw lookupError(lookup.reason);
     const { contact } = lookup;
 
     return res.json({
@@ -182,10 +185,11 @@ export const getVideoSession = async (req: Request, res: Response, next: NextFun
 export const initiateVideoUpload = async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!useR2) {
-      return res.status(503).json({
-        error: 'STOCKAGE_INDISPONIBLE',
-        message: "Le stockage vidéo n'est pas configuré sur ce serveur.",
-      });
+      throw new ApiError(
+        503,
+        "Le stockage vidéo n'est pas configuré sur ce serveur.",
+        'STOCKAGE_INDISPONIBLE'
+      );
     }
 
     const { c: contactId, contentType, sizeBytes } = req.body as {
@@ -196,7 +200,7 @@ export const initiateVideoUpload = async (req: Request, res: Response, next: Nex
     };
 
     const lookup = await resolveContact(contactId);
-    if (!lookup.ok) return rejectLookup(res, lookup.reason);
+    if (!lookup.ok) throw lookupError(lookup.reason);
 
     // La clé est construite entièrement côté serveur : le contactId est validé
     // par un alphabet restreint, l'extension vient du MIME, le reste est un
@@ -234,26 +238,24 @@ export const completeVideoUpload = async (req: Request, res: Response, next: Nex
     const { c: contactId, key } = req.body as { c: string; key: string };
 
     const lookup = await resolveContact(contactId);
-    if (!lookup.ok) return rejectLookup(res, lookup.reason);
+    if (!lookup.ok) throw lookupError(lookup.reason);
     const { contact } = lookup;
 
     // La clé doit être une de celles qu'on a émises pour CE contact — sinon
     // n'importe qui pourrait s'attribuer un objet arbitraire du bucket.
-    if (!key.startsWith(`videos/inbox/${contactId}/`)) return invalidLink(res);
+    if (!key.startsWith(`videos/inbox/${contactId}/`)) throw invalidLinkError();
 
     const head = await headObjectInR2(key);
     if (!head) {
-      return res.status(400).json({
-        error: 'TELEVERSEMENT_INTROUVABLE',
-        message: "Le téléversement ne s'est pas terminé. Réessayez.",
-      });
+      throw new ApiError(
+        400,
+        "Le téléversement ne s'est pas terminé. Réessayez.",
+        'TELEVERSEMENT_INTROUVABLE'
+      );
     }
     if (head.contentLength <= 100 || head.contentLength > MAX_VIDEO_BYTES) {
       await deleteFileFromR2(key).catch(() => undefined);
-      return res.status(400).json({
-        error: 'FICHIER_INVALIDE',
-        message: 'Le fichier reçu est vide ou trop volumineux.',
-      });
+      throw new ApiError(400, 'Le fichier reçu est vide ou trop volumineux.', 'FICHIER_INVALIDE');
     }
 
     // Magic bytes : un `Content-Type` déclaré ne prouve rien. On lit seulement
@@ -261,10 +263,11 @@ export const completeVideoUpload = async (req: Request, res: Response, next: Nex
     const prefix = await readObjectPrefix(key, 4096);
     if (!prefix || !isLikelyVideo(prefix)) {
       await deleteFileFromR2(key).catch(() => undefined);
-      return res.status(400).json({
-        error: 'FICHIER_NON_VIDEO',
-        message: "Ce fichier n'est pas une vidéo valide. Essayez avec un MP4 ou un MOV.",
-      });
+      throw new ApiError(
+        400,
+        "Ce fichier n'est pas une vidéo valide. Essayez avec un MP4 ou un MOV.",
+        'FICHIER_NON_VIDEO'
+      );
     }
 
     const result = await recordUpload({
