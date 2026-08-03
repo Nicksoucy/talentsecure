@@ -21,6 +21,7 @@ import {
   refreshProspectVideoFromGhl,
   bulkAssignProspectsToClient,
   exportProspectsZip,
+  getPendingVideoUploads,
 } from '../controllers/prospect.controller';
 import { getProspectAnalysis } from '../controllers/prospect-scoring.controller';
 import { proxyCv } from '../controllers/cv-proxy.controller';
@@ -128,6 +129,15 @@ router.get('/cv-proxy', proxyCv);
  * @access  Private (ADMIN, RH_RECRUITER)
  */
 router.post('/sync-survey', authorizeRoles('ADMIN', 'RH_RECRUITER'), syncSurveyProspects);
+
+/**
+ * @route   GET /api/prospects/pending-videos
+ * @desc    Vidéos téléversées sur /ma-video qu'aucun prospect n'a réclamées
+ *          (webhook GHL jamais arrivé, coordonnées divergentes…). Sans cet
+ *          écran, ces vidéos restent invisibles dans R2.
+ * @access  Private (ADMIN, RH_RECRUITER)
+ */
+router.get('/pending-videos', authorizeRoles('ADMIN', 'RH_RECRUITER'), getPendingVideoUploads);
 
 /**
  * @route   GET /api/prospects/:id/cv-url

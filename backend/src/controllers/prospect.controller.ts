@@ -9,6 +9,8 @@ import { resolveCityCoordinates, resolveProspectCoordinates } from '../services/
 import { haversineKm, boundingBox, buildGeoMapPoints } from '../utils/geo';
 import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
 import { createCandidateVideoTx } from '../services/candidate-video.service';
+import { findContactIdBy, getContactById } from '../services/ghl.client';
+import { listOrphanUploads } from '../services/pending-video.service';
 import { resolveSearchIds, hasSearchTokens } from '../utils/search';
 import { ApiError } from '../utils/apiError';
 import {
@@ -1184,26 +1186,14 @@ export const refreshProspectVideoFromGhl = async (req: Request, res: Response, n
     const phone = (prospect.phone || '').trim();
     if (!email && !phone) return res.status(400).json({ error: 'Pas d\'email ni téléphone pour chercher dans GHL' });
 
-    const GHL_BASE = 'https://services.leadconnectorhq.com';
-    const TOKEN = process.env.GHL_PIT_TOKEN || 'pit-7de455ab-c46e-47a4-af9e-0b07a6c3a1ee';
-    const LOC = process.env.GHL_LOCATION_ID || 'dfkLurZY2ADWAUZl4zYc';
-    const ghlH = { Authorization: `Bearer ${TOKEN}`, Version: '2021-07-28' };
-
     // 1) Trouver le contact GHL
-    const axios = require('axios');
     let contactId: string | null = null;
-    if (email) {
-      const r = await axios.get(`${GHL_BASE}/contacts/search/duplicate`, { params: { locationId: LOC, email }, headers: ghlH }).catch(() => null);
-      contactId = r?.data?.contact?.id || null;
-    }
-    if (!contactId && phone) {
-      const r = await axios.get(`${GHL_BASE}/contacts/search/duplicate`, { params: { locationId: LOC, number: phone }, headers: ghlH }).catch(() => null);
-      contactId = r?.data?.contact?.id || null;
-    }
+    if (email) contactId = await findContactIdBy('email', email);
+    if (!contactId && phone) contactId = await findContactIdBy('number', phone);
     if (!contactId) return res.status(404).json({ error: 'Contact GHL introuvable' });
 
     // 2) Récupérer les custom fields
-    const full = await axios.get(`${GHL_BASE}/contacts/${contactId}`, { headers: ghlH }).then((r: any) => r.data?.contact);
+    const full = await getContactById(contactId);
     let videoFileUrl: string | null = null;
     for (const f of (full?.customFields || [])) {
       const v = f.value;
@@ -1466,5 +1456,42 @@ export const exportProspectsZip = async (req: Request, res: Response, next: Next
     } else {
       try { res.end(); } catch { /* flux déjà fermé */ }
     }
+  }
+};
+
+/**
+ * Vidéos téléversées sur la page publique /ma-video qu'aucun prospect n'a
+ * réclamées.
+ *
+ * Le cas normal est le rattachement automatique (immédiat, à la création du
+ * prospect, ou par balayage cron). Ce qui atterrit ici a échappé aux trois :
+ * webhook GHL jamais reçu, ou coordonnées divergentes entre le contact GHL et
+ * la fiche prospect. Sans cet écran, la vidéo dort dans R2 et personne ne sait
+ * qu'elle existe.
+ *
+ * GET /api/prospects/pending-videos
+ */
+export const getPendingVideoUploads = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const minAgeMinutes = Math.max(0, parseInt(String(req.query.minAgeMinutes ?? '60'), 10) || 0);
+    const uploads = await listOrphanUploads(minAgeMinutes);
+
+    res.json({
+      minAgeMinutes,
+      total: uploads.length,
+      uploads: uploads.map((u) => ({
+        id: u.id,
+        ghlContactId: u.ghlContactId,
+        email: u.email,
+        phone: u.phone,
+        storagePath: u.storagePath,
+        originalName: u.originalName,
+        contentType: u.contentType,
+        sizeBytes: u.sizeBytes,
+        createdAt: u.createdAt,
+      })),
+    });
+  } catch (error) {
+    next(error);
   }
 };

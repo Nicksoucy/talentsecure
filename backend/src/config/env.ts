@@ -19,6 +19,15 @@ if (process.env.NODE_ENV !== 'test') {
 
 const REQUIRED_VARS = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'DATABASE_URL'] as const;
 
+// Variables sans lesquelles l'app démarre, mais dont l'absence casse une
+// fonctionnalité entière au premier appel. Volontairement NON bloquantes : un
+// dev local sans credentials GHL doit pouvoir lancer l'app et la suite de tests.
+// Les modules concernés (services/ghl.client.ts) lèvent au moment de l'appel.
+const RECOMMENDED_VARS = [
+  ['GHL_PIT_TOKEN', 'intégration GoHighLevel (survey, SMS, courriels, vidéos candidats)'],
+  ['GHL_LOCATION_ID', 'intégration GoHighLevel (sous-compte ciblé)'],
+] as const;
+
 const FORBIDDEN_VALUES = new Set([
   'your-secret-key',
   'change-this',
@@ -57,4 +66,12 @@ if (missing.length > 0 || insecure.length > 0) {
   }
   console.error('\nVérifiez votre fichier .env (ou les variables Cloud Run en production).\n');
   throw new Error('Configuration env invalide: ' + errors.join(' | '));
+}
+
+if (process.env.NODE_ENV !== 'test') {
+  for (const [name, feature] of RECOMMENDED_VARS) {
+    if (!process.env[name]?.trim()) {
+      console.warn(`⚠️  ${name} absent — ${feature} indisponible.`);
+    }
+  }
 }

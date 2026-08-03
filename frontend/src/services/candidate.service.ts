@@ -1,4 +1,5 @@
 import api from './api';
+import { uploadFileToSignedUrl } from './upload.util';
 import { Candidate } from '@/types';
 
 interface GetCandidatesParams {
@@ -170,49 +171,10 @@ export const candidateService = {
   },
 
   /**
-   * Upload file directly to signed URL (PUT)
+   * Upload file directly to signed URL (PUT).
+   * Délègue au helper partagé avec la page publique de téléversement.
    */
-  async uploadFileToUrl(
-    url: string,
-    file: File,
-    contentType: string,
-    onProgress?: (progress: number) => void
-  ): Promise<void> {
-    // Development Proxy workaround for CORS issues on localhost
-    // We rewrite the URL to go through Vite proxy (/r2-proxy) which forwards to R2
-    // Requires forcePathStyle: true in backend to keep bucket name in path!
-    if (window.location.hostname === 'localhost' && url.includes('r2.cloudflarestorage.com')) {
-      url = url.replace(/https:\/\/.*\.r2\.cloudflarestorage\.com/, '/r2-proxy');
-      console.log('Using R2 Development Proxy:', url);
-    }
-
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('PUT', url, true);
-      xhr.setRequestHeader('Content-Type', contentType);
-
-      if (onProgress) {
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            const percentComplete = Math.round((e.loaded / e.total) * 100);
-            onProgress(percentComplete);
-          }
-        };
-      }
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve();
-        } else {
-          // If proxy fails, we might see 500 or 503
-          reject(new Error(`Upload failed with status ${xhr.status} (Proxy/Network)`));
-        }
-      };
-
-      xhr.onerror = () => reject(new Error('Network error during upload'));
-      xhr.send(file);
-    });
-  },
+  uploadFileToUrl: uploadFileToSignedUrl,
 
   /**
    * Complete Direct Video Upload (Notify Backend)

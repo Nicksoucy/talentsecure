@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { prisma } from '../config/database';
 import { findMatchingCandidate, findMatchingEmployee } from '../utils/candidateMatch';
 import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
+import { claimForProspect } from '../services/pending-video.service';
 
 /**
  * Vérifie le secret du webhook GHL — fail-closed + timing-safe.
@@ -169,9 +170,23 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
       },
     });
 
-    // Si une vidéo de présentation est fournie, on la télécharge dans R2
-    // (best-effort : un échec vidéo ne doit pas faire échouer la création).
-    if (videoUrl) {
+    // Le candidat a pu terminer son téléversement sur /ma-video AVANT que ce
+    // webhook n'arrive : on réclame l'upload garé en attente. Best-effort — un
+    // échec ici ne doit jamais faire échouer la création du prospect.
+    let claimedPublicVideo = false;
+    try {
+      claimedPublicVideo = Boolean(
+        await claimForProspect({ id: prospect.id, email, phone, videoStoragePath: null })
+      );
+    } catch (e: any) {
+      console.error('⚠️ Réclamation vidéo publique échouée (prospect créé quand même):', e.message);
+    }
+
+    // Ancien champ vidéo du formulaire GHL (plafonné à 50 Mo). Ne s'exécute que
+    // si le candidat n'a pas déjà envoyé sa vidéo par /ma-video : le
+    // téléversement direct l'emporte toujours sur le fichier passé par GHL.
+    // Best-effort : un échec vidéo ne doit pas faire échouer la création.
+    if (videoUrl && !claimedPublicVideo) {
       try {
         const { downloadGhlFile, detectExtension, isLikelyVideo } = require('../utils/ghlFetch');
         const { uploadBufferToR2 } = require('../services/r2.service');
@@ -198,7 +213,8 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
     console.log('✅ Prospect créé avec succès:', {
       id: prospect.id,
       hasCv: !!cvUrl,
-      hasVideo: !!videoUrl,
+      hasVideo: !!videoUrl || claimedPublicVideo,
+      videoSource: claimedPublicVideo ? 'upload-public' : videoUrl ? 'champ-ghl' : null,
     });
 
     return res.status(201).json({

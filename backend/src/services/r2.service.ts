@@ -369,6 +369,99 @@ export async function deleteFileFromR2(key: string): Promise<void> {
 }
 
 /**
+ * URL présignée PUT pour un téléversement depuis un client NON authentifié
+ * (page publique /ma-video).
+ *
+ * Différences avec `getUploadSignedVideoUrl`, qui reste réservé au staff :
+ *  - la clé est imposée par l'appelant (pas de préfixe codé en dur) ;
+ *  - `ContentType` ET `ContentLength` sont figés dans la signature : R2 rejette
+ *    tout corps dont le type ou la taille diffère de ce que le serveur a
+ *    autorisé. Sans ça, une URL présignée publique est une porte ouverte pour
+ *    déverser n'importe quoi, de n'importe quelle taille, dans le bucket ;
+ *  - TTL court par défaut (15 min) — largement suffisant pour démarrer un
+ *    téléversement, et la fenêtre d'abus reste petite.
+ */
+export async function getConstrainedUploadUrl(params: {
+  key: string;
+  contentType: string;
+  exactBytes: number;
+  expiresIn?: number;
+}): Promise<string> {
+  const { key, contentType, exactBytes, expiresIn = 900 } = params;
+  try {
+    const client = getR2Client();
+
+    const command = new PutObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: key,
+      ContentType: contentType,
+      ContentLength: exactBytes,
+      // inline : la vidéo doit se lire dans le navigateur, pas se télécharger
+      ContentDisposition: 'inline',
+      CacheControl: 'public, max-age=31536000',
+    });
+
+    return await getSignedUrl(client, command, {
+      expiresIn,
+      // Sans cette liste, le SDK ne signe pas content-length et la contrainte
+      // de taille devient purement décorative.
+      signableHeaders: new Set(['content-type', 'content-length']),
+    });
+  } catch (error: any) {
+    console.error('Error generating constrained upload URL:', error.message);
+    throw new Error(`Failed to generate constrained upload URL: ${error.message}`);
+  }
+}
+
+/**
+ * Métadonnées d'un objet R2, ou null s'il n'existe pas.
+ * Sert à vérifier qu'un téléversement présigné a réellement abouti.
+ */
+export async function headObjectInR2(
+  key: string
+): Promise<{ contentLength: number; contentType?: string } | null> {
+  try {
+    const client = getR2Client();
+    const res = await client.send(new HeadObjectCommand({ Bucket: R2_BUCKET_NAME, Key: key }));
+    return {
+      contentLength: res.ContentLength ?? 0,
+      contentType: res.ContentType,
+    };
+  } catch (error: any) {
+    if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) return null;
+    throw error;
+  }
+}
+
+/**
+ * Lit les `bytes` premiers octets d'un objet R2 (requête Range).
+ *
+ * Utilisé pour valider les magic bytes d'un fichier téléversé sans jamais
+ * rapatrier 500 Mo dans la mémoire de Cloud Run.
+ */
+export async function readObjectPrefix(key: string, bytes: number = 4096): Promise<Buffer | null> {
+  try {
+    const client = getR2Client();
+    const res = await client.send(
+      new GetObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: key,
+        Range: `bytes=0-${Math.max(0, bytes - 1)}`,
+      })
+    );
+    if (!res.Body) return null;
+    const chunks: Buffer[] = [];
+    for await (const chunk of res.Body as AsyncIterable<Uint8Array>) {
+      chunks.push(Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  } catch (error: any) {
+    if (error.name === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404) return null;
+    throw error;
+  }
+}
+
+/**
  * Generate a signed URL for any file type
  *
  * @param key - The R2 object key

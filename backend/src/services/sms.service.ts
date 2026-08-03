@@ -7,14 +7,9 @@
  * location + un numéro SMS provisionné. Si le contact GHL est introuvable, on
  * lève une 422 pour que l'UI bascule sur la signature au comptoir.
  */
-import axios from 'axios';
 import { ApiError } from '../utils/apiError';
 import { lastTenDigits } from '../utils/phone';
-
-const GHL_TOKEN = process.env.GHL_PIT_TOKEN || 'pit-7de455ab-c46e-47a4-af9e-0b07a6c3a1ee';
-const GHL_LOCATION = process.env.GHL_LOCATION_ID || 'dfkLurZY2ADWAUZl4zYc';
-const GHL_BASE = 'https://services.leadconnectorhq.com';
-const H = { Authorization: `Bearer ${GHL_TOKEN}`, Version: '2021-07-28' };
+import { findContactIdBy, ghlRequest } from './ghl.client';
 
 /**
  * Génère les variantes plausibles d'un numéro pour la recherche GHL.
@@ -32,21 +27,6 @@ function phoneCandidates(phone: string): string[] {
   return [...set].filter(Boolean);
 }
 
-// NB: l'endpoint GHL "search/duplicate" attend `number` pour le téléphone
-// (et `email` pour le courriel) — PAS `phone`.
-async function searchByParam(key: 'number' | 'email', value: string): Promise<string | null> {
-  try {
-    const r = await axios.get(`${GHL_BASE}/contacts/search/duplicate`, {
-      params: { locationId: GHL_LOCATION, [key]: value },
-      headers: H,
-      timeout: 20000,
-    });
-    return r.data?.contact?.id ?? null;
-  } catch {
-    return null;
-  }
-}
-
 /** Retrouve le contactId GHL d'un agent par téléphone (plusieurs formats) puis email. */
 export async function resolveGhlContactId(
   phone?: string | null,
@@ -54,12 +34,12 @@ export async function resolveGhlContactId(
 ): Promise<string | null> {
   if (phone) {
     for (const candidate of phoneCandidates(phone)) {
-      const id = await searchByParam('number', candidate);
+      const id = await findContactIdBy('number', candidate);
       if (id) return id;
     }
   }
   if (email) {
-    const id = await searchByParam('email', email);
+    const id = await findContactIdBy('email', email);
     if (id) return id;
   }
   return null;
@@ -67,13 +47,12 @@ export async function resolveGhlContactId(
 
 /** Envoie un SMS à un contact GHL. */
 export async function sendSms(contactId: string, message: string): Promise<{ messageId?: string }> {
-  const r = await axios.post(
-    `${GHL_BASE}/conversations/messages`,
-    { type: 'SMS', contactId, message },
-    { headers: { ...H, 'Content-Type': 'application/json' }, timeout: 20000 }
-  );
+  const data = await ghlRequest<any>('/conversations/messages', {
+    method: 'POST',
+    body: { type: 'SMS', contactId, message },
+  });
   return {
-    messageId: r.data?.messageId || r.data?.messageIds?.[0] || r.data?.conversationId,
+    messageId: data?.messageId || data?.messageIds?.[0] || data?.conversationId,
   };
 }
 

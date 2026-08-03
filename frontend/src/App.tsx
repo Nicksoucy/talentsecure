@@ -37,6 +37,7 @@ const WishlistsPage = lazy(() => import('./pages/wishlists/WishlistsPage'));
 const ExportPage = lazy(() => import('./pages/exports/ExportPage'));
 const CatalogueViewPage = lazy(() => import('./pages/public/CatalogueViewPage'));
 const UniformSignPage = lazy(() => import('./pages/public/UniformSignPage'));
+const VideoUploadPage = lazy(() => import('./pages/public/VideoUploadPage'));
 const UniformsHubPage = lazy(() => import('./pages/uniformes/UniformsHubPage'));
 const UniformsCataloguePage = lazy(() => import('./pages/uniformes/UniformsCataloguePage'));
 const UniformInventoryPage = lazy(() => import('./pages/uniformes/UniformInventoryPage'));
@@ -82,6 +83,9 @@ function App() {
           {/* Public routes */}
           <Route path="/catalogue/:token" element={<CatalogueViewPage />} />
           <Route path="/uniformes/signer/:token" element={<UniformSignPage />} />
+          {/* Vidéo de présentation du candidat — cible de la redirection du
+              formulaire GoHighLevel et du rappel SMS/courriel. */}
+          <Route path="/ma-video" element={<VideoUploadPage />} />
 
           {/* Admin auth routes */}
           <Route element={<AuthLayout />}>
