@@ -21,6 +21,7 @@ import {
   Slider,
   FormControlLabel,
   Checkbox,
+  Select,
 } from '@mui/material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -77,14 +78,16 @@ export interface GeoPointsMapProps {
    */
   sitesUrl?: string;
   /**
-   * Endpoint optionnel des LEADS D'UN CONTRAT : active une couche colorée
-   * togglable (ex. /api/contracts/PSB/map-points). Ces pins portent des
-   * PERSONNES (prospects, candidats ou employés taguées sur ce contrat), donc
-   * le libellé est leur nom.
+   * Active le sélecteur de CONTRAT : liste les contrats ayant au moins un lead
+   * (GET /api/contracts) et affiche celui choisi en couche colorée. Ces pins
+   * portent des PERSONNES (prospects, candidats ou employés tagués), donc le
+   * libellé est leur nom.
+   *
+   * Choisir un contrat masque automatiquement la couche de base — sinon les
+   * quelques pins du contrat se noient dans le millier de points habituels.
+   * La case « Afficher tous les … » permet de les remontrer.
    */
-  contractUrl?: string;
-  /** Nom du contrat affiché dans la case à cocher et la légende (défaut PSB). */
-  contractLabel?: string;
+  contracts?: boolean;
 }
 
 // Pastille ronde : taille + couleur selon le nombre de personnes. Les points
@@ -217,28 +220,40 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
   unitPlural,
   onNearbySelect,
   sitesUrl,
-  contractUrl,
-  contractLabel = 'PSB',
+  contracts = false,
 }) => {
   const [points, setPoints] = useState<MapPoint[]>([]);
   const [unplaced, setUnplaced] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Couche de base (toutes les personnes) — masquable pour isoler un contrat.
+  const [showAllPeople, setShowAllPeople] = useState(true);
+
   // Couche des mandats (sites) — masquée par défaut, chargée à la 1re activation.
   const [sites, setSites] = useState<MapPoint[]>([]);
   const [showSites, setShowSites] = useState(false);
   const [sitesLoaded, setSitesLoaded] = useState(false);
 
-  // Couche des leads de contrat — même schéma, plus la couleur choisie.
+  // Couche des leads de contrat : liste des contrats + celui affiché.
+  const [contractList, setContractList] = useState<{ code: string; total: number }[]>([]);
+  const [contractCode, setContractCode] = useState('');
   const [contractPins, setContractPins] = useState<MapPoint[]>([]);
-  const [showContract, setShowContract] = useState(false);
-  const [contractLoaded, setContractLoaded] = useState(false);
   const [contractColor, setContractColor] = useState<string>(() => readContractColor());
 
   const pickContractColor = (value: string) => {
     setContractColor(value);
     saveContractColor(value);
+  };
+
+  /**
+   * Choisir un contrat isole sa couche : sans ça, ses quelques dizaines de pins
+   * se noient dans le millier de points de la couche de base — c'est précisément
+   * le reproche fait à la première version. Revenir à « Tous » les remontre.
+   */
+  const pickContract = (code: string) => {
+    setContractCode(code);
+    setShowAllPeople(!code);
   };
 
   // Recherche par point + rayon.
@@ -280,17 +295,28 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
       .finally(() => setSitesLoaded(true));
   }, [sitesUrl, showSites, sitesLoaded]);
 
-  // Leads de contrat : chargés paresseusement au 1er cochage. L'erreur est
-  // avalée volontairement — un endpoint contrat cassé ne doit jamais empêcher
-  // la carte principale de fonctionner.
+  // Liste des contrats disponibles (alimente le sélecteur). Erreur avalée : le
+  // sélecteur reste vide, la carte principale n'est jamais empêchée.
   useEffect(() => {
-    if (!contractUrl || !showContract || contractLoaded) return;
+    if (!contracts) return;
     api
-      .get(contractUrl)
+      .get('/api/contracts')
+      .then((r) => setContractList(r.data.data.contracts ?? []))
+      .catch((err) => console.error('Error fetching contracts:', err));
+  }, [contracts]);
+
+  // Points du contrat choisi. Même garde : un endpoint contrat cassé ne doit
+  // jamais empêcher la carte principale de fonctionner.
+  useEffect(() => {
+    if (!contractCode) {
+      setContractPins([]);
+      return;
+    }
+    api
+      .get(`/api/contracts/${encodeURIComponent(contractCode)}/map-points`)
       .then((r) => setContractPins(r.data.data.points ?? []))
-      .catch((err) => console.error('Error fetching contract points:', err))
-      .finally(() => setContractLoaded(true));
-  }, [contractUrl, showContract, contractLoaded]);
+      .catch((err) => console.error('Error fetching contract points:', err));
+  }, [contractCode]);
 
   // Compteur dans le rayon (aperçu) : recalculé au changement point/rayon.
   // Debounce : le slider émet en continu pendant le glissement — on n'appelle
@@ -406,26 +432,29 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
             />
           )}
 
-          {contractUrl && (
+          {contracts && contractList.length > 0 && (
             <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    size="small"
-                    checked={showContract}
-                    onChange={(e) => setShowContract(e.target.checked)}
-                    sx={{ color: contractColor, '&.Mui-checked': { color: contractColor } }}
-                  />
-                }
-                label={
-                  <Typography variant="caption">
-                    Afficher les candidats du contrat {contractLabel}
-                  </Typography>
-                }
-              />
+              <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>
+                Contrat :
+              </Typography>
+              <Select
+                size="small"
+                native
+                value={contractCode}
+                onChange={(e) => pickContract(String(e.target.value))}
+                sx={{ minWidth: 150, '& select': { py: 0.5, fontSize: 13 } }}
+                inputProps={{ 'aria-label': 'Contrat' }}
+              >
+                <option value="">Tous les {unitPlural}</option>
+                {contractList.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code} ({c.total})
+                  </option>
+                ))}
+              </Select>
               {/* Sélecteur de couleur : le choix est mémorisé par navigateur,
                   donc modifiable sans redéploiement. */}
-              {showContract && (
+              {contractCode && (
                 <Stack direction="row" spacing={0.5} alignItems="center">
                   {CONTRACT_PALETTE.map((c) => (
                     <Box
@@ -449,6 +478,20 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
                   ))}
                 </Stack>
               )}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={showAllPeople}
+                    onChange={(e) => setShowAllPeople(e.target.checked)}
+                  />
+                }
+                label={
+                  <Typography variant="caption">
+                    Afficher aussi tous les {unitPlural}
+                  </Typography>
+                }
+              />
             </Stack>
           )}
 
@@ -575,7 +618,9 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
           )}
 
           {/* Points par secteur postal (FSA) — regroupés en clusters au dézoom,
-              dont l'icône AFFICHE LA SOMME des personnes (pas le nombre de points). */}
+              dont l'icône AFFICHE LA SOMME des personnes (pas le nombre de points).
+              Masquable pour isoler la couche d'un contrat. */}
+          {showAllPeople && (
           <MarkerClusterGroup
             chunkedLoading
             showCoverageOnHover={false}
@@ -618,6 +663,7 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
               </Marker>
             ))}
           </MarkerClusterGroup>
+          )}
 
           {/* Couche ROSE des MANDATS (sites) — togglable, cluster séparé. Popup
               = nom(s) du mandat seulement ; aucune donnée sensible (les
@@ -652,7 +698,7 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
           {/* Couche des LEADS DE CONTRAT — togglable, cluster séparé pour ne
               jamais se fondre dans les pastilles de personnes. Le libellé du
               popup est le nom des personnes à cette position. */}
-          {showContract && contractPins.length > 0 && (
+          {contractCode && contractPins.length > 0 && (
             <MarkerClusterGroup
               chunkedLoading
               showCoverageOnHover={false}
@@ -672,7 +718,7 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
                         {c.label}
                       </Typography>
                       <Chip
-                        label={`Contrat ${contractLabel} — ${c.count} personne${c.count > 1 ? 's' : ''}`}
+                        label={`Contrat ${contractCode} — ${c.count} personne${c.count > 1 ? 's' : ''}`}
                         size="small"
                         sx={{ bgcolor: contractColor, color: 'white', mb: 1 }}
                       />
@@ -710,8 +756,8 @@ const GeoPointsMap: React.FC<GeoPointsMapProps> = ({
           {points.some((p) => p.source === 'address') ? 'Pastille verte = adresse exacte · bleue' : 'Pastille bleue'} = position au
           code postal (secteur) · orange = centre-ville approximatif ({unitPlural} sans code
           postal){showSites && sites.length > 0 ? ' · ◆ rose = mandat (site)' : ''}
-          {showContract && contractPins.length > 0
-            ? ` · ◆ ${contractLabel} (plein = adresse exacte, contour = approximatif)`
+          {contractCode && contractPins.length > 0
+            ? ` · ◆ ${contractCode} (plein = adresse exacte, contour = approximatif)`
             : ''}
         </Typography>
         {unplaced > 0 && (

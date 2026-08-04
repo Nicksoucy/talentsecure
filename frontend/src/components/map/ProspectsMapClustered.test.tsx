@@ -70,6 +70,11 @@ const pointsResponse = (points: unknown[], unplaced = 0) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Chaque test pilote l'appel des POINTS via mockResolvedValueOnce. Les autres
+  // appels du composant (liste des contrats, compteur du rayon…) doivent quand
+  // même recevoir une promesse : sans ce défaut, api.get renvoie undefined et
+  // le composant plante sur `.then`.
+  apiMock.get.mockResolvedValue({ data: { data: { contracts: [], points: [], unplaced: 0 } } });
 });
 
 describe('ProspectsMapClustered', () => {

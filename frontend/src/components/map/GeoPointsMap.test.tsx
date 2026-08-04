@@ -202,39 +202,40 @@ describe('GeoPointsMap', () => {
     expect(screen.getByText(/rose = mandat/i)).toBeInTheDocument();
   });
 
-  it('couche contrat : masquée par défaut (pas de fetch contractUrl, pas de pin)', async () => {
-    const CONTRACT_URL = '/api/contracts/PSB/map-points';
+  const CONTRACTS_URL = '/api/contracts';
+  const PSB_URL = '/api/contracts/PSB/map-points';
+
+  /** Réponses par défaut : liste des contrats + points du contrat PSB. */
+  function mockContracts(psbPoints: any[]) {
     mockGet.mockImplementation((url: string) => {
       if (url === POINTS_URL) return Promise.resolve({ data: { data: { points: samplePoints, unplaced: 0 } } });
-      if (url === CONTRACT_URL) return Promise.resolve({ data: { data: { points: [{ lat: 45.5, lng: -73.55, count: 1, source: 'address', label: 'Marie Tremblay' }], unplaced: 0 } } });
+      if (url === CONTRACTS_URL) return Promise.resolve({ data: { data: { contracts: [{ code: 'PSB', total: 148 }] } } });
+      if (url === PSB_URL) return Promise.resolve({ data: { data: { points: psbPoints, unplaced: 0 } } });
       return Promise.resolve({ data: { pagination: { total: 0 } } });
     });
+  }
 
-    renderMap({ contractUrl: CONTRACT_URL, contractLabel: 'PSB' });
+  it('contrat : aucun sélectionné par défaut — pas de fetch des points, pas de pin', async () => {
+    mockContracts([{ lat: 45.5, lng: -73.55, count: 1, source: 'address', label: 'Marie Tremblay' }]);
+    renderMap({ contracts: true });
     await screen.findByTestId('map');
 
-    const checkbox = screen.getByRole('checkbox', { name: /afficher les candidats du contrat psb/i });
-    expect(checkbox).not.toBeChecked();
-    expect(mockGet).not.toHaveBeenCalledWith(CONTRACT_URL);
+    // La LISTE est chargée (pour peupler le sélecteur), pas les POINTS.
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith(CONTRACTS_URL));
+    expect(mockGet).not.toHaveBeenCalledWith(PSB_URL);
     expect(screen.queryByText('Marie Tremblay')).not.toBeInTheDocument();
   });
 
-  it('couche contrat : cocher la case charge les pins nommés, la précision et la légende', async () => {
-    const CONTRACT_URL = '/api/contracts/PSB/map-points';
-    mockGet.mockImplementation((url: string) => {
-      if (url === POINTS_URL) return Promise.resolve({ data: { data: { points: samplePoints, unplaced: 0 } } });
-      if (url === CONTRACT_URL) return Promise.resolve({ data: { data: { points: [{ lat: 45.5, lng: -73.55, count: 2, source: 'address', label: 'Marie Tremblay, Jean Côté' }], unplaced: 0 } } });
-      return Promise.resolve({ data: { pagination: { total: 0 } } });
-    });
-
+  it('contrat : le choisir charge ses pins nommés, la précision et la légende', async () => {
+    mockContracts([{ lat: 45.5, lng: -73.55, count: 2, source: 'address', label: 'Marie Tremblay, Jean Côté' }]);
     const user = userEvent.setup();
-    renderMap({ contractUrl: CONTRACT_URL, contractLabel: 'PSB' });
+    renderMap({ contracts: true });
     await screen.findByTestId('map');
 
-    await user.click(screen.getByRole('checkbox', { name: /afficher les candidats du contrat psb/i }));
+    await user.selectOptions(await screen.findByLabelText('Contrat'), 'PSB');
 
     expect(await screen.findByText('Marie Tremblay, Jean Côté')).toBeInTheDocument();
-    await waitFor(() => expect(mockGet).toHaveBeenCalledWith(CONTRACT_URL));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith(PSB_URL));
     expect(screen.getByText(/contrat psb — 2 personnes/i)).toBeInTheDocument();
     // La précision du pin est annoncée explicitement (jamais de faux « exact ») :
     // dans le popup (texte exact) et dans la légende (phrase complète).
@@ -242,37 +243,56 @@ describe('GeoPointsMap', () => {
     expect(screen.getByText(/plein = adresse exacte/i)).toBeInTheDocument();
   });
 
-  it('couche contrat : une position approximative est annoncée comme telle', async () => {
-    const CONTRACT_URL = '/api/contracts/PSB/map-points';
-    mockGet.mockImplementation((url: string) => {
-      if (url === POINTS_URL) return Promise.resolve({ data: { data: { points: samplePoints, unplaced: 0 } } });
-      if (url === CONTRACT_URL) return Promise.resolve({ data: { data: { points: [{ lat: 45.5, lng: -73.55, count: 1, source: 'city', label: 'Ali Benali' }], unplaced: 0 } } });
-      return Promise.resolve({ data: { pagination: { total: 0 } } });
-    });
-
+  /**
+   * Le reproche fait à la 1re version : la couche du contrat s'ajoutait aux
+   * milliers de points de base, donc on ne voyait rien. Choisir un contrat doit
+   * ISOLER sa couche, et « Tous » doit la remontrer.
+   */
+  it('contrat : le choisir masque la couche de base, revenir à Tous la remontre', async () => {
+    mockContracts([{ lat: 45.5, lng: -73.55, count: 2, source: 'address', label: 'Marie Tremblay, Jean Côté' }]);
     const user = userEvent.setup();
-    renderMap({ contractUrl: CONTRACT_URL, contractLabel: 'PSB' });
+    renderMap({ contracts: true });
     await screen.findByTestId('map');
-    await user.click(screen.getByRole('checkbox', { name: /afficher les candidats du contrat psb/i }));
+
+    // Au départ, les points de base sont visibles.
+    expect(screen.getByText('H2X (Montréal)')).toBeInTheDocument();
+    const toutAfficher = screen.getByRole('checkbox', { name: /afficher aussi tous les/i });
+    expect(toutAfficher).toBeChecked();
+
+    await user.selectOptions(await screen.findByLabelText('Contrat'), 'PSB');
+    await screen.findByText('Marie Tremblay, Jean Côté');
+    expect(toutAfficher).not.toBeChecked();
+    expect(screen.queryByText('H2X (Montréal)')).not.toBeInTheDocument();
+
+    // On peut les remontrer sans quitter le contrat.
+    await user.click(toutAfficher);
+    expect(await screen.findByText('H2X (Montréal)')).toBeInTheDocument();
+    expect(screen.getByText('Marie Tremblay, Jean Côté')).toBeInTheDocument();
+
+    // Et revenir à « Tous » rétablit l'état initial.
+    await user.selectOptions(screen.getByLabelText('Contrat'), '');
+    await waitFor(() => expect(screen.queryByText('Marie Tremblay, Jean Côté')).not.toBeInTheDocument());
+  });
+
+  it('contrat : une position approximative est annoncée comme telle', async () => {
+    mockContracts([{ lat: 45.5, lng: -73.55, count: 1, source: 'city', label: 'Ali Benali' }]);
+    const user = userEvent.setup();
+    renderMap({ contracts: true });
+    await screen.findByTestId('map');
+    await user.selectOptions(await screen.findByLabelText('Contrat'), 'PSB');
 
     expect(await screen.findByText(/position approximative \(centre-ville\)/i)).toBeInTheDocument();
   });
 
-  it('couche contrat : le sélecteur de couleur mémorise le choix', async () => {
-    const CONTRACT_URL = '/api/contracts/PSB/map-points';
-    mockGet.mockImplementation((url: string) => {
-      if (url === POINTS_URL) return Promise.resolve({ data: { data: { points: samplePoints, unplaced: 0 } } });
-      if (url === CONTRACT_URL) return Promise.resolve({ data: { data: { points: [], unplaced: 0 } } });
-      return Promise.resolve({ data: { pagination: { total: 0 } } });
-    });
-
+  it('contrat : le sélecteur de couleur mémorise le choix', async () => {
+    mockContracts([]);
     const user = userEvent.setup();
-    renderMap({ contractUrl: CONTRACT_URL, contractLabel: 'PSB' });
+    renderMap({ contracts: true });
     await screen.findByTestId('map');
 
-    // Le sélecteur n'apparaît qu'une fois la couche activée.
+    // Les pastilles n'apparaissent qu'une fois un contrat choisi.
     expect(screen.queryByRole('button', { name: /couleur jaune/i })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('checkbox', { name: /afficher les candidats du contrat psb/i }));
+    await user.selectOptions(await screen.findByLabelText('Contrat'), 'PSB');
 
     await user.click(await screen.findByRole('button', { name: /couleur jaune/i }));
     expect(window.localStorage.getItem('ts.map.contractColor')).toBe('#f9a825');
