@@ -12,11 +12,15 @@
  *     Le nom se lit donc dans la 1re ligne du CV, et le nom de fichier sert de
  *     CONTRE-VÉRIFICATION — deux sources indépendantes qui concordent.
  *
- *  2. L'ADRESSE ne se cherche que dans l'EN-TÊTE, jamais dans tout le document.
- *     Mesuré sur le lot : le document entier donne 59 adresses de rue, l'en-tête
- *     seul 54 — les 5 de différence sont des adresses d'EMPLOYEUR trouvées dans
- *     la section Expérience, qui épingleraient la personne sur son ancien lieu
- *     de travail. On ne devine jamais : mieux vaut pas de pin qu'un faux pin.
+ *  2. L'ADRESSE se cherche dans TOUT le document, et se décide sur son
+ *     VOISINAGE — jamais sur sa position. Une première version ne lisait que
+ *     l'en-tête, en supposant qu'une adresse plus bas appartenait à un
+ *     employeur ; c'est faux sur une mise en page à DEUX COLONNES, où le bloc
+ *     de coordonnées de droite est linéarisé après le corps du CV. Ça avait
+ *     privé de pin 10 personnes du lot, dont une dont l'adresse était collée à
+ *     son propre téléphone. Voir findHomeStreetCandidates() pour les critères
+ *     retenus. On ne devine jamais : sous le seuil, l'adresse est signalée pour
+ *     revue plutôt qu'utilisée — mieux vaut pas de pin qu'un faux pin.
  */
 import { lastTenDigits } from './phone';
 import { parseAgendrixAddress, cleanNameTags, ParsedAddress } from './agendrixImport';
