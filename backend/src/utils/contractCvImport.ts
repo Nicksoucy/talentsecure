@@ -366,6 +366,88 @@ export function extractStreetLine(zone: string): string | null {
   return null;
 }
 
+// Marqueurs d'un EMPLOYEUR (raison sociale, plage de dates d'emploi).
+const EMPLOYER_RE =
+  /\b(inc\.?|ltée|ltee|s\.?e\.?n\.?c|corp\.?|compagnie|company|employeur|superviseur|g[ée]rant|magasin|\d{2}\/\d{4}\s*[-–]|\d{4}\s*[-–]\s*\d{4})\b/i;
+
+export interface StreetCandidate {
+  line: string;
+  score: number;
+  reasons: string[];
+}
+
+/**
+ * Cherche l'adresse du DOMICILE dans TOUT le document.
+ *
+ * La version initiale ne regardait que l'en-tête, en supposant qu'une adresse
+ * plus bas appartenait forcément à un employeur. C'était faux : sur une mise en
+ * page à DEUX COLONNES, le bloc de coordonnées de droite est linéarisé APRÈS le
+ * corps du CV. De vraies adresses de domicile étaient donc écartées (mesuré :
+ * 10 personnes du lot PSB, dont une avec « 1860 Rue Wolfe, H2L 3J8, Montréal »
+ * collé à son propre téléphone et à son propre courriel).
+ *
+ * On ne se fie donc plus à la POSITION mais à ce qui entoure l'adresse :
+ *   + code postal sur la même ligne ou la suivante      (fort)
+ *   + courriel/téléphone de la personne à ±3 lignes     (fort)
+ *   − raison sociale ou plage de dates à ±3 lignes      (fort négatif)
+ *   + situé en tout début de document                   (faible appoint)
+ */
+export function findHomeStreetCandidates(
+  text: string,
+  email: string | null,
+  phoneDigits: string
+): StreetCandidate[] {
+  const lines = text.split(/\r?\n/).map((l) => l.trim());
+  const out: StreetCandidate[] = [];
+  const emailLocal = email ? email.split('@')[0].toLowerCase() : '';
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = cleanAddressLine(lines[i]);
+    if (!line || line.length > 120 || !STREET_RE.test(line)) continue;
+
+    const reasons: string[] = [];
+    let score = 1;
+
+    const sameOrNext = `${lines[i]} ${lines[i + 1] ?? ''}`;
+    const around = lines.slice(Math.max(0, i - 3), i + 4).join(' ');
+
+    // Raison sociale SUR LA LIGNE MÊME de l'adresse : c'est l'adresse de
+    // l'entreprise, aucun autre indice ne peut racheter ça.
+    if (EMPLOYER_RE.test(line)) {
+      out.push({ line, score: -Infinity, reasons: ['raison sociale sur la ligne'] });
+      continue;
+    }
+
+    if (POSTAL_RE.test(sameOrNext)) {
+      score += 3;
+      reasons.push('code postal');
+    }
+    if (emailLocal && around.toLowerCase().includes(emailLocal)) {
+      score += 2;
+      reasons.push('courriel de la personne');
+    }
+    if (phoneDigits && around.replace(/\D/g, '').includes(phoneDigits)) {
+      score += 2;
+      reasons.push('téléphone de la personne');
+    }
+    if (EMPLOYER_RE.test(around)) {
+      score -= 3;
+      reasons.push('marqueur employeur');
+    }
+    if (i < 12) {
+      score += 1;
+      reasons.push('haut de page');
+    }
+
+    out.push({ line, score, reasons });
+  }
+
+  return out.sort((a, b) => b.score - a.score);
+}
+
+/** Score minimal pour retenir une adresse sans revue humaine. */
+export const HOME_ADDRESS_MIN_SCORE = 4;
+
 export type LocationPrecision = 'street' | 'postal' | 'city' | 'none';
 
 export interface ParsedCv {
@@ -421,10 +503,25 @@ export function parseCvContact(text: string, fileName: string): ParsedCv | null 
   if (!email) warnings.push('aucun courriel');
   if (!phone) warnings.push('aucun téléphone');
 
-  // Localisation — en-tête UNIQUEMENT (cf. docblock du module).
-  const streetLine = extractStreetLine(zone);
-  const postalCode = extractPostalCode(zone);
-  const cityMatch = zone.match(CITY_QC_RE);
+  // Localisation — on cherche dans TOUT le document et on tranche sur le
+  // voisinage (code postal, coordonnées de la personne), pas sur la position :
+  // un bloc de contact en colonne de droite sort après le corps du CV.
+  const phoneDigits = lastTenDigits(phone);
+  const best = findHomeStreetCandidates(text, email, phoneDigits)[0];
+  const streetLine = best && best.score >= HOME_ADDRESS_MIN_SCORE ? best.line : null;
+
+  const postalCode = extractPostalCode(zone) ?? (streetLine ? extractPostalCode(streetLine) : null);
+  // Repli « Ville, QC » : l'en-tête d'abord, puis le reste du document — mais
+  // JAMAIS depuis une ligne portant une raison sociale, sinon on épinglerait la
+  // personne dans la ville de son employeur.
+  const cityMatch =
+    zone.match(CITY_QC_RE) ??
+    text
+      .split(/\r?\n/)
+      .filter((l) => !EMPLOYER_RE.test(l))
+      .map((l) => l.match(CITY_QC_RE))
+      .find(Boolean) ??
+    null;
 
   let parsed: ParsedAddress = { address: null, city: null, province: 'QC', postalCode: null };
   if (streetLine) {
@@ -439,14 +536,12 @@ export function parseCvContact(text: string, fileName: string): ParsedCv | null 
   else if (finalPostal) precision = 'postal';
   else if (city) precision = 'city';
 
-  // Une rue présente ailleurs dans le document = probablement un employeur.
+  // Adresse repérée mais trop peu étayée pour être retenue : on la SIGNALE
+  // (elle peut être celle d'un employeur, ou un domicile mal entouré).
   let suspect: string | null = null;
-  if (!streetLine) {
-    const outside = extractStreetLine(text.slice(zone.length));
-    if (outside) {
-      suspect = outside;
-      warnings.push('adresse de rue trouvée hors en-tête (employeur ?) — à confirmer');
-    }
+  if (!streetLine && best) {
+    suspect = best.line;
+    warnings.push(`adresse peu fiable (${best.reasons.join(', ') || 'aucun indice'}) — à confirmer`);
   }
 
   if (precision === 'none') warnings.push('aucune localisation exploitable');
