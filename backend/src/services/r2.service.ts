@@ -391,13 +391,16 @@ export async function getConstrainedUploadUrl(params: {
   try {
     const client = getR2Client();
 
+    // ⚠️ NE PAS ajouter ContentDisposition ici. Le presigner le fait entrer dans
+    // la signature, mais aucun client n'envoie l'en-tête `Content-Disposition`
+    // sur le PUT → R2 répond `SignatureDoesNotMatch` (403). Vérifié en direct
+    // contre le bucket de production. La lecture inline est de toute façon
+    // assurée à la lecture, par l'URL présignée GET.
     const command = new PutObjectCommand({
       Bucket: R2_BUCKET_NAME,
       Key: key,
       ContentType: contentType,
       ContentLength: exactBytes,
-      // inline : la vidéo doit se lire dans le navigateur, pas se télécharger
-      ContentDisposition: 'inline',
       CacheControl: 'public, max-age=31536000',
     });
 
