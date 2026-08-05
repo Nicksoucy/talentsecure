@@ -34,6 +34,12 @@ describe('CandidateBadges', () => {
     expect(screen.queryByText('24/7')).not.toBeInTheDocument();
   });
 
+  it('inclut « Soir » dans l\'agrégat (5e case du formulaire GHL)', () => {
+    renderWithProviders(<CandidateBadges availableEvenings availableNights />);
+
+    expect(screen.getByText('Soir/Nuit')).toBeInTheDocument();
+  });
+
   it('affiche la note seulement au-dessus du seuil (>= 7)', () => {
     const { unmount } = renderWithProviders(<CandidateBadges globalRating={9} />);
     expect(screen.getByText('9/10')).toBeInTheDocument();

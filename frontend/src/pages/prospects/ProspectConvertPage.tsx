@@ -45,6 +45,13 @@ export default function ProspectConvertPage() {
       address: prospect.fullAddress || '',
       city: prospect.city || '',
       postalCode: prospect.postalCode || '',
+      // Disponibilités déclarées au formulaire GHL : le formulaire d'entrevue
+      // s'ouvre pré-coché, RH n'a plus qu'à confirmer ou corriger.
+      available24_7: prospect.available24_7 ?? false,
+      availableDay: prospect.availableDays ?? false,
+      availableEvening: prospect.availableEvenings ?? false,
+      availableNight: prospect.availableNights ?? false,
+      availableWeekend: prospect.availableWeekends ?? false,
     };
   }, [prospect]);
 

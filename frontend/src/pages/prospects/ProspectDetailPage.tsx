@@ -32,6 +32,7 @@ import { CONTRACT_COLOR } from '@/components/map/layerColors';
 import { DetailPageSkeleton } from '@/components/skeletons';
 import CVPreview from '@/components/CVPreview';
 import ProspectVideoPlayer from '@/components/video/ProspectVideoPlayer';
+import ProspectAvailability from './components/ProspectAvailability';
 
 export default function ProspectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -308,6 +309,17 @@ export default function ProspectDetailPage() {
           </Card>
         </Grid>
 
+
+        {/* Disponibilités déclarées au formulaire GHL */}
+        <Grid item xs={12} md={6}>
+          <ProspectAvailability
+            available24_7={prospect.available24_7}
+            availableDays={prospect.availableDays}
+            availableEvenings={prospect.availableEvenings}
+            availableNights={prospect.availableNights}
+            availableWeekends={prospect.availableWeekends}
+          />
+        </Grid>
 
         {/* Réponses du formulaire */}
         {prospect.surveyAnswers && Object.keys(prospect.surveyAnswers).length > 0 && (

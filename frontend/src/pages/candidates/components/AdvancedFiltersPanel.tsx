@@ -28,6 +28,7 @@ export interface AdvancedFiltersState {
     availability: {
         available24_7: boolean;
         availableDays: boolean;
+        availableEvenings: boolean;
         availableNights: boolean;
         availableWeekends: boolean;
         availableImmediately: boolean;
@@ -124,6 +125,17 @@ export default function AdvancedFiltersPanel({
                                 <FormControlLabel
                                     control={
                                         <Checkbox
+                                            checked={filters.availability.availableEvenings}
+                                            onChange={() => handleAvailabilityChange('availableEvenings')}
+                                            name="availableEvenings"
+                                            size="small"
+                                        />
+                                    }
+                                    label="Soir"
+                                />
+                                <FormControlLabel
+                                    control={
+                                        <Checkbox
                                             checked={filters.availability.availableNights}
                                             onChange={() => handleAvailabilityChange('availableNights')}
                                             name="availableNights"
@@ -190,9 +202,12 @@ export default function AdvancedFiltersPanel({
                             <TextField {...params} variant="outlined" label="Certifications requises" placeholder="Sélectionner..." size="small" />
                         )}
                         renderTags={(value, getTagProps) =>
-                            value.map((option, index) => (
-                                <Chip variant="outlined" label={option} size="small" {...getTagProps({ index })} />
-                            ))
+                            value.map((option, index) => {
+                                // `key` est extraite du spread : react/jsx-key ne la voit pas
+                                // à travers {...getTagProps()} et bloque le hook pre-commit.
+                                const { key, ...tagProps } = getTagProps({ index });
+                                return <Chip key={key} variant="outlined" label={option} size="small" {...tagProps} />;
+                            })
                         }
                         sx={{ mb: 3 }}
                     />
@@ -209,9 +224,12 @@ export default function AdvancedFiltersPanel({
                             <TextField {...params} variant="outlined" label="Langues parlées" placeholder="Sélectionner..." size="small" />
                         )}
                         renderTags={(value, getTagProps) =>
-                            value.map((option, index) => (
-                                <Chip variant="outlined" label={option} size="small" {...getTagProps({ index })} />
-                            ))
+                            value.map((option, index) => {
+                                // `key` est extraite du spread : react/jsx-key ne la voit pas
+                                // à travers {...getTagProps()} et bloque le hook pre-commit.
+                                const { key, ...tagProps } = getTagProps({ index });
+                                return <Chip key={key} variant="outlined" label={option} size="small" {...tagProps} />;
+                            })
                         }
                     />
                 </Grid>
@@ -233,9 +251,12 @@ export default function AdvancedFiltersPanel({
                             <TextField {...params} variant="outlined" label="Villes" placeholder="Ajouter une ville..." size="small" />
                         )}
                         renderTags={(value, getTagProps) =>
-                            value.map((option, index) => (
-                                <Chip variant="outlined" label={option} size="small" {...getTagProps({ index })} />
-                            ))
+                            value.map((option, index) => {
+                                // `key` est extraite du spread : react/jsx-key ne la voit pas
+                                // à travers {...getTagProps()} et bloque le hook pre-commit.
+                                const { key, ...tagProps } = getTagProps({ index });
+                                return <Chip key={key} variant="outlined" label={option} size="small" {...tagProps} />;
+                            })
                         }
                         sx={{ mb: 3 }}
                     />

@@ -180,7 +180,7 @@ export class AIExtractionService {
 Voici les filtres disponibles :
 - cities: Liste des villes (ex: "Montréal", "Laval", "Québec")
 - certifications: Liste des certifications (ex: "BSP", "RCR", "Permis de conduire", "SSIAP")
-- availability: Liste des disponibilités (ex: "24/7", "days", "nights", "weekends")
+- availability: Liste des disponibilités (ex: "24/7", "days", "evenings", "nights", "weekends")
 - minExperience: Nombre d'années d'expérience minimum (ex: 2)
 - minRating: Note minimale sur 10 (ex: 7)
 - hasVehicle: Booléen si un véhicule est requis
@@ -190,6 +190,7 @@ Voici les filtres disponibles :
 Règles d'interprétation :
 - "24/7" ou "tout le temps" -> availability: ["24/7"]
 - "jour" -> availability: ["days"]
+- "soir" -> availability: ["evenings"]
 - "nuit" -> availability: ["nights"]
 - "fin de semaine" -> availability: ["weekends"]
 - "bilingue" -> languages: ["Français", "Anglais"]

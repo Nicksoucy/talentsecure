@@ -55,6 +55,7 @@ const makeTalent = (overrides: Partial<TalentPreview> = {}): TalentPreview => ({
   status: 'AVAILABLE',
   available24_7: false,
   availableDays: true,
+  availableEvenings: false,
   availableNights: false,
   availableWeekends: false,
   availableImmediately: true,

@@ -110,6 +110,63 @@ describe('Webhooks GoHighLevel — /api/webhooks', () => {
     });
   });
 
+  describe('POST /gohighlevel/prospect — disponibilités', () => {
+    it('décode le champ « Disponibilités » du formulaire vers les colonnes', async () => {
+      const res = await request(app)
+        .post(PROSPECT_URL)
+        .set('x-webhook-secret', WEBHOOK_SECRET)
+        .send({
+          first_name: 'Dispo',
+          last_name: 'Reconnue',
+          phone: '5145550301',
+          disponibilites: ['soir', 'Fin de semaine'],
+        });
+      expect(res.status).toBe(201);
+
+      const inDb = await prisma.prospectCandidate.findUnique({ where: { id: res.body.prospectId } });
+      expect(inDb).toMatchObject({
+        availableEvenings: true,
+        availableWeekends: true,
+        availableDays: false,
+        availableNights: false,
+      });
+    });
+
+    it('« 24/7 » implique les quatre quarts', async () => {
+      const res = await request(app)
+        .post(PROSPECT_URL)
+        .set('x-webhook-secret', WEBHOOK_SECRET)
+        .send({ first_name: 'Dispo', last_name: 'Totale', phone: '5145550302', disponibilites: '24/7' });
+      expect(res.status).toBe(201);
+
+      const inDb = await prisma.prospectCandidate.findUnique({ where: { id: res.body.prospectId } });
+      expect(inDb).toMatchObject({
+        available24_7: true,
+        availableDays: true,
+        availableEvenings: true,
+        availableNights: true,
+        availableWeekends: true,
+      });
+    });
+
+    it('champ absent → aucune disponibilité écrite, création inchangée', async () => {
+      const res = await request(app)
+        .post(PROSPECT_URL)
+        .set('x-webhook-secret', WEBHOOK_SECRET)
+        .send({ first_name: 'Sans', last_name: 'Dispo', phone: '5145550303' });
+      expect(res.status).toBe(201);
+
+      const inDb = await prisma.prospectCandidate.findUnique({ where: { id: res.body.prospectId } });
+      expect(inDb).toMatchObject({
+        available24_7: false,
+        availableDays: false,
+        availableEvenings: false,
+        availableNights: false,
+        availableWeekends: false,
+      });
+    });
+  });
+
   describe('POST /gohighlevel/prospect — chemin heureux', () => {
     it('payload valide (sans vidéo) → 201 et prospect persisté', async () => {
       const res = await request(app)

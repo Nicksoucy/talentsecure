@@ -7,6 +7,12 @@ import { invalidateCaches } from '../utils/cacheInvalidation';
 import { getStatusFromRating } from '../utils/candidate.utils';
 import { canonicalCity } from '../utils/cityNormalize';
 import { computeExperienceMonths } from '../utils/experience';
+import {
+  normalizeAvailability,
+  hasAvailabilityInput,
+  availabilityRowsFrom,
+  flagsFromAvailabilityRows,
+} from '../utils/availability';
 import { findContactEverywhere } from '../utils/candidateMatch';
 import { resolveSearchIds } from '../utils/search';
 import { resolveProspectCoordinates } from '../services/cityGeocode.service';
@@ -256,12 +262,19 @@ export const createCandidate = async (
       consentDate,
       consentSignature,
       // Related data
-      availabilities,
       languages,
       experiences,
       certifications,
       situationTests,
     } = req.body;
+
+    // Disponibilités : les colonnes sont la source de vérité (24/7 implique les
+    // 4 quarts) ; la table `availabilities` reste alimentée en miroir. Un appelant
+    // qui n'envoie que l'ancien tableau `availabilities` reste servi.
+    const availabilityFlags = hasAvailabilityInput(req.body)
+      ? normalizeAvailability(req.body)
+      : flagsFromAvailabilityRows(req.body.availabilities);
+    const availabilities = availabilityRowsFrom(availabilityFlags);
 
     // DÉTECTION DE DOUBLON : un contact ne doit vivre qu'à une seule place.
     // Si email/téléphone correspond déjà ailleurs → 409 conflit (le frontend
@@ -315,6 +328,7 @@ export const createCandidate = async (
         // Availability
         hasVehicle: hasVehicle || false,
         canTravelKm: canTravelKm ? Number(canTravelKm) : null,
+        ...availabilityFlags,
         // Certifications
         hasBSP: hasBSP || false,
         bspNumber,
@@ -335,7 +349,7 @@ export const createCandidate = async (
         // Expérience dénormalisée (somme des mois) pour la recherche avancée.
         totalExperienceMonths: computeExperienceMonths(experiences),
         // Nested creates
-        availabilities: availabilities ? {
+        availabilities: availabilities.length > 0 ? {
           create: availabilities,
         } : undefined,
         languages: languages ? {
@@ -438,11 +452,21 @@ export const updateCandidate = async (
     // Prepare update data with nested relations handling
     const prismaUpdateData: any = { ...candidateData };
 
-    // Handle relations: Delete old ones and create new ones if provided
-    if (availabilities) {
+    // Disponibilités : on ne touche à rien si l'appelant n'en parle pas, mais on
+    // remet bien tout à false s'il a TOUT décoché. L'ancien code testait la
+    // véracité du tableau (`if (availabilities)`) : le frontend envoyant
+    // `undefined` quand plus rien n'était coché, décocher n'effaçait jamais rien.
+    const mentionsAvailability =
+      hasAvailabilityInput(updateData) || availabilities !== undefined;
+
+    if (mentionsAvailability) {
+      const flags = hasAvailabilityInput(updateData)
+        ? normalizeAvailability(updateData)
+        : flagsFromAvailabilityRows(availabilities);
+      Object.assign(prismaUpdateData, flags);
       prismaUpdateData.availabilities = {
         deleteMany: {},
-        create: availabilities,
+        create: availabilityRowsFrom(flags),
       };
     }
     if (languages) {

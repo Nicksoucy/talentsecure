@@ -130,6 +130,7 @@ export default function CandidateTableRow({
           hasSSIAP={candidate.hasSSIAP}
           available24_7={candidate.available24_7}
           availableDays={candidate.availableDays}
+          availableEvenings={candidate.availableEvenings}
           availableNights={candidate.availableNights}
           availableWeekends={candidate.availableWeekends}
           hasVehicle={candidate.hasVehicle}

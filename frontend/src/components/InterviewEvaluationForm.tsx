@@ -74,7 +74,9 @@ export interface InterviewFormData {
     expiryDate?: string;
   }>;
 
-  // Availability
+  // Availability — mêmes cases que le formulaire GHL « Renseignements étudiants ».
+  // `available24_7` implique les 4 quarts (normalisé aussi côté serveur).
+  available24_7: boolean;
   availableDay: boolean;
   availableEvening: boolean;
   availableNight: boolean;
@@ -151,6 +153,7 @@ export default function InterviewEvaluationForm({
       bspExpiryDate: '',
       bspStatus: 'NONE',
       certifications: [],
+      available24_7: false,
       availableDay: false,
       availableEvening: false,
       availableNight: false,
@@ -512,11 +515,26 @@ export default function InterviewEvaluationForm({
                 Cochez toutes les périodes où le candidat est disponible
               </Typography>
             </Grid>
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={formData.available24_7}
+                    onChange={(e) => updateField('available24_7', e.target.checked)}
+                  />
+                }
+                label="🕒 24/7 (toutes les périodes)"
+              />
+              <Typography variant="caption" display="block" color="text.secondary" sx={{ ml: 4 }}>
+                Coche automatiquement jour, soir, nuit et fin de semaine
+              </Typography>
+            </Grid>
             <Grid item xs={12} sm={6}>
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={formData.availableDay}
+                    checked={formData.available24_7 || formData.availableDay}
+                    disabled={formData.available24_7}
                     onChange={(e) => updateField('availableDay', e.target.checked)}
                   />
                 }
@@ -527,7 +545,8 @@ export default function InterviewEvaluationForm({
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={formData.availableEvening}
+                    checked={formData.available24_7 || formData.availableEvening}
+                    disabled={formData.available24_7}
                     onChange={(e) => updateField('availableEvening', e.target.checked)}
                   />
                 }
@@ -538,7 +557,8 @@ export default function InterviewEvaluationForm({
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={formData.availableNight}
+                    checked={formData.available24_7 || formData.availableNight}
+                    disabled={formData.available24_7}
                     onChange={(e) => updateField('availableNight', e.target.checked)}
                   />
                 }
@@ -549,7 +569,8 @@ export default function InterviewEvaluationForm({
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={formData.availableWeekend}
+                    checked={formData.available24_7 || formData.availableWeekend}
+                    disabled={formData.available24_7}
                     onChange={(e) => updateField('availableWeekend', e.target.checked)}
                   />
                 }

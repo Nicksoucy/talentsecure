@@ -32,6 +32,7 @@ const makeDetail = (overrides: Partial<TalentDetail> = {}): TalentDetail => ({
   status: 'PUBLISHED',
   available24_7: false,
   availableDays: true,
+  availableEvenings: false,
   availableNights: false,
   availableWeekends: false,
   availableImmediately: false,

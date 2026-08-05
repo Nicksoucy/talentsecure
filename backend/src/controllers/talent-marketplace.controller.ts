@@ -12,7 +12,7 @@ export const searchTalentsByCity = async (
     next: NextFunction
 ) => {
     try {
-        const { city, minRating, hasVehicle, available24_7, availableDays, availableNights, availableWeekends, mode } = req.query;
+        const { city, minRating, hasVehicle, available24_7, availableDays, availableEvenings, availableNights, availableWeekends, mode } = req.query;
 
         if (!city) {
             throw new ApiError(400, 'Ville requise');
@@ -46,6 +46,7 @@ export const searchTalentsByCity = async (
                 status: 'CV_ONLY',
                 available24_7: false,
                 availableDays: false,
+                availableEvenings: false,
                 availableNights: false,
                 availableWeekends: false,
                 availableImmediately: false,
@@ -97,6 +98,10 @@ export const searchTalentsByCity = async (
             where.availableDays = true;
         }
 
+        if (availableEvenings === 'true') {
+            where.availableEvenings = true;
+        }
+
         if (availableNights === 'true') {
             where.availableNights = true;
         }
@@ -117,6 +122,7 @@ export const searchTalentsByCity = async (
                 status: true,
                 available24_7: true,
                 availableDays: true,
+                availableEvenings: true,
                 availableNights: true,
                 availableWeekends: true,
                 availableImmediately: true,
@@ -264,6 +270,7 @@ export const getTalentDetail = async (req: Request, res: Response, next: NextFun
                 videoStoragePath: true,
                 available24_7: true,
                 availableDays: true,
+                availableEvenings: true,
                 availableNights: true,
                 availableWeekends: true,
                 availableImmediately: true,
