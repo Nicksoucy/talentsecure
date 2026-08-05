@@ -1,6 +1,7 @@
 import { prisma } from '../config/database';
 import { ContactSection } from '../utils/candidateMatch';
 import { canonicalCity } from '../utils/cityNormalize';
+import { normalizeAvailability, availabilityRowsFrom, AvailabilityFlags } from '../utils/availability';
 import { createCandidateVideoTx } from './candidate-video.service';
 import { carryOverTags } from './contractLeads.service';
 
@@ -29,6 +30,7 @@ interface Normalized {
   hasVehicle: boolean;
   notes: string | null;
   surveyAnswers: any;
+  availability: AvailabilityFlags;
 }
 
 function normalize(r: any): Normalized {
@@ -51,6 +53,9 @@ function normalize(r: any): Normalized {
     hasVehicle: r.hasVehicle ?? false,
     notes: r.hrNotes ?? r.notes ?? null,
     surveyAnswers: r.surveyAnswers ?? null,
+    // Disponibilités : candidats ET prospects portent les mêmes 5 colonnes, on
+    // les transporte donc telles quelles. (Employee n'a pas la notion.)
+    availability: normalizeAvailability(r),
   };
 }
 
@@ -111,10 +116,19 @@ export async function moveContact(opts: {
           videoStoragePath: n.videoStoragePath,
           videoUploadedAt: n.videoUploadedAt,
           hrNotes: n.notes,
+          ...n.availability,
           createdById,
         },
         select: { id: true, firstName: true, lastName: true },
       });
+      // Disponibilités reprises → posées AUSSI dans la relation `availabilities`
+      // (miroir transitoire ; les colonnes du candidat font foi, déjà posées).
+      const availabilityRows = availabilityRowsFrom(n.availability);
+      if (availabilityRows.length > 0) {
+        await tx.availability.createMany({
+          data: availabilityRows.map((row) => ({ ...row, candidateId: created.id })),
+        });
+      }
       // Vidéo de présentation reprise → enregistrée aussi comme vidéo typée
       // PRESENTATION (les colonnes video* du candidat = miroir, déjà posées).
       if (n.videoStoragePath || n.videoUrl) {
@@ -149,6 +163,7 @@ export async function moveContact(opts: {
           source: 'move',
           isContacted: false,
           isConverted: false,
+          ...n.availability,
         },
         select: { id: true, firstName: true, lastName: true },
       });

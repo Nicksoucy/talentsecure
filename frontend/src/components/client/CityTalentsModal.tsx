@@ -83,6 +83,7 @@ export default function CityTalentsModal({ open, onClose, city, province = 'QC',
         hasVehicle: false,
         available24_7: false,
         availableDays: false,
+        availableEvenings: false,
         availableNights: false,
         availableWeekends: false,
     });
@@ -429,6 +430,16 @@ export default function CityTalentsModal({ open, onClose, city, province = 'QC',
                                     />
                                 }
                                 label="Jour"
+                            />
+                            <FormControlLabel
+                                control={
+                                    <Checkbox
+                                        checked={filters.availableEvenings}
+                                        onChange={(e) => setFilters({ ...filters, availableEvenings: e.target.checked })}
+                                        size="small"
+                                    />
+                                }
+                                label="Soir"
                             />
                             <FormControlLabel
                                 control={

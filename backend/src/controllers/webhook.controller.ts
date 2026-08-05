@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { prisma } from '../config/database';
 import { findMatchingCandidate, findMatchingEmployee } from '../utils/candidateMatch';
 import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
+import { parseGhlAvailability, findGhlAvailabilityAnswer } from '../utils/availability';
 import { claimForProspect } from '../services/pending-video.service';
 
 /**
@@ -67,6 +68,16 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
     const videoUrl =
       bodyData.video_url || formData.video_url ||
       contactData.video_de_presentation || contactData.video_presentation || null;
+
+    // Disponibilités du formulaire « Renseignements étudiants ». Le webhook ne
+    // transporte qu'une liste FIXE de champs et jetait donc tout champ custom.
+    // Repérage par la valeur (les clés GHL ne sont pas stables) sur les trois
+    // formats de charge utile ; rien de reconnu → aucune écriture.
+    const disponibilites = parseGhlAvailability(
+      findGhlAvailabilityAnswer(bodyData) ??
+      findGhlAvailabilityAnswer(formData) ??
+      findGhlAvailabilityAnswer(contactData)
+    );
 
     // Valider les champs requis
     if (!firstName || !phone) {
@@ -164,6 +175,7 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
         submissionDate: new Date(),
         isContacted: false,
         isConverted: false,
+        ...(disponibilites ?? {}),
         notes: cvUrl
           ? 'Ajouté automatiquement via GoHighLevel avec CV'
           : 'Ajouté automatiquement via GoHighLevel',

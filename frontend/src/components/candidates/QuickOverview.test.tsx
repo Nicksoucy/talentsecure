@@ -82,8 +82,27 @@ describe('QuickOverview', () => {
       />
     );
 
-    expect(screen.getByText(/24\/7 \(Jour, Nuit, FDS\)/)).toBeInTheDocument();
+    expect(screen.getByText(/24\/7 \(Jour, Soir, Nuit, FDS\)/)).toBeInTheDocument();
     expect(screen.getByText('Disponible immédiatement')).toBeInTheDocument();
+  });
+
+  it('détaille les quarts cochés, « Soir » compris', () => {
+    renderWithProviders(
+      <QuickOverview
+        candidate={makeCandidate({ availableEvenings: true, availableWeekends: true })}
+      />
+    );
+
+    expect(screen.getByText('Soir')).toBeInTheDocument();
+    expect(screen.getByText('FDS')).toBeInTheDocument();
+    expect(screen.queryByText('Jour')).not.toBeInTheDocument();
+  });
+
+  it('affiche « Non spécifié » quand aucun quart n\'est coché', () => {
+    renderWithProviders(<QuickOverview candidate={makeCandidate({})} />);
+
+    // Horaires + langues + historique : au moins trois « Non spécifié ».
+    expect(screen.getAllByText('Non spécifié').length).toBeGreaterThanOrEqual(3);
   });
 
   it('affiche le nombre de postes listés dans l\'historique', () => {

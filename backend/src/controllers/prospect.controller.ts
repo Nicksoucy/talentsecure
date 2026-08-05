@@ -19,6 +19,7 @@ import {
   mergeIdFilter,
   prospectIdsForContract,
 } from '../services/contractLeads.service';
+import { normalizeAvailability, availabilityRowsFrom } from '../utils/availability';
 
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
 const PROSPECT_STATS_CACHE_KEY = 'prospects:stats';
@@ -577,17 +578,30 @@ export const convertToCandidate = async (
     scalarData.bspExpiryDate = sanitizeDateField(formData.bspExpiryDate);
     scalarData.consentDate = sanitizeDateField(formData.consentDate);
 
-    // Convert availability booleans to Prisma structure
-    const availabilityTypes = [
-      { key: 'availableDay', type: 'JOUR' },
-      { key: 'availableEvening', type: 'SOIR' },
-      { key: 'availableNight', type: 'NUIT' },
-      { key: 'availableWeekend', type: 'FIN_DE_SEMAINE' },
-    ];
+    // Disponibilités : le formulaire d'entrevue l'emporte (RH vient de les
+    // confirmer de vive voix) ; à défaut, on reprend celles déclarées par la
+    // personne au formulaire GHL, pour ne jamais les perdre à la conversion.
+    const formFlags = {
+      available24_7: formData.available24_7 === true,
+      availableDays: formData.availableDay === true,
+      availableEvenings: formData.availableEvening === true,
+      availableNights: formData.availableNight === true,
+      availableWeekends: formData.availableWeekend === true,
+    };
+    const availabilityFlags = normalizeAvailability(
+      Object.values(formFlags).some(Boolean)
+        ? formFlags
+        : {
+            available24_7: prospect.available24_7,
+            availableDays: prospect.availableDays,
+            availableEvenings: prospect.availableEvenings,
+            availableNights: prospect.availableNights,
+            availableWeekends: prospect.availableWeekends,
+          }
+    );
+    Object.assign(scalarData, availabilityFlags);
 
-    const availabilities = availabilityTypes
-      .filter(av => formData[av.key] === true)
-      .map(av => ({ type: av.type, isAvailable: true }));
+    const availabilities = availabilityRowsFrom(availabilityFlags);
 
     // Sanitize and normalize nested relations
     const sanitizedLanguages = (formData.languages || []).map((lang: any) => ({

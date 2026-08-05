@@ -10,8 +10,12 @@ const dateTimeString = z.string()
   .datetime('Date invalide (format ISO 8601 requis)')
   .transform((str) => new Date(str));
 
+// Les valeurs doivent correspondre EXACTEMENT à l'enum Prisma `AvailabilityType`.
+// `JOUR_SEMAINE` / `NUIT_SEMAINE` y figuraient sans exister côté base : elles
+// passaient la validation puis faisaient échouer Prisma (erreur 500 opaque au
+// lieu d'un 400 explicite).
 const availabilitySchema = z.object({
-  type: z.enum(['JOUR', 'SOIR', 'NUIT', 'FIN_DE_SEMAINE', 'JOUR_SEMAINE', 'NUIT_SEMAINE']),
+  type: z.enum(['JOUR', 'SOIR', 'NUIT', 'FIN_DE_SEMAINE']),
   isAvailable: z.boolean().default(true),
   notes: z.string().optional().nullable(),
 });
@@ -87,6 +91,13 @@ const baseCandidateSchema = z.object({
   interviewScore: z.number().min(0).max(100).optional().nullable(),
   interviewNotes: z.string().max(5000).optional().nullable(),
   urgency24hScore: z.number().min(0).max(100).optional().nullable(),
+  // Disponibilités : les 5 cases du formulaire GHL. Le schéma étant `.strict()`,
+  // sans ces clés tout enregistrement du formulaire d'entrevue repartait en 400.
+  available24_7: z.boolean().optional().nullable(),
+  availableDays: z.boolean().optional().nullable(),
+  availableEvenings: z.boolean().optional().nullable(),
+  availableNights: z.boolean().optional().nullable(),
+  availableWeekends: z.boolean().optional().nullable(),
   availabilities: z.array(availabilitySchema).optional().nullable(),
   languages: z.array(languageSchema).optional().nullable(),
   experiences: z.array(experienceSchema).optional().nullable(),

@@ -224,9 +224,14 @@ model Candidate {
 
   // Disponibilité horaire (NOUVEAU - Phase 1)
   vehicleType          String? // Type de véhicule
+  // Source de vérité des disponibilités : les 5 cases du formulaire GHL
+  // « Renseignements étudiants ». `available24_7` implique les 4 quarts (voir
+  // normalizeAvailability dans src/utils/availability.ts) — sinon un candidat
+  // 24/7 ne ressortirait pas d'un filtre « jour ».
   available24_7        Boolean @default(false) // Disponible 24/7
   availableDays        Boolean @default(false) // Disponible jour (6h-18h)
-  availableNights      Boolean @default(false) // Disponible nuit (18h-6h)
+  availableEvenings    Boolean @default(false) // Disponible soir (18h-00h)
+  availableNights      Boolean @default(false) // Disponible nuit (00h-6h)
   availableWeekends    Boolean @default(false) // Disponible fin de semaine
   availableImmediately Boolean @default(true) // Disponible immédiatement
 
@@ -309,6 +314,7 @@ model Candidate {
   @@index([email])
   // New indexes for Phase 1 - Advanced Search
   @@index([available24_7])
+  @@index([availableEvenings])
   @@index([hasRCR])
   @@index([city, hasBSP, available24_7]) // Common search combination
   @@index([globalRating, available24_7]) // Rating + availability
@@ -714,6 +720,14 @@ model ProspectCandidate {
   ghlSubmissionId String? @unique // ID soumission GHL (idempotence + lien)
   surveyAnswers   Json? // Reponses du survey (BSP, dispo, adresse...)
   source          String? // 'survey-video' | 'form-cv' | 'webhook'
+
+  // Disponibilités décodées du formulaire GHL (surveyAnswers garde le brut).
+  // Reprises telles quelles sur le candidat à la conversion.
+  available24_7     Boolean @default(false)
+  availableDays     Boolean @default(false)
+  availableEvenings Boolean @default(false)
+  availableNights   Boolean @default(false)
+  availableWeekends Boolean @default(false)
 
   // Metadata
   timezone       String?

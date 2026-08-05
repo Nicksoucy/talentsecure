@@ -14,6 +14,7 @@ interface CandidateBadgesProps {
     hasSSIAP?: boolean;
     available24_7?: boolean;
     availableDays?: boolean;
+    availableEvenings?: boolean;
     availableNights?: boolean;
     availableWeekends?: boolean;
     hasVehicle?: boolean;
@@ -29,6 +30,7 @@ const CandidateBadges = ({
     hasSSIAP,
     available24_7,
     availableDays,
+    availableEvenings,
     availableNights,
     availableWeekends,
     hasVehicle,
@@ -115,6 +117,7 @@ const CandidateBadges = ({
         // Autres disponibilités (orange clair)
         const availabilityLabels = [];
         if (availableDays) availabilityLabels.push('Jour');
+        if (availableEvenings) availabilityLabels.push('Soir');
         if (availableNights) availabilityLabels.push('Nuit');
         if (availableWeekends) availabilityLabels.push('FDS');
 

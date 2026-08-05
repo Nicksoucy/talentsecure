@@ -3,6 +3,7 @@ import { downloadGhlFile, detectExtension, isLikelyVideo } from '../utils/ghlFet
 import { uploadBufferToR2 } from '../services/r2.service';
 import { findMatchingEmployee, findMatchingCandidate } from '../utils/candidateMatch';
 import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
+import { parseGhlAvailability, findGhlAvailabilityAnswer } from '../utils/availability';
 import { resolveProspectCoordinates } from './cityGeocode.service';
 import { getGhlLocationId, ghlRequest } from './ghl.client';
 import { claimForProspect } from './pending-video.service';
@@ -221,6 +222,13 @@ export async function syncOneSubmission(sub: any): Promise<{ status: string; det
   };
   if (cvStoragePath) baseData.cvStoragePath = cvStoragePath;
   if (videoStoragePath) { baseData.videoStoragePath = videoStoragePath; baseData.videoUploadedAt = videoUploadedAt; }
+
+  // Disponibilités déclarées au formulaire (« 24/7 / jour / soir / nuit / fin
+  // de semaine »). Repérées par la VALEUR : les IDs de champs du survey ne sont
+  // pas stables (cf. commentaire en tête de fichier). Champ absent ou
+  // indécodable → on n'écrit rien, jamais de dégradation d'une fiche correcte.
+  const dispo = parseGhlAvailability(findGhlAvailabilityAnswer(answers));
+  if (dispo) Object.assign(baseData, dispo);
 
   // Géocodage : code postal (FSA) d'abord, sinon centre de la ville saisie.
   const geo = await resolveProspectCoordinates({ postalCode: baseData.postalCode, city: baseData.city });

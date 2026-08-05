@@ -10,6 +10,7 @@ const makeFilters = (
   availability: {
     available24_7: false,
     availableDays: false,
+    availableEvenings: false,
     availableNights: false,
     availableWeekends: false,
     availableImmediately: false,

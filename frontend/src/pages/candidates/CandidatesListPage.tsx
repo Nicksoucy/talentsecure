@@ -60,6 +60,7 @@ import QuickFilters from './components/QuickFilters';
 import SmartSearchBar from './components/SmartSearchBar';
 import { candidateService, AdvancedSearchParams } from '@/services/candidate.service';
 import { candidateFormSchema } from '@/validation/candidate';
+import { buildAvailabilityPayload } from '@/utils/availability';
 import { HelpDialog } from '@/components/HelpDialog';
 import CandidateComparatorDialog from './components/CandidateComparatorDialog';
 import ContactConflictDialog from '@/components/ContactConflictDialog';
@@ -189,6 +190,7 @@ export default function CandidatesListPage() {
     availability: {
       available24_7: false,
       availableDays: false,
+      availableEvenings: false,
       availableNights: false,
       availableWeekends: false,
       availableImmediately: false,
@@ -275,6 +277,7 @@ export default function CandidatesListPage() {
       availability: {
         available24_7: false,
         availableDays: false,
+        availableEvenings: false,
         availableNights: false,
         availableWeekends: false,
         availableImmediately: false,
@@ -311,6 +314,7 @@ export default function CandidatesListPage() {
         const availability: string[] = [];
         if (advancedFilters.availability.available24_7) availability.push('24/7');
         if (advancedFilters.availability.availableDays) availability.push('days');
+        if (advancedFilters.availability.availableEvenings) availability.push('evenings');
         if (advancedFilters.availability.availableNights) availability.push('nights');
         if (advancedFilters.availability.availableWeekends) availability.push('weekends');
 
@@ -685,12 +689,9 @@ export default function CandidatesListPage() {
 
     const safeValues = validationResult.data;
 
-    // Construct availabilities array from boolean flags
-    const availabilities = [];
-    if (formData.availableDay) availabilities.push({ type: 'JOUR' });
-    if (formData.availableEvening) availabilities.push({ type: 'SOIR' });
-    if (formData.availableNight) availabilities.push({ type: 'NUIT' });
-    if (formData.availableWeekend) availabilities.push({ type: 'FIN_DE_SEMAINE' });
+    // Disponibilités : les 5 drapeaux (source de vérité côté serveur) + le
+    // tableau relationnel alimenté en miroir.
+    const availability = buildAvailabilityPayload(formData);
 
     const candidateData = {
       // Personal info
@@ -733,7 +734,7 @@ export default function CandidatesListPage() {
       languages: safeValues.languages,
       experiences: safeValues.experiences,
       certifications: safeValues.certifications,
-      availabilities: availabilities.length > 0 ? availabilities : undefined,
+      ...availability,
       canWorkUrgent: formData.canWorkUrgent, // Add urgency flag
 
       situationTests: [
@@ -816,11 +817,14 @@ export default function CandidatesListPage() {
       bspExpiryDate: candidate.bspExpiryDate ? new Date(candidate.bspExpiryDate).toISOString().split('T')[0] : '',
       bspStatus: candidate.bspStatus || 'NONE',
 
-      // Availability (we don't have these in the database yet, so default to false)
-      availableDay: false,
-      availableEvening: false,
-      availableNight: false,
-      availableWeekend: false,
+      // Disponibilités — reprises des colonnes du candidat. Elles étaient
+      // forcées à `false` ici : rouvrir une fiche depuis la liste et
+      // enregistrer effaçait donc silencieusement ses disponibilités.
+      available24_7: candidate.available24_7 || false,
+      availableDay: candidate.availableDays || false,
+      availableEvening: candidate.availableEvenings || false,
+      availableNight: candidate.availableNights || false,
+      availableWeekend: candidate.availableWeekends || false,
       canWorkUrgent: candidate.canWorkUrgent || false,
 
       // Languages

@@ -11,6 +11,7 @@ export interface TalentPreview {
     // Availability
     available24_7: boolean;
     availableDays: boolean;
+    availableEvenings: boolean;
     availableNights: boolean;
     availableWeekends: boolean;
     availableImmediately: boolean;
@@ -97,6 +98,7 @@ export const talentMarketplaceService = {
         hasVehicle?: boolean;
         available24_7?: boolean;
         availableDays?: boolean;
+        availableEvenings?: boolean;
         availableNights?: boolean;
         availableWeekends?: boolean;
     }): Promise<{ data: TalentPreview[]; total: number; city: string }> => {

@@ -31,6 +31,14 @@ const LIST_SELECT = {
     cvUrl: true,
     videoUrl: true,
 
+    // Disponibilités : sans ces colonnes, CandidateTableRow recevait `undefined`
+    // et le badge de disponibilité restait invisible sur TOUTES les lignes.
+    available24_7: true,
+    availableDays: true,
+    availableEvenings: true,
+    availableNights: true,
+    availableWeekends: true,
+
     // Metadata (for display logic)
     isActive: true,
     isArchived: true,
@@ -556,6 +564,7 @@ export class CandidateService {
 
         if (availability.includes('24/7')) where.available24_7 = true;
         if (availability.includes('days')) where.availableDays = true;
+        if (availability.includes('evenings')) where.availableEvenings = true;
         if (availability.includes('nights')) where.availableNights = true;
         if (availability.includes('weekends')) where.availableWeekends = true;
 

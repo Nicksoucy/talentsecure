@@ -13,6 +13,7 @@ function makeTalent(overrides: Partial<TalentPreview> = {}): TalentPreview {
     status: 'CV_ONLY',
     available24_7: false,
     availableDays: false,
+    availableEvenings: false,
     availableNights: false,
     availableWeekends: false,
     availableImmediately: false,
@@ -66,6 +67,7 @@ describe('CVListItem', () => {
           available24_7: true,
           hasVehicle: true,
           availableDays: false,
+          availableEvenings: false,
           availableNights: false,
           availableWeekends: false,
         })}
@@ -88,6 +90,7 @@ describe('CVListItem', () => {
         talent={makeTalent({
           available24_7: true,
           availableDays: true,
+          availableEvenings: false,
           availableNights: true,
           availableWeekends: true,
           hasVehicle: true,

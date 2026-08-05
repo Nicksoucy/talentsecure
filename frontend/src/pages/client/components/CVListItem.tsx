@@ -65,6 +65,9 @@ export default function CVListItem({ talent, selected, onToggleSelect }: CVListI
                     {talent.availableDays && (
                         <Chip label="Jour" size="small" variant="outlined" />
                     )}
+                    {talent.availableEvenings && (
+                        <Chip label="Soir" size="small" variant="outlined" />
+                    )}
                     {talent.availableNights && (
                         <Chip label="Nuit" size="small" variant="outlined" />
                     )}

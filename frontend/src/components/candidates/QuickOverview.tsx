@@ -100,12 +100,16 @@ const QuickOverview = ({ candidate }: QuickOverviewProps) => {
                         <InfoRow
                             icon={<ScheduleIcon fontSize="small" />}
                             label="Horaires"
-                            value={candidate.available24_7 ? "24/7 (Jour, Nuit, FDS)" : (
-                                <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                            value={candidate.available24_7 ? "24/7 (Jour, Soir, Nuit, FDS)" : (
+                                // `component="span"` : InfoRow rend la valeur dans un
+                                // <Typography variant="body1"> (donc un <p>), et un <div>
+                                // n'y est pas valide (avertissement validateDOMNesting).
+                                <Stack component="span" direction="row" spacing={0.5} flexWrap="wrap">
                                     {candidate.availableDays && <Typography component="span" variant="body2" sx={{ bgcolor: 'action.hover', px: 1, borderRadius: 1 }}>Jour</Typography>}
+                                    {candidate.availableEvenings && <Typography component="span" variant="body2" sx={{ bgcolor: 'action.hover', px: 1, borderRadius: 1 }}>Soir</Typography>}
                                     {candidate.availableNights && <Typography component="span" variant="body2" sx={{ bgcolor: 'action.hover', px: 1, borderRadius: 1 }}>Nuit</Typography>}
                                     {candidate.availableWeekends && <Typography component="span" variant="body2" sx={{ bgcolor: 'action.hover', px: 1, borderRadius: 1 }}>FDS</Typography>}
-                                    {!candidate.availableDays && !candidate.availableNights && !candidate.availableWeekends && "Non spécifié"}
+                                    {!candidate.availableDays && !candidate.availableEvenings && !candidate.availableNights && !candidate.availableWeekends && "Non spécifié"}
                                 </Stack>
                             )}
                         />
@@ -140,6 +144,7 @@ const QuickOverview = ({ candidate }: QuickOverviewProps) => {
                                 hasSSIAP={candidate.hasSSIAP}
                                 available24_7={candidate.available24_7}
                                 availableDays={candidate.availableDays}
+                                availableEvenings={candidate.availableEvenings}
                                 availableNights={candidate.availableNights}
                                 availableWeekends={candidate.availableWeekends}
                                 hasVehicle={candidate.hasVehicle}

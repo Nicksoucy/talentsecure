@@ -49,6 +49,7 @@ import { DetailPageSkeleton } from '@/components/skeletons';
 import SkillsExtractionPanel from '@/components/candidates/SkillsExtractionPanel';
 import InterviewEvaluationForm, { InterviewFormData } from '../../components/InterviewEvaluationForm';
 import { candidateFormSchema } from '../../validation/candidate';
+import { buildAvailabilityPayload } from '@/utils/availability';
 import QuickOverview from '@/components/candidates/QuickOverview';
 import CandidateBadges from '@/components/candidates/CandidateBadges';
 import CandidateTabs, { CustomTabPanel } from './components/CandidateTabs';
@@ -214,12 +215,9 @@ const CandidateDetailPage = () => {
       const situationTest2 = situationTests.find((t: any) => t.question?.includes('urgence'))?.answer || '';
       const situationTest3 = situationTests.find((t: any) => t.question?.includes('sécurité') || t.question?.includes('securite'))?.answer || '';
 
-      // Map availabilities to boolean flags
-      const availabilities = candidate.availabilities || [];
-      const availableDay = availabilities.some((a: any) => a.type === 'JOUR' && a.isAvailable);
-      const availableEvening = availabilities.some((a: any) => a.type === 'SOIR' && a.isAvailable);
-      const availableNight = availabilities.some((a: any) => a.type === 'NUIT' && a.isAvailable);
-      const availableWeekend = availabilities.some((a: any) => a.type === 'FIN_DE_SEMAINE' && a.isAvailable);
+      // Disponibilités : les colonnes du candidat sont la source de vérité.
+      // (Avant, on relisait la table `availabilities` — la seule écrite — alors
+      // que l'aperçu et les filtres, eux, lisaient les colonnes jamais écrites.)
 
       setInitialFormData({
         firstName: candidate.firstName || '',
@@ -242,10 +240,11 @@ const CandidateDetailPage = () => {
         bspExpiryDate: candidate.bspExpiryDate ? new Date(candidate.bspExpiryDate).toISOString().split('T')[0] : '',
         bspStatus: candidate.bspStatus || 'NONE',
 
-        availableDay,
-        availableEvening,
-        availableNight,
-        availableWeekend,
+        available24_7: candidate.available24_7 || false,
+        availableDay: candidate.availableDays || false,
+        availableEvening: candidate.availableEvenings || false,
+        availableNight: candidate.availableNights || false,
+        availableWeekend: candidate.availableWeekends || false,
         canWorkUrgent: candidate.canWorkUrgent || false,
 
         languages: candidate.languages || [],
@@ -291,12 +290,9 @@ const CandidateDetailPage = () => {
 
     const safeValues = validationResult.data;
 
-    // Construct availabilities array from boolean flags
-    const availabilities = [];
-    if (formData.availableDay) availabilities.push({ type: 'JOUR' });
-    if (formData.availableEvening) availabilities.push({ type: 'SOIR' });
-    if (formData.availableNight) availabilities.push({ type: 'NUIT' });
-    if (formData.availableWeekend) availabilities.push({ type: 'FIN_DE_SEMAINE' });
+    // Disponibilités : on envoie les 5 drapeaux (source de vérité côté serveur)
+    // ET le tableau relationnel, alimenté en miroir le temps d'une release.
+    const availability = buildAvailabilityPayload(formData);
 
     const candidateData = {
       // Personal info
@@ -339,7 +335,7 @@ const CandidateDetailPage = () => {
       languages: safeValues.languages,
       experiences: safeValues.experiences,
       certifications: safeValues.certifications,
-      availabilities: availabilities.length > 0 ? availabilities : undefined,
+      ...availability,
       canWorkUrgent: formData.canWorkUrgent,
 
       situationTests: [
@@ -395,6 +391,7 @@ const CandidateDetailPage = () => {
                 hasSSIAP={candidate.hasSSIAP}
                 available24_7={candidate.available24_7}
                 availableDays={candidate.availableDays}
+                availableEvenings={candidate.availableEvenings}
                 availableNights={candidate.availableNights}
                 availableWeekends={candidate.availableWeekends}
                 hasVehicle={candidate.hasVehicle}

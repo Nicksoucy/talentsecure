@@ -24,6 +24,7 @@ export default function QuickFilters({ onApplyPreset }: QuickFiltersProps) {
                     available24_7: true,
                     availableImmediately: true,
                     availableDays: false,
+                    availableEvenings: false,
                     availableNights: false,
                     availableWeekends: false
                 }
@@ -54,6 +55,7 @@ export default function QuickFilters({ onApplyPreset }: QuickFiltersProps) {
                     available24_7: false,
                     availableImmediately: false,
                     availableDays: false,
+                    availableEvenings: false,
                     availableNights: true,
                     availableWeekends: false
                 }

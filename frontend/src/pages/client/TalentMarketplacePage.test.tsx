@@ -35,6 +35,7 @@ function makeTalent(overrides: Partial<TalentPreview> = {}): TalentPreview {
     status: 'QUALIFIED',
     available24_7: false,
     availableDays: true,
+    availableEvenings: false,
     availableNights: false,
     availableWeekends: false,
     availableImmediately: false,

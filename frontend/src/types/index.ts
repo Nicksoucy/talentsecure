@@ -45,7 +45,7 @@ export type CandidateStatus =
 export interface Availability {
   id: string;
   candidateId: string;
-  type: string; // 'JOUR', 'SOIR', 'NUIT', 'WEEKEND'
+  type: string; // 'JOUR' | 'SOIR' | 'NUIT' | 'FIN_DE_SEMAINE'
   isAvailable: boolean;
 }
 
@@ -126,9 +126,10 @@ export interface Candidate {
   canTravelKm?: number;
   vehicleType?: string;
 
-  // Schedule Availability
+  // Schedule Availability — les 5 cases du formulaire GHL
   available24_7?: boolean;
   availableDays?: boolean;
+  availableEvenings?: boolean;
   availableNights?: boolean;
   availableWeekends?: boolean;
   availableImmediately?: boolean;
@@ -252,6 +253,12 @@ export interface ProspectCandidate {
   videoUploadedAt?: string;
   ghlSubmissionId?: string;
   surveyAnswers?: Record<string, any>;
+  // Disponibilités décodées du formulaire GHL (surveyAnswers garde le brut).
+  available24_7?: boolean;
+  availableDays?: boolean;
+  availableEvenings?: boolean;
+  availableNights?: boolean;
+  availableWeekends?: boolean;
   source?: string;
   timezone?: string;
   submissionDate?: string;
