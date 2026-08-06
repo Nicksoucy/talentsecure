@@ -102,6 +102,36 @@ describe('ProspectsPage', () => {
     expect(svc.getProspects).toHaveBeenCalled();
   });
 
+  it('affiche les disponibilités en puces, et « Non spécifié » quand il n\'y en a aucune', async () => {
+    svc.getProspects.mockResolvedValue(
+      makeProspectsResponse([
+        makeProspect({ id: 'p-dispo', availableDays: true, availableWeekends: true }),
+        makeProspect({ id: 'p-vide', firstName: 'Sans', lastName: 'Dispo' }),
+      ], 2)
+    );
+    renderProspects();
+
+    expect(await screen.findByRole('columnheader', { name: 'Disponibilités' })).toBeInTheDocument();
+    expect(screen.getByText('Jour')).toBeInTheDocument();
+    expect(screen.getByText('FDS')).toBeInTheDocument();
+    // Aucune case cochée → libellé explicite plutôt qu'une cellule vide.
+    expect(screen.getByText('Non spécifié')).toBeInTheDocument();
+  });
+
+  it('résume un prospect 24/7 par une seule puce', async () => {
+    svc.getProspects.mockResolvedValue(
+      makeProspectsResponse([
+        makeProspect({ available24_7: true, availableDays: true, availableNights: true }),
+      ])
+    );
+    renderProspects();
+
+    expect(await screen.findByText('24/7')).toBeInTheDocument();
+    // 24/7 remplace les quarts individuels : pas de doublon visuel.
+    expect(screen.queryByText('Jour')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nuit')).not.toBeInTheDocument();
+  });
+
   it('affiche l\'état vide quand aucun prospect n\'est retourné', async () => {
     svc.getProspects.mockResolvedValue(makeProspectsResponse([], 0));
     renderProspects();
