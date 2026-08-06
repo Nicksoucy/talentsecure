@@ -14,6 +14,7 @@ import { invalidateCaches } from '../utils/cacheInvalidation';
 import { canonicalCity } from '../utils/cityNormalize';
 import {
   isInQuebecBounds,
+  isRuralFSA,
   nominatimReverse,
   nominatimSearch,
   resolveCityCoordinates,
@@ -85,8 +86,16 @@ export async function resolveEmployeeCoordinates(
     if (exact) return { ...exact, source: 'address' };
   }
 
-  const byPostal = resolvePostalCoordinates(input.postalCode);
-  if (byPostal) return { ...byPostal, source: 'postal' };
+  // Même règle que pour les prospects : le centroïde d'une FSA RURALE couvre
+  // des centaines de km² et plusieurs municipalités, donc il ne bat le
+  // centre-ville que si la ville ne résout pas. L'adresse exacte ci-dessus
+  // reste prioritaire dans tous les cas.
+  const rural = isRuralFSA(input.postalCode);
+
+  if (!rural) {
+    const byPostal = resolvePostalCoordinates(input.postalCode);
+    if (byPostal) return { ...byPostal, source: 'postal' };
+  }
 
   const city = (input.city || '').trim();
   if (city) {
@@ -94,6 +103,11 @@ export async function resolveEmployeeCoordinates(
     if (coords && coords.lat != null && coords.lng != null) {
       return { lat: coords.lat, lng: coords.lng, source: 'city' };
     }
+  }
+
+  if (rural) {
+    const byPostal = resolvePostalCoordinates(input.postalCode);
+    if (byPostal) return { ...byPostal, source: 'postal' };
   }
   return null;
 }

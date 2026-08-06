@@ -6,43 +6,96 @@
  * sinon centre de la ville saisie. Voir resolveProspectCoordinates.
  *
  * Lancer (depuis backend/) :
- *   npx ts-node src/scripts/backfillProspectGeocodes.ts          # seulement les non géocodés
- *   npx ts-node src/scripts/backfillProspectGeocodes.ts --all    # recalcule TOUT
+ *   npx ts-node src/scripts/backfillProspectGeocodes.ts                 # non géocodés seulement (écrit)
+ *   npx ts-node src/scripts/backfillProspectGeocodes.ts --all           # recalcul complet — DRY-RUN
+ *   npx ts-node src/scripts/backfillProspectGeocodes.ts --all --apply   # recalcul complet — ÉCRIT
+ *
+ * --all réécrit lat/lng de TOUTE la table : il est donc en DRY-RUN par défaut et
+ * exige --apply pour écrire. Le rapport imprime ce qui bougerait, de combien, et
+ * bloque si une coordonnée tombe hors des bornes du Québec.
  *
  * Note : une ville absente du seed et jamais vue est mise en file de géocodage
  * Nominatim en arrière-plan (city_geocodes) ; un second passage la placera.
+ * Pour tout résoudre d'un coup avant le backfill : npm run prewarm:cities.
  */
 import { prisma } from '../config/database';
 import { resolveProspectCoordinates } from '../services/cityGeocode.service';
 import logger from '../config/logger';
+import { classify, printAuditReport, GeocodeDelta } from './lib/geocodeAudit';
 
 async function main() {
   const recomputeAll = process.argv.includes('--all');
+  // Le recalcul complet est destructif : dry-run tant que --apply n'est pas donné.
+  const dryRun = process.argv.includes('--dry-run') || (recomputeAll && !process.argv.includes('--apply'));
+
   const where: any = { isDeleted: false };
-  if (!recomputeAll) where.lat = null; // uniquement les prospects pas encore placés
+  if (!recomputeAll) {
+    where.lat = null; // uniquement les prospects pas encore placés
+  } else {
+    // NE JAMAIS écraser une position à la RUE : resolveProspectCoordinates ne
+    // sait produire que 'postal' ou 'city', donc un recalcul complet dégraderait
+    // les fiches géocodées à l'adresse exacte par contractGeocode.service.
+    where.NOT = { geocodeSource: 'address' };
+  }
 
   const prospects = await prisma.prospectCandidate.findMany({
     where,
-    select: { id: true, postalCode: true, city: true },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      postalCode: true,
+      city: true,
+      lat: true,
+      lng: true,
+      geocodeSource: true,
+    },
   });
 
   let postal = 0;
   let city = 0;
   let unresolved = 0;
+  const deltas: GeocodeDelta[] = [];
 
   for (const p of prospects) {
     const geo = await resolveProspectCoordinates({ postalCode: p.postalCode, city: p.city });
+
+    const before = p.lat != null && p.lng != null ? { lat: p.lat, lng: p.lng, source: p.geocodeSource } : null;
+    const after = geo ? { lat: geo.lat, lng: geo.lng, source: geo.source } : null;
+    const { verdict, movedKm } = classify(before, after, { keepsExistingWhenUnresolved: true });
+    deltas.push({
+      id: p.id,
+      label: `${p.firstName} ${p.lastName}`.trim(),
+      city: p.city,
+      postalCode: p.postalCode,
+      before,
+      after,
+      movedKm,
+      verdict,
+    });
+
     if (geo) {
-      await prisma.prospectCandidate.update({
-        where: { id: p.id },
-        data: { lat: geo.lat, lng: geo.lng, geocodedAt: new Date(), geocodeSource: geo.source },
-      });
+      // Garde-fou dur : jamais d'écriture hors des bornes du Québec.
+      if (verdict !== 'REJETÉ_HORS_QC' && !dryRun) {
+        await prisma.prospectCandidate.update({
+          where: { id: p.id },
+          data: { lat: geo.lat, lng: geo.lng, geocodedAt: new Date(), geocodeSource: geo.source },
+        });
+      }
       if (geo.source === 'postal') postal++;
       else city++;
     } else {
       unresolved++;
     }
   }
+
+  const rejected = printAuditReport(deltas, 'géocodage des prospects', dryRun);
+  if (rejected > 0) {
+    console.error(`\n⛔ ${rejected} coordonnée(s) hors Québec — écriture refusée. Corriger les données source.\n`);
+    process.exitCode = 1;
+    return;
+  }
+  if (dryRun) return;
 
   const total = prospects.length;
   const placed = postal + city;

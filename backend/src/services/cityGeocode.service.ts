@@ -109,7 +109,9 @@ export function isInQuebecBounds(lat: number, lng: number): boolean {
  * + country=Canada). Ne renvoie un résultat que s'il existe une ville de ce nom
  * AU QUÉBEC ; sinon null (villes étrangères ou hors-QC → non placées).
  */
-async function geocodeNominatim(city: string): Promise<{ lat: number; lng: number } | null> {
+export async function geocodeNominatim(
+  city: string
+): Promise<{ lat: number; lng: number } | null> {
   const hit = await nominatimSearch({ city, state: 'Québec', country: 'Canada' });
   if (!hit || !hit.lat || !hit.lon) return null;
   if (hit.class && !PLACE_CLASSES.has(hit.class)) return null; // pas une rue
@@ -305,6 +307,19 @@ export function postalToFSA(postalCode?: string | null): string | null {
   return /^[A-Z]\d[A-Z]$/.test(fsa) ? fsa : null;
 }
 
+/**
+ * FSA RURALE au sens de Postes Canada : 2ᵉ caractère = « 0 » (J0J, G0A…).
+ * Une FSA rurale couvre des centaines de km² et plusieurs municipalités — son
+ * centroïde n'est donc PAS une position utilisable : J0J place Napierville à
+ * ~19 km et Saint-Bernard-de-Lacolle à ~22 km de leur vrai centre, toutes deux
+ * au même point. Accepte un code postal complet ou une FSA nue.
+ * LECTURE SEULE pour l'instant : sert à l'audit, ne change aucun placement.
+ */
+export function isRuralFSA(postalCode?: string | null): boolean {
+  const fsa = postalToFSA(postalCode);
+  return !!fsa && fsa[1] === '0';
+}
+
 /** Coordonnées du centroïde FSA d'un code postal (offline, QC), sinon null. */
 export function resolvePostalCoordinates(
   postalCode?: string | null
@@ -312,7 +327,13 @@ export function resolvePostalCoordinates(
   const fsa = postalToFSA(postalCode);
   if (!fsa) return null;
   const hit = quebecFSACentroids[fsa];
-  return hit ? { lat: hit.lat, lng: hit.lng } : null;
+  if (!hit) return null;
+  // Filet « échec fermé » : jamais de centroïde hors Québec, même si le fichier
+  // de données est régénéré avec une entrée aberrante (cf. H0H au pôle Nord).
+  // Toutes les autres voies de géocodage ont déjà ce garde ; celle-ci ne l'avait
+  // pas, et écrivait donc lat 90 directement en base.
+  if (!isInQuebecBounds(hit.lat, hit.lng)) return null;
+  return { lat: hit.lat, lng: hit.lng };
 }
 
 /**
@@ -326,8 +347,13 @@ export async function resolveProspectCoordinates(input: {
   postalCode?: string | null;
   city?: string | null;
 }): Promise<ProspectGeocode | null> {
-  const byPostal = resolvePostalCoordinates(input.postalCode);
-  if (byPostal) return { ...byPostal, source: 'postal' };
+  const rural = isRuralFSA(input.postalCode);
+
+  // FSA URBAINE : le secteur postal (quelques km²) bat le centre-ville.
+  if (!rural) {
+    const byPostal = resolvePostalCoordinates(input.postalCode);
+    if (byPostal) return { ...byPostal, source: 'postal' };
+  }
 
   const city = (input.city || '').trim();
   if (city) {
@@ -335,6 +361,13 @@ export async function resolveProspectCoordinates(input: {
     if (coords && coords.lat != null && coords.lng != null) {
       return { lat: coords.lat, lng: coords.lng, source: 'city' };
     }
+  }
+
+  // FSA RURALE dont la ville n'a pas résolu : le centroïde de secteur reste le
+  // meilleur repli — grossier, mais dans la bonne région.
+  if (rural) {
+    const byPostal = resolvePostalCoordinates(input.postalCode);
+    if (byPostal) return { ...byPostal, source: 'postal' };
   }
   return null;
 }
