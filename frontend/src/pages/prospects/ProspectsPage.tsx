@@ -32,6 +32,7 @@ import {
   Checkbox,
   Toolbar,
   CircularProgress,
+  Stack,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -61,6 +62,7 @@ import ContactConflictDialog from '@/components/ContactConflictDialog';
 import { ContactConflict } from '@/services/contact.service';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import CrossTableHint from '@/components/CrossTableHint';
+import { availabilityLabels } from '@/utils/availability';
 import { prospectService } from '@/services/prospect.service';
 import { contractService } from '@/services/contract.service';
 import { CONTRACT_COLOR } from '@/components/map/layerColors';
@@ -914,6 +916,7 @@ export default function ProspectsPage() {
                   <TableCell>Email</TableCell>
                   <TableCell>Téléphone</TableCell>
                   <TableCell>Ville</TableCell>
+                  <TableCell>Disponibilités</TableCell>
                   <TableCell>CV</TableCell>
                   <TableCell>Vidéo</TableCell>
                   <TableCell>Date soumission</TableCell>
@@ -925,7 +928,7 @@ export default function ProspectsPage() {
               <TableBody>
                 {prospects.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} align="center">
+                    <TableCell colSpan={12} align="center">
                       Aucun prospect trouvé
                     </TableCell>
                   </TableRow>
@@ -974,6 +977,29 @@ export default function ProspectsPage() {
                             label={`${prospect.distanceKm} km`}
                             sx={{ ml: 0.5, height: 20 }}
                           />
+                        )}
+                      </TableCell>
+                      {/* Disponibilités déclarées au formulaire GHL. Même rendu en
+                          puces que la fiche détail, pour que l'œil retrouve la
+                          même chose d'un écran à l'autre. */}
+                      <TableCell>
+                        {availabilityLabels(prospect).length > 0 ? (
+                          <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                            {availabilityLabels(prospect).map((label) => (
+                              <Chip
+                                key={label}
+                                size="small"
+                                variant="outlined"
+                                color="primary"
+                                label={label}
+                                sx={{ height: 20 }}
+                              />
+                            ))}
+                          </Stack>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Non spécifié
+                          </Typography>
                         )}
                       </TableCell>
                       <TableCell>
