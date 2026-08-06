@@ -151,7 +151,10 @@ export const quebecFSACentroids: Record<string, { lat: number; lng: number }> = 
   G9R: { lat: 46.6098, lng: -72.8266 },
   G9T: { lat: 46.6315, lng: -72.737 },
   G9X: { lat: 47.4334, lng: -72.7824 },
-  H0H: { lat: 90, lng: 0 },
+  // PAS de H0H ici : « H0H 0H0 » est le code postal de fantaisie du père Noël,
+  // que GeoNames publie au PÔLE NORD ({ lat: 90, lng: 0 }). Il n'a jamais
+  // correspondu à une résidence, et le laisser plaçait des fiches à ~4 900 km
+  // du Québec. Toute régénération depuis CA.zip doit le purger à nouveau.
   H0M: { lat: 45.6986, lng: -73.5025 },
   H1A: { lat: 45.6753, lng: -73.5016 },
   H1B: { lat: 45.632, lng: -73.5075 },
