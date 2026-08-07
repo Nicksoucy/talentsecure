@@ -63,7 +63,10 @@ const QuickOverview = ({ candidate }: QuickOverviewProps) => {
                             icon={<VerifiedUserIcon fontSize="small" />}
                             label="Permis BSP"
                             value={candidate.hasBSP ? (
-                                <Stack direction="row" alignItems="center" spacing={1}>
+                                // `component="span"` : InfoRow rend la valeur dans un
+                                // <Typography variant="body1"> (donc un <p>), et un <div>
+                                // n'y est pas valide (avertissement validateDOMNesting).
+                                <Stack component="span" direction="row" alignItems="center" spacing={1}>
                                     <Typography component="span" fontWeight={500}>Valide</Typography>
                                     {candidate.bspExpiryDate && (
                                         <Typography component="span" variant="caption" color="text.secondary">
