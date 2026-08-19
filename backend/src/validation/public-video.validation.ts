@@ -18,16 +18,28 @@ export const ghlContactIdSchema = z
   .max(64, 'Lien invalide')
   .regex(/^[A-Za-z0-9_-]+$/, 'Lien invalide');
 
+/** True si la valeur ressemble à un identifiant de contact GHL exploitable. */
+export function isUsableContactId(value: unknown): boolean {
+  return ghlContactIdSchema.safeParse(value).success;
+}
+
 /**
  * Le formulaire GHL peut transmettre l'identifiant sous `c` (notre paramètre)
  * ou `contact_id` (celui que GHL ajoute lui-même) — on accepte les deux.
+ *
+ * Les deux sont volontairement typés en `string` libre plutôt qu'en identifiant
+ * strict : si la redirection GHL n'interpole pas son merge field, `c` arrive
+ * littéralement à `{{contact.id}}`. Rejeter la requête à ce moment-là ferait
+ * afficher « lien invalide » au candidat alors qu'un `contact_id` parfaitement
+ * valide peut se trouver juste à côté. On exige donc seulement qu'AU MOINS UN
+ * des deux soit exploitable, et le contrôleur retient celui-là.
  */
 export const videoSessionQuerySchema = z
   .object({
-    c: ghlContactIdSchema.optional(),
-    contact_id: ghlContactIdSchema.optional(),
+    c: z.string().trim().max(200).optional(),
+    contact_id: z.string().trim().max(200).optional(),
   })
-  .refine((data) => Boolean(data.c || data.contact_id), {
+  .refine((data) => isUsableContactId(data.c) || isUsableContactId(data.contact_id), {
     message: 'Identifiant de contact manquant',
     path: ['c'],
   });

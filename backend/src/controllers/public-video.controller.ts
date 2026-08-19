@@ -35,7 +35,11 @@ import { isLikelyVideo } from '../utils/ghlFetch';
 import { ApiError } from '../utils/apiError';
 import { recordUpload } from '../services/pending-video.service';
 import { findMatchingProspect } from '../utils/candidateMatch';
-import { MAX_VIDEO_BYTES, normalizeMimeType } from '../validation/public-video.validation';
+import {
+  MAX_VIDEO_BYTES,
+  isUsableContactId,
+  normalizeMimeType,
+} from '../validation/public-video.validation';
 import logger from '../config/logger';
 
 /**
@@ -82,8 +86,20 @@ function ghlUnavailableError(): ApiError {
   );
 }
 
+/**
+ * Retient le premier identifiant EXPLOITABLE parmi les paramètres possibles.
+ *
+ * L'ordre seul ne suffit pas : si la redirection GHL n'interpole pas son merge
+ * field, `c` vaut littéralement `{{contact.id}}`. Prendre `c` aveuglément
+ * afficherait « lien invalide » au candidat alors que le `contact_id` ajouté
+ * par GHL, juste à côté, est parfaitement bon.
+ */
 function contactIdFrom(req: Request): string {
-  return String((req.query.c ?? req.query.contact_id ?? req.body?.c ?? '') as string);
+  const candidates = [req.query.c, req.query.contact_id, req.body?.c];
+  for (const candidate of candidates) {
+    if (isUsableContactId(candidate)) return String(candidate).trim();
+  }
+  return '';
 }
 
 type ContactLookup =

@@ -138,6 +138,25 @@ describe('Téléversement vidéo public — /api/public/video', () => {
       expect(res.body.firstName).toBe('Amélie');
     });
 
+    it('merge field NON interpolé dans c, mais contact_id valide → on retient contact_id', async () => {
+      // Cas réel : la redirection GHL peut livrer `?c={{contact.id}}` tel quel
+      // tout en ajoutant son propre `contact_id`. Prendre `c` aveuglément
+      // afficherait « lien invalide » alors que le bon id est juste à côté.
+      ghlClient.getContactById.mockResolvedValue(contact());
+      const res = await request(app)
+        .get(SESSION_URL)
+        .query({ c: '{{contact.id}}', contact_id: CONTACT_ID });
+      expect(res.status).toBe(200);
+      expect(res.body.firstName).toBe('Amélie');
+      expect(ghlClient.getContactById).toHaveBeenCalledWith(CONTACT_ID);
+    });
+
+    it('merge field non interpolé et RIEN d’autre → 400 (aucun appel à GHL)', async () => {
+      const res = await request(app).get(SESSION_URL).query({ c: '{{contact.id}}' });
+      expect(res.status).toBe(400);
+      expect(ghlClient.getContactById).not.toHaveBeenCalled();
+    });
+
     it('vidéo déjà en attente pour ce contact → alreadyUploaded true', async () => {
       ghlClient.getContactById.mockResolvedValue(contact());
       await prisma.pendingVideoUpload.create({

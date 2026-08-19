@@ -30,6 +30,7 @@ import {
   Badge as BadgeIcon,
   Checkroom as CheckroomIcon,
   ManageAccounts as ManageAccountsIcon,
+  PinDrop as PinDropIcon,
 } from '@mui/icons-material';
 import { useAuthStore } from '@/store/authStore';
 import { usePerms } from '@/hooks/usePerms';
@@ -78,6 +79,7 @@ const MainLayout = () => {
     { text: 'Candidats', icon: <PeopleIcon />, path: '/candidates', show: !isMagasinAny },
     { text: 'Employés', icon: <BadgeIcon />, path: '/employees', show: true },
     { text: 'Candidats Potentiels', icon: <PersonSearchIcon />, path: '/prospects', show: !isMagasinAny },
+    { text: 'Mandats', icon: <PinDropIcon />, path: '/mandates', show: !isMagasinAny },
     { text: 'Catalogues', icon: <DescriptionIcon />, path: '/catalogues', show: !isMagasinAny },
     { text: 'Clients', icon: <BusinessIcon />, path: '/clients', show: !isMagasinAny },
     { text: 'Demandes Clients', icon: <ShoppingCartIcon />, path: '/wishlists', show: !isMagasinAny },
