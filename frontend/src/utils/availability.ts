@@ -74,3 +74,24 @@ export function availabilityLabels(c: {
     if (c.availableWeekends) labels.push('FDS');
     return labels;
 }
+
+/**
+ * Options du filtre « Disponibilités » des listes.
+ *
+ * Les valeurs sont les jetons attendus par l'API (`?availability=` côté
+ * candidats potentiels, `availability[]` côté recherche avancée) ; les libellés
+ * sont ceux qu'on lit à l'écran. Le filtre exige TOUS les quarts cochés, et un
+ * profil 24/7 ressort de chacun d'eux (24/7 implique les 4 quarts).
+ */
+export const AVAILABILITY_FILTER_OPTIONS = [
+    { value: '24/7', label: '24/7' },
+    { value: 'days', label: 'Jour' },
+    { value: 'evenings', label: 'Soir' },
+    { value: 'nights', label: 'Nuit' },
+    { value: 'weekends', label: 'Fin de semaine' },
+] as const;
+
+/** Libellé lisible d'un jeton de filtre (repli : le jeton lui-même). */
+export function availabilityFilterLabel(value: string): string {
+    return AVAILABILITY_FILTER_OPTIONS.find((o) => o.value === value)?.label ?? value;
+}

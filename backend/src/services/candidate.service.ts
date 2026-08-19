@@ -4,6 +4,7 @@ import { canonicalCity } from '../utils/cityNormalize';
 import { resolveCityCoordinates } from './cityGeocode.service';
 import { haversineKm, boundingBox, LatLng } from '../utils/geo';
 import { resolveSearchIds, hasSearchTokens } from '../utils/search';
+import { availabilityWhereFrom } from '../utils/availability';
 
 // O1 — plafond du nombre de lignes exportées d'un coup (sécurité mémoire/timeout).
 const EXPORT_ROW_CAP = 5000;
@@ -562,11 +563,9 @@ export class CandidateService {
         if (certifications.includes('SSIAP')) where.hasSSIAP = true;
         if (certifications.includes('Permis')) where.hasDriverLicense = true;
 
-        if (availability.includes('24/7')) where.available24_7 = true;
-        if (availability.includes('days')) where.availableDays = true;
-        if (availability.includes('evenings')) where.availableEvenings = true;
-        if (availability.includes('nights')) where.availableNights = true;
-        if (availability.includes('weekends')) where.availableWeekends = true;
+        // Même traduction jeton → colonne que le filtre de la liste des
+        // candidats potentiels : un seul vocabulaire pour les deux écrans.
+        Object.assign(where, availabilityWhereFrom(availability));
 
         if (minRating) where.globalRating = { gte: Number(minRating) };
         if (hasVehicle !== undefined) where.hasVehicle = hasVehicle;

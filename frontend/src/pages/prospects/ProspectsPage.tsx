@@ -62,7 +62,7 @@ import ContactConflictDialog from '@/components/ContactConflictDialog';
 import { ContactConflict } from '@/services/contact.service';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import CrossTableHint from '@/components/CrossTableHint';
-import { availabilityLabels } from '@/utils/availability';
+import { availabilityLabels, AVAILABILITY_FILTER_OPTIONS, availabilityFilterLabel } from '@/utils/availability';
 import { prospectService } from '@/services/prospect.service';
 import { contractService } from '@/services/contract.service';
 import { CONTRACT_COLOR } from '@/components/map/layerColors';
@@ -101,6 +101,7 @@ export default function ProspectsPage() {
     isContacted: '',
     isConverted: '',
     hasVideo: '',
+    availability: [] as string[], // quarts exigés (ET) — [] = tous
     contractCode: '', // contrat client (ex. PSB) — '' = tous
     submissionDateStart: '',
     submissionDateEnd: '',
@@ -216,6 +217,27 @@ export default function ProspectsPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  /**
+   * Critères actuels de la liste, en un seul endroit : la requête paginée et
+   * les actions « toutes les pages » (sélection, contact en lot, export) les
+   * partagent. Recopiés à la main, ces objets avaient divergé — vidéo et dates
+   * ne filtraient que l'affichage, si bien que « tout sélectionner » ramenait
+   * des prospects que l'écran ne montrait pas.
+   */
+  const filterParams = (searchTerm: string) => ({
+    search: searchTerm || undefined,
+    city: filters.city || undefined,
+    cities: filters.cities.length > 0 ? filters.cities : undefined,
+    near: filters.near || undefined,
+    isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
+    isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
+    contractCode: filters.contractCode || undefined,
+    hasVideo: filters.hasVideo === '' ? undefined : filters.hasVideo === 'true',
+    availability: filters.availability.length > 0 ? filters.availability : undefined,
+    submissionDateStart: filters.submissionDateStart || undefined,
+    submissionDateEnd: filters.submissionDateEnd || undefined,
+  });
+
   // Fetch prospects
   const { data, isLoading, error } = useQuery({
     queryKey: ['prospects', page, pageSize, debouncedSearch, filters],
@@ -223,16 +245,7 @@ export default function ProspectsPage() {
       prospectService.getProspects({
         page,
         limit: pageSize,
-        search: debouncedSearch.trim() || undefined,
-        city: filters.city || undefined,
-        cities: filters.cities.length > 0 ? filters.cities : undefined,
-        near: filters.near || undefined,
-        isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
-        isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
-        contractCode: filters.contractCode || undefined,
-        hasVideo: filters.hasVideo === '' ? undefined : filters.hasVideo === 'true',
-        submissionDateStart: filters.submissionDateStart || undefined,
-        submissionDateEnd: filters.submissionDateEnd || undefined,
+        ...filterParams(debouncedSearch.trim()),
         sortBy: 'submissionDate',
         sortOrder: 'desc',
       }),
@@ -414,13 +427,7 @@ export default function ProspectsPage() {
       const response = await prospectService.getProspects({
         page: 1,
         limit: 10000, // Large limit to get all
-        search: search || undefined,
-        city: filters.city || undefined,
-        cities: filters.cities.length > 0 ? filters.cities : undefined,
-        near: filters.near || undefined,
-        isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
-        isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
-        contractCode: filters.contractCode || undefined,
+        ...filterParams(search),
       });
 
       const allIds = response.data.map((p: ProspectCandidate) => p.id);
@@ -446,13 +453,7 @@ export default function ProspectsPage() {
         const response = await prospectService.getProspects({
           page: 1,
           limit: 10000,
-          search: search || undefined,
-          city: filters.city || undefined,
-          cities: filters.cities.length > 0 ? filters.cities : undefined,
-          near: filters.near || undefined,
-          isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
-          isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
-          contractCode: filters.contractCode || undefined,
+          ...filterParams(search),
         });
         prospectsToContact = response.data.map((p: ProspectCandidate) => p.id);
       } else {
@@ -533,13 +534,7 @@ export default function ProspectsPage() {
         const response = await prospectService.getProspects({
           page: 1,
           limit: 10000,
-          search: search || undefined,
-          city: filters.city || undefined,
-          cities: filters.cities.length > 0 ? filters.cities : undefined,
-          near: filters.near || undefined,
-          isContacted: filters.isContacted === '' ? undefined : filters.isContacted === 'true',
-          isConverted: filters.isConverted === '' ? undefined : filters.isConverted === 'true',
-          contractCode: filters.contractCode || undefined,
+          ...filterParams(search),
         });
         prospectsToExport = response.data;
       } else {
@@ -742,6 +737,43 @@ export default function ProspectsPage() {
                     <MenuItem value="">Tous</MenuItem>
                     <MenuItem value="true">Avec vidéo</MenuItem>
                     <MenuItem value="false">Sans vidéo</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              {/* Disponibilités : plusieurs quarts se cumulent en ET (« Soir +
+                  Fin de semaine » = les deux exigés). Un profil 24/7 ressort de
+                  chaque quart, puisqu'il les implique tous. */}
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth>
+                  <InputLabel id="prospects-availability-label">Disponibilités</InputLabel>
+                  <Select
+                    multiple
+                    labelId="prospects-availability-label"
+                    label="Disponibilités"
+                    value={filters.availability}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFilters({
+                        ...filters,
+                        // MUI renvoie une chaîne quand le <select> natif prend le relais.
+                        availability: typeof value === 'string' ? value.split(',') : value,
+                      });
+                      setPage(1);
+                    }}
+                    renderValue={(selected) =>
+                      (selected as string[]).map(availabilityFilterLabel).join(' + ')
+                    }
+                  >
+                    {AVAILABILITY_FILTER_OPTIONS.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        <Checkbox
+                          size="small"
+                          checked={filters.availability.includes(option.value)}
+                          sx={{ p: 0.5, mr: 1 }}
+                        />
+                        {option.label}
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>

@@ -173,6 +173,59 @@ describe('ProspectsPage', () => {
     expect(within(paper).getByRole('button', { name: /Exporter CSV/i })).toBeInTheDocument();
   });
 
+  it('le filtre « Disponibilités » envoie les quarts cochés à l\'API', async () => {
+    const user = userEvent.setup();
+    renderProspects();
+    await screen.findByText('Marie Gagnon');
+
+    await user.click(screen.getByRole('button', { name: /Afficher filtres/i }));
+    await user.click(screen.getByRole('combobox', { name: 'Disponibilités' }));
+    await user.click(await screen.findByRole('option', { name: 'Soir' }));
+
+    // Jetons de l'API, pas les libellés affichés.
+    await waitFor(() =>
+      expect(svc.getProspects).toHaveBeenLastCalledWith(
+        expect.objectContaining({ availability: ['evenings'] }),
+      ),
+    );
+  });
+
+  it('deux quarts cochés partent ensemble (le serveur les exige tous les deux)', async () => {
+    const user = userEvent.setup();
+    renderProspects();
+    await screen.findByText('Marie Gagnon');
+
+    await user.click(screen.getByRole('button', { name: /Afficher filtres/i }));
+    await user.click(screen.getByRole('combobox', { name: 'Disponibilités' }));
+    await user.click(await screen.findByRole('option', { name: 'Soir' }));
+    await user.click(await screen.findByRole('option', { name: 'Fin de semaine' }));
+
+    await waitFor(() =>
+      expect(svc.getProspects).toHaveBeenLastCalledWith(
+        expect.objectContaining({ availability: ['evenings', 'weekends'] }),
+      ),
+    );
+  });
+
+  it('tout décocher retire le filtre au lieu de garder un tableau vide', async () => {
+    const user = userEvent.setup();
+    renderProspects();
+    await screen.findByText('Marie Gagnon');
+
+    await user.click(screen.getByRole('button', { name: /Afficher filtres/i }));
+    await user.click(screen.getByRole('combobox', { name: 'Disponibilités' }));
+    const soir = await screen.findByRole('option', { name: 'Soir' });
+    await user.click(soir);
+    await user.click(soir);
+
+    // `[]` enverrait `availability=` à l'API : un paramètre vide pour rien.
+    await waitFor(() =>
+      expect(svc.getProspects).toHaveBeenLastCalledWith(
+        expect.objectContaining({ availability: undefined }),
+      ),
+    );
+  });
+
   it('navigue vers le détail au clic sur l\'action « Voir détails »', async () => {
     const user = userEvent.setup();
     renderProspects();

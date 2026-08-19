@@ -250,3 +250,49 @@ export function flagsFromAvailabilityRows(
     availableWeekends: has('FIN_DE_SEMAINE'),
   });
 }
+
+// ──────────────────────────── Filtres de recherche ───────────────────────────
+
+/**
+ * Jetons acceptés par les filtres de disponibilité : recherche avancée des
+ * candidats (tableau dans le corps POST) et liste des candidats potentiels
+ * (`?availability=` en CSV). Un seul vocabulaire pour les deux écrans — un
+ * renommage ici les casse ensemble plutôt que d'en laisser un mentir en
+ * silence.
+ */
+export const AVAILABILITY_TOKENS = ['24/7', 'days', 'evenings', 'nights', 'weekends'] as const;
+export type AvailabilityToken = (typeof AVAILABILITY_TOKENS)[number];
+
+const TOKEN_TO_FLAG: Record<AvailabilityToken, keyof AvailabilityFlags> = {
+  '24/7': 'available24_7',
+  days: 'availableDays',
+  evenings: 'availableEvenings',
+  nights: 'availableNights',
+  weekends: 'availableWeekends',
+};
+
+/**
+ * Conditions Prisma pour un filtre « disponible … ».
+ *
+ * Plusieurs quarts se combinent en ET (« soir » + « fin de semaine » = les deux
+ * cochés), pas en OU : on cherche quelqu'un qui couvre le besoin au complet.
+ * Et comme `normalizeAvailability` fait impliquer les 4 quarts par 24/7, une
+ * personne 24/7 ressort de n'importe lequel de ces filtres — sans ça, la plus
+ * disponible de toutes disparaîtrait des résultats.
+ *
+ * Accepte un tableau (corps JSON) ou une chaîne CSV (paramètre d'URL). Les
+ * jetons inconnus sont ignorés : un paramètre bidon ne doit pas vider la liste.
+ */
+export function availabilityWhereFrom(
+  input: string | string[] | null | undefined
+): Partial<Record<keyof AvailabilityFlags, true>> {
+  const tokens = Array.isArray(input) ? input : String(input ?? '').split(',');
+  const where: Partial<Record<keyof AvailabilityFlags, true>> = {};
+
+  for (const raw of tokens) {
+    const flag = TOKEN_TO_FLAG[String(raw).trim().toLowerCase() as AvailabilityToken];
+    if (flag) where[flag] = true;
+  }
+
+  return where;
+}

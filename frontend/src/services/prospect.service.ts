@@ -9,6 +9,7 @@ interface GetProspectsParams {
   isContacted?: boolean;
   isConverted?: boolean;
   hasVideo?: boolean;
+  availability?: string[]; // quarts exigés (ET) → envoyé en CSV : days,evenings,nights,weekends,24/7
   contractCode?: string; // filtre par contrat client (ex. PSB)
   includeProcessed?: boolean; // NOUVEAU : filtrage dynamique
   submissionDateStart?: string;
@@ -34,10 +35,11 @@ export const prospectService = {
    * Get all prospects with filters
    */
   async getProspects(params?: GetProspectsParams): Promise<ProspectsResponse> {
-    // `cities` (tableau) → CSV ; `near` (point+rayon) → nearLat/nearLng/nearRadiusKm.
-    const { cities, near, ...rest } = params || {};
+    // `cities` et `availability` (tableaux) → CSV ; `near` (point+rayon) → nearLat/nearLng/nearRadiusKm.
+    const { cities, near, availability, ...rest } = params || {};
     const query: any = { ...rest };
     if (cities && cities.length > 0) query.cities = cities.join(',');
+    if (availability && availability.length > 0) query.availability = availability.join(',');
     if (near) {
       query.nearLat = near.lat;
       query.nearLng = near.lng;

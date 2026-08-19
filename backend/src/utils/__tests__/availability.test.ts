@@ -5,6 +5,7 @@ import {
   flagsFromAvailabilityRows,
   parseGhlAvailability,
   findGhlAvailabilityAnswer,
+  availabilityWhereFrom,
 } from '../availability';
 
 /**
@@ -175,5 +176,40 @@ describe('findGhlAvailabilityAnswer', () => {
   it('retourne null quand rien ne ressemble à une disponibilité', () => {
     expect(findGhlAvailabilityAnswer({ Courriel: 'a@b.ca' })).toBeNull();
     expect(findGhlAvailabilityAnswer(null)).toBeNull();
+  });
+});
+
+describe('availabilityWhereFrom', () => {
+  it('traduit un jeton en condition Prisma', () => {
+    expect(availabilityWhereFrom(['evenings'])).toEqual({ availableEvenings: true });
+  });
+
+  it('accepte une chaîne CSV (paramètre d\'URL) autant qu\'un tableau', () => {
+    expect(availabilityWhereFrom('evenings, weekends')).toEqual({
+      availableEvenings: true,
+      availableWeekends: true,
+    });
+  });
+
+  it('plusieurs quarts se cumulent en ET (toutes les colonnes exigées)', () => {
+    expect(availabilityWhereFrom(['days', 'nights'])).toEqual({
+      availableDays: true,
+      availableNights: true,
+    });
+  });
+
+  it('« 24/7 » vise sa propre colonne', () => {
+    expect(availabilityWhereFrom(['24/7'])).toEqual({ available24_7: true });
+  });
+
+  it('rien de fourni → aucune condition (on ne filtre pas)', () => {
+    expect(availabilityWhereFrom(undefined)).toEqual({});
+    expect(availabilityWhereFrom(null)).toEqual({});
+    expect(availabilityWhereFrom('')).toEqual({});
+    expect(availabilityWhereFrom([])).toEqual({});
+  });
+
+  it('ignore les jetons inconnus au lieu de vider la liste', () => {
+    expect(availabilityWhereFrom(['matins', 'EVENINGS'])).toEqual({ availableEvenings: true });
   });
 });

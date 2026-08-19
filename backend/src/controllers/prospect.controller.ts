@@ -19,7 +19,7 @@ import {
   mergeIdFilter,
   prospectIdsForContract,
 } from '../services/contractLeads.service';
-import { normalizeAvailability, availabilityRowsFrom } from '../utils/availability';
+import { normalizeAvailability, availabilityRowsFrom, availabilityWhereFrom } from '../utils/availability';
 
 const PROSPECT_LIST_CACHE_PREFIX = 'prospects:list';
 const PROSPECT_STATS_CACHE_KEY = 'prospects:stats';
@@ -39,7 +39,7 @@ const invalidateProspectCaches = () =>
  */
 function buildProspectWhere(query: any): any {
   const {
-    city, cities, isContacted, isConverted, hasVideo,
+    city, cities, isContacted, isConverted, hasVideo, availability,
     includeProcessed, submissionDateStart, submissionDateEnd,
   } = query;
 
@@ -67,6 +67,10 @@ function buildProspectWhere(query: any): any {
   // Filtre vidéo : avec / sans vidéo de présentation
   if (hasVideo === 'true') where.videoStoragePath = { not: null };
   else if (hasVideo === 'false') where.videoStoragePath = null;
+
+  // Filtre disponibilités (CSV : days,evenings,nights,weekends,24/7). Plusieurs
+  // quarts se combinent en ET ; les 24/7 ressortent de tous (cf. utils).
+  Object.assign(where, availabilityWhereFrom(availability));
 
   // Filtrage dynamique : masquer/afficher les prospects déjà traités (skills)
   if (includeProcessed === 'false') where.skills = { none: {} };
