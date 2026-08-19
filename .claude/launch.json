@@ -1,0 +1,25 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend-local",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "DATABASE_URL='postgresql://postgres:postgres@localhost:5432/talentsecure_test' PORT=5001 DISABLE_SCHEDULER=true CACHE_ENABLED=false npm run dev"
+      ],
+      "cwd": "backend",
+      "port": 5001
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "VITE_API_URL=http://localhost:5001 npm run dev"
+      ],
+      "cwd": "frontend",
+      "port": 5173
+    }
+  ]
+}
