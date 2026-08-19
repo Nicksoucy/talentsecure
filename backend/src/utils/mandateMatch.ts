@@ -90,11 +90,15 @@ export function normalizeLanguageCode(raw: string | null | undefined): string {
     .toLowerCase()
     .trim();
   if (!t) return '';
-  if (/^fr|franc/.test(t)) return 'FR';
-  if (/^en|angl|engl/.test(t)) return 'EN';
-  if (/^es|espagn|spanish|castell/.test(t)) return 'ES';
-  if (/^ar|arabe|arabic/.test(t)) return 'AR';
-  if (/^cr|creole|kreyol/.test(t)) return 'HT';
+  // Chaque variante est ancrée individuellement. Écrit `/^fr|franc/`, le `^` ne
+  // porte que sur la première : « franc » aurait suffi n'importe où dans la
+  // chaîne, et surtout `/^ar|arabe/` aurait rangé « arabe » correctement mais
+  // `/^en|angl/` aurait pris tout libellé contenant « angl ».
+  if (/^(fr|franc)/.test(t)) return 'FR';
+  if (/^(en|angl|engl)/.test(t)) return 'EN';
+  if (/^(es|espagn|spanish|castell)/.test(t)) return 'ES';
+  if (/^(ar|arabe|arabic)/.test(t)) return 'AR';
+  if (/^(cr|creole|kreyol)/.test(t)) return 'HT';
   return t.toUpperCase();
 }
 

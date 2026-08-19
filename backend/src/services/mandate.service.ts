@@ -62,6 +62,25 @@ const MANDATE_SELECT = {
 const DEFAULT_PAGE_SIZE = 50;
 const DEFAULT_MATCH_LIMIT = 50;
 
+/**
+ * Tri de la liste des mandats, champ par champ. Voir le commentaire dans
+ * `listMandates` : surtout ne pas revenir à une clé calculée.
+ */
+function mandateOrderBy(
+  sortBy: string,
+  sortOrder: 'asc' | 'desc'
+): Prisma.MandateOrderByWithRelationInput {
+  switch (sortBy) {
+    case 'city':
+      return { city: sortOrder };
+    case 'createdAt':
+      return { createdAt: sortOrder };
+    case 'name':
+    default:
+      return { name: sortOrder };
+  }
+}
+
 export async function listMandates(filters: MandateFilters) {
   const where: Prisma.MandateWhereInput = { isDeleted: false };
 
@@ -94,10 +113,16 @@ export async function listMandates(filters: MandateFilters) {
   // `profileUpdatedAt` est nullable : sans `nulls: 'last'`, les mandats non
   // cotés monopoliseraient la première page en tri décroissant (même piège que
   // `globalRating` côté candidats).
+  //
+  // Les autres champs sont énumérés un à un plutôt que construits en
+  // `{ [sortBy]: sortOrder }` : `sortBy` vient de la requête, et un nom de
+  // propriété calculé depuis une valeur du client laisse écrire n'importe
+  // quelle clé. La route pose bien une garde zod, mais elle ne protège pas les
+  // autres appelants de ce service.
   const orderBy: Prisma.MandateOrderByWithRelationInput =
     sortBy === 'profileUpdatedAt'
       ? { profileUpdatedAt: { sort: sortOrder, nulls: 'last' } }
-      : { [sortBy]: sortOrder };
+      : mandateOrderBy(sortBy, sortOrder);
 
   const [mandates, total] = await Promise.all([
     prisma.mandate.findMany({
