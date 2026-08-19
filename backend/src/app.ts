@@ -36,6 +36,8 @@ import contractRoutes from './routes/contract.routes';
 import contactLifecycleRoutes from './routes/contact-lifecycle.routes';
 import webhookRoutes from './routes/webhook.routes';
 import publicVideoRoutes from './routes/public-video.routes';
+import publicQuestionnaireRoutes from './routes/public-questionnaire.routes';
+import questionnaireRoutes from './routes/questionnaire.routes';
 import adminRoutes from './routes/admin.routes';
 import wishlistRoutes from './routes/wishlist.routes';
 import exportRoutes from './routes/export.routes';
@@ -159,11 +161,13 @@ export function createApp(): Express {
   app.use('/api/geo', geoRoutes);
   app.use('/api/employees', employeeRoutes);
   app.use('/api/mandates', mandateRoutes);
+  app.use('/api/questionnaires', questionnaireRoutes);
   app.use('/api/contracts', contractRoutes);
   app.use('/api/contacts', contactLifecycleRoutes);
   app.use('/api/webhooks', webhookRoutes);
   // Téléversement vidéo par le candidat — non authentifié par conception.
   app.use('/api/public/video', publicVideoRoutes);
+  app.use('/api/public/questionnaire', publicQuestionnaireRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/wishlist', wishlistRoutes);
   app.use('/api/exports', exportRoutes);

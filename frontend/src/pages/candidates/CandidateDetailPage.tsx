@@ -52,6 +52,7 @@ import { candidateFormSchema } from '../../validation/candidate';
 import { buildAvailabilityPayload } from '@/utils/availability';
 import QuickOverview from '@/components/candidates/QuickOverview';
 import CandidateBadges from '@/components/candidates/CandidateBadges';
+import QuestionnaireCard from '@/components/candidates/QuestionnaireCard';
 import CandidateTabs, { CustomTabPanel } from './components/CandidateTabs';
 
 const STATUS_COLORS: Record<string, 'success' | 'info' | 'warning' | 'error' | 'default'> = {
@@ -899,6 +900,9 @@ const CandidateDetailPage = () => {
         <CustomTabPanel value={tabValue} index={3}>
           <Grid container spacing={3}>
             <Grid item xs={12} md={6}>
+              {/* Préférences déclarées par le candidat — informatif, jamais
+                  éliminatoire (voir QuestionnaireCard). */}
+              <QuestionnaireCard personType="candidate" personId={candidate.id} />
               {/* Evaluation */}
               <Card sx={{ mb: 3 }}>
                 <CardContent>

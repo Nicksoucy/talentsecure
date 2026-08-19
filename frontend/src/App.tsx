@@ -32,6 +32,8 @@ const EmployeeDetailPage = lazy(() => import('./pages/employees/EmployeeDetailPa
 const ProspectsPage = lazy(() => import('./pages/prospects/ProspectsPage'));
 const ProspectDetailPage = lazy(() => import('./pages/prospects/ProspectDetailPage'));
 const ProspectConvertPage = lazy(() => import('./pages/prospects/ProspectConvertPage'));
+const MandatesPage = lazy(() => import('./pages/mandates/MandatesPage'));
+const QuestionnairePage = lazy(() => import('./pages/public/QuestionnairePage'));
 const AutresCompetancesPage = lazy(() => import('./pages/autres-competances/AutresCompetancesPage'));
 const WishlistsPage = lazy(() => import('./pages/wishlists/WishlistsPage'));
 const ExportPage = lazy(() => import('./pages/exports/ExportPage'));
@@ -86,6 +88,10 @@ function App() {
           {/* Vidéo de présentation du candidat — cible de la redirection du
               formulaire GoHighLevel et du rappel SMS/courriel. */}
           <Route path="/ma-video" element={<VideoUploadPage />} />
+          {/* Questionnaire du candidat. Jeton en segment de chemin (patron des
+              pages catalogue/uniforme) : le lien est envoyé par les RH, pas
+              construit par une redirection GoHighLevel. */}
+          <Route path="/mon-profil/:token" element={<QuestionnairePage />} />
 
           {/* Admin auth routes */}
           <Route element={<AuthLayout />}>
@@ -138,6 +144,9 @@ function App() {
             <Route path="/prospects" element={<RequireRole roles={STAFF_NO_MAGASIN}><ProspectsPage /></RequireRole>} />
             <Route path="/prospects/:id" element={<RequireRole roles={STAFF_NO_MAGASIN}><ProspectDetailPage /></RequireRole>} />
             <Route path="/prospects/:id/convert" element={<RequireRole roles={STAFF_NO_MAGASIN}><ProspectConvertPage /></RequireRole>} />
+            {/* Répartition : profil des sites + jumelage. La page affiche des
+                coordonnées de candidats, donc même garde que /candidates. */}
+            <Route path="/mandates" element={<RequireRole roles={STAFF_NO_MAGASIN}><MandatesPage /></RequireRole>} />
             <Route path="/catalogues" element={<RequireRole roles={STAFF_NO_MAGASIN}><CataloguesPage /></RequireRole>} />
             <Route path="/clients" element={<RequireRole roles={STAFF_NO_MAGASIN}><ClientsPage /></RequireRole>} />
             <Route path="/clients/:id" element={<RequireRole roles={STAFF_NO_MAGASIN}><ClientDetailPage /></RequireRole>} />

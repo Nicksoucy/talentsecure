@@ -133,13 +133,13 @@ enum SkillSource {
 // Models
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String? // Null si OAuth uniquement
-  tokenVersion Int   @default(0) // P2-C : révocation — incrémenté au logout/changement de mdp ; les tokens portant une version ≠ sont rejetés
-  firstName String
-  lastName  String
-  role      UserRole @default(RH_RECRUITER)
+  id           String   @id @default(uuid())
+  email        String   @unique
+  password     String? // Null si OAuth uniquement
+  tokenVersion Int      @default(0) // P2-C : révocation — incrémenté au logout/changement de mdp ; les tokens portant une version ≠ sont rejetés
+  firstName    String
+  lastName     String
+  role         UserRole @default(RH_RECRUITER)
 
   // OAuth
   googleId    String? @unique
@@ -455,17 +455,17 @@ model SituationTest {
 }
 
 model Client {
-  id          String  @id @default(uuid())
-  name        String
-  companyName String?
-  email       String  @unique
-  password    String? // Mot de passe pour login client
-  tokenVersion Int    @default(0) // P2-C : révocation (cf. User.tokenVersion)
-  phone       String?
-  address     String?
-  city        String?
-  province    String?
-  postalCode  String?
+  id           String  @id @default(uuid())
+  name         String
+  companyName  String?
+  email        String  @unique
+  password     String? // Mot de passe pour login client
+  tokenVersion Int     @default(0) // P2-C : révocation (cf. User.tokenVersion)
+  phone        String?
+  address      String?
+  city         String?
+  province     String?
+  postalCode   String?
 
   // Billing & Pricing
   billingEmail             String?
@@ -705,7 +705,7 @@ model ProspectCandidate {
   lng           Float?
   geocodedAt    DateTime?
   geocodeSource String? // 'postal' | 'city'
-  fullAddress   String? @db.Text // Adresse complÃ¨te du CSV
+  fullAddress   String?   @db.Text // Adresse complÃ¨te du CSV
 
   // CV
   cvUrl         String? // URL du CV Ã  tÃ©lÃ©charger
@@ -1230,6 +1230,50 @@ model Mandate {
   geocodedAt    DateTime?
   geocodeSource String? // 'address' | 'postal' | 'city'
 
+  // ─────────────────────── Profil du mandat (saisi par les ops) ───────────────
+  // L'import Agendrix ne fournit QUE l'identité et l'adresse. Tout ce qui suit
+  // est saisi à la main par la répartition et n'est JAMAIS écrasé par un import
+  // (voir computeMandateUpdate). Un mandat non coté reste parfaitement valide :
+  // le jumelage se rabat alors sur les seuls critères durs + la distance.
+
+  // Exigences dures — filtrent, elles ne pondèrent pas.
+  requiresBSP           Boolean  @default(true) // permis BSP obligatoire (défaut du métier)
+  requiresDriverLicense Boolean  @default(false)
+  requiresVehicle       Boolean  @default(false)
+  requiredLanguages     String[] @default([]) // ['FR'] | ['FR','EN'] — vide = aucune exigence
+
+  // Quarts à couvrir. Mêmes 4 quarts que le candidat, pour comparer pomme avec
+  // pomme via utils/availability.ts. Pas de « 24/7 » ici : côté mandat, c'est
+  // simplement les 4 cases cochées.
+  shiftDays     Boolean @default(false)
+  shiftEvenings Boolean @default(false)
+  shiftNights   Boolean @default(false)
+  shiftWeekends Boolean @default(false)
+
+  // Contexte de travail, coté 1 (faible) à 5 (élevé) par les superviseurs.
+  // Vocabulaire calqué sur les « Work Context » d'O*NET (code 33-9032, licence
+  // CC BY 4.0) : c'est ce qui rend le profil traçable à une source publique
+  // plutôt qu'à une intuition, et c'est l'entrée du jumelage par préférences.
+  // null = pas encore coté (à distinguer de 1 = faible).
+  siteType          String? // STATIQUE | MOBILE | CHANTIER | EVENEMENTIEL | RESIDENTIEL | INDUSTRIEL | INSTITUTIONNEL
+  conflictFrequency Int? // fréquence des situations conflictuelles
+  publicContact     Int? // intensité du contact avec le public
+  monotony          Int? // répétitivité des tâches
+  autonomy          Int? // 1 = toujours en équipe … 5 = toujours seul
+  outdoorExposure   Int? // exposition aux intempéries
+  physicalDemand    Int? // exigence physique (station debout, rondes, escaliers)
+
+  clientName String?
+  headcount  Int? // nombre de postes à pourvoir
+  notes      String? @db.Text // consignes de jumelage — JAMAIS de secret de site
+
+  // Un mandat importé mais plus staffé reste en base (historique) sans polluer
+  // le jumelage. Distinct de isDeleted, qui vise l'effacement logique.
+  isActive Boolean @default(true)
+
+  profileUpdatedAt   DateTime?
+  profileUpdatedById String?
+
   isDeleted Boolean   @default(false)
   deletedAt DateTime?
   createdAt DateTime  @default(now())
@@ -1237,6 +1281,7 @@ model Mandate {
 
   @@index([isDeleted])
   @@index([lat, lng])
+  @@index([isActive, isDeleted])
   @@map("mandates")
 }
 
@@ -1572,16 +1617,16 @@ model UniformIssuanceLine {
 }
 
 model UniformReturn {
-  id         String                @id @default(uuid())
-  issuanceId String
-  employeeId String // dénormalisé pour la fiche
-  status     UniformIssuanceStatus @default(DRAFT)
-  notes      String?               @db.Text
-  returnedAt DateTime?
+  id           String                @id @default(uuid())
+  issuanceId   String
+  employeeId   String // dénormalisé pour la fiche
+  status       UniformIssuanceStatus @default(DRAFT)
+  notes        String?               @db.Text
+  returnedAt   DateTime?
   // Retour tardif : pièces rapportées APRÈS la clôture de fin d'emploi
   // (remise CLOSED_TERMINATION). Lignes à coût 0 (dette déjà figée) ; les
   // pièces en bon état créditent la dette via un règlement automatique.
-  isLateReturn Boolean @default(false)
+  isLateReturn Boolean               @default(false)
 
   employeeSignatureStoragePath String?
   employerSignatureStoragePath String?
@@ -1716,4 +1761,93 @@ model Notification {
   @@index([channel, status])
   @@index([createdAt])
   @@map("notifications")
+}
+
+// ===========================================================================
+// QUESTIONNAIRE DE PRÉFÉRENCES DE TRAVAIL ET D'AFFECTATION
+//
+// Rempli par le candidat sur une page publique (patron /ma-video). Sert à
+// PROPOSER des mandats, jamais à écarter quelqu'un : la recommandation 7 de la
+// CDPDJ (1998) interdit qu'un résultat de test de personnalité soit seul ou
+// déterminant, et l'art. 12.1 de la Loi sur le privé (P-39.1) encadre les
+// décisions exclusivement automatisées. Aucun chemin de code ne doit filtrer
+// sur ces colonnes.
+//
+// Choix volontaires :
+//  - personType + personId SANS FK (même esprit que ContractLead et
+//    PendingVideoUpload) : la même réponse reste valide après le passage
+//    prospect → candidat → employé, où l'id change.
+//  - le jeton d'accès vit sur la réponse elle-même : une invitation RH et une
+//    arrivée par le tunnel GHL convergent ainsi vers un seul objet.
+//  - les scores sont dénormalisés ici à la soumission ; les réponses énoncé par
+//    énoncé restent dans la table fille, dont la lecture est réservée (la CDPDJ
+//    recommande que seul l'administrateur du test voie le détail, les décideurs
+//    n'ayant que les conclusions).
+// ===========================================================================
+model QuestionnaireResponse {
+  id String @id @default(uuid())
+
+  personType String // 'candidate' | 'prospect'
+  personId   String
+
+  /// Version de la banque d'énoncés (questionnaireItems.ts). Des réponses de
+  /// versions différentes ne sont pas comparables.
+  version String
+
+  /// Jeton du lien public. Aléatoire, jamais devinable, expirable.
+  accessToken String   @unique
+  expiresAt   DateTime
+
+  status      String    @default("IN_PROGRESS") // IN_PROGRESS | COMPLETED
+  startedAt   DateTime?
+  completedAt DateTime?
+  /// Consentement Loi 25 (art. 14 : présenté distinctement), horodaté.
+  consentAt   DateTime?
+
+  // Préférences déclarées, 1-5. Miroir exact des cotes de contexte du mandat.
+  prefConflictTolerance Int?
+  prefPublicContact     Int?
+  prefMonotonyTolerance Int?
+  prefAutonomy          Int?
+  prefOutdoorTolerance  Int?
+  prefPhysicalTolerance Int?
+
+  // Traits, moyenne 1-5 (échelle brute : aucune norme importée).
+  traitDependability   Float?
+  traitIntegrity       Float?
+  traitSelfControl     Float?
+  traitStressTolerance Float?
+
+  /// Signaux de réponse bâclée, en clair. Vide = rien à signaler.
+  qualityFlags String[] @default([])
+  careless     Boolean  @default(false)
+
+  /// 'invitation' (envoyée par les RH) | 'ghl' (tunnel de candidature)
+  source      String
+  createdById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  answers QuestionnaireAnswer[]
+
+  @@index([personType, personId, status])
+  @@index([status])
+  @@map("questionnaire_responses")
+}
+
+model QuestionnaireAnswer {
+  id         String                @id @default(uuid())
+  responseId String
+  response   QuestionnaireResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+
+  itemId     String
+  value      Int
+  /// Temps passé sur l'énoncé — sert au contrôle qualité, pas au score.
+  elapsedMs  Int?
+  answeredAt DateTime @default(now())
+
+  @@unique([responseId, itemId])
+  @@index([responseId])
+  @@map("questionnaire_answers")
 }

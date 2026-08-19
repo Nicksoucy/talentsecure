@@ -42,7 +42,14 @@ const formatMb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(0)} Mo`;
 
 export default function VideoUploadPage() {
   const [searchParams] = useSearchParams();
-  const contactId = searchParams.get('c') || searchParams.get('contact_id') || '';
+  // On retient le premier paramètre EXPLOITABLE, pas simplement le premier
+  // présent : si la redirection GHL n'interpole pas son merge field, `c` vaut
+  // littéralement `{{contact.id}}` alors qu'un `contact_id` valide peut se
+  // trouver juste à côté. Afficher « lien invalide » dans ce cas serait faux.
+  const contactId =
+    [searchParams.get('c'), searchParams.get('contact_id')].find((v) =>
+      /^[A-Za-z0-9_-]{10,64}$/.test((v || '').trim())
+    )?.trim() || '';
 
   const [tab, setTab] = useState<'file' | 'record'>('file');
   const [uploading, setUploading] = useState(false);

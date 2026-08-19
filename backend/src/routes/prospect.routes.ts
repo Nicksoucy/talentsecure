@@ -49,6 +49,7 @@ const prospectQueryFilters = z.object({
   isContacted: z.string().optional(),
   isConverted: z.string().optional(),
   hasVideo: z.string().optional(),
+  availability: z.string().max(100).optional(), // CSV de quarts : days,evenings,nights,weekends,24/7
   contractCode: z.string().max(20).optional(), // filtre par contrat client (ex. PSB)
   includeProcessed: z.string().optional(), // NOUVEAU : filtrage dynamique
   submissionDateStart: z.string().optional(),

@@ -48,6 +48,21 @@ export const publicShareLimiter = rateLimit({
   skip: skipInTests,
 });
 
+// 40 req / minute / IP sur le questionnaire public. Compartiment DÉDIÉ (et non
+// publicShareLimiter) : le questionnaire sauvegarde automatiquement à chaque
+// page, donc il consomme bien plus qu'une signature d'uniforme. Partager le
+// compteur ferait qu'un candidat qui répond vite bloquerait quelqu'un d'autre en
+// train de signer un formulaire. Assez haut pour une passation normale, assez
+// bas pour rendre coûteuse l'énumération de jetons.
+export const questionnaireLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Trop de requêtes. Réessayez dans une minute.',
+  skip: skipInTests,
+});
+
 // 10 req / minute / IP sur le téléversement public de vidéo. Chaque appel
 // touche l'API GHL (validation du contact) et peut émettre une URL présignée
 // vers R2 : deux ressources qu'on ne veut pas voir marteler. Assez large pour
