@@ -18,7 +18,11 @@
  */
 import * as fs from 'fs';
 import { prisma } from '../config/database';
-import { postalToFSA, resolvePostalCoordinates } from '../services/cityGeocode.service';
+import {
+  postalToFSA,
+  prefersCityOverFSA,
+  resolvePostalCoordinates,
+} from '../services/cityGeocode.service';
 import {
   canonicalCity,
   normalizeCityKey,
@@ -28,8 +32,15 @@ import { haversineKm } from '../utils/geo';
 import { quebecCitiesCoordinates } from '../data/quebecCities';
 
 const OUT_CSV = 'ville-vs-code-postal-review.csv'; // suffixe -review.csv → gitignoré (PII)
+
+/**
+ * Base des liens vers les fiches. Volontairement PAS FRONTEND_URL : en local
+ * cette variable vaut http://localhost:5183, et le CSV part aux RH — un lien
+ * localhost n'ouvre rien chez eux. On vise la prod par défaut ; FICHE_BASE_URL
+ * permet de viser un autre environnement en connaissance de cause.
+ */
 const FRONTEND =
-  process.env.FRONTEND_URL ||
+  process.env.FICHE_BASE_URL ||
   'https://talentsecure-frontend-572017163659.northamerica-northeast1.run.app';
 
 /**
@@ -76,6 +87,12 @@ function conflictOf(r: {
   if (province && province !== 'QC') {
     return { reason: `code postal de ${province}, hors Québec`, distanceKm: null };
   }
+
+  // Secteur dont la ville l'emporte de toute façon (FSA rurale, ou centroïde
+  // cassé) : la fiche N'EST PAS placée par ce centroïde, donc l'écart ne prouve
+  // aucune contradiction. Un village de la FSA J0K est normalement à 90 km du
+  // centroïde de sa FSA — et il est déjà épinglé sur son village, pas là.
+  if (prefersCityOverFSA(r.postalCode)) return null;
 
   const postal = resolvePostalCoordinates(r.postalCode);
   const center = cityCenter.get(normalizeCityKey(r.city));
