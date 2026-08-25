@@ -296,7 +296,11 @@ function report(rows: Row[], pins: Map<string, PinInfo>): void {
   console.log(`\n   ${mixed.length} épingle(s) portent des villes différentes.\n`);
   for (const g of mixed.slice(0, 20)) {
     const info = pins.get(g.k);
-    console.log(`   📍 ${g.k.replace('|', ', ')} — lieu réel : ${info?.place ?? '?'} (${g.rs.length} fiches)`);
+    // On reconstruit les coordonnées depuis les composantes plutôt que de
+    // remplacer le séparateur dans la clé : plus lisible, et pas de doute sur
+    // le nombre d'occurrences remplacées.
+    const [latS, lngS] = g.k.split('|');
+    console.log(`   📍 ${latS}, ${lngS} — lieu réel : ${info?.place ?? '?'} (${g.rs.length} fiches)`);
     const counts = new Map<string, number>();
     for (const r of g.rs) counts.set(r.canonical || '(vide)', (counts.get(r.canonical || '(vide)') ?? 0) + 1);
     for (const [c, n] of [...counts.entries()].sort((a, b) => b[1] - a[1])) {

@@ -343,30 +343,42 @@ export function isRuralFSA(postalCode?: string | null): boolean {
 }
 
 /**
- * FSA « urbaines » (2ᵉ caractère ≠ 0) dont le centroïde GeoNames est inutilisable :
- * soit il tombe hors de la municipalité desservie, soit la FSA couvre plusieurs
- * municipalités éloignées. Le test du « 0 » ne les attrape donc pas, alors qu'elles
- * ont exactement le même défaut qu'une FSA rurale.
+ * FSA « urbaines » (2ᵉ caractère ≠ 0) dont le centroïde GeoNames est CASSÉ : il
+ * tombe dans un lac ou une forêt inhabitée, à des dizaines de kilomètres de la
+ * municipalité desservie. Le test du « 0 » ne les attrape pas, alors qu'elles ont
+ * exactement le même défaut qu'une FSA rurale.
  *
  * Constaté par géocodage INVERSE de chaque épingle (audit du 2026-08-25,
- * src/scripts/audit-pins-people.ts) — c'est-à-dire en demandant ce qui se trouve
- * RÉELLEMENT à ces coordonnées, pas en supposant :
+ * src/scripts/audit-pins-people.ts) — en demandant ce qui se trouve RÉELLEMENT à
+ * ces coordonnées, pas en supposant :
  *
- *   H8P  LaSalle          → rive sud, Kahnawake        (le fleuve entre les deux)
- *   H8R  LaSalle          → rive sud, Kahnawake        (idem, 27 fiches au total)
- *   G4R  Sept-Îles        → Lac-Walker                 87 km, en pleine forêt
+ *   G4R  Sept-Îles        → Lac-Walker                 87 km, pleine forêt
  *   J5K  Mascouche        → Saint-Colomban             41 km
  *   G3L  Saint-Raymond    → Lac-Blanc                  39 km
  *   G7X  Jonquière        → Lac-Ministuk               27 km, réserve faunique
- *   J8V  Gatineau         → Cantley                    12 km, autre municipalité
  *
  * On ne corrige PAS les coordonnées à la main : aucune source publique fiable de
  * centroïdes FSA n'est accessible ici (Nominatim ne couvre pas les codes postaux
  * canadiens), et inventer un point serait pire que le problème. On applique le
  * remède déjà éprouvé pour les FSA rurales : la ville écrite prime, le centroïde
  * ne sert plus que de dernier recours si la ville ne résout pas.
+ *
+ * ── Trois FSA volontairement ABSENTES de cette liste ────────────────────────
+ * H8P et H8R (LaSalle) et J8V (Gatineau) ont AUSSI un centroïde hors de leur
+ * municipalité — les deux premiers tombent même sur la rive sud, à Kahnawake,
+ * avec le fleuve entre les deux. Mais l'écart est petit, et le remède serait
+ * pire que le mal. Mesuré pour quelqu'un qui habite vraiment LaSalle :
+ *
+ *   centroïde H8R actuel (rive sud) ........... 4,0 km  ← l'épingle a l'air fausse
+ *   repli sur la ville écrite « Montréal » ..... 9,2 km  ← mais elle est PLUS loin
+ *
+ * 22 des 27 fiches concernées écrivent « Montréal » (LaSalle est un arrondissement),
+ * donc le repli les enverrait au centre-ville, deux fois plus loin de chez elles.
+ * La carte sert à mesurer une distance, pas à afficher le bon nom de municipalité :
+ * on garde le centroïde. À revoir le jour où on disposera de vrais centroïdes FSA
+ * (fichier de limites de Statistique Canada).
  */
-const UNRELIABLE_FSA_CENTROIDS = new Set(['H8P', 'H8R', 'G3L', 'G4R', 'G7X', 'J5K', 'J8V']);
+const UNRELIABLE_FSA_CENTROIDS = new Set(['G3L', 'G4R', 'G7X', 'J5K']);
 
 /**
  * Vrai quand le centre de la VILLE est un meilleur repère que le centroïde du

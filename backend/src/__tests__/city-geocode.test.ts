@@ -174,31 +174,50 @@ describe('resolveProspectCoordinates ne produit JAMAIS de précision « adresse 
   });
 });
 
-describe('FSA urbaines au centroïde faux — la ville l’emporte quand même', () => {
-  // Constaté par géocodage inverse le 2026-08-25 : le centroïde GeoNames de H8R
-  // tombe sur la RIVE SUD (Kahnawake), pas à LaSalle. 27 fiches se retrouvaient
-  // de l'autre côté du fleuve. Le test du « 2ᵉ caractère = 0 » ne l'attrape pas :
-  // H8R est une FSA urbaine.
-  const H8R_CENTROID = { lat: 45.3994, lng: -73.6506 }; // rive sud
-  const LASALLE = { lat: 45.4333, lng: -73.6333 }; // seed statique
+describe('FSA urbaines au centroïde CASSÉ — la ville l’emporte quand même', () => {
+  // Constaté par géocodage inverse le 2026-08-25 : le centroïde GeoNames de G4R
+  // tombe à Lac-Walker, 87 km au nord de Sept-Îles, en pleine forêt. Le test du
+  // « 2ᵉ caractère = 0 » ne l'attrape pas : G4R est une FSA urbaine.
+  const G4R_CENTROID = { lat: 50.8558, lng: -67.0511 }; // Lac-Walker
+  const SEPT_ILES = { lat: 50.2, lng: -66.3833 }; // seed statique
 
-  it('H8R + LaSalle → placé par la VILLE, du bon côté du fleuve', async () => {
-    expect(isRuralFSA('H8R 3M9')).toBe(false); // FSA « urbaine » au sens de Postes Canada
-    expect(prefersCityOverFSA('H8R 3M9')).toBe(true); // …mais son centroïde est faux
+  it('G4R + Sept-Îles → placé par la VILLE, plus dans le bois', async () => {
+    expect(isRuralFSA('G4R 2T7')).toBe(false); // FSA « urbaine » au sens de Postes Canada
+    expect(prefersCityOverFSA('G4R 2T7')).toBe(true); // …mais son centroïde est cassé
 
-    const geo = await resolveProspectCoordinates({ postalCode: 'H8R 3M9', city: 'LaSalle' });
+    const geo = await resolveProspectCoordinates({ postalCode: 'G4R 2T7', city: 'Sept-Îles' });
 
     expect(geo!.source).toBe('city');
-    expect(geo!.lat).toBeCloseTo(LASALLE.lat, 3);
-    expect(haversineKm(geo!, H8R_CENTROID)).toBeGreaterThan(3);
+    expect(geo!.lat).toBeCloseTo(SEPT_ILES.lat, 3);
+    expect(haversineKm(geo!, G4R_CENTROID)).toBeGreaterThan(50);
   });
 
-  it.each(['H8P 2S6', 'G4R 2T7', 'J5K 3C6', 'G3L 1Y1', 'G7X 9N5', 'J8V 1Z9'])(
-    '%s est marqué comme centroïde non fiable',
+  it.each(['G4R 2T7', 'J5K 3C6', 'G3L 1Y1', 'G7X 9N5'])(
+    '%s est marqué comme centroïde cassé',
     (postalCode) => {
       expect(prefersCityOverFSA(postalCode)).toBe(true);
     }
   );
+
+  // Garde-fou de la décision documentée dans UNRELIABLE_FSA_CENTROIDS : le
+  // centroïde de H8R tombe sur la rive sud, MAIS il reste à 4,0 km d'un
+  // résident de LaSalle, alors que le repli sur « Montréal » (ce qu'écrivent
+  // 22 des 27 fiches) l'enverrait à 9,2 km. On garde donc le centroïde : la
+  // carte sert à mesurer une distance, pas à afficher le bon nom de ville.
+  it.each(['H8P 2S6', 'H8R 3M9', 'J8V 1Z9'])(
+    '%s garde son centroïde : le repli sur la ville serait PLUS loin',
+    (postalCode) => {
+      expect(prefersCityOverFSA(postalCode)).toBe(false);
+    }
+  );
+
+  it('le repli « Montréal » éloignerait un résident de LaSalle', () => {
+    const LASALLE = { lat: 45.4333, lng: -73.6333 };
+    const H8R_CENTROID = { lat: 45.3994, lng: -73.6506 }; // rive sud, Kahnawake
+    const MONTREAL = { lat: 45.5017, lng: -73.5673 };
+
+    expect(haversineKm(H8R_CENTROID, LASALLE)).toBeLessThan(haversineKm(MONTREAL, LASALLE));
+  });
 
   it('une FSA urbaine SAINE garde la priorité au code postal', async () => {
     // H8N couvre aussi LaSalle et son centroïde, lui, est juste : on ne dégrade pas.
@@ -208,14 +227,14 @@ describe('FSA urbaines au centroïde faux — la ville l’emporte quand même',
     expect(geo!.source).toBe('postal');
   });
 
-  it('centroïde non fiable + ville introuvable → repli sur le centroïde (fiche jamais perdue)', async () => {
+  it('centroïde cassé + ville introuvable → repli sur le centroïde (fiche jamais perdue)', async () => {
     const geo = await resolveProspectCoordinates({
-      postalCode: 'H8R 3M9',
+      postalCode: 'G4R 2T7',
       city: 'ZzzVilleQuiNExistePas',
     });
 
     expect(geo!.source).toBe('postal');
-    expect(geo!.lat).toBeCloseTo(H8R_CENTROID.lat, 3);
+    expect(geo!.lat).toBeCloseTo(G4R_CENTROID.lat, 3);
   });
 });
 
