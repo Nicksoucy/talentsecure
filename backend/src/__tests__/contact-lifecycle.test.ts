@@ -234,5 +234,32 @@ describe('Contacts (cycle de vie) — /api/contacts', () => {
       expect(after?.isDeleted).toBe(true);
       expect(after?.deletedAt).not.toBeNull();
     });
+
+    // Un déplacement ne doit pas faire disparaître quelqu'un de la carte de
+    // destination : la position déjà calculée voyage avec la fiche. On ne
+    // re-géocode PAS — ça dégraderait une fiche placée à l'adresse exacte.
+    it('la position déjà calculée suit le contact déplacé', async () => {
+      const src = await prisma.prospectCandidate.create({
+        data: {
+          firstName: 'Geo', lastName: 'Voyage', email: 'geo.voyage@test.com',
+          phone: '5145558888', city: 'Montréal',
+          lat: 45.4712, lng: -73.6103,
+          geocodedAt: new Date('2026-08-01T12:00:00Z'),
+          geocodeSource: 'address',
+        },
+      });
+
+      const res = await request(app)
+        .post('/api/contacts/move')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ fromSection: 'prospect', fromId: src.id, toSection: 'candidate' });
+
+      expect(res.status).toBe(200);
+      const moved = await prisma.candidate.findUnique({ where: { id: res.body.data.id } });
+      expect(moved?.lat).toBeCloseTo(45.4712, 4);
+      expect(moved?.lng).toBeCloseTo(-73.6103, 4);
+      expect(moved?.geocodeSource).toBe('address'); // précision à la rue conservée
+      expect(moved?.geocodedAt).not.toBeNull();
+    });
   });
 });

@@ -15,7 +15,10 @@ jest.mock('axios', () => ({
 
 import { prisma, cleanDatabase } from './setup';
 import {
+  geocodeNominatim,
+  isGeocodableCityName,
   isRuralFSA,
+  prefersCityOverFSA,
   resolvePostalCoordinates,
   resolveProspectCoordinates,
 } from '../services/cityGeocode.service';
@@ -168,5 +171,81 @@ describe('resolveProspectCoordinates ne produit JAMAIS de précision « adresse 
     expect(geo).not.toBeNull();
     expect(['postal', 'city']).toContain(geo!.source);
     expect(geo!.source).not.toBe('address');
+  });
+});
+
+describe('FSA urbaines au centroïde faux — la ville l’emporte quand même', () => {
+  // Constaté par géocodage inverse le 2026-08-25 : le centroïde GeoNames de H8R
+  // tombe sur la RIVE SUD (Kahnawake), pas à LaSalle. 27 fiches se retrouvaient
+  // de l'autre côté du fleuve. Le test du « 2ᵉ caractère = 0 » ne l'attrape pas :
+  // H8R est une FSA urbaine.
+  const H8R_CENTROID = { lat: 45.3994, lng: -73.6506 }; // rive sud
+  const LASALLE = { lat: 45.4333, lng: -73.6333 }; // seed statique
+
+  it('H8R + LaSalle → placé par la VILLE, du bon côté du fleuve', async () => {
+    expect(isRuralFSA('H8R 3M9')).toBe(false); // FSA « urbaine » au sens de Postes Canada
+    expect(prefersCityOverFSA('H8R 3M9')).toBe(true); // …mais son centroïde est faux
+
+    const geo = await resolveProspectCoordinates({ postalCode: 'H8R 3M9', city: 'LaSalle' });
+
+    expect(geo!.source).toBe('city');
+    expect(geo!.lat).toBeCloseTo(LASALLE.lat, 3);
+    expect(haversineKm(geo!, H8R_CENTROID)).toBeGreaterThan(3);
+  });
+
+  it.each(['H8P 2S6', 'G4R 2T7', 'J5K 3C6', 'G3L 1Y1', 'G7X 9N5', 'J8V 1Z9'])(
+    '%s est marqué comme centroïde non fiable',
+    (postalCode) => {
+      expect(prefersCityOverFSA(postalCode)).toBe(true);
+    }
+  );
+
+  it('une FSA urbaine SAINE garde la priorité au code postal', async () => {
+    // H8N couvre aussi LaSalle et son centroïde, lui, est juste : on ne dégrade pas.
+    expect(prefersCityOverFSA('H8N 1A1')).toBe(false);
+
+    const geo = await resolveProspectCoordinates({ postalCode: 'H8N 1A1', city: 'LaSalle' });
+    expect(geo!.source).toBe('postal');
+  });
+
+  it('centroïde non fiable + ville introuvable → repli sur le centroïde (fiche jamais perdue)', async () => {
+    const geo = await resolveProspectCoordinates({
+      postalCode: 'H8R 3M9',
+      city: 'ZzzVilleQuiNExistePas',
+    });
+
+    expect(geo!.source).toBe('postal');
+    expect(geo!.lat).toBeCloseTo(H8R_CENTROID.lat, 3);
+  });
+});
+
+describe('Un nom de ville trop court n’est jamais géocodé', () => {
+  // « QC » avait été résolu par Nominatim en plein Eeyou Istchee Baie-James
+  // (51.70, -76.81), à ~700 km de Montréal, puis MÉMORISÉ dans city_geocodes :
+  // trois candidats y ont été épinglés et toute fiche suivante aurait suivi.
+  it.each(['QC', 'Qc', 'qc', 'M', 'm', ' M ', ''])('« %s » est refusé', (city) => {
+    expect(isGeocodableCityName(city)).toBe(false);
+  });
+
+  it.each(['Laval', 'Québec', 'LaSalle', 'Gatineau'])('« %s » reste géocodable', (city) => {
+    expect(isGeocodableCityName(city)).toBe(true);
+  });
+
+  it('geocodeNominatim ne fait AUCUN appel réseau pour « QC »', async () => {
+    const axios = require('axios').default;
+    axios.get.mockClear();
+
+    await expect(geocodeNominatim('QC')).resolves.toBeNull();
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  it('ville « QC » sans code postal → aucune coordonnée, plutôt qu’un point à 700 km', async () => {
+    const geo = await resolveProspectCoordinates({ postalCode: null, city: 'QC' });
+    expect(geo).toBeNull();
+  });
+
+  it('ville « QC » AVEC code postal → placé par le code postal', async () => {
+    const geo = await resolveProspectCoordinates({ postalCode: 'H1T 2K5', city: 'QC' });
+    expect(geo!.source).toBe('postal');
   });
 });

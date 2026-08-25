@@ -4,6 +4,19 @@ import logger from '../config/logger';
 import { ApiError } from '../utils/apiError';
 
 /**
+ * Position déjà calculée du candidat, reprise telle quelle sur le prospect
+ * re-créé. Sans ça la fiche ressort de la re-conversion sans coordonnées et
+ * disparaît de la carte des Candidats Potentiels ; et re-géocoder dégraderait
+ * une fiche placée à l'adresse exacte (source 'address').
+ */
+const geoOf = (c: {
+  lat: number | null;
+  lng: number | null;
+  geocodedAt: Date | null;
+  geocodeSource: string | null;
+}) => ({ lat: c.lat, lng: c.lng, geocodedAt: c.geocodedAt, geocodeSource: c.geocodeSource });
+
+/**
  * ADMIN ONLY: Re-convertir les candidats auto-convertis en prospects
  *
  * Cette fonction identifie et re-convertit en prospects tous les candidats
@@ -93,6 +106,7 @@ export const revertAutoConvertedCandidates = async (
               isContacted: false,
               isConverted: false,
               notes: `Re-créé depuis candidat auto-converti (ID original: ${candidate.id})`,
+              ...geoOf(candidate),
             },
           });
           // Visible pour les candidats suivants (évite les doublons même contact).
@@ -230,6 +244,7 @@ export const revertSingleCandidateToProspect = async (
           isContacted: false,
           isConverted: false,
           notes: `Re-créé depuis candidat (ID: ${candidate.id})\nRaison: Re-conversion manuelle par admin`,
+          ...geoOf(candidate),
         },
       });
       prospectId = newProspect.id;
@@ -392,6 +407,7 @@ export const revertBatchCandidatesToProspects = async (
               isContacted: false,
               isConverted: false,
               notes: `Re-créé depuis candidat (ID: ${candidate.id})\nRaison: Re-conversion batch par admin`,
+              ...geoOf(candidate),
             },
           });
           prospectId = newProspect.id;
