@@ -86,6 +86,107 @@ describe('agendrixImport — parseAgendrixAddress', () => {
     });
   });
 
+  // Agents région d'Ottawa : un token de province (« ON », « QUE », « Ontario »)
+  // ne doit JAMAIS devenir la ville — chaînes RÉELLES tirées de la prod.
+  it('« ville, ON » : code de province écarté, vraie ville gardée, province = ON', () => {
+    expect(parseAgendrixAddress('555 Aglish Mews, Ottawa, ON')).toEqual({
+      address: '555 Aglish Mews',
+      city: 'Ottawa',
+      province: 'ON',
+      postalCode: null,
+    });
+  });
+
+  it('ville hors-Québec absente du seed extraite quand même (Gloucester, ON)', () => {
+    expect(parseAgendrixAddress('1444 Rainbow Crescent b, Gloucester, ON')).toEqual({
+      address: '1444 Rainbow Crescent b',
+      city: 'Gloucester',
+      province: 'ON',
+      postalCode: null,
+    });
+  });
+
+  it('token « On » isolé → city null (JAMAIS « On »), province ON', () => {
+    // Chaîne réelle (employé Tadjo) : ville collée « Gloucester » non délimitée →
+    // non extractible, mais surtout « On » n'atterrit pas dans city.
+    expect(parseAgendrixAddress('2017 Jasmine Crescent #203 Gloucester, On')).toEqual({
+      address: '2017 Jasmine Crescent #203 Gloucester',
+      city: null,
+      province: 'ON',
+      postalCode: null,
+    });
+  });
+
+  it('même chaîne SANS token de province → city null, province QC (jamais un code)', () => {
+    expect(parseAgendrixAddress('2017 Jasmine Crescent #203 Gloucester')).toEqual({
+      address: '2017 Jasmine Crescent #203 Gloucester',
+      city: null,
+      province: 'QC',
+      postalCode: null,
+    });
+  });
+
+  it('« QUE » écarté, ville gardée, province via code postal (Saint-Laurent)', () => {
+    expect(parseAgendrixAddress('308-250 Boul. Thompson, Saint-Laurent, QUE H4N 1C1')).toEqual({
+      address: '308-250 Boul. Thompson',
+      city: 'Saint-Laurent',
+      province: 'QC',
+      postalCode: 'H4N 1C1',
+    });
+  });
+
+  it('« QUE » écarté sans code postal → province QC par défaut (Longueuil)', () => {
+    expect(parseAgendrixAddress('10-1051 joliette, Longueuil, QUE')).toEqual({
+      address: '10-1051 joliette',
+      city: 'Longueuil',
+      province: 'QC',
+      postalCode: null,
+    });
+  });
+
+  it('province collée à la ville hors-Québec (« Ottawa ON »)', () => {
+    expect(parseAgendrixAddress('100 Metcalfe, Ottawa ON')).toEqual({
+      address: '100 Metcalfe',
+      city: 'Ottawa',
+      province: 'ON',
+      postalCode: null,
+    });
+  });
+
+  it('code pays « CA » écarté comme « Canada » → vraie ville gardée (Mascouche)', () => {
+    expect(parseAgendrixAddress('817 Rue Turenne, Mascouche, CA')).toEqual({
+      address: '817 Rue Turenne',
+      city: 'Mascouche',
+      province: 'QC',
+      postalCode: null,
+    });
+  });
+
+  it('piège « Rue Ontario » : « Ontario » reste dans la rue, pas retiré comme province', () => {
+    expect(parseAgendrixAddress('1234 Rue Ontario, Montréal, QC')).toEqual({
+      address: '1234 Rue Ontario',
+      city: 'Montréal',
+      province: 'QC',
+      postalCode: null,
+    });
+    // Sans virgule et sans ville reconnue : la rue est conservée INTACTE, province QC.
+    expect(parseAgendrixAddress('1234 Rue Ontario')).toEqual({
+      address: '1234 Rue Ontario',
+      city: null,
+      province: 'QC',
+      postalCode: null,
+    });
+  });
+
+  it('token de province seul (« ON ») → city null, province ON', () => {
+    expect(parseAgendrixAddress('ON')).toEqual({
+      address: null,
+      city: null,
+      province: 'ON',
+      postalCode: null,
+    });
+  });
+
   it('vide / null → tout null, province QC par défaut', () => {
     expect(parseAgendrixAddress('')).toEqual({ address: null, city: null, province: 'QC', postalCode: null });
     expect(parseAgendrixAddress(null)).toEqual({ address: null, city: null, province: 'QC', postalCode: null });
