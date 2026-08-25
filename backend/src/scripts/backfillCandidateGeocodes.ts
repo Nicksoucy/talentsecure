@@ -9,6 +9,8 @@
  *   npx ts-node src/scripts/backfillCandidateGeocodes.ts                 # non géocodés seulement (écrit)
  *   npx ts-node src/scripts/backfillCandidateGeocodes.ts --all           # recalcul complet — DRY-RUN
  *   npx ts-node src/scripts/backfillCandidateGeocodes.ts --all --apply   # recalcul complet — ÉCRIT
+ *   …            --repin-city-first           # seulement les FSA « ville d'abord » — DRY-RUN
+ *   …            --repin-city-first --apply   # …et écrit
  *
  * --all réécrit lat/lng de TOUTE la table : DRY-RUN par défaut, --apply pour écrire.
  *
@@ -16,17 +18,24 @@
  * Nominatim en arrière-plan (city_geocodes) ; un second passage la placera.
  */
 import { prisma } from '../config/database';
-import { resolveProspectCoordinates } from '../services/cityGeocode.service';
+import { prefersCityOverFSA, resolveProspectCoordinates } from '../services/cityGeocode.service';
 import logger from '../config/logger';
 import { classify, printAuditReport, GeocodeDelta } from './lib/geocodeAudit';
 
 async function main() {
   const recomputeAll = process.argv.includes('--all');
-  // Le recalcul complet est destructif : dry-run tant que --apply n'est pas donné.
-  const dryRun = process.argv.includes('--dry-run') || (recomputeAll && !process.argv.includes('--apply'));
+  // Recalcul CIBLÉ : uniquement les fiches dont le secteur postal a perdu la
+  // priorité au profit de la ville (FSA rurale, ou FSA urbaine au centroïde
+  // faux — cf. UNRELIABLE_FSA_CENTROIDS). Sert à rejouer un changement de
+  // règle sans réécrire toute la table comme le ferait --all.
+  const repinCityFirst = process.argv.includes('--repin-city-first');
+  // Toute réécriture de fiches DÉJÀ placées est destructive : dry-run tant que
+  // --apply n'est pas donné.
+  const rewrites = recomputeAll || repinCityFirst;
+  const dryRun = process.argv.includes('--dry-run') || (rewrites && !process.argv.includes('--apply'));
 
   const where: any = { isDeleted: false };
-  if (!recomputeAll) {
+  if (!rewrites) {
     where.lat = null; // uniquement les candidats pas encore placés
   } else {
     // NE JAMAIS écraser une position à la RUE : resolveProspectCoordinates ne
@@ -49,12 +58,17 @@ async function main() {
     },
   });
 
+  // Le filtre « ville d'abord » se fait en JS : le code postal saisi varie en
+  // casse et en espacement (« J7v4m9 », « H7 N2N1 »), ce qu'un startsWith SQL
+  // ne rattraperait pas. Les tables sont petites, le coût est négligeable.
+  const selection = repinCityFirst ? candidates.filter((r) => prefersCityOverFSA(r.postalCode)) : candidates;
+
   let postal = 0;
   let city = 0;
   let unresolved = 0;
   const deltas: GeocodeDelta[] = [];
 
-  for (const c of candidates) {
+  for (const c of selection) {
     const geo = await resolveProspectCoordinates({ postalCode: c.postalCode, city: c.city });
 
     const before = c.lat != null && c.lng != null ? { lat: c.lat, lng: c.lng, source: c.geocodeSource } : null;
@@ -94,14 +108,19 @@ async function main() {
   }
   if (dryRun) return;
 
-  const total = candidates.length;
+  const total = selection.length;
   const placed = postal + city;
   const pct = total ? Math.round((placed / total) * 100) : 0;
   logger.info(
     `[backfill-geocode-candidats] ${total} traité(s) — ${placed} placés (${postal} code postal, ${city} ville), ${unresolved} non résolus.`
   );
   console.log('\n=== Backfill géocodage des candidats ===');
-  console.log(`Mode         : ${recomputeAll ? 'recalcul complet (--all)' : 'non géocodés seulement'}`);
+  const mode = recomputeAll
+    ? 'recalcul complet (--all)'
+    : repinCityFirst
+      ? 'FSA « ville d’abord » seulement (--repin-city-first)'
+      : 'non géocodés seulement';
+  console.log(`Mode         : ${mode}`);
   console.log(`Traités      : ${total}`);
   console.log(`Placés       : ${placed}  (${pct}%)`);
   console.log(`  - code postal : ${postal}`);

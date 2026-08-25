@@ -15,7 +15,10 @@ jest.mock('axios', () => ({
 
 import { prisma, cleanDatabase } from './setup';
 import {
+  geocodeNominatim,
+  isGeocodableCityName,
   isRuralFSA,
+  prefersCityOverFSA,
   resolvePostalCoordinates,
   resolveProspectCoordinates,
 } from '../services/cityGeocode.service';
@@ -168,5 +171,100 @@ describe('resolveProspectCoordinates ne produit JAMAIS de précision « adresse 
     expect(geo).not.toBeNull();
     expect(['postal', 'city']).toContain(geo!.source);
     expect(geo!.source).not.toBe('address');
+  });
+});
+
+describe('FSA urbaines au centroïde CASSÉ — la ville l’emporte quand même', () => {
+  // Constaté par géocodage inverse le 2026-08-25 : le centroïde GeoNames de G4R
+  // tombe à Lac-Walker, 87 km au nord de Sept-Îles, en pleine forêt. Le test du
+  // « 2ᵉ caractère = 0 » ne l'attrape pas : G4R est une FSA urbaine.
+  const G4R_CENTROID = { lat: 50.8558, lng: -67.0511 }; // Lac-Walker
+  const SEPT_ILES = { lat: 50.2, lng: -66.3833 }; // seed statique
+
+  it('G4R + Sept-Îles → placé par la VILLE, plus dans le bois', async () => {
+    expect(isRuralFSA('G4R 2T7')).toBe(false); // FSA « urbaine » au sens de Postes Canada
+    expect(prefersCityOverFSA('G4R 2T7')).toBe(true); // …mais son centroïde est cassé
+
+    const geo = await resolveProspectCoordinates({ postalCode: 'G4R 2T7', city: 'Sept-Îles' });
+
+    expect(geo!.source).toBe('city');
+    expect(geo!.lat).toBeCloseTo(SEPT_ILES.lat, 3);
+    expect(haversineKm(geo!, G4R_CENTROID)).toBeGreaterThan(50);
+  });
+
+  it.each(['G4R 2T7', 'J5K 3C6', 'G3L 1Y1', 'G7X 9N5'])(
+    '%s est marqué comme centroïde cassé',
+    (postalCode) => {
+      expect(prefersCityOverFSA(postalCode)).toBe(true);
+    }
+  );
+
+  // Garde-fou de la décision documentée dans UNRELIABLE_FSA_CENTROIDS : le
+  // centroïde de H8R tombe sur la rive sud, MAIS il reste à 4,0 km d'un
+  // résident de LaSalle, alors que le repli sur « Montréal » (ce qu'écrivent
+  // 22 des 27 fiches) l'enverrait à 9,2 km. On garde donc le centroïde : la
+  // carte sert à mesurer une distance, pas à afficher le bon nom de ville.
+  it.each(['H8P 2S6', 'H8R 3M9', 'J8V 1Z9'])(
+    '%s garde son centroïde : le repli sur la ville serait PLUS loin',
+    (postalCode) => {
+      expect(prefersCityOverFSA(postalCode)).toBe(false);
+    }
+  );
+
+  it('le repli « Montréal » éloignerait un résident de LaSalle', () => {
+    const LASALLE = { lat: 45.4333, lng: -73.6333 };
+    const H8R_CENTROID = { lat: 45.3994, lng: -73.6506 }; // rive sud, Kahnawake
+    const MONTREAL = { lat: 45.5017, lng: -73.5673 };
+
+    expect(haversineKm(H8R_CENTROID, LASALLE)).toBeLessThan(haversineKm(MONTREAL, LASALLE));
+  });
+
+  it('une FSA urbaine SAINE garde la priorité au code postal', async () => {
+    // H8N couvre aussi LaSalle et son centroïde, lui, est juste : on ne dégrade pas.
+    expect(prefersCityOverFSA('H8N 1A1')).toBe(false);
+
+    const geo = await resolveProspectCoordinates({ postalCode: 'H8N 1A1', city: 'LaSalle' });
+    expect(geo!.source).toBe('postal');
+  });
+
+  it('centroïde cassé + ville introuvable → repli sur le centroïde (fiche jamais perdue)', async () => {
+    const geo = await resolveProspectCoordinates({
+      postalCode: 'G4R 2T7',
+      city: 'ZzzVilleQuiNExistePas',
+    });
+
+    expect(geo!.source).toBe('postal');
+    expect(geo!.lat).toBeCloseTo(G4R_CENTROID.lat, 3);
+  });
+});
+
+describe('Un nom de ville trop court n’est jamais géocodé', () => {
+  // « QC » avait été résolu par Nominatim en plein Eeyou Istchee Baie-James
+  // (51.70, -76.81), à ~700 km de Montréal, puis MÉMORISÉ dans city_geocodes :
+  // trois candidats y ont été épinglés et toute fiche suivante aurait suivi.
+  it.each(['QC', 'Qc', 'qc', 'M', 'm', ' M ', ''])('« %s » est refusé', (city) => {
+    expect(isGeocodableCityName(city)).toBe(false);
+  });
+
+  it.each(['Laval', 'Québec', 'LaSalle', 'Gatineau'])('« %s » reste géocodable', (city) => {
+    expect(isGeocodableCityName(city)).toBe(true);
+  });
+
+  it('geocodeNominatim ne fait AUCUN appel réseau pour « QC »', async () => {
+    const axios = require('axios').default;
+    axios.get.mockClear();
+
+    await expect(geocodeNominatim('QC')).resolves.toBeNull();
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  it('ville « QC » sans code postal → aucune coordonnée, plutôt qu’un point à 700 km', async () => {
+    const geo = await resolveProspectCoordinates({ postalCode: null, city: 'QC' });
+    expect(geo).toBeNull();
+  });
+
+  it('ville « QC » AVEC code postal → placé par le code postal', async () => {
+    const geo = await resolveProspectCoordinates({ postalCode: 'H1T 2K5', city: 'QC' });
+    expect(geo!.source).toBe('postal');
   });
 });

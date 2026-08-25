@@ -105,6 +105,24 @@ export function isInQuebecBounds(lat: number, lng: number): boolean {
 }
 
 /**
+ * Longueur minimale d'un nom de ville qu'on accepte de géocoder.
+ *
+ * Raison d'être : les formulaires reçoivent régulièrement une abréviation de
+ * PROVINCE dans le champ Ville (« QC », « Qc ») ou une frappe accidentelle
+ * (« M »). Nominatim, lui, répond toujours quelque chose — « QC » a été résolu
+ * en plein territoire d'Eeyou Istchee Baie-James, à ~700 km de Montréal, et
+ * trois candidats y ont été épinglés. Pire : la réponse est mémorisée dans
+ * city_geocodes, donc chaque fiche suivante héritait du même point.
+ * Aucune municipalité du Québec n'a un nom de moins de trois lettres.
+ */
+const MIN_CITY_NAME_LENGTH = 3;
+
+/** Vrai si la chaîne peut raisonnablement désigner une municipalité. */
+export function isGeocodableCityName(city?: string | null): boolean {
+  return normalizeCityKey(city).length >= MIN_CITY_NAME_LENGTH;
+}
+
+/**
  * Géocode une ville en requête STRUCTURÉE limitée au QUÉBEC (city + state=Québec
  * + country=Canada). Ne renvoie un résultat que s'il existe une ville de ce nom
  * AU QUÉBEC ; sinon null (villes étrangères ou hors-QC → non placées).
@@ -112,6 +130,7 @@ export function isInQuebecBounds(lat: number, lng: number): boolean {
 export async function geocodeNominatim(
   city: string
 ): Promise<{ lat: number; lng: number } | null> {
+  if (!isGeocodableCityName(city)) return null; // « QC », « M »… → jamais de requête
   const hit = await nominatimSearch({ city, state: 'Québec', country: 'Canada' });
   if (!hit || !hit.lat || !hit.lon) return null;
   if (hit.class && !PLACE_CLASSES.has(hit.class)) return null; // pas une rue
@@ -248,7 +267,10 @@ export async function resolveCityCoordinates(
   // 1) Seed statique
   for (const city of cities) {
     const key = normalizeCityKey(city);
-    if (!key) {
+    // Vide, ou trop court pour être une municipalité (« QC », « M ») : non placé,
+    // et surtout PAS mis en file de géocodage — sinon Nominatim invente une
+    // réponse qu'on mémoriserait pour toutes les fiches suivantes.
+    if (key.length < MIN_CITY_NAME_LENGTH) {
       result.set(city, { lat: null, lng: null });
       continue;
     }
@@ -320,6 +342,54 @@ export function isRuralFSA(postalCode?: string | null): boolean {
   return !!fsa && fsa[1] === '0';
 }
 
+/**
+ * FSA « urbaines » (2ᵉ caractère ≠ 0) dont le centroïde GeoNames est CASSÉ : il
+ * tombe dans un lac ou une forêt inhabitée, à des dizaines de kilomètres de la
+ * municipalité desservie. Le test du « 0 » ne les attrape pas, alors qu'elles ont
+ * exactement le même défaut qu'une FSA rurale.
+ *
+ * Constaté par géocodage INVERSE de chaque épingle (audit du 2026-08-25,
+ * src/scripts/audit-pins-people.ts) — en demandant ce qui se trouve RÉELLEMENT à
+ * ces coordonnées, pas en supposant :
+ *
+ *   G4R  Sept-Îles        → Lac-Walker                 87 km, pleine forêt
+ *   J5K  Mascouche        → Saint-Colomban             41 km
+ *   G3L  Saint-Raymond    → Lac-Blanc                  39 km
+ *   G7X  Jonquière        → Lac-Ministuk               27 km, réserve faunique
+ *
+ * On ne corrige PAS les coordonnées à la main : aucune source publique fiable de
+ * centroïdes FSA n'est accessible ici (Nominatim ne couvre pas les codes postaux
+ * canadiens), et inventer un point serait pire que le problème. On applique le
+ * remède déjà éprouvé pour les FSA rurales : la ville écrite prime, le centroïde
+ * ne sert plus que de dernier recours si la ville ne résout pas.
+ *
+ * ── Trois FSA volontairement ABSENTES de cette liste ────────────────────────
+ * H8P et H8R (LaSalle) et J8V (Gatineau) ont AUSSI un centroïde hors de leur
+ * municipalité — les deux premiers tombent même sur la rive sud, à Kahnawake,
+ * avec le fleuve entre les deux. Mais l'écart est petit, et le remède serait
+ * pire que le mal. Mesuré pour quelqu'un qui habite vraiment LaSalle :
+ *
+ *   centroïde H8R actuel (rive sud) ........... 4,0 km  ← l'épingle a l'air fausse
+ *   repli sur la ville écrite « Montréal » ..... 9,2 km  ← mais elle est PLUS loin
+ *
+ * 22 des 27 fiches concernées écrivent « Montréal » (LaSalle est un arrondissement),
+ * donc le repli les enverrait au centre-ville, deux fois plus loin de chez elles.
+ * La carte sert à mesurer une distance, pas à afficher le bon nom de municipalité :
+ * on garde le centroïde. À revoir le jour où on disposera de vrais centroïdes FSA
+ * (fichier de limites de Statistique Canada).
+ */
+const UNRELIABLE_FSA_CENTROIDS = new Set(['G3L', 'G4R', 'G7X', 'J5K']);
+
+/**
+ * Vrai quand le centre de la VILLE est un meilleur repère que le centroïde du
+ * secteur postal : FSA rurale, ou FSA urbaine dont le centroïde est faux.
+ */
+export function prefersCityOverFSA(postalCode?: string | null): boolean {
+  const fsa = postalToFSA(postalCode);
+  if (!fsa) return false;
+  return fsa[1] === '0' || UNRELIABLE_FSA_CENTROIDS.has(fsa);
+}
+
 /** Coordonnées du centroïde FSA d'un code postal (offline, QC), sinon null. */
 export function resolvePostalCoordinates(
   postalCode?: string | null
@@ -347,10 +417,11 @@ export async function resolveProspectCoordinates(input: {
   postalCode?: string | null;
   city?: string | null;
 }): Promise<ProspectGeocode | null> {
-  const rural = isRuralFSA(input.postalCode);
+  const cityFirst = prefersCityOverFSA(input.postalCode);
 
-  // FSA URBAINE : le secteur postal (quelques km²) bat le centre-ville.
-  if (!rural) {
+  // FSA URBAINE au centroïde fiable : le secteur postal (quelques km²) bat le
+  // centre-ville.
+  if (!cityFirst) {
     const byPostal = resolvePostalCoordinates(input.postalCode);
     if (byPostal) return { ...byPostal, source: 'postal' };
   }
@@ -363,9 +434,9 @@ export async function resolveProspectCoordinates(input: {
     }
   }
 
-  // FSA RURALE dont la ville n'a pas résolu : le centroïde de secteur reste le
-  // meilleur repli — grossier, mais dans la bonne région.
-  if (rural) {
+  // Ville non résolue : le centroïde de secteur reste le meilleur repli —
+  // grossier, mais dans la bonne région, et toujours mieux que « non placé ».
+  if (cityFirst) {
     const byPostal = resolvePostalCoordinates(input.postalCode);
     if (byPostal) return { ...byPostal, source: 'postal' };
   }

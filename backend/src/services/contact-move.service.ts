@@ -31,6 +31,20 @@ interface Normalized {
   notes: string | null;
   surveyAnswers: any;
   availability: AvailabilityFlags;
+  geo: GeoCarryOver;
+}
+
+/**
+ * Position déjà calculée de la source. Les 3 tables portent les mêmes 4 colonnes,
+ * donc on la transporte telle quelle : re-géocoder dégraderait une fiche placée à
+ * l'adresse exacte (source 'address'), et ne rien transporter la ferait disparaître
+ * de la carte de destination.
+ */
+interface GeoCarryOver {
+  lat: number | null;
+  lng: number | null;
+  geocodedAt: Date | null;
+  geocodeSource: string | null;
 }
 
 function normalize(r: any): Normalized {
@@ -56,6 +70,12 @@ function normalize(r: any): Normalized {
     // Disponibilités : candidats ET prospects portent les mêmes 5 colonnes, on
     // les transporte donc telles quelles. (Employee n'a pas la notion.)
     availability: normalizeAvailability(r),
+    geo: {
+      lat: r.lat ?? null,
+      lng: r.lng ?? null,
+      geocodedAt: r.geocodedAt ?? null,
+      geocodeSource: r.geocodeSource ?? null,
+    },
   };
 }
 
@@ -117,6 +137,7 @@ export async function moveContact(opts: {
           videoUploadedAt: n.videoUploadedAt,
           hrNotes: n.notes,
           ...n.availability,
+          ...n.geo,
           createdById,
         },
         select: { id: true, firstName: true, lastName: true },
@@ -164,6 +185,7 @@ export async function moveContact(opts: {
           isContacted: false,
           isConverted: false,
           ...n.availability,
+          ...n.geo,
         },
         select: { id: true, firstName: true, lastName: true },
       });
@@ -187,6 +209,7 @@ export async function moveContact(opts: {
           videoUrl: n.videoUrl,
           videoStoragePath: n.videoStoragePath,
           notes: n.notes,
+          ...n.geo,
           convertedFromCandidateId: fromSection === 'candidate' ? fromId : null,
         },
         select: { id: true, firstName: true, lastName: true },

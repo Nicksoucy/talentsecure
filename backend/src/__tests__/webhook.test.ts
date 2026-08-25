@@ -24,7 +24,8 @@ import { prisma, cleanDatabase } from './setup';
  * Services externes MOCKÉS (zéro réseau réel) :
  *  - ../services/survey-sync.service  (API GHL : findSubmissionByContact / syncOneSubmission)
  *  - ../utils/ghlFetch + ../services/r2.service (téléchargement vidéo + R2),
- *    chargés en `require()` paresseux dans le contrôleur seulement si video_url.
+ *    chargés en `require()` paresseux dans le contrôleur seulement si video_url ;
+ *  - axios (Nominatim) : le géocodage à la création ne doit jamais sortir en CI.
  */
 
 // Le secret DOIT être en place AVANT que le contrôleur ne le lise (à la requête).
@@ -32,6 +33,14 @@ const WEBHOOK_SECRET = 'test-webhook-secret-value-123';
 process.env.GOHIGHLEVEL_WEBHOOK_SECRET = WEBHOOK_SECRET;
 
 // Mocks des services externes — déclarés avant l'import de createApp.
+// axios : le webhook géocode désormais la fiche à la création. Les villes des
+// tests viennent toutes du seed statique (aucun appel réel attendu), mais on
+// coupe le réseau pour de bon — un géocodage de fond non awaité ne doit jamais
+// partir vers Nominatim depuis la CI.
+jest.mock('axios', () => ({
+  __esModule: true,
+  default: { get: jest.fn().mockResolvedValue({ data: [] }) },
+}));
 jest.mock('../services/survey-sync.service', () => ({
   findSubmissionByContact: jest.fn(),
   syncOneSubmission: jest.fn(),
@@ -194,6 +203,72 @@ describe('Webhooks GoHighLevel — /api/webhooks', () => {
       // Pas de video_url → aucun appel R2/téléchargement.
       const r2 = require('../services/r2.service');
       expect(r2.uploadBufferToR2).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /gohighlevel/prospect — géocodage à la création', () => {
+    // Le formulaire GHL est la porte d'entrée de la majorité des CV. Tant que ce
+    // webhook ne géocodait pas, les fiches n'avaient AUCUNE coordonnée et
+    // restaient invisibles sur la carte des Candidats Potentiels jusqu'au
+    // prochain backfill manuel — 131 fiches en attente au 2026-08-25, dont 114
+    // arrivées après le dernier rattrapage.
+    it('code postal fourni → fiche placée par le secteur postal', async () => {
+      const res = await request(app)
+        .post(PROSPECT_URL)
+        .set('x-webhook-secret', WEBHOOK_SECRET)
+        .send({
+          first_name: 'Geo',
+          last_name: 'Postal',
+          email: 'geo.postal@test.com',
+          phone: '5145559001',
+          city: 'Montréal',
+          postal_code: 'H2X 1Y4',
+          state: 'QC',
+        });
+      expect(res.status).toBe(201);
+
+      const inDb = await prisma.prospectCandidate.findUnique({ where: { id: res.body.prospectId } });
+      expect(inDb?.lat).not.toBeNull();
+      expect(inDb?.lng).not.toBeNull();
+      expect(inDb?.geocodeSource).toBe('postal');
+      expect(inDb?.geocodedAt).toBeInstanceOf(Date);
+    });
+
+    it('sans code postal, ville connue → fiche placée par le centre-ville', async () => {
+      const res = await request(app)
+        .post(PROSPECT_URL)
+        .set('x-webhook-secret', WEBHOOK_SECRET)
+        .send({
+          first_name: 'Geo',
+          last_name: 'Ville',
+          email: 'geo.ville@test.com',
+          phone: '5145559002',
+          city: 'Laval',
+          state: 'QC',
+        });
+      expect(res.status).toBe(201);
+
+      const inDb = await prisma.prospectCandidate.findUnique({ where: { id: res.body.prospectId } });
+      expect(inDb?.geocodeSource).toBe('city');
+      expect(inDb?.lat).toBeCloseTo(45.6066, 2);
+    });
+
+    it('adresse inexploitable → prospect créé quand même, simplement non placé', async () => {
+      const res = await request(app)
+        .post(PROSPECT_URL)
+        .set('x-webhook-secret', WEBHOOK_SECRET)
+        .send({
+          first_name: 'Geo',
+          last_name: 'Sans',
+          email: 'geo.sans@test.com',
+          phone: '5145559003',
+        });
+      expect(res.status).toBe(201);
+
+      const inDb = await prisma.prospectCandidate.findUnique({ where: { id: res.body.prospectId } });
+      expect(inDb).not.toBeNull(); // un CV ne se perd JAMAIS faute d'adresse
+      expect(inDb?.lat).toBeNull();
+      expect(inDb?.geocodedAt).toBeNull();
     });
   });
 

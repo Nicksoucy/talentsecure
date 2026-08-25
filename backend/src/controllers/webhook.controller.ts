@@ -5,6 +5,7 @@ import { findMatchingCandidate, findMatchingEmployee } from '../utils/candidateM
 import { canonicalCity, resolveProvince } from '../utils/cityNormalize';
 import { parseGhlAvailability, findGhlAvailabilityAnswer } from '../utils/availability';
 import { claimForProspect } from '../services/pending-video.service';
+import { resolveProspectCoordinates } from '../services/cityGeocode.service';
 
 /**
  * Vérifie le secret du webhook GHL — fail-closed + timing-safe.
@@ -156,6 +157,19 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
     // Normaliser la ville
     const normalizedCity = normalizeCity(city);
 
+    // Géocodage à la saisie — code postal (FSA) d'abord, sinon centre-ville.
+    // C'est LA porte d'entrée de la majorité des CV : sans ça, la fiche n'a
+    // aucune coordonnée et reste invisible sur la carte des Candidats Potentiels
+    // jusqu'à ce que quelqu'un pense à lancer backfillProspectGeocodes à la main.
+    // Best-effort : Nominatim indisponible ne doit JAMAIS faire perdre un CV —
+    // la fiche est créée sans position et le backfill la rattrapera.
+    let geo: Awaited<ReturnType<typeof resolveProspectCoordinates>> = null;
+    try {
+      geo = await resolveProspectCoordinates({ postalCode, city: normalizedCity });
+    } catch (e: any) {
+      console.error('⚠️ Géocodage impossible (prospect créé sans position):', e.message);
+    }
+
     // Créer le prospect dans la base de données
     const prospect = await prisma.prospectCandidate.create({
       data: {
@@ -168,6 +182,10 @@ export const handleGoHighLevelWebhook = async (req: Request, res: Response) => {
         province,
         postalCode,
         country,
+        lat: geo?.lat ?? null,
+        lng: geo?.lng ?? null,
+        geocodedAt: geo ? new Date() : null,
+        geocodeSource: geo?.source ?? null,
         fullAddress: streetAddress ? `${streetAddress}, ${normalizedCity || city || ''}, ${province}, ${country}` : null,
         cvUrl,
         videoUrl: videoUrl || null,
