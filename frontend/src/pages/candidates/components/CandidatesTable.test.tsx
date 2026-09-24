@@ -131,13 +131,24 @@ describe('CandidatesTable', () => {
       />
     );
 
+    // Compteur + barre de pages en haut ET en bas du tableau
     expect(
-      screen.getByText(/page 1 sur 3 \(25 candidats au total\)/i)
-    ).toBeInTheDocument();
+      screen.getAllByText(/page 1 sur 3 \(25 candidats au total\)/i)
+    ).toHaveLength(2);
+    const [topNav, bottomNav] = screen.getAllByRole('navigation');
 
-    const nav = screen.getByRole('navigation');
-    await userEvent.click(within(nav).getByRole('button', { name: /go to page 2/i }));
-    expect(onPageChange).toHaveBeenCalledWith(2);
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    // En haut : change de page sans faire défiler
+    await userEvent.click(within(topNav).getByRole('button', { name: /go to page 2/i }));
+    expect(onPageChange).toHaveBeenLastCalledWith(2);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    // En bas : change de page et remonte en haut de la liste
+    await userEvent.click(within(bottomNav).getByRole('button', { name: /go to page 3/i }));
+    expect(onPageChange).toHaveBeenLastCalledWith(3);
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
 
   it("ne rend pas la pagination quand l'objet pagination est absent", () => {

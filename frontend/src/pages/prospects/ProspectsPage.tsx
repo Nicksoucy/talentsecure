@@ -1,4 +1,4 @@
-import { Suspense, useState, useEffect, lazy } from 'react';
+import { Suspense, useState, useEffect, useRef, lazy } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   Box,
@@ -88,6 +88,9 @@ export default function ProspectsPage() {
   const [searchParams] = useSearchParams();
   const initialQ = searchParams.get('q') || '';
   const [page, setPage] = useState(1);
+  // Ancre de la barre de pages du haut : en changeant de page depuis le bas,
+  // on remonte ici pour lire la nouvelle page depuis le début.
+  const topPagerRef = useRef<HTMLDivElement>(null);
   const [pageSize] = useState(20);
   const [search, setSearch] = useState(initialQ);
   // Recherche debouncée (300 ms) — l'input reste instantané, l'appel API attend.
@@ -575,6 +578,40 @@ export default function ProspectsPage() {
   // « Tous » pour la conversion résout à undefined → le backend masque les convertis par défaut.
   const convertedHidden = filters.isConverted !== 'true';
 
+  // Compteur + pagination : visible dès qu'il y a des résultats, pour que
+  // l'utilisateur sache qu'une recherche peut tenir sur 2+ pages. Affiché en
+  // haut ET en bas du tableau.
+  const renderPager = (position: 'top' | 'bottom') =>
+    prospects.length > 0 && (
+      <Box
+        ref={position === 'top' ? topPagerRef : undefined}
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 1,
+          ...(position === 'top' ? { mb: 2, scrollMarginTop: 80 } : { mt: 3 }),
+        }}
+      >
+        <Typography variant="body2" color="text.secondary">
+          Page {page} sur {totalPages} ({totalResults} candidat{totalResults > 1 ? 's' : ''} potentiel{totalResults > 1 ? 's' : ''}{searchActive ? ' trouvés' : ''})
+        </Typography>
+        {totalPages > 1 && (
+          <Pagination
+            count={totalPages}
+            page={page}
+            onChange={(_, value) => {
+              setPage(value);
+              if (position === 'bottom') {
+                topPagerRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+              }
+            }}
+            color="primary"
+          />
+        )}
+      </Box>
+    );
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -931,6 +968,9 @@ export default function ProspectsPage() {
             </Paper>
           )}
 
+          {/* Pagination en haut aussi : pas besoin de descendre pour changer de page */}
+          {renderPager('top')}
+
           <TableContainer component={Paper}>
             <Table>
               <TableHead>
@@ -1141,23 +1181,7 @@ export default function ProspectsPage() {
             </Table>
           </TableContainer>
 
-          {/* Compteur + pagination : visible dès qu'il y a des résultats, pour
-              que l'utilisateur sache qu'une recherche peut tenir sur 2+ pages. */}
-          {prospects.length > 0 && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, mt: 3 }}>
-              <Typography variant="body2" color="text.secondary">
-                Page {page} sur {totalPages} ({totalResults} candidat{totalResults > 1 ? 's' : ''} potentiel{totalResults > 1 ? 's' : ''}{searchActive ? ' trouvés' : ''})
-              </Typography>
-              {totalPages > 1 && (
-                <Pagination
-                  count={totalPages}
-                  page={page}
-                  onChange={(_, value) => setPage(value)}
-                  color="primary"
-                />
-              )}
-            </Box>
-          )}
+          {renderPager('bottom')}
         </>
       )}
 
