@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Circle, Popup } from 'react-leaflet';
 import { Box, Typography, CircularProgress, Paper, Chip, Button } from '@mui/material';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { BASEMAP_URL, BASEMAP_ATTRIBUTION } from '../../config/basemap';
 import { quebecCitiesCoordinates } from '../../utils/quebecCities';
 import { useClientAuthStore } from '@/store/clientAuthStore';
 import axios from 'axios';
@@ -110,8 +111,8 @@ const CatalogueMap: React.FC<CatalogueMapProps> = ({ catalogueId, onCityClick })
         scrollWheelZoom={true}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          attribution={BASEMAP_ATTRIBUTION}
+          url={BASEMAP_URL}
         />
 
         {cityStats.map((stat) => {
