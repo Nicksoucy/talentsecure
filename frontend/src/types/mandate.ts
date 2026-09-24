@@ -90,7 +90,21 @@ export interface Mandate {
   isActive: boolean;
   /** null = profil jamais rempli. */
   profileUpdatedAt: string | null;
+  /** Retiré depuis l'écran Mandats (réversible). */
+  isDeleted?: boolean;
+  deletedAt?: string | null;
   createdAt: string;
+}
+
+/** Ajout manuel d'un mandat : identité et adresse seulement. */
+export interface MandateCreateInput {
+  name: string;
+  /** Identifiant Agendrix s'il existe ; sinon le serveur génère MAN-0001… */
+  externalId?: string;
+  address?: string;
+  city?: string;
+  postalCode?: string;
+  clientName?: string;
 }
 
 /** Corps du PATCH : tout est optionnel, un champ absent n'est pas modifié. */

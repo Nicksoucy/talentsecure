@@ -99,6 +99,15 @@ async function main() {
     for (const d of dupes) console.log(`  - ${d}`);
   }
 
+  // Les mandats retirés à la main depuis l'écran Mandats sont lus aussi, pour
+  // que l'import ne tente pas de les recréer (collision d'identifiant) et
+  // surtout ne les ramène pas : un retrait volontaire fait foi.
+  const removedIds = new Set(
+    (
+      await prisma.mandate.findMany({ where: { isDeleted: true }, select: { externalId: true } })
+    ).map((m) => m.externalId)
+  );
+
   const existing = (await prisma.mandate.findMany({
     where: { isDeleted: false },
     select: {
@@ -116,8 +125,13 @@ async function main() {
   const creations: MandateRow[] = [];
   const updates: { existing: MandateSnapshot; row: MandateRow; plan: MandateUpdatePlan }[] = [];
   const unchanged: MandateRow[] = [];
+  const skippedRemoved: MandateRow[] = [];
 
   for (const row of unique) {
+    if (removedIds.has(row.externalId)) {
+      skippedRemoved.push(row);
+      continue;
+    }
     const match = byExternalId.get(row.externalId);
     if (!match) {
       creations.push(row);
@@ -131,6 +145,10 @@ async function main() {
   const unplaceable = unique.filter((r) => r.unplaceable);
 
   // ── Rapport ──────────────────────────────────────────────────────────────
+  if (skippedRemoved.length > 0) {
+    console.log(`\n─── IGNORÉS — RETIRÉS DANS L'ÉCRAN MANDATS (${skippedRemoved.length}) ───`);
+    for (const r of skippedRemoved) console.log(`  - ${r.name} (${r.externalId}) — à ramener depuis l'écran si voulu`);
+  }
   console.log(`\n─── CRÉATIONS (${creations.length}) ───`);
   for (const c of creations) {
     console.log(`  + ${c.name} (${c.externalId})${c.unplaceable ? ' [SANS ADRESSE — non plaçable]' : ` — ${c.parsed.city ?? '?'}`}`);
@@ -213,6 +231,7 @@ async function main() {
   console.log(`\n=== RÉSUMÉ ${APPLY ? '(APPLIQUÉ)' : '(DRY-RUN)'} ===`);
   console.log(`Lignes fichier valides : ${rows.length}`);
   console.log(`  Créations       : ${creations.length}`);
+  console.log(`  Ignorés (retirés) : ${skippedRemoved.length}`);
   console.log(`  Mises à jour    : ${updates.length}`);
   console.log(`  Inchangés       : ${unchanged.length}`);
   console.log(`  Non plaçables   : ${unplaceable.length} (adresse « f »/manquante)`);

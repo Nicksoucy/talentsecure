@@ -22,7 +22,11 @@ import {
   type Friction,
   type MandateContext,
 } from '../utils/questionnaireScoring';
-import type { MandateFilters, UpdateMandateProfileInput } from '../validation/mandate.validation';
+import type {
+  CreateMandateInput,
+  MandateFilters,
+  UpdateMandateProfileInput,
+} from '../validation/mandate.validation';
 
 /** Colonnes du profil renvoyées par la liste et le détail. */
 const MANDATE_SELECT = {
@@ -56,6 +60,8 @@ const MANDATE_SELECT = {
   notes: true,
   isActive: true,
   profileUpdatedAt: true,
+  isDeleted: true,
+  deletedAt: true,
   createdAt: true,
 } satisfies Prisma.MandateSelect;
 
@@ -82,7 +88,9 @@ function mandateOrderBy(
 }
 
 export async function listMandates(filters: MandateFilters) {
-  const where: Prisma.MandateWhereInput = { isDeleted: false };
+  // Les retirés ne se voient que sur demande, et alors seuls : c'est la vue
+  // « corbeille » d'où on peut les ramener.
+  const where: Prisma.MandateWhereInput = { isDeleted: filters.removed === true };
 
   if (filters.isActive !== undefined) where.isActive = filters.isActive;
   if (filters.siteType) where.siteType = filters.siteType;
@@ -173,6 +181,85 @@ export async function updateMandateProfile(
   data.profileUpdatedById = userId;
 
   return prisma.mandate.update({ where: { id }, data, select: MANDATE_SELECT });
+}
+
+/** Préfixe des identifiants générés pour les mandats ajoutés à la main. */
+const MANUAL_ID_PREFIX = 'MAN-';
+
+/**
+ * Prochain identifiant libre MAN-0001, MAN-0002… Les retirés comptent aussi :
+ * un identifiant ne doit jamais être réattribué à un autre site.
+ */
+async function nextManualExternalId(): Promise<string> {
+  const rows = await prisma.mandate.findMany({
+    where: { externalId: { startsWith: MANUAL_ID_PREFIX } },
+    select: { externalId: true },
+  });
+  const max = rows.reduce((acc, r) => {
+    const n = Number(r.externalId.slice(MANUAL_ID_PREFIX.length));
+    return Number.isInteger(n) && n > acc ? n : acc;
+  }, 0);
+  return `${MANUAL_ID_PREFIX}${String(max + 1).padStart(4, '0')}`;
+}
+
+/**
+ * Ajout manuel d'un mandat. L'identifiant est la clé de dédup de l'import
+ * Agendrix : si on saisit celui d'un site déjà connu (même retiré), on refuse
+ * plutôt que de créer un doublon que l'import ne saurait plus rattacher.
+ */
+export async function createMandate(input: CreateMandateInput) {
+  const externalId = input.externalId ?? (await nextManualExternalId());
+
+  const clash = await prisma.mandate.findUnique({
+    where: { externalId },
+    select: { name: true, isDeleted: true },
+  });
+  if (clash) {
+    throw new ApiError(
+      409,
+      clash.isDeleted
+        ? `L'identifiant ${externalId} appartient au mandat retiré « ${clash.name} » — ramenez-le plutôt.`
+        : `L'identifiant ${externalId} est déjà utilisé par « ${clash.name} ».`,
+      'MANDAT_IDENTIFIANT_PRIS'
+    );
+  }
+
+  return prisma.mandate.create({
+    data: {
+      externalId,
+      name: input.name,
+      address: input.address ?? null,
+      city: input.city ?? null,
+      postalCode: input.postalCode?.toUpperCase() ?? null,
+      province: input.province?.toUpperCase() ?? 'QC',
+      clientName: input.clientName ?? null,
+    },
+    select: MANDATE_SELECT,
+  });
+}
+
+/**
+ * Retire un mandat : il sort de la liste, de la carte et du jumelage, mais
+ * rien n'est effacé — `restoreMandate` le ramène tel quel, profil compris.
+ */
+export async function removeMandate(id: string) {
+  const existing = await prisma.mandate.findFirst({ where: { id, isDeleted: false }, select: { id: true } });
+  if (!existing) throw new ApiError(404, 'Mandat introuvable', 'MANDAT_INTROUVABLE');
+  return prisma.mandate.update({
+    where: { id },
+    data: { isDeleted: true, deletedAt: new Date() },
+    select: MANDATE_SELECT,
+  });
+}
+
+export async function restoreMandate(id: string) {
+  const existing = await prisma.mandate.findFirst({ where: { id, isDeleted: true }, select: { id: true } });
+  if (!existing) throw new ApiError(404, 'Mandat retiré introuvable', 'MANDAT_INTROUVABLE');
+  return prisma.mandate.update({
+    where: { id },
+    data: { isDeleted: false, deletedAt: null },
+    select: MANDATE_SELECT,
+  });
 }
 
 /** Candidats réellement joignables : ni supprimés, ni archivés, ni désactivés. */

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderWithProviders, screen, waitFor, userEvent } from '@/test/renderWithProviders';
+import { renderWithProviders, screen, waitFor, userEvent, within } from '@/test/renderWithProviders';
 import type { Mandate } from '@/types/mandate';
 
 // La page lit ses données via TanStack Query → on mocke le service appelé.
@@ -9,15 +9,26 @@ vi.mock('@/services/mandate.service', () => ({
     getMandate: vi.fn(),
     updateProfile: vi.fn(),
     getCandidates: vi.fn(),
+    createMandate: vi.fn(),
+    removeMandate: vi.fn(),
+    restoreMandate: vi.fn(),
   },
 }));
 
 import { mandateService } from '@/services/mandate.service';
 import MandatesPage from './MandatesPage';
+import { useAuthStore } from '@/store/authStore';
+import { makeUser } from '@/test/factories';
 
 const getMandates = vi.mocked(mandateService.getMandates);
 const getCandidates = vi.mocked(mandateService.getCandidates);
 const updateProfile = vi.mocked(mandateService.updateProfile);
+const createMandate = vi.mocked(mandateService.createMandate);
+const removeMandate = vi.mocked(mandateService.removeMandate);
+const restoreMandate = vi.mocked(mandateService.restoreMandate);
+
+const loginAs = (role: string) =>
+  useAuthStore.setState({ user: makeUser({ role: role as never }), isAuthenticated: true });
 
 function makeMandate(overrides: Partial<Mandate> = {}): Mandate {
   return {
@@ -237,6 +248,94 @@ describe('MandatesPage', () => {
       await waitFor(() => {
         expect(updateProfile).toHaveBeenCalledWith('m-1', expect.objectContaining({ monotony: null }));
       });
+    });
+  });
+  describe('ajout et retrait', () => {
+    it('SALES ne voit ni « Ajouter » ni « Retirer »', async () => {
+      loginAs('SALES');
+      mockList([makeMandate()]);
+      renderWithProviders(<MandatesPage />);
+      await screen.findByText('Tour Montréal');
+
+      expect(screen.queryByRole('button', { name: /Ajouter un mandat/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Retirer/i })).not.toBeInTheDocument();
+    });
+
+    it('ajoute un mandat puis ouvre directement son profil', async () => {
+      loginAs('RH_RECRUITER');
+      mockList([makeMandate()]);
+      const created = makeMandate({
+        id: 'm-new', externalId: 'MAN-0001', name: 'Nouveau site', profileUpdatedAt: null,
+      });
+      createMandate.mockResolvedValue({ data: created });
+      renderWithProviders(<MandatesPage />);
+      await screen.findByText('Tour Montréal');
+
+      await userEvent.click(screen.getByRole('button', { name: /Ajouter un mandat/i }));
+      const addButton = screen.getByRole('button', { name: 'Ajouter' });
+      expect(addButton).toBeDisabled(); // nom requis
+
+      await userEvent.type(screen.getByLabelText(/Nom du site/i), 'Nouveau site');
+      await userEvent.type(screen.getByLabelText(/^Ville/i), 'Laval');
+      await userEvent.click(addButton);
+
+      await waitFor(() =>
+        expect(createMandate).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'Nouveau site', city: 'Laval' }),
+        ),
+      );
+      // Enchaîne sur la fenêtre de profil du nouveau mandat
+      expect(await screen.findByText(/Contexte de travail/i)).toBeInTheDocument();
+      expect(within(screen.getByRole('dialog')).getByText(/MAN-0001/)).toBeInTheDocument();
+    });
+
+    it('affiche le message du serveur quand l identifiant est déjà pris', async () => {
+      loginAs('ADMIN');
+      mockList([makeMandate()]);
+      createMandate.mockRejectedValue({
+        response: { data: { message: "L'identifiant GAR-000001 est déjà utilisé par « Tour Montréal »." } },
+      });
+      renderWithProviders(<MandatesPage />);
+      await screen.findByText('Tour Montréal');
+
+      await userEvent.click(screen.getByRole('button', { name: /Ajouter un mandat/i }));
+      await userEvent.type(screen.getByLabelText(/Nom du site/i), 'Doublon');
+      await userEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+
+      expect(await screen.findByText(/déjà utilisé par « Tour Montréal »/)).toBeInTheDocument();
+    });
+
+    it('retire un mandat après confirmation', async () => {
+      loginAs('ADMIN');
+      mockList([makeMandate()]);
+      removeMandate.mockResolvedValue({ data: makeMandate({ isDeleted: true }) });
+      renderWithProviders(<MandatesPage />);
+      await screen.findByText('Tour Montréal');
+
+      await userEvent.click(screen.getByRole('button', { name: /Retirer/i }));
+      expect(screen.getByText(/Rien n'est effacé/)).toBeInTheDocument();
+      expect(removeMandate).not.toHaveBeenCalled();
+
+      const dialog = screen.getByRole('dialog');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Retirer' }));
+      await waitFor(() => expect(removeMandate).toHaveBeenCalledWith('m-1'));
+    });
+
+    it('la vue « Mandats retirés » demande les retirés et permet de les ramener', async () => {
+      loginAs('ADMIN');
+      mockList([makeMandate()]);
+      restoreMandate.mockResolvedValue({ data: makeMandate() });
+      renderWithProviders(<MandatesPage />);
+      await screen.findByText('Tour Montréal');
+
+      await userEvent.click(screen.getByLabelText('Mandats retirés'));
+      await waitFor(() =>
+        expect(getMandates).toHaveBeenLastCalledWith(expect.objectContaining({ removed: true, page: 1 })),
+      );
+      // Dans cette vue : seulement « Ramener »
+      expect(screen.queryByRole('button', { name: /Profil/i })).not.toBeInTheDocument();
+      await userEvent.click(await screen.findByRole('button', { name: /Ramener/i }));
+      await waitFor(() => expect(restoreMandate).toHaveBeenCalledWith('m-1'));
     });
   });
 });

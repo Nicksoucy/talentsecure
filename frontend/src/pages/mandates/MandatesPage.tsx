@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useSnackbar } from 'notistack';
 import {
   Alert,
   Box,
@@ -27,17 +28,30 @@ import {
   Tooltip,
   Typography,
   Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
 } from '@mui/material';
 import {
   Search as SearchIcon,
   Place as PlaceIcon,
   PeopleAlt as PeopleAltIcon,
   Edit as EditIcon,
+  Add as AddIcon,
+  DeleteOutline as DeleteOutlineIcon,
+  Restore as RestoreIcon,
 } from '@mui/icons-material';
+import { useAuthStore } from '@/store/authStore';
 import { mandateService } from '@/services/mandate.service';
 import { SITE_TYPES, SITE_TYPE_LABELS, type Mandate, type SiteType } from '@/types/mandate';
 import MandateProfileDialog from './components/MandateProfileDialog';
 import MandateCandidatesDialog from './components/MandateCandidatesDialog';
+import MandateCreateDialog from './components/MandateCreateDialog';
+
+/** Rôles autorisés à écrire sur les mandats — miroir de mandate.routes.ts. */
+const WRITE_ROLES = ['ADMIN', 'RH_RECRUITER'];
 
 const PAGE_SIZE = 25;
 /** Colonnes du tableau — à garder synchronisé avec le colSpan de l'état vide. */
@@ -63,18 +77,47 @@ export default function MandatesPage() {
   const [search, setSearch] = useState('');
   const [siteType, setSiteType] = useState<SiteType | ''>('');
   const [unratedOnly, setUnratedOnly] = useState(false);
+  // Vue « corbeille » : seulement les mandats retirés, pour pouvoir les ramener.
+  const [showRemoved, setShowRemoved] = useState(false);
   const [page, setPage] = useState(1);
 
   const [editing, setEditing] = useState<Mandate | null>(null);
   const [matching, setMatching] = useState<Mandate | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [removing, setRemoving] = useState<Mandate | null>(null);
+
+  const { user } = useAuthStore();
+  const canWrite = WRITE_ROLES.includes(user?.role ?? '');
+  const queryClient = useQueryClient();
+  const { enqueueSnackbar } = useSnackbar();
+
+  const removeMutation = useMutation({
+    mutationFn: (m: Mandate) => mandateService.removeMandate(m.id),
+    onSuccess: (_, m) => {
+      queryClient.invalidateQueries({ queryKey: ['mandates'] });
+      enqueueSnackbar(`« ${m.name} » retiré — récupérable dans « Mandats retirés »`, { variant: 'success' });
+      setRemoving(null);
+    },
+    onError: () => enqueueSnackbar('Impossible de retirer le mandat', { variant: 'error' }),
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (m: Mandate) => mandateService.restoreMandate(m.id),
+    onSuccess: (_, m) => {
+      queryClient.invalidateQueries({ queryKey: ['mandates'] });
+      enqueueSnackbar(`« ${m.name} » ramené`, { variant: 'success' });
+    },
+    onError: () => enqueueSnackbar('Impossible de ramener le mandat', { variant: 'error' }),
+  });
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['mandates', { search, siteType, unratedOnly, page }],
+    queryKey: ['mandates', { search, siteType, unratedOnly, showRemoved, page }],
     queryFn: () =>
       mandateService.getMandates({
         search: search || undefined,
         siteType: siteType || undefined,
         unratedOnly: unratedOnly || undefined,
+        removed: showRemoved || undefined,
         page,
         limit: PAGE_SIZE,
       }),
@@ -93,9 +136,16 @@ export default function MandatesPage() {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
-        Mandats
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+        <Typography variant="h4" gutterBottom>
+          Mandats
+        </Typography>
+        {canWrite && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreating(true)}>
+            Ajouter un mandat
+          </Button>
+        )}
+      </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Décrivez chaque site pour pouvoir lui proposer les bons candidats. Un
         mandat non coté reste utilisable : le jumelage se rabat alors sur les
@@ -105,7 +155,7 @@ export default function MandatesPage() {
       <Card sx={{ mb: 2 }}>
         <CardContent>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={5}>
+            <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
                 size="small"
@@ -121,7 +171,7 @@ export default function MandatesPage() {
                 }}
               />
             </Grid>
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={3}>
               <FormControl fullWidth size="small">
                 <InputLabel id="filtre-type-site">Type de site</InputLabel>
                 <Select
@@ -139,7 +189,7 @@ export default function MandatesPage() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={6} md={2}>
               <FormControlLabel
                 control={
                   <Switch
@@ -148,6 +198,17 @@ export default function MandatesPage() {
                   />
                 }
                 label="Jamais cotés"
+              />
+            </Grid>
+            <Grid item xs={6} md={3}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={showRemoved}
+                    onChange={(e) => withFilterReset(setShowRemoved)(e.target.checked)}
+                  />
+                }
+                label="Mandats retirés"
               />
             </Grid>
           </Grid>
@@ -181,7 +242,9 @@ export default function MandatesPage() {
             {!isLoading && mandates.length === 0 && (
               <TableRow>
                 <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ py: 4 }}>
-                  <Typography color="text.secondary">Aucun mandat trouvé.</Typography>
+                  <Typography color="text.secondary">
+                    {showRemoved ? 'Aucun mandat retiré.' : 'Aucun mandat trouvé.'}
+                  </Typography>
                 </TableCell>
               </TableRow>
             )}
@@ -239,13 +302,38 @@ export default function MandatesPage() {
                   {/* Pas d'infobulle sur ces boutons : ils portent déjà un
                       libellé visible, et une Tooltip MUI remplacerait ce
                       libellé comme nom accessible pour les lecteurs d'écran. */}
-                  <TableCell align="right">
-                    <Button size="small" startIcon={<EditIcon />} onClick={() => setEditing(m)}>
-                      Profil
-                    </Button>
-                    <Button size="small" startIcon={<PeopleAltIcon />} onClick={() => setMatching(m)}>
-                      Candidats
-                    </Button>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                    {showRemoved ? (
+                      canWrite && (
+                        <Button
+                          size="small"
+                          startIcon={<RestoreIcon />}
+                          disabled={restoreMutation.isPending}
+                          onClick={() => restoreMutation.mutate(m)}
+                        >
+                          Ramener
+                        </Button>
+                      )
+                    ) : (
+                      <>
+                        <Button size="small" startIcon={<EditIcon />} onClick={() => setEditing(m)}>
+                          Profil
+                        </Button>
+                        <Button size="small" startIcon={<PeopleAltIcon />} onClick={() => setMatching(m)}>
+                          Candidats
+                        </Button>
+                        {canWrite && (
+                          <Button
+                            size="small"
+                            color="error"
+                            startIcon={<DeleteOutlineIcon />}
+                            onClick={() => setRemoving(m)}
+                          >
+                            Retirer
+                          </Button>
+                        )}
+                      </>
+                    )}
                   </TableCell>
                 </TableRow>
               );
@@ -267,6 +355,36 @@ export default function MandatesPage() {
 
       <MandateProfileDialog mandate={editing} onClose={() => setEditing(null)} />
       <MandateCandidatesDialog mandate={matching} onClose={() => setMatching(null)} />
+      <MandateCreateDialog
+        open={creating}
+        onClose={() => setCreating(false)}
+        onCreated={(m) => {
+          // Enchaîne directement sur le profil : quarts, exigences, type de site.
+          setCreating(false);
+          setEditing(m);
+        }}
+      />
+
+      <Dialog open={Boolean(removing)} onClose={() => setRemoving(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Retirer ce mandat ?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            « {removing?.name} » disparaîtra de la liste, de la carte et du jumelage. Rien
+            n'est effacé : vous pourrez le ramener depuis « Mandats retirés ».
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRemoving(null)}>Annuler</Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={removeMutation.isPending}
+            onClick={() => removing && removeMutation.mutate(removing)}
+          >
+            Retirer
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

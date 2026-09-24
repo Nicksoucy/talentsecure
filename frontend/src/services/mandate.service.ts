@@ -1,6 +1,7 @@
 import api from './api';
 import type {
   Mandate,
+  MandateCreateInput,
   MandateProfileInput,
   MandateCandidate,
   MandateCandidatesMeta,
@@ -14,6 +15,8 @@ export interface MandateFilters {
   isActive?: boolean;
   /** Ne garder que les mandats dont le profil n'a jamais été rempli. */
   unratedOnly?: boolean;
+  /** Vue des mandats retirés (et seulement eux). */
+  removed?: boolean;
   page?: number;
   limit?: number;
   sortBy?: 'name' | 'city' | 'profileUpdatedAt' | 'createdAt';
@@ -49,6 +52,22 @@ export const mandateService = {
 
   async updateProfile(id: string, input: MandateProfileInput): Promise<{ data: Mandate }> {
     const response = await api.patch(`/api/mandates/${id}`, input);
+    return response.data;
+  },
+
+  async createMandate(input: MandateCreateInput): Promise<{ data: Mandate }> {
+    const response = await api.post('/api/mandates', input);
+    return response.data;
+  },
+
+  /** Retrait réversible : le mandat sort de la liste, de la carte et du jumelage. */
+  async removeMandate(id: string): Promise<{ data: Mandate }> {
+    const response = await api.delete(`/api/mandates/${id}`);
+    return response.data;
+  },
+
+  async restoreMandate(id: string): Promise<{ data: Mandate }> {
+    const response = await api.post(`/api/mandates/${id}/restore`);
     return response.data;
   },
 

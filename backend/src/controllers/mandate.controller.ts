@@ -2,10 +2,18 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import { getCache, setCache } from '../config/cache';
 import { buildGeoMapPoints } from '../utils/geo';
-import { MANDATE_MAPPOINTS_CACHE_KEY } from '../services/mandateGeocode.service';
+import {
+  MANDATE_MAPPOINTS_CACHE_KEY,
+  geocodeMandateById,
+  invalidateMandateCaches,
+} from '../services/mandateGeocode.service';
 import { successResponse } from '../utils/response';
 import * as mandateService from '../services/mandate.service';
-import type { MandateFilters, UpdateMandateProfileInput } from '../validation/mandate.validation';
+import type {
+  CreateMandateInput,
+  MandateFilters,
+  UpdateMandateProfileInput,
+} from '../validation/mandate.validation';
 
 /**
  * Points carte des mandats (sites XGuard), regroupés par coordonnées — libellé =
@@ -61,6 +69,44 @@ export const listMandates = async (req: Request, res: Response, next: NextFuncti
 export const getMandate = async (req: Request, res: Response, next: NextFunction) => {
   try {
     return successResponse(res, await mandateService.getMandateById(req.params.id));
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Ajout manuel d'un mandat. Le géocodage part en arrière-plan (comme pour les
+ * employés) : l'épingle apparaît sur la carte quelques secondes plus tard.
+ */
+export const createMandate = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const created = await mandateService.createMandate(req.body as CreateMandateInput);
+    if (created.address || created.postalCode || created.city) {
+      void geocodeMandateById(created.id);
+    }
+    return successResponse(res.status(201), created, { message: 'Mandat ajouté' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** Retire un mandat (réversible). */
+export const removeMandate = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const removed = await mandateService.removeMandate(req.params.id);
+    await invalidateMandateCaches();
+    return successResponse(res, removed, { message: 'Mandat retiré' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** Ramène un mandat retiré, profil compris. */
+export const restoreMandate = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const restored = await mandateService.restoreMandate(req.params.id);
+    await invalidateMandateCaches();
+    return successResponse(res, restored, { message: 'Mandat ramené' });
   } catch (error) {
     next(error);
   }
