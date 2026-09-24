@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Tabs, Tab, Table, TableHead, TableRow, TableCell, TableBody, Chip, Stack, Link, Button,
+  Alert, CircularProgress,
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import { uniformService } from '@/services/uniform.service';
+import { getApiErrorMessage } from '@/utils/apiError';
 import { usePerms } from '@/hooks/usePerms';
 
 const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
@@ -128,6 +130,21 @@ export default function UniformReportsPage() {
             Anciens employés (inactifs) qui détiennent encore des uniformes. Clôturer
             la fin d’emploi marque les pièces non retournées et fige la dette à prélever.
           </Typography>
+          {inactive.isLoading && (
+            <Stack direction="row" spacing={1.5} alignItems="center" mb={2}>
+              <CircularProgress size={18} />
+              <Typography variant="body2" color="text.secondary">Chargement du rapport…</Typography>
+            </Stack>
+          )}
+          {inactive.isError && (
+            <Alert
+              severity="error"
+              sx={{ mb: 2 }}
+              action={<Button color="inherit" size="small" onClick={() => inactive.refetch()}>Réessayer</Button>}
+            >
+              Impossible de charger le rapport : {getApiErrorMessage(inactive.error)}
+            </Alert>
+          )}
           <Box sx={{ overflowX: 'auto' }}>
           <Table size="small">
             <TableHead><TableRow>

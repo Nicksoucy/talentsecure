@@ -382,8 +382,16 @@ export interface InactiveHolder {
  * `computeHoldings` retombe à 0 et l'employé disparaît de cette liste.
  */
 export async function listOutstandingByInactiveEmployees(): Promise<InactiveHolder[]> {
+  // Préfiltre : `computeHoldings` ne peut être > 0 que si l'employé a AU MOINS
+  // une remise non-brouillon. Sans ce filtre, on boucle 2 requêtes Prisma par
+  // employé INACTIF (904 en prod → réponse en ~60 s) ; avec, une poignée.
+  const holderIds = await prisma.uniformIssuance.findMany({
+    where: { status: { notIn: ['DRAFT', 'CANCELLED'] } },
+    select: { employeeId: true },
+    distinct: ['employeeId'],
+  });
   const employees = await prisma.employee.findMany({
-    where: { status: 'INACTIF', isDeleted: false },
+    where: { status: 'INACTIF', isDeleted: false, id: { in: holderIds.map((h) => h.employeeId) } },
     select: {
       id: true,
       firstName: true,
