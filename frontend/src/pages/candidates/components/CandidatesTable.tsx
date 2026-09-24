@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import {
     Table,
     TableBody,
@@ -75,6 +76,10 @@ export default function CandidatesTable({
     userRole,
     onAddCandidate,
 }: CandidatesTableProps) {
+    // Ancre de la barre de pages du haut : en changeant de page depuis le bas,
+    // on remonte ici pour lire la nouvelle page depuis le début.
+    const topRef = useRef<HTMLDivElement>(null);
+
     // Empty state
     if (candidates.length === 0) {
         return (
@@ -96,8 +101,41 @@ export default function CandidatesTable({
         );
     }
 
+    const renderPager = (position: 'top' | 'bottom') =>
+        pagination && (
+            <Box
+                ref={position === 'top' ? topRef : undefined}
+                display="flex"
+                justifyContent="center"
+                alignItems="center"
+                flexWrap="wrap"
+                gap={2}
+                {...(position === 'top' ? { mb: 2, sx: { scrollMarginTop: 80 } } : { mt: 3 })}
+            >
+                <Typography variant="body2" color="text.secondary">
+                    Page {pagination.page} sur {pagination.totalPages} ({pagination.total} candidats au total)
+                </Typography>
+                <Pagination
+                    count={pagination.totalPages}
+                    page={page}
+                    onChange={(_, newPage) => {
+                        onPageChange(newPage);
+                        if (position === 'bottom') {
+                            topRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+                        }
+                    }}
+                    color="primary"
+                    showFirstButton
+                    showLastButton
+                />
+            </Box>
+        );
+
     return (
         <>
+            {/* Pagination en haut aussi : pas besoin de descendre pour changer de page */}
+            {renderPager('top')}
+
             <TableContainer component={Paper} elevation={0}>
                 <Table>
                     <TableHead>
@@ -177,22 +215,7 @@ export default function CandidatesTable({
                 </Table>
             </TableContainer>
 
-            {/* Pagination */}
-            {candidates.length > 0 && pagination && (
-                <Box display="flex" justifyContent="center" alignItems="center" mt={3} gap={2}>
-                    <Typography variant="body2" color="text.secondary">
-                        Page {pagination.page} sur {pagination.totalPages} ({pagination.total} candidats au total)
-                    </Typography>
-                    <Pagination
-                        count={pagination.totalPages}
-                        page={page}
-                        onChange={(_, newPage) => onPageChange(newPage)}
-                        color="primary"
-                        showFirstButton
-                        showLastButton
-                    />
-                </Box>
-            )}
+            {renderPager('bottom')}
         </>
     );
 }

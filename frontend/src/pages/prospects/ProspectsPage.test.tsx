@@ -91,6 +91,28 @@ describe('ProspectsPage', () => {
     expect(screen.getByText('Contactés')).toBeInTheDocument();
   });
 
+  it('affiche la barre de pages en haut et en bas, et remonte en haut depuis celle du bas', async () => {
+    svc.getProspects.mockResolvedValue(makeProspectsResponse([makeProspect()], 60));
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    renderProspects();
+
+    expect(await screen.findAllByText(/page 1 sur 3 \(60 candidats potentiels\)/i)).toHaveLength(2);
+    const [topNav, bottomNav] = screen.getAllByRole('navigation');
+
+    await userEvent.click(within(topNav).getByRole('button', { name: /go to page 2/i }));
+    await waitFor(() =>
+      expect(svc.getProspects).toHaveBeenCalledWith(expect.objectContaining({ page: 2 })),
+    );
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    await userEvent.click(within(bottomNav).getByRole('button', { name: /go to page 3/i }));
+    await waitFor(() =>
+      expect(svc.getProspects).toHaveBeenCalledWith(expect.objectContaining({ page: 3 })),
+    );
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
   it('passe du squelette aux données des prospects mockés', async () => {
     renderProspects();
 
