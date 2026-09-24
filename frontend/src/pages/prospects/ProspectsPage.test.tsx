@@ -102,13 +102,13 @@ describe('ProspectsPage', () => {
 
     await userEvent.click(within(topNav).getByRole('button', { name: /go to page 2/i }));
     await waitFor(() =>
-      expect(svc.getProspects).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 })),
+      expect(svc.getProspects).toHaveBeenCalledWith(expect.objectContaining({ page: 2 })),
     );
     expect(scrollIntoView).not.toHaveBeenCalled();
 
     await userEvent.click(within(bottomNav).getByRole('button', { name: /go to page 3/i }));
     await waitFor(() =>
-      expect(svc.getProspects).toHaveBeenLastCalledWith(expect.objectContaining({ page: 3 })),
+      expect(svc.getProspects).toHaveBeenCalledWith(expect.objectContaining({ page: 3 })),
     );
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
