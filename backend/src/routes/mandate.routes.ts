@@ -16,6 +16,7 @@ import {
   mandateIdParamSchema,
   mandateCandidatesQuerySchema,
   createMandateSchema,
+  emptyBodySchema,
   updateMandateProfileSchema,
 } from '../validation/mandate.validation';
 
@@ -51,7 +52,11 @@ router.patch(
 
 // Retrait réversible : isDeleted, jamais d'effacement.
 router.delete('/:id', validate({ params: mandateIdParamSchema }), removeMandate);
-router.post('/:id/restore', validate({ params: mandateIdParamSchema }), restoreMandate);
+router.post(
+  '/:id/restore',
+  validate({ params: mandateIdParamSchema, body: emptyBodySchema }),
+  restoreMandate
+);
 
 // Candidats classés pour ce mandat (critères durs + distance, sans psychométrie).
 router.get(

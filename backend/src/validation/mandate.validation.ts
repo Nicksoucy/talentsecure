@@ -113,6 +113,9 @@ export const createMandateSchema = z
   })
   .strict();
 
+/** Actions sans charge utile (ramener un mandat) : tout champ envoyé est refusé. */
+export const emptyBodySchema = z.object({}).strict();
+
 export const mandateIdParamSchema = z.object({ id: z.string().uuid() }).strict();
 
 export const mandateCandidatesQuerySchema = z
