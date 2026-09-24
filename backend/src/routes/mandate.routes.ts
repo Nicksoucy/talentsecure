@@ -5,6 +5,9 @@ import {
   getMandate,
   updateMandateProfile,
   getMandateCandidates,
+  createMandate,
+  removeMandate,
+  restoreMandate,
 } from '../controllers/mandate.controller';
 import { authenticateJWT, authorizeReadWrite } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
@@ -12,6 +15,8 @@ import {
   mandateFiltersSchema,
   mandateIdParamSchema,
   mandateCandidatesQuerySchema,
+  createMandateSchema,
+  emptyBodySchema,
   updateMandateProfileSchema,
 } from '../validation/mandate.validation';
 
@@ -34,12 +39,23 @@ router.get('/stats/map-points', getMandatesMapPoints);
 
 router.get('/', validate({ query: mandateFiltersSchema }), listMandates);
 
+// Ajout manuel (hors import Agendrix). Écriture → ADMIN/RH seulement.
+router.post('/', validate({ body: createMandateSchema }), createMandate);
+
 router.get('/:id', validate({ params: mandateIdParamSchema }), getMandate);
 
 router.patch(
   '/:id',
   validate({ params: mandateIdParamSchema, body: updateMandateProfileSchema }),
   updateMandateProfile
+);
+
+// Retrait réversible : isDeleted, jamais d'effacement.
+router.delete('/:id', validate({ params: mandateIdParamSchema }), removeMandate);
+router.post(
+  '/:id/restore',
+  validate({ params: mandateIdParamSchema, body: emptyBodySchema }),
+  restoreMandate
 );
 
 // Candidats classés pour ce mandat (critères durs + distance, sans psychométrie).

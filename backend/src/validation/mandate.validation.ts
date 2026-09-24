@@ -49,6 +49,8 @@ export const mandateFiltersSchema = z
     isActive: queryBoolean,
     /** Ne renvoyer que les mandats dont le profil n'a jamais été rempli. */
     unratedOnly: queryBoolean,
+    /** Afficher les mandats retirés (et seulement eux) pour pouvoir les ramener. */
+    removed: queryBoolean,
     page: z.coerce.number().int().min(1).optional(),
     limit: z.coerce.number().int().min(1).max(200).optional(),
     sortBy: z.enum(['name', 'city', 'profileUpdatedAt', 'createdAt']).optional(),
@@ -84,6 +86,36 @@ export const updateMandateProfileSchema = z
   })
   .strict();
 
+/** Texte facultatif : une chaîne vide vaut « non fourni ». */
+const optionalText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .optional()
+    .transform((v) => (v ? v : undefined));
+
+/**
+ * Ajout manuel d'un mandat (hors import Agendrix). Seules l'identité et
+ * l'adresse passent ici ; le profil se saisit ensuite par le PATCH habituel.
+ * `lat`/`lng` restent interdits : c'est le géocodage qui les pose.
+ */
+export const createMandateSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Le nom du site est requis').max(200),
+    // Identifiant Agendrix s'il existe déjà ; sinon le service en génère un (MAN-0001).
+    externalId: optionalText(50),
+    address: optionalText(300),
+    city: optionalText(100),
+    postalCode: optionalText(10),
+    province: optionalText(2),
+    clientName: optionalText(200),
+  })
+  .strict();
+
+/** Actions sans charge utile (ramener un mandat) : tout champ envoyé est refusé. */
+export const emptyBodySchema = z.object({}).strict();
+
 export const mandateIdParamSchema = z.object({ id: z.string().uuid() }).strict();
 
 export const mandateCandidatesQuerySchema = z
@@ -99,4 +131,5 @@ export const mandateCandidatesQuerySchema = z
   .strict();
 
 export type MandateFilters = z.infer<typeof mandateFiltersSchema>;
+export type CreateMandateInput = z.infer<typeof createMandateSchema>;
 export type UpdateMandateProfileInput = z.infer<typeof updateMandateProfileSchema>;
