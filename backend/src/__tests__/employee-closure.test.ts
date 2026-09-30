@@ -4,7 +4,8 @@ import { prisma, cleanDatabase } from './setup';
 import { createApp } from '../app';
 import { hashPassword } from '../utils/password';
 import { generateAccessToken } from '../utils/jwt';
-import { addDaysYmd, montrealYmd } from '../utils/montreal-date';
+import { addDaysYmd, endOfDayMontreal, montrealYmd } from '../utils/montreal-date';
+import { buildClosureSms } from '../services/employee-file-closure.service';
 
 // Réseau simulé : courriel (fournisseur), contact GHL et texto.
 const sendEmailWithProvider = jest.fn().mockResolvedValue(undefined);
@@ -38,6 +39,26 @@ jest.mock('../services/addressGeocode.service', () => ({
  * Vérifie : statut + date limite, courriel À employé CC paie + RH avec pièces et
  * montant, texto, trace enregistrée, échec d'envoi non bloquant, renvoi.
  */
+describe('buildClosureSms — texte des RH (2026-09-30)', () => {
+  it('reprend mot pour mot le texte fourni par les RH', () => {
+    expect(buildClosureSms({ firstName: 'Nicolas', deadline: endOfDayMontreal('2026-09-30'), total: 40, hasPieces: true })).toBe(
+      "Sécurité XGuard : Bonjour Nicolas, votre dossier est maintenant fermé. Merci de rapporter vos uniformes d'ici le 30 septembre " +
+        "au 9380, boul. Saint-Laurent (lun. au ven., 9 h à 15 h 30) ou de nous les envoyer par la poste. Sans retour, 40 $ seront " +
+        "déduits de votre paie, tel que convenu à l'embauche. Les détails vous ont été envoyés par courriel (pensez à vérifier vos " +
+        'courriels indésirables).'
+    );
+  });
+
+  it('« 1er » du mois, montant avec cents, et version sans uniformes', () => {
+    const withCents = buildClosureSms({ firstName: 'Ana', deadline: endOfDayMontreal('2026-10-01'), total: 42.5, hasPieces: true });
+    expect(withCents).toContain("d'ici le 1er octobre");
+    expect(withCents).toContain('Sans retour, 42,50 $ seront déduits');
+    const none = buildClosureSms({ firstName: 'Ana', deadline: endOfDayMontreal('2026-10-01'), total: 0, hasPieces: false });
+    expect(none).not.toContain('déduits');
+    expect(none).toContain('tout bien de la Compagnie');
+  });
+});
+
 describe('Fermeture de dossier — /api/employees/:id/closure', () => {
   let app: Express;
   let rhToken: string;
@@ -132,8 +153,7 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
     expect(html).toContain('105,00 $');
     expect(html).toContain('au plus tard le');
     expect(html).toContain('Tamara Hadid');
-    expect(sms).toContain('105,00 $');
-    expect(sms.length).toBeLessThanOrEqual(320);
+    expect(sms).toContain('Sans retour, 105 $ seront déduits de votre paie, tel que convenu à l\'embauche.');
     const after = await prisma.employee.findUnique({ where: { id: emp.id } });
     expect(after?.status).toBe('ACTIF');
     expect(sendEmailWithProvider).not.toHaveBeenCalled();
@@ -163,7 +183,7 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
     expect(mail.contactId).toBe('contact-upserted');
     // Texto : contact retrouvé par le NUMÉRO de la fiche, jamais par le courriel.
     expect(resolveGhlContactId).toHaveBeenCalledWith('5145550000', null);
-    expect(sendSms).toHaveBeenCalledWith('contact-by-phone', expect.stringContaining('105,00 $'));
+    expect(sendSms).toHaveBeenCalledWith('contact-by-phone', expect.stringContaining('105 $ seront déduits'));
 
     const notice = await prisma.employeeOffboardingNotice.findFirst({ where: { employeeId: emp.id } });
     expect(Number(notice?.estimatedAmount)).toBe(105);
@@ -177,6 +197,18 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
     const overview = await request(app).get(`/api/employees/${emp.id}/closure`).set('Authorization', `Bearer ${rhToken}`);
     expect(overview.body.data.tracking.status).toBe('EN_ATTENTE');
     expect(overview.body.data.tracking.daysLeft).toBe(14);
+
+    // Règle RH : il rapporte 1 chemise sur 3 → retour complet, suivi « Rapporté ».
+    const line = await prisma.uniformIssuanceLine.findFirst({ where: { issuanceId: iss!.id } });
+    await prisma.uniformReturn.create({
+      data: {
+        issuanceId: iss!.id, employeeId: emp.id, status: 'RETURNED', returnedAt: new Date(),
+        lines: { create: [{ variantId: line!.variantId, quantity: 1, condition: 'GOOD', unitReplacementCost: 0 }] },
+      },
+    });
+    const later = await request(app).get(`/api/employees/${emp.id}/closure`).set('Authorization', `Bearer ${rhToken}`);
+    expect(later.body.data.tracking.status).toBe('RAPPORTE');
+    expect(later.body.data.tracking.daysLeft).toBeNull();
   });
 
   it('texto : si la fiche GHL a un autre numéro que TalentSecure, on N’ENVOIE PAS (bogue du 30 sept)', async () => {

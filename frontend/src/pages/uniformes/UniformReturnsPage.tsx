@@ -50,7 +50,7 @@ export default function UniformReturnsPage() {
   // (PDF historique) vs remise dont tout a déjà été retourné.
   const [emptyReason, setEmptyReason] = useState<'NO_LINES' | 'ALL_RETURNED' | null>(null);
   // Retour tardif : remise clôturée à la fin d'emploi (CLOSED_TERMINATION) —
-  // les pièces en bon état créditent la dette figée de l'agent.
+  // règle RH, tout le montant retenu est remboursé à la finalisation.
   const [isLateReturn, setIsLateReturn] = useState(false);
 
   const [searchParams] = useSearchParams();
@@ -329,9 +329,9 @@ export default function UniformReturnsPage() {
         <Paper sx={{ p: 2, mb: 2 }}>
           {isLateReturn && (
             <Alert severity="warning" sx={{ mb: 2 }}>
-              <strong>Retour tardif</strong> — remise clôturée à la fin d'emploi : la dette de l'agent est déjà
-              figée. Chaque pièce rapportée en <strong>bon état</strong> créditera automatiquement sa dette.
-              Une pièce endommagée ne crédite rien (elle doit être remplacée).
+              <strong>Retour tardif</strong> — remise clôturée à la fin d'emploi. Règle RH : tout retour compte comme
+              complet, même en retard. Dès que ce retour est enregistré, tout le montant retenu à l'agent lui est
+              remboursé et la paie reçoit un courriel.
             </Alert>
           )}
           <Alert severity="info" sx={{ mb: 2 }}>

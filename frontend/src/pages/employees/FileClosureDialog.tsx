@@ -215,9 +215,10 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
               </Alert>
             )}
             <Alert severity="warning">
-              L’employé passera à <strong>Inactif</strong>. Si les uniformes ne sont pas revenus le{' '}
+              L’employé passera à <strong>Inactif</strong>. Si aucun uniforme n’est revenu le{' '}
               {new Date(`${deadline}T12:00:00`).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' })}, le dossier
-              uniformes sera fermé automatiquement et la paie recevra le montant à retenir.
+              uniformes sera fermé automatiquement et la paie recevra le montant à retenir. S’il en rapporte avant, même en
+              partie, le retour compte comme complet et la paie reçoit un courriel « rien à retenir ».
             </Alert>
           </Stack>
         </DialogContent>

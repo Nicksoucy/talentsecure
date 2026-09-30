@@ -8,7 +8,7 @@
 import { prisma } from '../config/database';
 import { notify } from '../services/notification.service';
 import { computeAmountOwed, computeHoldings } from '../services/uniform-stock.service';
-import { closeTerminationCore, notifyTerminationClosed } from '../services/uniform-termination.service';
+import { closeTerminationCore, notifyTerminationClosed, returnedSinceClosure } from '../services/uniform-termination.service';
 import { businessDaysBetween, addBusinessDays } from '../utils/business-days';
 import { defaultReturnDeadline } from '../services/employee-offboarding.service';
 
@@ -448,6 +448,9 @@ export async function checkInactiveEmployeesWithHoldings(): Promise<number> {
     }
 
     // --- Rappel la veille de l'échéance ---------------------------------------
+    // Règle RH : l'agent a déjà rapporté des uniformes → retour considéré
+    // complet, rien n'ira à la paie ; pas de rappel « échéance demain ».
+    if (await returnedSinceClosure(emp.id)) continue;
     if (deadline.getTime() - now.getTime() <= 24 * 60 * 60 * 1000) {
       await notify({
         type: 'UNIFORM_INACTIVE_EMPLOYEE_HAS_HOLDINGS',

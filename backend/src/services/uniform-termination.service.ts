@@ -20,11 +20,13 @@
  * détentions se nettent globalement). Après clôture, `computeHoldings` retombe
  * à 0 → une 2ᵉ passe est un no-op.
  */
-import { Prisma } from '@prisma/client';
+import { Prisma, UniformItemCondition } from '@prisma/client';
 import { prisma } from '../config/database';
 import { notify } from './notification.service';
 import { EMAIL_RH } from './email.service';
+import { estimateHoldingsCost } from './employee-offboarding.service';
 import { computeAmountOwed, computeHoldings } from './uniform-stock.service';
+import { formatLongFr } from '../utils/montreal-date';
 
 export type ClosableIssuance = Prisma.UniformIssuanceGetPayload<{
   include: {
@@ -47,8 +49,12 @@ export async function closeTerminationCore(
   issuance: ClosableIssuance,
   createdById: string | null,
   reason: string = DEFAULT_REASON,
-): Promise<{ returnId: string; employeeId: string } | null> {
+): Promise<{ returnId: string; employeeId: string; waived: boolean } | null> {
   if (!['ISSUED', 'PARTIALLY_RETURNED'].includes(issuance.status)) return null;
+  // Règle RH : l'agent a rapporté des uniformes depuis la fermeture de son
+  // dossier → le retour est complet pour la paie, le reste n'est pas facturé.
+  const returnedAt = await returnedSinceClosure(issuance.employeeId);
+  const waived = returnedAt !== null;
 
   // Quantité restante par variante = Σ(lignes) − Σ(retours déjà finalisés).
   const remaining = new Map<string, { quantity: number; cost: number }>();
@@ -82,7 +88,7 @@ export async function closeTerminationCore(
       variantId: x.variantId,
       quantity: x.quantity,
       condition: 'NOT_RETURNED' as const,
-      unitReplacementCost: x.cost,
+      unitReplacementCost: waived ? 0 : x.cost,
     }));
 
   const created = await prisma.$transaction(async (tx) => {
@@ -92,7 +98,9 @@ export async function closeTerminationCore(
         employeeId: issuance.employeeId,
         status: 'RETURNED',
         returnedAt: new Date(),
-        notes: reason,
+        notes: waived
+          ? `${reason} — sans retenue : l’agent a rapporté des uniformes le ${formatLongFr(returnedAt!)} (retour considéré complet, règle RH)`
+          : reason,
         createdById,
         lines: { create: lines },
       },
@@ -117,7 +125,7 @@ export async function closeTerminationCore(
     return ret;
   });
 
-  return { returnId: created.id, employeeId: issuance.employeeId };
+  return { returnId: created.id, employeeId: issuance.employeeId, waived };
 }
 
 /** Base des liens dans les courriels (jamais localhost chez la paie). */
@@ -164,7 +172,7 @@ export function buildPayrollDeductionHtml(opts: {
     <th style="text-align:left;padding:6px 8px;border:1px solid #d1d5db;">Taille</th>
     <th style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">Qté</th>
     <th style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">Valeur</th></tr></thead><tbody>${rows}</tbody></table>` : ''}
-  <p style="margin-top:16px;">Si l'employé rapporte des pièces plus tard, vous recevrez un courriel avec le montant à rembourser.</p>
+  <p style="margin-top:16px;">S'il rapporte des uniformes plus tard, même en partie, tout le montant retenu lui sera remboursé : vous recevrez un courriel.</p>
   <p><a href="${esc(opts.link)}" style="background:#2563eb;color:#fff;padding:10px 18px;text-decoration:none;border-radius:6px;display:inline-block;">Voir la fiche dans TalentSecure</a></p>
   <p style="font-size:12px;color:#6b7280;">TalentSecure — avis automatique. RH est en copie.</p>
 </div>`;
@@ -204,7 +212,10 @@ export async function notifyTerminationClosed(employeeId: string): Promise<void>
       audience: 'ADMINS',
       dedupKey: `termination-closed-${employeeId}-${day}`,
       title: `Fin d'emploi clôturée — ${employeeName}`,
-      message: `Dette uniforme : ${owed.owed.toFixed(2)} $ transmise à la paie`,
+      message:
+        owed.owed > 0
+          ? `Dette uniforme : ${owed.owed.toFixed(2)} $ transmise à la paie`
+          : 'Aucune retenue sur la paie (uniformes rapportés ou rien à facturer)',
       link: `/employees/${employeeId}`,
       payload: { employeeId, amountOwed: owed.owed },
     }).catch(() => {});
@@ -233,5 +244,378 @@ export async function notifyTerminationClosed(employeeId: string): Promise<void>
     }).catch(() => {});
   } catch (e) {
     console.error('notifyTerminationClosed failed:', e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Règle RH (2026-09-30) : un retour, même partiel, compte comme complet
+// ---------------------------------------------------------------------------
+// Dès qu'un agent dont le dossier est fermé RAPPORTE des uniformes, la paie
+// considère le retour complet : rien n'est retenu, ni pour les pièces qui
+// manquent, ni pour celles rapportées abîmées ou déclarées perdues. Seul
+// l'agent qui ne rapporte RIEN avant la date limite voit le montant retenu.
+// « Rapporter » = au moins une pièce physiquement rendue (bon état ou abîmée) ;
+// déclarer des pièces perdues sans rien rapporter ne compte pas.
+
+const PHYSICAL_CONDITIONS: UniformItemCondition[] = ['GOOD', 'DAMAGED'];
+const CHARGED_CONDITIONS: UniformItemCondition[] = ['DAMAGED', 'LOST', 'NOT_RETURNED'];
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Début de la fin d'emploi : la dernière lettre « Fermer le dossier », sinon la date de fin d'emploi. */
+async function closureSince(employeeId: string): Promise<Date | null> {
+  const [notice, emp] = await Promise.all([
+    prisma.employeeOffboardingNotice.findFirst({
+      where: { employeeId },
+      orderBy: { sentAt: 'desc' },
+      select: { sentAt: true },
+    }),
+    prisma.employee.findUnique({ where: { id: employeeId }, select: { terminationDate: true } }),
+  ]);
+  return notice?.sentAt ?? emp?.terminationDate ?? null;
+}
+
+/**
+ * Date du premier retour PHYSIQUE (dans les délais) depuis la fermeture du
+ * dossier — la dernière lettre « Fermer le dossier », sinon la fin d'emploi.
+ * Null si l'agent n'a rien rapporté (ou si son dossier n'a jamais été fermé).
+ */
+export async function returnedSinceClosure(employeeId: string, excludeReturnId?: string): Promise<Date | null> {
+  const since = await closureSince(employeeId);
+  if (!since) return null;
+  const first = await prisma.uniformReturn.findFirst({
+    where: {
+      employeeId,
+      status: 'RETURNED',
+      isLateReturn: false,
+      returnedAt: { gte: since },
+      ...(excludeReturnId ? { id: { not: excludeReturnId } } : {}),
+      lines: { some: { condition: { in: PHYSICAL_CONDITIONS } } },
+    },
+    orderBy: { returnedAt: 'asc' },
+    select: { returnedAt: true },
+  });
+  return first?.returnedAt ?? null;
+}
+
+/**
+ * Ce retour (pas encore finalisé) tombe-t-il sous la règle RH ? Oui si l'agent
+ * est parti, que son dossier a été fermé, et qu'il rapporte des pièces
+ * maintenant ou l'a déjà fait depuis la fermeture. Ses pièces abîmées ou
+ * perdues ne sont alors pas facturées.
+ */
+export async function isClosureReturnWaived(ret: {
+  id: string;
+  employeeId: string;
+  isLateReturn: boolean;
+  lines: { condition: UniformItemCondition }[];
+}): Promise<boolean> {
+  if (ret.isLateReturn) return false;
+  const emp = await prisma.employee.findUnique({
+    where: { id: ret.employeeId },
+    select: { status: true, terminationDate: true, offboardingNotices: { select: { id: true }, take: 1 } },
+  });
+  if (!emp || emp.status !== 'INACTIF') return false;
+  if (!emp.terminationDate && emp.offboardingNotices.length === 0) return false;
+  if (ret.lines.some((l) => PHYSICAL_CONDITIONS.includes(l.condition))) return true;
+  return (await returnedSinceClosure(ret.employeeId, ret.id)) !== null;
+}
+
+const CONDITION_FR: Record<string, string> = {
+  GOOD: 'Bon état',
+  DAMAGED: 'Abîmée',
+  LOST: 'Perdue',
+  NOT_RETURNED: 'Non rapportée',
+};
+
+export interface PayrollReturnSummary {
+  employeeName: string;
+  employeeNumber?: string | null;
+  returnedAt: Date;
+  /** Pièces de CE retour, avec leur état. */
+  received: Array<{ itemName: string; size: string; quantity: number; condition: string }>;
+  /** Pièces encore chez l'agent — non facturées (règle RH). */
+  missingPieces: number;
+  /** Montant annoncé dans la lettre de fermeture (ce que la paie retient). */
+  letterAmount: number;
+  link: string;
+}
+
+const CELL = 'padding:6px 8px;border:1px solid #d1d5db;';
+
+function receivedTableHtml(received: PayrollReturnSummary['received']): string {
+  const rows = received
+    .map(
+      (r) => `<tr><td style="${CELL}">${esc(r.itemName)}</td><td style="${CELL}">${esc(r.size)}</td>
+      <td style="${CELL}text-align:right;">${r.quantity}</td><td style="${CELL}">${esc(r.condition)}</td></tr>`
+    )
+    .join('');
+  return `<table style="width:100%;border-collapse:collapse;font-size:14px;margin:8px 0 12px;"><thead><tr style="background:#f3f4f6;">
+    <th style="text-align:left;${CELL}">Pièce</th><th style="text-align:left;${CELL}">Taille</th>
+    <th style="text-align:right;${CELL}">Qté</th><th style="text-align:left;${CELL}">État</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+const amountRow = (label: string, value: string) =>
+  `<tr><td style="${CELL}">${label}</td><td style="${CELL}text-align:right;"><strong>${value}</strong></td></tr>`;
+
+/** « Deuxième courriel » à la paie : l'agent a rapporté des uniformes, rien à retenir. */
+export function buildPayrollReturnHtml(s: PayrollReturnSummary): string {
+  const row = amountRow;
+  return `<div style="font-family:Arial,sans-serif;color:#111827;max-width:640px;margin:0 auto;padding:20px;">
+  <h2 style="color:#15803d;margin-top:0;">Uniformes rapportés — rien à retenir</h2>
+  <p><strong>${esc(s.employeeName)}</strong>${s.employeeNumber ? ` (matricule ${esc(s.employeeNumber)})` : ''}
+  a rapporté des uniformes le ${esc(formatLongFr(s.returnedAt))}. Sa lettre de fermeture annonçait une retenue de ${money(s.letterAmount)}.</p>
+  <p style="margin-bottom:0;"><strong>Pièces reçues</strong></p>
+  ${receivedTableHtml(s.received)}
+  ${
+    s.missingPieces > 0
+      ? `<p>${s.missingPieces} pièce${s.missingPieces > 1 ? 's n’ont' : ' n’a'} pas été rapportée${s.missingPieces > 1 ? 's' : ''} : ${
+          s.missingPieces > 1 ? 'elles ne sont pas facturées' : 'elle n’est pas facturée'
+        }.</p>`
+      : ''
+  }
+  <table style="width:100%;border-collapse:collapse;font-size:15px;margin:8px 0 12px;"><tbody>
+    ${row('Montant à retenir sur la paie', money(0))}
+    ${row('À remettre à l’employé (ou à ne pas retenir)', money(s.letterAmount))}
+  </tbody></table>
+  <p>Règle convenue avec les RH : dès qu’un agent rapporte ses uniformes, le retour est considéré complet pour la paie, même s’il manque des pièces.
+  Si le montant de ${money(s.letterAmount)} a déjà été retenu, il est à remettre en entier.</p>
+  <p><a href="${esc(s.link)}" style="background:#2563eb;color:#fff;padding:10px 18px;text-decoration:none;border-radius:6px;display:inline-block;">Voir la fiche dans TalentSecure</a></p>
+  <p style="font-size:12px;color:#6b7280;">TalentSecure — avis automatique. RH est en copie.</p>
+</div>`;
+}
+
+/**
+ * Après un retour finalisé DANS LES DÉLAIS : si c'est le PREMIER retour
+ * physique depuis la lettre de fermeture et que la lettre est partie (la paie
+ * l'a reçue en copie avec un montant), écrit à la paie (CC RH) que le retour
+ * est complet et qu'il n'y a rien à retenir. Les retours suivants ne changent
+ * rien pour la paie : pas de nouveau courriel. Renvoie le résumé envoyé, ou
+ * null. Ne lève jamais.
+ */
+export async function notifyPayrollReturnReceived(returnId: string): Promise<PayrollReturnSummary | null> {
+  try {
+    const ret = await prisma.uniformReturn.findUnique({
+      where: { id: returnId },
+      include: { lines: { include: { variant: { include: { item: true } } } } },
+    });
+    if (!ret || ret.status !== 'RETURNED' || ret.isLateReturn) return null;
+    if (!ret.lines.some((l) => PHYSICAL_CONDITIONS.includes(l.condition))) return null;
+    const employee = await prisma.employee.findUnique({
+      where: { id: ret.employeeId },
+      select: { firstName: true, lastName: true, employeeNumber: true, status: true },
+    });
+    // Un employé actif qui échange ses uniformes ne concerne pas la paie.
+    if (!employee || employee.status !== 'INACTIF') return null;
+    const returnedAt = ret.returnedAt ?? new Date();
+    const notice = await prisma.employeeOffboardingNotice.findFirst({
+      where: { employeeId: ret.employeeId, emailStatus: 'SENT', sentAt: { lte: returnedAt } },
+      orderBy: { sentAt: 'desc' },
+    });
+    const letterAmount = notice ? Number(notice.estimatedAmount) : 0;
+    // Pas de lettre partie, ou lettre sans montant : la paie ne retient rien.
+    if (!notice || !(letterAmount > 0)) return null;
+    // La paie a déjà été avisée par un retour précédent.
+    const earlier = await prisma.uniformReturn.findFirst({
+      where: {
+        employeeId: ret.employeeId,
+        id: { not: ret.id },
+        status: 'RETURNED',
+        isLateReturn: false,
+        returnedAt: { gte: notice.sentAt },
+        lines: { some: { condition: { in: PHYSICAL_CONDITIONS } } },
+      },
+      select: { id: true },
+    });
+    if (earlier) return null;
+
+    const remaining = await estimateHoldingsCost(ret.employeeId);
+    const employeeName = `${employee.firstName} ${employee.lastName}`;
+    const summary: PayrollReturnSummary = {
+      employeeName,
+      employeeNumber: employee.employeeNumber,
+      returnedAt,
+      received: ret.lines.map((l) => ({
+        itemName: l.variant?.item.name ?? l.customItemName ?? 'Pièce',
+        size: l.variant?.size ?? '',
+        quantity: l.quantity,
+        condition: CONDITION_FR[l.condition] ?? l.condition,
+      })),
+      missingPieces: remaining.totalPieces,
+      letterAmount,
+      link: `${appBaseUrl()}/employees/${ret.employeeId}`,
+    };
+    await notify({
+      type: 'UNIFORM_SETTLEMENT_RECORDED',
+      channels: ['EMAIL'],
+      audience: 'PAIE',
+      dedupKey: `closure-return-paie-${ret.id}`,
+      title: `Uniformes rapportés — ${employeeName} — rien à retenir`,
+      message:
+        `${employeeName} a rapporté des uniformes : retour considéré complet (règle RH). ` +
+        `Rien à retenir ; si ${letterAmount.toFixed(2)} $ ont été retenus, ils sont à remettre.`,
+      link: summary.link,
+      payload: {
+        employeeId: ret.employeeId,
+        returnId: ret.id,
+        noticeId: notice.id,
+        letterAmount,
+        amountToKeep: 0,
+        amountToRelease: letterAmount,
+        missingPieces: summary.missingPieces,
+        emailCc: [EMAIL_RH],
+        emailHtml: buildPayrollReturnHtml(summary),
+      },
+    });
+    return summary;
+  } catch (e) {
+    console.error('notifyPayrollReturnReceived failed:', e);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Règle RH (2026-09-30), après la date limite : on rembourse TOUT
+// ---------------------------------------------------------------------------
+// L'agent qui rapporte des uniformes APRÈS la clôture de son dossier (retour
+// tardif), même en partie, récupère tout ce qui a été retenu pour sa fin
+// d'emploi. Pas plafonné au solde dû : si la paie a déjà retenu le montant (et
+// l'a inscrit comme « RETENUE PAIE »), c'est un vrai remboursement à lui verser.
+
+export const LATE_RETURN_METHOD = 'RETOUR TARDIF';
+
+/**
+ * Montant à rembourser à un agent qui rapporte des uniformes en retard : tout ce
+ * qui a été facturé depuis la fermeture de son dossier (pièces non rapportées,
+ * perdues, abîmées), moins ce qu'un retour tardif précédent a déjà remboursé.
+ */
+export async function lateReturnRefundDue(employeeId: string): Promise<{ charged: number; alreadyRefunded: number; due: number }> {
+  const since = await closureSince(employeeId);
+  const [lines, refunds] = await Promise.all([
+    prisma.uniformReturnLine.findMany({
+      where: {
+        condition: { in: CHARGED_CONDITIONS },
+        return: { employeeId, status: 'RETURNED', isLateReturn: false, ...(since ? { returnedAt: { gte: since } } : {}) },
+      },
+      select: { quantity: true, unitReplacementCost: true },
+    }),
+    prisma.uniformDebtSettlement.aggregate({
+      where: { employeeId, method: LATE_RETURN_METHOD, ...(since ? { createdAt: { gte: since } } : {}) },
+      _sum: { amount: true },
+    }),
+  ]);
+  const charged = round2(lines.reduce((sum, l) => sum + l.quantity * Number(l.unitReplacementCost), 0));
+  const alreadyRefunded = round2(Number(refunds._sum.amount ?? 0));
+  return { charged, alreadyRefunded, due: Math.max(0, round2(charged - alreadyRefunded)) };
+}
+
+/** Courriel à la paie : uniformes rapportés en retard, tout le montant retenu est à rembourser. */
+export function buildPayrollLateRefundHtml(s: {
+  employeeName: string;
+  employeeNumber?: string | null;
+  returnedAt: Date;
+  received: PayrollReturnSummary['received'];
+  charged: number;
+  alreadyRefunded: number;
+  refund: number;
+  link: string;
+}): string {
+  return `<div style="font-family:Arial,sans-serif;color:#111827;max-width:640px;margin:0 auto;padding:20px;">
+  <h2 style="color:#15803d;margin-top:0;">Uniformes rapportés en retard — tout est remboursé</h2>
+  <p><strong>${esc(s.employeeName)}</strong>${s.employeeNumber ? ` (matricule ${esc(s.employeeNumber)})` : ''}
+  a rapporté des uniformes le ${esc(formatLongFr(s.returnedAt))}, après la date limite.</p>
+  <p style="margin-bottom:0;"><strong>Pièces reçues</strong></p>
+  ${receivedTableHtml(s.received)}
+  <table style="width:100%;border-collapse:collapse;font-size:15px;margin:8px 0 12px;"><tbody>
+    ${amountRow('Montant retenu pour les uniformes', money(s.charged))}
+    ${s.alreadyRefunded > 0 ? amountRow('Déjà remboursé', money(s.alreadyRefunded)) : ''}
+    ${amountRow('À rembourser à l’employé', money(s.refund))}
+  </tbody></table>
+  <p>Règle convenue avec les RH : tout retour d’uniformes compte comme complet, même en retard. Tout le montant retenu est donc à rembourser.
+  Si la retenue n’a pas encore été faite, ne la faites pas.</p>
+  <p><a href="${esc(s.link)}" style="background:#2563eb;color:#fff;padding:10px 18px;text-decoration:none;border-radius:6px;display:inline-block;">Voir la fiche dans TalentSecure</a></p>
+  <p style="font-size:12px;color:#6b7280;">TalentSecure — avis automatique. RH est en copie.</p>
+</div>`;
+}
+
+/**
+ * Après un RETOUR TARDIF finalisé (remise déjà clôturée) : si l'agent a
+ * rapporté au moins une pièce, rembourse tout le montant encore dû à rembourser
+ * (règlement « RETOUR TARDIF »), avise les admins et la paie (CC RH).
+ * Renvoie le montant remboursé (0 si rien). Ne lève jamais.
+ */
+export async function refundLateReturn(returnId: string, createdById?: string | null): Promise<number> {
+  try {
+    const ret = await prisma.uniformReturn.findUnique({
+      where: { id: returnId },
+      include: { lines: { include: { variant: { include: { item: true } } } } },
+    });
+    if (!ret || ret.status !== 'RETURNED' || !ret.isLateReturn) return 0;
+    if (!ret.lines.some((l) => PHYSICAL_CONDITIONS.includes(l.condition))) return 0;
+    const { charged, alreadyRefunded, due } = await lateReturnRefundDue(ret.employeeId);
+    if (due <= 0) return 0;
+
+    await prisma.uniformDebtSettlement.create({
+      data: {
+        employeeId: ret.employeeId,
+        amount: due,
+        method: LATE_RETURN_METHOD,
+        notes: `Retour tardif ${ret.id} — remise ${ret.issuanceId} : retour considéré complet (règle RH), tout le montant retenu est remboursé`,
+        createdById: createdById ?? null,
+      },
+    });
+
+    const employee = await prisma.employee.findUnique({
+      where: { id: ret.employeeId },
+      select: { firstName: true, lastName: true, employeeNumber: true },
+    });
+    const name = employee ? `${employee.firstName} ${employee.lastName}` : 'Agent';
+    const link = `${appBaseUrl()}/employees/${ret.employeeId}`;
+    await notify({
+      type: 'UNIFORM_SETTLEMENT_RECORDED',
+      channels: ['IN_APP'],
+      audience: 'ADMINS',
+      title: 'Retour tardif — tout est remboursé',
+      message: `${name} a rapporté des uniformes après la date limite : ${due.toFixed(2)} $ à lui rembourser (retour considéré complet, règle RH)`,
+      link: `/employees/${ret.employeeId}`,
+      payload: { returnId: ret.id, employeeId: ret.employeeId, amount: due },
+    }).catch((e) => console.error('notify failed:', e));
+    await notify({
+      type: 'UNIFORM_SETTLEMENT_RECORDED',
+      channels: ['EMAIL'],
+      audience: 'PAIE',
+      dedupKey: `late-return-paie-${ret.id}`,
+      title: `Uniformes rapportés en retard — ${name} — ${due.toFixed(2)} $ à rembourser`,
+      message:
+        `${name}${employee?.employeeNumber ? ` (matricule ${employee.employeeNumber})` : ''} a rapporté des uniformes après la date limite.\n` +
+        `Règle RH : tout retour compte comme complet. Montant à rembourser (ou à ne pas retenir) : ${due.toFixed(2)} $.`,
+      link,
+      payload: {
+        returnId: ret.id,
+        employeeId: ret.employeeId,
+        amount: due,
+        charged,
+        alreadyRefunded,
+        emailCc: [EMAIL_RH],
+        emailHtml: buildPayrollLateRefundHtml({
+          employeeName: name,
+          employeeNumber: employee?.employeeNumber,
+          returnedAt: ret.returnedAt ?? new Date(),
+          received: ret.lines.map((l) => ({
+            itemName: l.variant?.item.name ?? l.customItemName ?? 'Pièce',
+            size: l.variant?.size ?? '',
+            quantity: l.quantity,
+            condition: CONDITION_FR[l.condition] ?? l.condition,
+          })),
+          charged,
+          alreadyRefunded,
+          refund: due,
+          link,
+        }),
+      },
+    }).catch((e) => console.error('notify failed:', e));
+    return due;
+  } catch (e) {
+    console.error('refundLateReturn failed:', e);
+    return 0;
   }
 }

@@ -5,6 +5,7 @@ import { createApp } from '../app';
 import { hashPassword } from '../utils/password';
 import { generateAccessToken } from '../utils/jwt';
 import { notify } from '../services/notification.service';
+import { computeAmountOwed } from '../services/uniform-stock.service';
 
 /**
  * Retours d'uniforme — sous-routeur /api/uniforms/returns/* + holdings.
@@ -445,7 +446,7 @@ describe('Uniformes — retours /api/uniforms/returns', () => {
       await prisma.uniformReturn.delete({ where: { id: res.body.data.id } });
     });
 
-    it('finalize : crédit de dette pour GOOD, rien pour DAMAGED, remise reste clôturée', async () => {
+    it('finalize : règle RH, tout le montant retenu est remboursé, même avec une pièce abîmée', async () => {
       // Dette figée avant : 2 × 25 = 50 $. Retour tardif : 1 GOOD + 1 DAMAGED.
       const created = await request(app)
         .post('/api/uniforms/returns')
@@ -464,15 +465,15 @@ describe('Uniformes — retours /api/uniforms/returns', () => {
         .set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
       expect(res.body.message).toMatch(/tardif/i);
-      // Seule la pièce GOOD crédite, au coût facturé à la clôture (25 $).
-      expect(Number(res.body.data.settledAmount)).toBe(25);
+      // Tout retour compte comme complet, même en retard : les 50 $ retenus.
+      expect(Number(res.body.data.settledAmount)).toBe(50);
 
       // Règlement automatique créé, méthode dédiée.
       const settlements = await prisma.uniformDebtSettlement.findMany({
         where: { employeeId: lateEmployeeId },
       });
       expect(settlements).toHaveLength(1);
-      expect(Number(settlements[0].amount)).toBe(25);
+      expect(Number(settlements[0].amount)).toBe(50);
       expect(settlements[0].method).toBe('RETOUR TARDIF');
 
       // La paie (qui avait reçu le montant à retenir) est avisée du remboursement, RH en copie.
@@ -480,13 +481,17 @@ describe('Uniformes — retours /api/uniforms/returns', () => {
         expect.objectContaining({
           audience: 'PAIE',
           channels: ['EMAIL'],
-          title: expect.stringContaining('25.00 $ à rembourser'),
-          payload: expect.objectContaining({ amount: 25, emailCc: [expect.stringContaining('rh')] }),
+          title: expect.stringContaining('50.00 $ à rembourser'),
+          payload: expect.objectContaining({
+            amount: 50,
+            emailCc: [expect.stringContaining('rh')],
+            emailHtml: expect.stringContaining('tout est remboursé'),
+          }),
         })
       );
 
       // La dette FACTURÉE reste 50 $ (la ligne DAMAGED du retour tardif est à
-      // 0 $ — pas de double facturation) ; solde = 50 − 25 = 25 $.
+      // 0 $ — pas de double facturation) ; tout est remboursé → solde 0 $.
       const lines = await prisma.uniformReturnLine.findMany({
         where: { return: { employeeId: lateEmployeeId, status: 'RETURNED' } },
       });
@@ -494,6 +499,7 @@ describe('Uniformes — retours /api/uniforms/returns', () => {
         .filter((l) => ['DAMAGED', 'LOST', 'NOT_RETURNED'].includes(l.condition))
         .reduce((s, l) => s + l.quantity * Number(l.unitReplacementCost), 0);
       expect(charged).toBe(50);
+      expect((await computeAmountOwed(lateEmployeeId)).owed).toBe(0);
 
       // La remise reste CLOSED_TERMINATION (refreshParentStatus la saute).
       const parent = await prisma.uniformIssuance.findUnique({ where: { id: lateIssuanceId } });
@@ -505,6 +511,202 @@ describe('Uniformes — retours /api/uniforms/returns', () => {
         where: { returnId: created.body.data.id },
       });
       expect([...movements.map((m) => m.type)].sort()).toEqual(['DAMAGED', 'IN', 'IN', 'WASH_IN']);
+    });
+
+    it('retenue déjà inscrite comme payée : tout est remboursé quand même, et rien de plus au 2e retour', async () => {
+      const emp = await prisma.employee.create({
+        data: { firstName: 'Ancien', lastName: 'Payé', phone: '5145550002', city: 'Montréal', status: 'INACTIF' },
+      });
+      const issuance = await prisma.uniformIssuance.create({
+        data: {
+          employeeId: emp.id,
+          division: 'SECURITE',
+          status: 'CLOSED_TERMINATION',
+          issuedAt: new Date(),
+          lines: { create: [{ variantId, quantity: 2, unitCostSnapshot: 25 }] },
+        },
+      });
+      await prisma.uniformReturn.create({
+        data: {
+          issuanceId: issuance.id,
+          employeeId: emp.id,
+          status: 'RETURNED',
+          returnedAt: new Date(),
+          lines: { create: [{ variantId, quantity: 2, condition: 'NOT_RETURNED', unitReplacementCost: 25 }] },
+        },
+      });
+      // La paie a retenu les 50 $ et RH l'a inscrit : plus rien de dû.
+      await prisma.uniformDebtSettlement.create({ data: { employeeId: emp.id, amount: 50, method: 'RETENUE PAIE' } });
+      expect((await computeAmountOwed(emp.id)).owed).toBe(0);
+
+      const lateReturn = async () => {
+        const created = await request(app)
+          .post('/api/uniforms/returns')
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ issuanceId: issuance.id, lines: [{ variantId, quantity: 1, condition: 'GOOD' }] });
+        expect(created.status).toBe(201);
+        return request(app)
+          .post(`/api/uniforms/returns/${created.body.data.id}/finalize`)
+          .set('Authorization', `Bearer ${adminToken}`);
+      };
+
+      (notify as jest.Mock).mockClear();
+      const first = await lateReturn();
+      expect(Number(first.body.data.settledAmount)).toBe(50);
+      expect(notify).toHaveBeenCalledWith(
+        expect.objectContaining({ audience: 'PAIE', title: expect.stringContaining('50.00 $ à rembourser') })
+      );
+
+      (notify as jest.Mock).mockClear();
+      const second = await lateReturn();
+      expect(Number(second.body.data.settledAmount)).toBe(0);
+      expect((notify as jest.Mock).mock.calls.some((c) => c[0].audience === 'PAIE')).toBe(false);
+    });
+  });
+  // -----------------------------------------------------------------------
+  // « Fermer le dossier » — règle RH : un retour, même partiel, est complet
+  // -----------------------------------------------------------------------
+  describe('dossier fermé — un retour, même partiel, compte comme complet pour la paie', () => {
+    const deadline = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+
+    // Employé dont le dossier a été fermé : remise ISSUED + lettre (la paie l'a
+    // reçue en copie et retient le montant annoncé).
+    async function closedEmployee(opts: {
+      lastName: string;
+      phone: string;
+      status?: 'ACTIF' | 'INACTIF';
+      emailStatus?: string;
+      lines: { variantId: string; quantity: number; unitCostSnapshot: number }[];
+    }) {
+      const emp = await prisma.employee.create({
+        data: {
+          firstName: 'Dossier',
+          lastName: opts.lastName,
+          phone: opts.phone,
+          city: 'Montréal',
+          status: opts.status ?? 'INACTIF',
+          terminationDate: new Date(Date.now() - 2 * 60 * 60 * 1000),
+          uniformReturnDeadlineAt: deadline,
+        },
+      });
+      const issuance = await prisma.uniformIssuance.create({
+        data: { employeeId: emp.id, division: 'SECURITE', status: 'ISSUED', issuedAt: new Date(), lines: { create: opts.lines } },
+      });
+      await prisma.employeeOffboardingNotice.create({
+        data: {
+          employeeId: emp.id,
+          sentAt: new Date(Date.now() - 60 * 60 * 1000),
+          reason: 'DEMISSION',
+          reasonText: 'Démission',
+          returnDeadlineAt: deadline,
+          emailStatus: opts.emailStatus ?? 'SENT',
+          smsStatus: 'SKIPPED',
+          estimatedAmount: opts.lines.reduce((sum, l) => sum + l.quantity * l.unitCostSnapshot, 0),
+          htmlSnapshot: '<p>lettre</p>',
+        },
+      });
+      return { employeeId: emp.id, issuanceId: issuance.id };
+    }
+
+    async function returnAndFinalize(
+      issuanceId: string,
+      lines: { variantId: string; quantity: number; condition: 'GOOD' | 'DAMAGED' | 'LOST' }[]
+    ) {
+      const created = await request(app)
+        .post('/api/uniforms/returns')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ issuanceId, lines });
+      expect(created.status).toBe(201);
+      const res = await request(app)
+        .post(`/api/uniforms/returns/${created.body.data.id}/finalize`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      return res;
+    }
+
+    const payrollMails = () =>
+      (notify as jest.Mock).mock.calls.map((c) => c[0]).filter((n) => n.audience === 'PAIE');
+
+    beforeEach(() => (notify as jest.Mock).mockClear());
+
+    it('1er retour partiel : « rien à retenir » à la paie, pièce perdue non facturée', async () => {
+      // Lettre : 2 chemises S à 25 $ + 1 chemise M à 30 $ = 80 $.
+      const { employeeId, issuanceId } = await closedEmployee({
+        lastName: 'Partiel',
+        phone: '5145550101',
+        lines: [
+          { variantId, quantity: 2, unitCostSnapshot: 25 },
+          { variantId: variantDamagedId, quantity: 1, unitCostSnapshot: 30 },
+        ],
+      });
+
+      // Rapporte 1 chemise S ; déclare la M perdue ; il garde 1 chemise S.
+      const res = await returnAndFinalize(issuanceId, [
+        { variantId, quantity: 1, condition: 'GOOD' },
+        { variantId: variantDamagedId, quantity: 1, condition: 'LOST' },
+      ]);
+      expect(res.body.data.closureWaived).toBe(true);
+      expect(res.body.data.payrollNotified).toBe(true);
+
+      const [mail] = payrollMails();
+      expect(mail).toMatchObject({
+        channels: ['EMAIL'],
+        title: 'Uniformes rapportés — Dossier Partiel — rien à retenir',
+        payload: expect.objectContaining({
+          letterAmount: 80,
+          amountToKeep: 0,
+          amountToRelease: 80,
+          missingPieces: 1,
+          emailCc: [expect.stringContaining('rh')],
+        }),
+      });
+      expect(mail.payload.emailHtml).toContain('Perdue');
+      expect(mail.payload.emailHtml).toContain('n’a pas été rapportée');
+      // Pas d'alerte « dette à confirmer » : rien n'est facturé.
+      expect((notify as jest.Mock).mock.calls.some((c) => c[0].type === 'UNIFORM_RETURN_DAMAGED')).toBe(false);
+      expect((await computeAmountOwed(employeeId)).owed).toBe(0);
+
+      // 2e passage : la paie a déjà eu son courriel, rien de nouveau pour elle.
+      (notify as jest.Mock).mockClear();
+      const again = await returnAndFinalize(issuanceId, [{ variantId, quantity: 1, condition: 'GOOD' }]);
+      expect(again.body.data.payrollNotified).toBe(false);
+      expect(payrollMails()).toHaveLength(0);
+    });
+
+    it('déclarer des pièces perdues SANS rien rapporter ne compte pas comme un retour', async () => {
+      const { employeeId, issuanceId } = await closedEmployee({
+        lastName: 'Perdu',
+        phone: '5145550102',
+        lines: [{ variantId, quantity: 1, unitCostSnapshot: 25 }],
+      });
+      const res = await returnAndFinalize(issuanceId, [{ variantId, quantity: 1, condition: 'LOST' }]);
+      expect(res.body.data.closureWaived).toBe(false);
+      expect(res.body.data.payrollNotified).toBe(false);
+      expect(payrollMails()).toHaveLength(0);
+      expect((await computeAmountOwed(employeeId)).owed).toBe(25);
+    });
+
+    it('rien à la paie si la lettre n’est pas partie ; employé actif : règle ne s’applique pas', async () => {
+      const noLetter = await closedEmployee({
+        lastName: 'SansCourriel',
+        phone: '5145550103',
+        emailStatus: 'SKIPPED',
+        lines: [{ variantId, quantity: 1, unitCostSnapshot: 25 }],
+      });
+      const res = await returnAndFinalize(noLetter.issuanceId, [{ variantId, quantity: 1, condition: 'GOOD' }]);
+      expect(res.body.data.payrollNotified).toBe(false);
+
+      const active = await closedEmployee({
+        lastName: 'Actif',
+        phone: '5145550104',
+        status: 'ACTIF',
+        lines: [{ variantId: variantDamagedId, quantity: 1, unitCostSnapshot: 30 }],
+      });
+      const res2 = await returnAndFinalize(active.issuanceId, [{ variantId: variantDamagedId, quantity: 1, condition: 'DAMAGED' }]);
+      expect(res2.body.data.closureWaived).toBe(false);
+      expect(payrollMails()).toHaveLength(0);
+      // Actif : la pièce abîmée reste facturée comme avant.
+      expect((await computeAmountOwed(active.employeeId)).owed).toBe(30);
     });
   });
 });

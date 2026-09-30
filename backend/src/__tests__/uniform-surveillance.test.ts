@@ -119,6 +119,42 @@ describe('Surveillance offboarding — checkInactiveEmployeesWithHoldings', () =
     expect(closedNotifs.some((n) => n.channel === 'IN_APP')).toBe(true);
   });
 
+  // Règle RH : l'agent a rapporté des uniformes (même en partie) → retour complet.
+  async function physicalReturn(emp: { id: string }, iss: { id: string }, variant: { id: string }, qty = 1) {
+    await prisma.uniformReturn.create({
+      data: {
+        issuanceId: iss.id, employeeId: emp.id, status: 'RETURNED', returnedAt: new Date(),
+        lines: { create: [{ variantId: variant.id, quantity: qty, condition: 'GOOD', unitReplacementCost: 0 }] },
+      },
+    });
+  }
+
+  it('échéance dépassée APRÈS un retour partiel : clôture SANS retenue, aucun courriel à la paie', async () => {
+    await seedAdmin();
+    const justPast = new Date(Date.now() - 60 * 1000);
+    const { emp, iss, variant } = await seedInactiveHolder({ phone: '4385550006', deadline: justPast, issuedQty: 3 });
+    await physicalReturn(emp, iss, variant, 1);
+
+    await checkInactiveEmployeesWithHoldings();
+
+    expect((await prisma.uniformIssuance.findUnique({ where: { id: iss.id } }))?.status).toBe('CLOSED_TERMINATION');
+    expect(await computeHoldings(emp.id)).toHaveLength(0);
+    expect((await computeAmountOwed(emp.id)).owed).toBe(0);
+    const closedNotifs = await prisma.notification.findMany({ where: { type: 'UNIFORM_TERMINATION_CLOSED' } });
+    expect(closedNotifs.filter((n) => n.channel === 'EMAIL')).toHaveLength(0);
+    expect(closedNotifs.find((n) => n.channel === 'IN_APP')?.message).toMatch(/Aucune retenue/);
+  });
+
+  it('veille de l’échéance, mais l’agent a déjà rapporté des pièces : pas de rappel', async () => {
+    await seedAdmin();
+    const tomorrow = new Date(Date.now() + 12 * 3600 * 1000);
+    const { emp, iss, variant } = await seedInactiveHolder({ phone: '4385550007', deadline: tomorrow, issuedQty: 2 });
+    await physicalReturn(emp, iss, variant, 1);
+
+    await checkInactiveEmployeesWithHoldings();
+    expect(await prisma.notification.count({ where: { type: TYPE } })).toBe(0);
+  });
+
   it('échéance manquante (données héritées) : rétablit l’échéance (+14 j) + persiste, pas de clôture', async () => {
     // INACTIF sans terminationDate ni uniformReturnDeadlineAt (créé en direct /
     // antérieur à la feature) mais détenant des pièces.
@@ -176,6 +212,14 @@ describe('Surveillance offboarding — checkInactiveEmployeesWithHoldings', () =
       const second = await closeTerminationCore((await load(iss.id))!, null);
       expect(second).toBeNull();
       expect(await prisma.uniformReturn.count({ where: { issuanceId: iss.id } })).toBe(1);
+    });
+
+    it('pièces perdues déclarées sans rien rapporter : clôture AVEC retenue (la règle RH ne joue pas)', async () => {
+      const { emp, iss } = await seedInactiveHolder({ phone: '4385550012', deadline: new Date(), issuedQty: 3, lostQty: 1 });
+      const res = await closeTerminationCore((await load(iss.id))!, null);
+      expect(res?.waived).toBe(false);
+      // 1 perdue (30 $) + 2 non rapportées (60 $).
+      expect((await computeAmountOwed(emp.id)).owed).toBe(90);
     });
 
     it('toutes les pièces déjà retournées (GOOD) : clôture sans dette (0 ligne, owed 0)', async () => {

@@ -32,6 +32,7 @@ import {
   propagateUniformOffboarding,
 } from './employee-offboarding.service';
 import { computeAmountOwed, computeHoldings } from './uniform-stock.service';
+import { returnedSinceClosure } from './uniform-termination.service';
 import { UNIFORM_RETURN_DEADLINE_CALENDAR_DAYS } from '../constants/uniform';
 
 export const CLOSURE_REASONS = ['INACTIVITE', 'DEMISSION', 'FIN_EMPLOI'] as const;
@@ -179,15 +180,30 @@ export function buildClosureLetterHtml(opts: {
 </body></html>`;
 }
 
-/** Texto court (≤ 320 caractères visés). */
+/** Montant à la manière des RH dans le texto : « 40 $ », « 42,50 $ ». */
+function smsMoney(n: number): string {
+  const cents = Math.round(n * 100);
+  return cents % 100 === 0 ? `${cents / 100} $` : `${(cents / 100).toFixed(2).replace('.', ',')} $`;
+}
+
+/**
+ * Texto de fermeture — texte fourni par les RH le 2026-09-30, mot pour mot :
+ * « Sécurité XGuard : Bonjour Nicolas, votre dossier est maintenant fermé. Merci
+ * de rapporter vos uniformes d'ici le 30 septembre au 9380, boul. Saint-Laurent
+ * (lun. au ven., 9 h à 15 h 30) ou de nous les envoyer par la poste. Sans retour,
+ * 40 $ seront déduits de votre paie, tel que convenu à l'embauche. Les détails
+ * vous ont été envoyés par courriel (pensez à vérifier vos courriels indésirables). »
+ */
 export function buildClosureSms(opts: { firstName: string; deadline: Date; total: number; hasPieces: boolean }): string {
-  const day = formatLongFr(opts.deadline).replace(/ \d{4}$/, '');
-  const head = `Sécurité XGuard : Bonjour ${opts.firstName}, votre dossier est fermé.`;
+  const day = formatLongFr(opts.deadline).replace(/ \d{4}$/, '').replace(/^1 /, '1er ');
+  const place = 'au 9380, boul. Saint-Laurent (lun. au ven., 9 h à 15 h 30)';
+  const head = `Sécurité XGuard : Bonjour ${opts.firstName.trim()}, votre dossier est maintenant fermé.`;
   const body = opts.hasPieces
-    ? ` Veuillez rapporter vos uniformes d'ici le ${day} au 9380 boul. Saint-Laurent (lun-ven 9h-15h30) ou par la poste, sinon ${money(opts.total)} sera déduit de votre paie.`
-    : ` Veuillez retourner tout bien de la Compagnie d'ici le ${day} au 9380 boul. Saint-Laurent (lun-ven 9h-15h30) ou par la poste.`;
-  // Les courriels GHL tombent souvent dans les indésirables : on le dit.
-  return `${head}${body} Détails par courriel (vérifiez vos courriels indésirables).`;
+    ? ` Merci de rapporter vos uniformes d'ici le ${day} ${place} ou de nous les envoyer par la poste. Sans retour, ${smsMoney(
+        opts.total
+      )} seront déduits de votre paie, tel que convenu à l'embauche.`
+    : ` Merci de rapporter tout bien de la Compagnie encore en votre possession d'ici le ${day} ${place} ou de nous l'envoyer par la poste.`;
+  return `${head}${body} Les détails vous ont été envoyés par courriel (pensez à vérifier vos courriels indésirables).`;
 }
 
 // ---------------------------------------------------------------------------
@@ -264,8 +280,12 @@ export async function getClosureOverview(employeeId: string) {
         return: { employeeId, status: 'RETURNED', isLateReturn: false, returnedAt: { gte: latest.sentAt } },
       },
     });
+    // Règle RH : dès que l'agent a rapporté des uniformes, le retour est
+    // complet pour la paie, même s'il reste des pièces chez lui.
+    const returnedAt = await returnedSinceClosure(employeeId);
     let status: ClosureTrackingStatus;
-    if (holdings.length > 0) status = 'EN_ATTENTE';
+    if (returnedAt) status = 'RAPPORTE';
+    else if (holdings.length > 0) status = 'EN_ATTENTE';
     else if (closedLines > 0) status = 'TRANSMIS_PAIE';
     else status = hadPieces ? 'RAPPORTE' : 'AUCUN_UNIFORME';
     // Jours de CALENDRIER restants (heure de Montréal) : « jusqu'au 14 » vu le
