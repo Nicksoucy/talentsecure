@@ -22,6 +22,7 @@ import { validate } from '../middleware/validation.middleware';
 import {
   createEmployeeSchema,
   employeeClosureSchema,
+  employeeClosureResendSchema,
   updateEmployeeSchema,
 } from '../validation/employee.validation';
 
@@ -66,6 +67,10 @@ router.post(
   previewEmployeeClosure
 );
 router.post('/:id/closure', validate({ params: uuidParam, body: employeeClosureSchema }), sendEmployeeClosure);
-router.post('/:id/closure/:noticeId/resend', validate({ params: noticeParams }), resendEmployeeClosure);
+router.post(
+  '/:id/closure/:noticeId/resend',
+  validate({ params: noticeParams, body: employeeClosureResendSchema }),
+  resendEmployeeClosure
+);
 
 export default router;

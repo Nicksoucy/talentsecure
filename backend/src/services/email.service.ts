@@ -82,14 +82,38 @@ export async function verifyEmailService(): Promise<boolean> {
   }
 }
 
-/** Strip HTML pour générer une version texte de secours. */
-function stripHtml(html: string): string {
-  return html
-    .replace(/<style[^>]*>.*?<\/style>/gis, '')
-    .replace(/<script[^>]*>.*?<\/script>/gis, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+/** Retire les blocs <tag …>…</tag> par balayage linéaire (pas de regex à retour arrière). */
+function removeBlocks(html: string, tag: string): string {
+  const lower = html.toLowerCase();
+  let out = '';
+  let i = 0;
+  for (;;) {
+    const start = lower.indexOf(`<${tag}`, i);
+    if (start === -1) break;
+    const end = lower.indexOf(`</${tag}`, start);
+    if (end === -1) break;
+    const close = lower.indexOf('>', end);
+    out += html.slice(i, start);
+    i = close === -1 ? html.length : close + 1;
+  }
+  return out + html.slice(i);
+}
+
+/**
+ * Strip HTML pour générer une version texte de secours. Linéaire : le HTML peut
+ * contenir du texte saisi par RH (lettre de fermeture de dossier) — une regex
+ * polynomiale (`<style[^>]*>.*?</style>`) serait exploitable (ReDoS).
+ */
+export function stripHtml(html: string): string {
+  const noBlocks = removeBlocks(removeBlocks(html, 'style'), 'script');
+  let out = '';
+  let inTag = false;
+  for (const ch of noBlocks) {
+    if (ch === '<') inTag = true;
+    else if (ch === '>' && inTag) { inTag = false; out += ' '; }
+    else if (!inTag) out += ch;
+  }
+  return out.split(/\s/).filter(Boolean).join(' ');
 }
 
 /**

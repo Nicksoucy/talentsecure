@@ -45,3 +45,6 @@ export const employeeClosureSchema = z.object({
   deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date limite invalide (AAAA-MM-JJ)'),
   sendSms: z.boolean().optional().default(false),
 });
+
+/** « Renvoyer » un avis : aucun paramètre — le texte original est réutilisé. */
+export const employeeClosureResendSchema = z.object({}).strict();
