@@ -134,6 +134,7 @@ export default function UniformReportsPage() {
               <TableCell>Agent</TableCell>
               <TableCell align="right">Pièces</TableCell>
               <TableCell>Échéance retour</TableCell>
+              <TableCell>Avis à l’employé</TableCell>
               <TableCell align="right">Montant à risque/dû</TableCell>
               <TableCell align="right">Action</TableCell>
             </TableRow></TableHead>
@@ -153,6 +154,18 @@ export default function UniformReportsPage() {
                     <TableCell>
                       {fmtDate(r.employee.uniformReturnDeadlineAt)}
                       {overdueDeadline && <Chip size="small" color="error" label="dépassée" sx={{ ml: 1 }} />}
+                    </TableCell>
+                    <TableCell>
+                      {r.lastNotice ? (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          color={r.lastNotice.emailStatus === 'SENT' ? 'success' : 'error'}
+                          label={`envoyé le ${fmtDate(r.lastNotice.sentAt)}${r.lastNotice.emailStatus === 'SENT' ? '' : ' (échec courriel)'}`}
+                        />
+                      ) : (
+                        <Chip size="small" color="warning" label="jamais avisé" />
+                      )}
                     </TableCell>
                     <TableCell align="right">{money(r.owed)}</TableCell>
                     <TableCell align="right">
@@ -175,7 +188,7 @@ export default function UniformReportsPage() {
                 );
               })}
               {inactive.data?.data?.length === 0 && (
-                <TableRow><TableCell colSpan={5}><Typography variant="body2" color="text.secondary">Aucun ancien employé ne détient d’uniforme. 🎉</Typography></TableCell></TableRow>
+                <TableRow><TableCell colSpan={6}><Typography variant="body2" color="text.secondary">Aucun ancien employé ne détient d’uniforme. 🎉</Typography></TableCell></TableRow>
               )}
             </TableBody>
           </Table>

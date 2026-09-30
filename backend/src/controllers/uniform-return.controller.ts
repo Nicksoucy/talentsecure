@@ -10,6 +10,8 @@ import { sendSignatureSms } from '../services/sms.service';
 import { generateShareToken, getTokenExpiration } from '../utils/token';
 import { SIGN_TOKEN_DAYS } from '../constants/uniform';
 import { notify } from '../services/notification.service';
+import { EMAIL_RH } from '../services/email.service';
+import { appBaseUrl } from '../services/uniform-termination.service';
 import { getOrCreateOpenBatch } from '../services/uniform-wash-batch.service';
 
 const userId = (req: Request): string | undefined => (req.user as any)?.id;
@@ -151,11 +153,31 @@ async function settleLateReturn(
   notify({
     type: 'UNIFORM_SETTLEMENT_RECORDED',
     channels: ['IN_APP'],
-    audience: 'RH',
+    audience: 'ADMINS',
     title: 'Retour tardif — dette créditée',
     message: `${amount.toFixed(2)} $ crédités (pièces rapportées en bon état) — solde restant : ${after.owed.toFixed(2)} $`,
     link: `/employees/${ret.employeeId}`,
     payload: { returnId: ret.id, employeeId: ret.employeeId, amount, owedAfter: after.owed },
+  }).catch((e) => console.error('notify failed:', e));
+
+  // La paie a déjà reçu le montant à retenir : elle doit savoir quoi rembourser.
+  const emp = await prisma.employee.findUnique({
+    where: { id: ret.employeeId },
+    select: { firstName: true, lastName: true, employeeNumber: true },
+  });
+  const name = emp ? `${emp.firstName} ${emp.lastName}` : 'Agent';
+  notify({
+    type: 'UNIFORM_SETTLEMENT_RECORDED',
+    channels: ['EMAIL'],
+    audience: 'PAIE',
+    dedupKey: `late-return-paie-${ret.id}`,
+    title: `Uniformes rapportés en retard — ${name} — ${amount.toFixed(2)} $ à rembourser`,
+    message:
+      `${name}${emp?.employeeNumber ? ` (matricule ${emp.employeeNumber})` : ''} a rapporté des uniformes après la clôture de son dossier.\n` +
+      `Montant à rembourser (ou à ne pas retenir) : ${amount.toFixed(2)} $.\n` +
+      `Solde restant à retenir : ${after.owed.toFixed(2)} $.`,
+    link: `${appBaseUrl()}/employees/${ret.employeeId}`,
+    payload: { returnId: ret.id, employeeId: ret.employeeId, amount, owedAfter: after.owed, emailCc: [EMAIL_RH] },
   }).catch((e) => console.error('notify failed:', e));
 
   return amount;

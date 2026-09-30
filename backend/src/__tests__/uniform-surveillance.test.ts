@@ -2,14 +2,13 @@ import { prisma, cleanDatabase } from './setup';
 import { checkInactiveEmployeesWithHoldings } from '../jobs/uniform-surveillance';
 import { computeHoldings, computeAmountOwed } from '../services/uniform-stock.service';
 import { closeTerminationCore } from '../services/uniform-termination.service';
-import { addBusinessDays } from '../utils/business-days';
 
 /**
  * Surveillance offboarding — checkInactiveEmployeesWithHoldings.
  *
  * On appelle le check DIRECTEMENT (pas via HTTP) et on observe ses effets en
  * base : notifications créées (PENDING — aucun envoi réseau, le dispatch est un
- * autre worker) et, après le délai de grâce, clôture AUTOMATIQUE des remises.
+ * autre worker) et, dès l'échéance dépassée, clôture AUTOMATIQUE des remises.
  *
  * `notification.service` n'est PAS mocké : on veut vérifier les vraies lignes
  * `notifications`. `notify()` ne fait que des INSERT (idempotents par dedupKey) ;
@@ -36,7 +35,7 @@ describe('Surveillance offboarding — checkInactiveEmployeesWithHoldings', () =
     const emp = await prisma.employee.create({
       data: {
         firstName: 'Anc', lastName: phone, phone, status: 'INACTIF',
-        terminationDate: deadline ? addBusinessDays(deadline, -5) : null,
+        terminationDate: deadline ? new Date(deadline.getTime() - 14 * 86_400_000) : null,
         uniformReturnDeadlineAt: deadline,
       },
     });
@@ -65,34 +64,37 @@ describe('Surveillance offboarding — checkInactiveEmployeesWithHoldings', () =
 
   const TYPE = 'UNIFORM_INACTIVE_EMPLOYEE_HAS_HOLDINGS';
 
-  it('échéance future : 1 rappel RH ; idempotent (dedup par jour)', async () => {
-    const future = addBusinessDays(new Date(), 30);
+  async function seedAdmin() {
+    return prisma.user.create({
+      data: { email: `admin-${Date.now()}@test.local`, firstName: 'Ad', lastName: 'Min', role: 'ADMIN' },
+    });
+  }
+
+  it('échéance dans plus d’un jour : aucun avis (pas de courriel quotidien)', async () => {
+    await seedAdmin();
+    const future = new Date(Date.now() + 5 * 24 * 3600 * 1000);
     await seedInactiveHolder({ phone: '4385550001', deadline: future, issuedQty: 2 });
 
     await checkInactiveEmployeesWithHoldings();
-    let notifs = await prisma.notification.count({ where: { type: TYPE } });
-    expect(notifs).toBe(1); // RH email (IN_APP sans userIds → 0)
-
-    // 2ᵉ passage le même jour → dedupKey identique → aucune nouvelle ligne.
-    await checkInactiveEmployeesWithHoldings();
-    notifs = await prisma.notification.count({ where: { type: TYPE } });
-    expect(notifs).toBe(1);
+    expect(await prisma.notification.count({ where: { type: TYPE } })).toBe(0);
   });
 
-  it('échéance dépassée (dans la grâce) + dette : alerte RH + PAIE', async () => {
-    const pastDeadline = addBusinessDays(new Date(), -1); // dépassée mais grâce non écoulée
-    await seedInactiveHolder({ phone: '4385550002', deadline: pastDeadline, issuedQty: 3, lostQty: 1, cost: 30 });
+  it('veille de l’échéance : 1 rappel dans l’app (RH/admins), une seule fois', async () => {
+    await seedAdmin();
+    const tomorrow = new Date(Date.now() + 12 * 3600 * 1000);
+    await seedInactiveHolder({ phone: '4385550002', deadline: tomorrow, issuedQty: 2 });
 
+    await checkInactiveEmployeesWithHoldings();
     await checkInactiveEmployeesWithHoldings();
     const notifs = await prisma.notification.findMany({ where: { type: TYPE } });
-    // RH + PAIE (owed = 30 > 0).
-    expect(notifs.length).toBe(2);
-    expect(notifs.some((n) => (n.recipientEmail || '').includes('paie'))).toBe(true);
+    expect(notifs).toHaveLength(1);
+    expect(notifs[0].channel).toBe('IN_APP');
   });
 
-  it('échéance + grâce dépassées : clôture AUTOMATIQUE (remise CLOSED_TERMINATION, détentions → 0)', async () => {
-    const longPast = addBusinessDays(new Date(), -40); // échéance + 10j de grâce largement dépassés
-    const { emp, iss } = await seedInactiveHolder({ phone: '4385550003', deadline: longPast, issuedQty: 2 });
+  it('échéance dépassée (dès le lendemain) : clôture AUTOMATIQUE + courriel PAIE (CC RH) avec pièces et montant', async () => {
+    await seedAdmin();
+    const justPast = new Date(Date.now() - 60 * 1000);
+    const { emp, iss } = await seedInactiveHolder({ phone: '4385550003', deadline: justPast, issuedQty: 2 });
 
     expect((await computeHoldings(emp.id)).length).toBeGreaterThan(0);
 
@@ -100,18 +102,24 @@ describe('Surveillance offboarding — checkInactiveEmployeesWithHoldings', () =
 
     const closed = await prisma.uniformIssuance.findUnique({ where: { id: iss.id } });
     expect(closed?.status).toBe('CLOSED_TERMINATION');
-    // Un retour NOT_RETURNED a été créé → détentions retombent à 0.
     expect(await computeHoldings(emp.id)).toHaveLength(0);
-    // Notif de clôture émise vers RH ET PAIE (PAIE = moitié porteuse : prélèvement
-    // sur la dernière paie), avec le montant dû figé (NOT_RETURNED = 2 × 30).
+
     const closedNotifs = await prisma.notification.findMany({ where: { type: 'UNIFORM_TERMINATION_CLOSED' } });
-    expect(closedNotifs.some((n) => (n.recipientEmail || '').includes('rh'))).toBe(true);
-    const paie = closedNotifs.find((n) => (n.recipientEmail || '').includes('paie'));
-    expect(paie).toBeDefined();
-    expect((paie?.payload as any)?.amountOwed).toBe(60);
+    // Un seul courriel : à la paie, RH en copie (plus de courriel RH séparé).
+    const emails = closedNotifs.filter((n) => n.channel === 'EMAIL');
+    expect(emails).toHaveLength(1);
+    expect(emails[0].recipientEmail).toContain('paie');
+    const payload = emails[0].payload as any;
+    expect(payload.amountOwed).toBe(60);
+    expect(payload.emailCc).toEqual([expect.stringContaining('rh')]);
+    expect(payload.emailHtml).toContain('Chemise 4385550003');
+    expect(payload.emailHtml).toContain('60,00 $');
+    expect(payload.emailHtml).not.toContain('localhost');
+    // Alerte dans l'app pour les admins.
+    expect(closedNotifs.some((n) => n.channel === 'IN_APP')).toBe(true);
   });
 
-  it('échéance manquante (données héritées) : rétablit l’échéance + persiste, rappel RH, pas de clôture', async () => {
+  it('échéance manquante (données héritées) : rétablit l’échéance (+14 j) + persiste, pas de clôture', async () => {
     // INACTIF sans terminationDate ni uniformReturnDeadlineAt (créé en direct /
     // antérieur à la feature) mais détenant des pièces.
     const emp = await prisma.employee.create({
@@ -125,12 +133,11 @@ describe('Surveillance offboarding — checkInactiveEmployeesWithHoldings', () =
 
     await checkInactiveEmployeesWithHoldings();
 
-    // Échéance rétablie et PERSISTÉE (sinon dead-end : rappel quotidien sans escalade).
     const after = await prisma.employee.findUnique({ where: { id: emp.id } });
-    expect(after?.uniformReturnDeadlineAt).toBeTruthy();
     expect(after?.terminationDate).toBeTruthy();
-    // Échéance future (ancre = maintenant + 5 j ouvr.) → rappel RH, pas de clôture.
-    expect(await prisma.notification.count({ where: { type: TYPE } })).toBe(1);
+    const days = (after!.uniformReturnDeadlineAt!.getTime() - Date.now()) / 86_400_000;
+    expect(days).toBeGreaterThan(13);
+    expect(days).toBeLessThan(15.1);
     const stillOpen = await prisma.uniformIssuance.findUnique({ where: { id: iss.id } });
     expect(stillOpen?.status).toBe('ISSUED');
   });

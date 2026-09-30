@@ -15,6 +15,7 @@ vi.mock('@/services/employee.service', () => ({
   employeeService: {
     getEmployeeById: vi.fn(),
     updateEmployee: vi.fn(),
+    getClosure: vi.fn(),
   },
 }));
 
@@ -35,6 +36,23 @@ vi.mock('@/services/uniform.service', () => ({
 const getEmployeeById = vi.mocked(employeeService.getEmployeeById);
 const updateEmployee = vi.mocked(employeeService.updateEmployee);
 const closeTermination = vi.mocked(uniformService.closeTermination);
+const getClosure = vi.mocked(employeeService.getClosure);
+
+function makeClosure(notices: any[] = []): any {
+  return {
+    employee: { id: 'emp-1', firstName: 'Marc', lastName: 'Lavoie', email: 'marc.lavoie@example.com', phone: '514-555-0123', status: 'ACTIF' },
+    defaults: {
+      deadline: '2026-10-14',
+      reasonTexts: { INACTIVITE: 'a', DEMISSION: 'b', FIN_EMPLOI: 'c' },
+      reasonLabels: { INACTIVITE: 'Inactivité', DEMISSION: 'Démission', FIN_EMPLOI: "Fin d'emploi" },
+      cc: ['paie@xguard.ca', 'rh@xguard.ca'],
+      subject: 's',
+    },
+    estimate: { pieces: [], totalPieces: 0, total: 0, issuancesWithoutLines: 0 },
+    notices,
+    tracking: notices.length ? { status: 'AUCUN_UNIFORME', daysLeft: null, owed: 0 } : null,
+  };
+}
 
 function makeEmployee(overrides: Partial<Employee> = {}): Employee {
   return {
@@ -70,6 +88,7 @@ function renderPage(id = 'emp-1') {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getClosure.mockResolvedValue(makeClosure());
   // usePerms dérive ses droits du rôle dans le store auth : ADMIN ⇒
   // canViewUniforms + canWriteEmployees.
   useAuthStore.getState().setAuth(makeUser({ role: 'ADMIN' }), 'tok', 'refresh');
@@ -239,5 +258,31 @@ describe('EmployeeDetailPage', () => {
     await waitFor(() => expect(closeTermination).toHaveBeenCalledTimes(2));
     expect(closeTermination).toHaveBeenCalledWith('iss-1');
     expect(closeTermination).toHaveBeenCalledWith('iss-2');
+  });
+
+  describe('Fermer le dossier', () => {
+    it('bouton visible pour un employé actif ; ouvre la fenêtre', async () => {
+      const user = userEvent.setup();
+      getEmployeeById.mockResolvedValue({ data: makeEmployee() });
+      renderPage();
+      const btn = await screen.findByRole('button', { name: /fermer le dossier/i });
+      await user.click(btn);
+      expect(await screen.findByText(/Fermer le dossier — Marc Lavoie/)).toBeInTheDocument();
+    });
+
+    it('employé inactif déjà avisé : pas de bouton, carte de suivi affichée', async () => {
+      getEmployeeById.mockResolvedValue({ data: { ...makeEmployee(), status: 'INACTIF' } as Employee });
+      getClosure.mockResolvedValue(
+        makeClosure([{
+          id: 'n-1', sentAt: '2026-09-30T14:00:00.000Z', sentByName: 'Tamara', reason: 'INACTIVITE',
+          returnDeadlineAt: '2026-10-15T03:59:59.999Z', emailTo: 'marc.lavoie@example.com',
+          emailCc: ['paie@xguard.ca', 'rh@xguard.ca'], emailStatus: 'SENT', emailError: null,
+          smsTo: null, smsStatus: 'SKIPPED', smsError: null, estimatedAmount: 0,
+        }]),
+      );
+      renderPage();
+      expect(await screen.findByText('Fermeture de dossier')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /fermer le dossier/i })).not.toBeInTheDocument();
+    });
   });
 });

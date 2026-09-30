@@ -1,11 +1,11 @@
 import { prisma, cleanDatabase } from './setup';
 import {
   buildDeactivationFields,
+  defaultReturnDeadline,
+  estimateHoldingsCost,
   propagateUniformOffboarding,
   revertUniformOffboarding,
 } from '../services/employee-offboarding.service';
-import { UNIFORM_RETURN_DEADLINE_BUSINESS_DAYS } from '../constants/uniform';
-import { addBusinessDays } from '../utils/business-days';
 
 /**
  * Service partagé de transition ACTIF↔INACTIF (employee-offboarding.service) —
@@ -15,13 +15,33 @@ import { addBusinessDays } from '../utils/business-days';
  */
 describe('employee-offboarding.service', () => {
   describe('buildDeactivationFields (pur)', () => {
-    it('pose fin d’emploi = maintenant et échéance = +5 jours ouvrables', () => {
-      const now = new Date('2026-07-17T12:00:00.000Z');
+    it('pose fin d’emploi = maintenant et échéance = +14 jours, fin de journée à Montréal', () => {
+      const now = new Date('2026-09-29T16:00:00.000Z'); // 29 sept, midi à Montréal
       const fields = buildDeactivationFields({ terminationDate: null, uniformReturnDeadlineAt: null }, now);
       expect(fields.terminationDate).toEqual(now);
-      expect(fields.uniformReturnDeadlineAt).toEqual(
-        addBusinessDays(now, UNIFORM_RETURN_DEADLINE_BUSINESS_DAYS)
+      // 13 octobre 23:59:59.999 EDT = 14 octobre 03:59:59.999 UTC
+      expect(fields.uniformReturnDeadlineAt.toISOString()).toBe('2026-10-14T03:59:59.999Z');
+    });
+
+    it('le jour civil de départ est celui de Montréal (soir = même jour, pas le lendemain UTC)', () => {
+      // 29 sept 22h à Montréal = 30 sept 02h UTC → départ = 29 sept
+      expect(defaultReturnDeadline(new Date('2026-09-30T02:00:00.000Z')).toISOString()).toBe(
+        '2026-10-14T03:59:59.999Z'
       );
+      // Heure normale (hiver) : fin de journée = 04:59:59.999 UTC
+      expect(defaultReturnDeadline(new Date('2026-11-20T17:00:00.000Z')).toISOString()).toBe(
+        '2026-12-05T04:59:59.999Z'
+      );
+    });
+
+    it('une date choisie par RH remplace même une échéance déjà posée', () => {
+      const chosen = new Date('2026-10-20T03:59:59.999Z');
+      const fields = buildDeactivationFields(
+        { terminationDate: null, uniformReturnDeadlineAt: new Date('2026-10-01T00:00:00.000Z') },
+        new Date('2026-09-29T16:00:00.000Z'),
+        chosen
+      );
+      expect(fields.uniformReturnDeadlineAt).toEqual(chosen);
     });
 
     it('préserve des ancres déjà posées (réenregistrement idempotent)', () => {
@@ -92,6 +112,70 @@ describe('employee-offboarding.service', () => {
       const reverted2 = await prisma.uniformIssuance.findUnique({ where: { id: issManual.id } });
       expect(reverted1?.dueReturnAt).toBeNull();
       expect(reverted2?.dueReturnAt?.toISOString()).toBe(manual.toISOString());
+    });
+
+    it('nouvelle échéance choisie par RH : les remises qui avaient l’ancienne la suivent', async () => {
+      const emp = await prisma.employee.create({
+        data: { firstName: 'Re', lastName: 'Date', phone: '5145557703', status: 'INACTIF' },
+      });
+      const item = await prisma.uniformItem.create({
+        data: { division: 'SECURITE', name: 'Pantalon OFF-RD', defaultReplacementCost: 40 },
+      });
+      const variant = await prisma.uniformVariant.create({
+        data: { itemId: item.id, size: '32', barcode: 'OFF-RD-1', replacementCost: 40 },
+      });
+      const oldDeadline = new Date('2026-10-01T03:59:59.999Z');
+      const manual = new Date('2099-01-01T12:00:00.000Z');
+      const propagated = await prisma.uniformIssuance.create({
+        data: {
+          employeeId: emp.id, division: 'SECURITE', status: 'ISSUED', dueReturnAt: oldDeadline,
+          lines: { create: [{ variantId: variant.id, quantity: 1, unitCostSnapshot: 40 }] },
+        },
+      });
+      const fixed = await prisma.uniformIssuance.create({
+        data: {
+          employeeId: emp.id, division: 'SECURITE', status: 'ISSUED', dueReturnAt: manual,
+          lines: { create: [{ variantId: variant.id, quantity: 1, unitCostSnapshot: 40 }] },
+        },
+      });
+
+      const newDeadline = new Date('2026-10-14T03:59:59.999Z');
+      await propagateUniformOffboarding(emp.id, newDeadline, oldDeadline);
+
+      const a = await prisma.uniformIssuance.findUnique({ where: { id: propagated.id } });
+      const b = await prisma.uniformIssuance.findUnique({ where: { id: fixed.id } });
+      expect(a?.dueReturnAt?.toISOString()).toBe(newDeadline.toISOString());
+      expect(b?.dueReturnAt?.toISOString()).toBe(manual.toISOString());
+    });
+
+    it('estimateHoldingsCost : coût figé sur la remise (pas le coût courant) et remises sans pièces signalées', async () => {
+      const emp = await prisma.employee.create({
+        data: { firstName: 'Est', lastName: 'Imation', phone: '5145557704', status: 'ACTIF' },
+      });
+      const item = await prisma.uniformItem.create({
+        data: { division: 'SECURITE', name: 'Manteau OFF-EST', defaultReplacementCost: 90 },
+      });
+      // Coût courant 90 $, mais la remise a figé 75 $ : c'est 75 $ qui sera retenu.
+      const variant = await prisma.uniformVariant.create({
+        data: { itemId: item.id, size: 'L', barcode: 'OFF-EST-1', replacementCost: 90 },
+      });
+      await prisma.uniformIssuance.create({
+        data: {
+          employeeId: emp.id, division: 'SECURITE', status: 'ISSUED',
+          lines: { create: [{ variantId: variant.id, quantity: 2, unitCostSnapshot: 75 }] },
+        },
+      });
+      await prisma.uniformIssuance.create({
+        data: { employeeId: emp.id, division: 'SECURITE', status: 'ISSUED' },
+      });
+
+      const est = await estimateHoldingsCost(emp.id);
+      expect(est.totalPieces).toBe(2);
+      expect(est.total).toBe(150);
+      expect(est.pieces).toEqual([
+        { itemName: 'Manteau OFF-EST', size: 'L', quantity: 2, unitCost: 75, lineTotal: 150 },
+      ]);
+      expect(est.issuancesWithoutLines).toBe(1);
     });
   });
 });

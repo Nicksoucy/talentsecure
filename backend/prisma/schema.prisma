@@ -1165,7 +1165,7 @@ model Employee {
 
   // Offboarding uniformes — posés automatiquement à la transition ACTIF→INACTIF,
   // remis à null si l'employé est réactivé. terminationDate ancre l'échéance de
-  // retour (uniformReturnDeadlineAt = +5 jours ouvrables), utilisée par la
+  // retour (uniformReturnDeadlineAt = +14 jours, ou date choisie par RH), utilisée par la
   // surveillance pour rappels/escalade/clôture automatique.
   terminationDate         DateTime?
   uniformReturnDeadlineAt DateTime?
@@ -1183,6 +1183,9 @@ model Employee {
   videoStoragePath String?
 
   notes String? @db.Text
+
+  // Avis de fermeture de dossier envoyés (courriel + texto, date limite uniformes)
+  offboardingNotices EmployeeOffboardingNotice[]
 
   // Lien vers la fiche candidat d'origine (traçabilité)
   convertedFromCandidateId String?
@@ -1203,6 +1206,37 @@ model Employee {
   @@index([convertedFromCandidateId])
   @@index([lat, lng])
   @@map("employees")
+}
+
+// Avis « Fermeture de votre dossier XGuard » envoyé à l'employé (À employé,
+// CC paie@ + rh@), avec la date limite de retour des uniformes et le montant
+// qui sera retenu. `htmlSnapshot` = le texte exact envoyé (preuve).
+// SQL : prisma/sql/add_employee_offboarding_notices.sql
+model EmployeeOffboardingNotice {
+  id               String   @id @default(uuid())
+  employeeId       String
+  employee         Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  sentById         String?
+  sentByName       String?
+  sentAt           DateTime @default(now())
+  reason           String // INACTIVITE | DEMISSION | FIN_EMPLOI
+  reasonText       String   @db.Text
+  returnDeadlineAt DateTime
+  emailTo          String?
+  emailCc          String[] @default([])
+  emailStatus      String // SENT | FAILED | SKIPPED
+  emailError       String?
+  smsTo            String?
+  smsStatus        String // SENT | FAILED | SKIPPED
+  smsError         String?
+  estimatedAmount  Decimal  @default(0) @db.Decimal(10, 2)
+  piecesSnapshot   Json     @default("[]")
+  htmlSnapshot     String   @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([employeeId, sentAt], map: "employee_offboarding_notices_employee_idx")
+  @@map("employee_offboarding_notices")
 }
 
 // ===========================================================================

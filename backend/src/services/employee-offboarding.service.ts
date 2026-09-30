@@ -5,8 +5,8 @@
  * que l'UI (ancres de fin d'emploi, propagation des échéances, avertissement).
  */
 import { prisma } from '../config/database';
-import { addBusinessDays } from '../utils/business-days';
-import { UNIFORM_RETURN_DEADLINE_BUSINESS_DAYS } from '../constants/uniform';
+import { UNIFORM_RETURN_DEADLINE_CALENDAR_DAYS } from '../constants/uniform';
+import { addDaysYmd, endOfDayMontreal, montrealYmd } from '../utils/montreal-date';
 import {
   computeAmountOwed,
   computeHoldings,
@@ -19,18 +19,27 @@ export interface DeactivationFields {
 }
 
 /**
+ * Échéance de retour par défaut : +14 jours de calendrier, fin de journée à
+ * Montréal (« au plus tard le 14 octobre » = tout le 14 octobre compte).
+ */
+export function defaultReturnDeadline(now: Date = new Date()): Date {
+  return endOfDayMontreal(addDaysYmd(montrealYmd(now), UNIFORM_RETURN_DEADLINE_CALENDAR_DAYS));
+}
+
+/**
  * Ancres de la transition ACTIF→INACTIF : fin d'emploi + échéance de retour
- * (+5 jours ouvrables). Préserve les valeurs déjà posées (ex : réenregistrement).
+ * (+14 jours). Préserve les valeurs déjà posées (ex : réenregistrement), sauf si
+ * RH choisit explicitement une date (`deadlineOverride`, « Fermer le dossier »).
  */
 export function buildDeactivationFields(
   existing: { terminationDate: Date | null; uniformReturnDeadlineAt: Date | null },
-  now: Date = new Date()
+  now: Date = new Date(),
+  deadlineOverride?: Date
 ): DeactivationFields {
   return {
     terminationDate: existing.terminationDate ?? now,
     uniformReturnDeadlineAt:
-      existing.uniformReturnDeadlineAt ??
-      addBusinessDays(now, UNIFORM_RETURN_DEADLINE_BUSINESS_DAYS),
+      deadlineOverride ?? existing.uniformReturnDeadlineAt ?? defaultReturnDeadline(now),
   };
 }
 
@@ -46,13 +55,23 @@ export interface UniformOffboardingWarning {
  * À la fin d'emploi : propage l'échéance aux remises actives SANS date butoir
  * (ferme l'angle mort des remises invisibles à la surveillance des retards) et
  * renvoie un avertissement non bloquant si l'employé détient encore des pièces.
+ *
+ * `previousDeadline` : ancienne échéance de l'employé quand RH en choisit une
+ * nouvelle — les remises qui l'avaient reçue par propagation suivent aussi.
  */
 export async function propagateUniformOffboarding(
   employeeId: string,
-  deadline: Date
+  deadline: Date,
+  previousDeadline?: Date | null
 ): Promise<UniformOffboardingWarning | undefined> {
   const active = await getActiveIssuancesForEmployee(employeeId);
-  const missingDue = active.filter((a) => !a.dueReturnAt).map((a) => a.id);
+  const missingDue = active
+    .filter(
+      (a) =>
+        !a.dueReturnAt ||
+        (previousDeadline && a.dueReturnAt.getTime() === previousDeadline.getTime())
+    )
+    .map((a) => a.id);
   if (missingDue.length > 0) {
     await prisma.uniformIssuance.updateMany({
       where: { id: { in: missingDue } },
@@ -91,4 +110,62 @@ export async function revertUniformOffboarding(
     },
     data: { dueReturnAt: null },
   });
+}
+
+export interface EstimatedPiece {
+  itemName: string;
+  size: string;
+  quantity: number;
+  unitCost: number;
+  lineTotal: number;
+}
+
+export interface HoldingsEstimate {
+  pieces: EstimatedPiece[];
+  totalPieces: number;
+  total: number;
+  /** Remises actives SANS aucune ligne (import PDF historique) : montant incomplet. */
+  issuancesWithoutLines: number;
+}
+
+/**
+ * Montant qui sera retenu si rien ne revient : pièces détenues × coût figé sur
+ * la remise (`unitCostSnapshot`, la même base que `closeTerminationCore`), pour
+ * que le montant annoncé à l'employé soit celui que la paie recevra. Repli sur
+ * le coût courant de la variante si aucune remise active ne la porte.
+ */
+export async function estimateHoldingsCost(employeeId: string): Promise<HoldingsEstimate> {
+  const [holdings, active] = await Promise.all([
+    computeHoldings(employeeId),
+    prisma.uniformIssuance.findMany({
+      where: { employeeId, status: { in: ['ISSUED', 'PARTIALLY_RETURNED'] } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, lines: { select: { variantId: true, unitCostSnapshot: true } } },
+    }),
+  ]);
+
+  const snapshot = new Map<string, number>();
+  for (const iss of active) {
+    for (const l of iss.lines) {
+      if (l.variantId && !snapshot.has(l.variantId)) snapshot.set(l.variantId, Number(l.unitCostSnapshot));
+    }
+  }
+
+  const pieces = holdings.map((h) => {
+    const unitCost = snapshot.get(h.variantId) ?? h.replacementCost;
+    return {
+      itemName: h.itemName,
+      size: h.size,
+      quantity: h.quantity,
+      unitCost,
+      lineTotal: Math.round(unitCost * h.quantity * 100) / 100,
+    };
+  });
+
+  return {
+    pieces,
+    totalPieces: pieces.reduce((s, p) => s + p.quantity, 0),
+    total: Math.round(pieces.reduce((s, p) => s + p.lineTotal, 0) * 100) / 100,
+    issuancesWithoutLines: active.filter((a) => a.lines.length === 0).length,
+  };
 }

@@ -11,12 +11,27 @@ import {
   promoteCandidateToEmployee,
   promoteProspectToEmployee,
 } from '../controllers/employee.controller';
+import {
+  getEmployeeClosure,
+  previewEmployeeClosure,
+  sendEmployeeClosure,
+  resendEmployeeClosure,
+} from '../controllers/employee-closure.controller';
 import { authenticateJWT, authorizeReadWrite } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
-import { createEmployeeSchema, updateEmployeeSchema } from '../validation/employee.validation';
+import {
+  createEmployeeSchema,
+  employeeClosureSchema,
+  employeeClosureResendSchema,
+  updateEmployeeSchema,
+} from '../validation/employee.validation';
 
 const uuidParam = z.object({ id: z.string().uuid('ID invalide') });
 const candidateIdParam = z.object({ candidateId: z.string().uuid('ID invalide') });
+const noticeParams = z.object({
+  id: z.string().uuid('ID invalide'),
+  noticeId: z.string().uuid('ID invalide'),
+});
 const prospectIdParam = z.object({ prospectId: z.string().uuid('ID invalide') });
 
 const router = Router();
@@ -42,5 +57,20 @@ router.post('/promote-prospect/:prospectId', validate({ params: prospectIdParam 
 router.get('/:id', validate({ params: uuidParam }), getEmployeeById);
 router.put('/:id', validate({ params: uuidParam, body: updateEmployeeSchema }), updateEmployee);
 router.delete('/:id', validate({ params: uuidParam }), deleteEmployee);
+
+// Fermeture de dossier : lettre par courriel (CC paie + RH), texto, date limite
+// de retour des uniformes. Écriture réservée ADMIN/RH (authorizeReadWrite).
+router.get('/:id/closure', validate({ params: uuidParam }), getEmployeeClosure);
+router.post(
+  '/:id/closure/preview',
+  validate({ params: uuidParam, body: employeeClosureSchema }),
+  previewEmployeeClosure
+);
+router.post('/:id/closure', validate({ params: uuidParam, body: employeeClosureSchema }), sendEmployeeClosure);
+router.post(
+  '/:id/closure/:noticeId/resend',
+  validate({ params: noticeParams, body: employeeClosureResendSchema }),
+  resendEmployeeClosure
+);
 
 export default router;

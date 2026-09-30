@@ -8,12 +8,15 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditIcon from '@mui/icons-material/Edit';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import PersonOffIcon from '@mui/icons-material/PersonOff';
 import { useSnackbar } from 'notistack';
 import { employeeService } from '@/services/employee.service';
 import type { UniformOffboardingWarning } from '@/services/employee.service';
 import { uniformService } from '@/services/uniform.service';
 import { usePerms } from '@/hooks/usePerms';
 import UniformFichePanel from '../uniformes/components/UniformFichePanel';
+import FileClosureDialog from './FileClosureDialog';
+import FileClosureCard from './FileClosureCard';
 
 function Info({ label, value }: { label: string; value?: any }) {
   return (
@@ -39,6 +42,13 @@ export default function EmployeeDetailPage() {
     enabled: !!id,
   });
 
+  const closure = useQuery({
+    queryKey: ['employee-closure', id],
+    queryFn: () => employeeService.getClosure(id!),
+    enabled: !!id,
+  });
+  const [closureOpen, setClosureOpen] = useState(false);
+
   const [editOpen, setEditOpen] = useState(false);
   const [form, setForm] = useState<any>({});
   const [warning, setWarning] = useState<UniformOffboardingWarning | null>(null);
@@ -59,6 +69,7 @@ export default function EmployeeDetailPage() {
       qc.invalidateQueries({ queryKey: ['employee', id] });
       qc.invalidateQueries({ queryKey: ['employees'] });
       qc.invalidateQueries({ queryKey: ['uniform-fiche', id] });
+      qc.invalidateQueries({ queryKey: ['employee-closure', id] });
       enqueueSnackbar('Employé mis à jour', { variant: 'success' });
       setEditOpen(false);
       // Fin d'emploi avec uniformes encore détenus → avertissement non bloquant.
@@ -129,6 +140,17 @@ export default function EmployeeDetailPage() {
                 Modifier
               </Button>
             )}
+            {canWriteEmployees && closure.data && (e.status === 'ACTIF' || closure.data.notices.length === 0) && (
+              <Button
+                startIcon={<PersonOffIcon />}
+                variant="outlined"
+                color="error"
+                size="small"
+                onClick={() => setClosureOpen(true)}
+              >
+                Fermer le dossier
+              </Button>
+            )}
           </Stack>
         </Stack>
         <Grid container spacing={2}>
@@ -145,6 +167,8 @@ export default function EmployeeDetailPage() {
           <Info label="Véhicule" value={e.hasVehicle ? 'Oui' : 'Non'} />
         </Grid>
       </Paper>
+
+      {closure.data && <FileClosureCard overview={closure.data} canWrite={canWriteEmployees} />}
 
       {/* Gestion des uniformes */}
       <Divider sx={{ mb: 2 }}>
@@ -169,6 +193,11 @@ export default function EmployeeDetailPage() {
                 <MenuItem value="ACTIF">Actif</MenuItem>
                 <MenuItem value="INACTIF">Inactif</MenuItem>
               </TextField>
+              {e.status === 'ACTIF' && form.status === 'INACTIF' && (
+                <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5 }}>
+                  Rien ne sera envoyé à l’employé. Pour l’aviser (lettre + uniformes), utilisez « Fermer le dossier ».
+                </Typography>
+              )}
             </Grid>
             <Grid item xs={12} sm={6}><TextField label="Courriel" fullWidth size="small" value={form.email || ''} onChange={(ev) => set('email', ev.target.value)} /></Grid>
             <Grid item xs={12} sm={6}><TextField label="Téléphone" fullWidth size="small" required value={form.phone || ''} onChange={(ev) => set('phone', ev.target.value)} /></Grid>
@@ -194,6 +223,10 @@ export default function EmployeeDetailPage() {
         </DialogActions>
       </Dialog>
 
+      {closure.data && (
+        <FileClosureDialog open={closureOpen} onClose={() => setClosureOpen(false)} overview={closure.data} />
+      )}
+
       {/* Avertissement fin d'emploi : uniformes encore détenus */}
       <Dialog open={!!warning} onClose={() => setWarning(null)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -204,7 +237,7 @@ export default function EmployeeDetailPage() {
             {e.firstName} {e.lastName} est maintenant <strong>inactif</strong> mais détient encore{' '}
             <strong>{warning?.totalPieces} pièce(s)</strong>.
             {warning?.deadline && (
-              <> Échéance de retour fixée au <strong>{fmtDate(warning.deadline)}</strong> (5 jours ouvrables).</>
+              <> Échéance de retour fixée au <strong>{fmtDate(warning.deadline)}</strong> (14 jours).</>
             )}
           </Typography>
           {warning && warning.owed > 0 && (
