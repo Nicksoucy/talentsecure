@@ -186,7 +186,8 @@ export function buildClosureSms(opts: { firstName: string; deadline: Date; total
   const body = opts.hasPieces
     ? ` Veuillez rapporter vos uniformes d'ici le ${day} au 9380 boul. Saint-Laurent (lun-ven 9h-15h30) ou par la poste, sinon ${money(opts.total)} sera déduit de votre paie.`
     : ` Veuillez retourner tout bien de la Compagnie d'ici le ${day} au 9380 boul. Saint-Laurent (lun-ven 9h-15h30) ou par la poste.`;
-  return `${head}${body} Détails par courriel.`;
+  // Les courriels GHL tombent souvent dans les indésirables : on le dit.
+  return `${head}${body} Détails par courriel (vérifiez vos courriels indésirables).`;
 }
 
 // ---------------------------------------------------------------------------
