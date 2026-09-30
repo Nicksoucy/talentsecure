@@ -19,7 +19,8 @@ import { prisma } from '../config/database';
 import { ApiError } from '../utils/apiError';
 import { addDaysYmd, endOfDayMontreal, formatLongFr, montrealYmd } from '../utils/montreal-date';
 import { EMAIL_PAIE, EMAIL_RH } from './email.service';
-import { isGhlConfigured } from './ghl.client';
+import { getContactById, isGhlConfigured } from './ghl.client';
+import { lastTenDigits } from '../utils/phone';
 import { upsertPersonContact } from './ghl-email.service';
 import { sendEmailWithProvider } from './notification.service';
 import { resolveGhlContactId, sendSms } from './sms.service';
@@ -331,25 +332,35 @@ function errMessage(e: unknown): string {
   return ((e as Error)?.message || String(e)).slice(0, 500);
 }
 
-/** Contact GHL de l'employé (créé/mis à jour), ou null si GHL indisponible. */
-async function employeeContactId(emp: ClosureEmployee): Promise<string | null> {
-  if (!isGhlConfigured()) return null;
+/**
+ * Contact GHL pour le COURRIEL : retrouvé/créé par l'adresse seulement. On
+ * n'y écrit pas le téléphone : une fiche GHL existante peut appartenir à la même
+ * personne avec un autre numéro (vieux cellulaire) — on ne l'écrase pas.
+ */
+async function emailContactId(emp: ClosureEmployee): Promise<string | null> {
+  if (!isGhlConfigured() || !emp.email?.trim()) return null;
   try {
-    return await upsertPersonContact({
-      email: emp.email,
-      phone: emp.phone,
-      firstName: emp.firstName,
-      lastName: emp.lastName,
-    });
+    return await upsertPersonContact({ email: emp.email, firstName: emp.firstName, lastName: emp.lastName });
   } catch {
-    // Upsert refusé (doublon, droits) → on retombe sur la recherche existante.
-    return resolveGhlContactId(emp.phone, emp.email).catch(() => null);
+    return resolveGhlContactId(null, emp.email).catch(() => null);
   }
 }
 
-async function deliverEmail(emp: ClosureEmployee, html: string, contactId: string | null): Promise<ChannelResult> {
+/**
+ * Contact GHL pour le TEXTO : retrouvé/créé par le NUMÉRO de la fiche
+ * TalentSecure, jamais par le courriel. Bogue du 2026-09-30 : le contact trouvé
+ * par courriel portait un vieux numéro dans GHL, et le texto est parti là.
+ */
+async function smsContactId(emp: ClosureEmployee): Promise<string | null> {
+  const byPhone = await resolveGhlContactId(emp.phone, null).catch(() => null);
+  if (byPhone) return byPhone;
+  return upsertPersonContact({ phone: emp.phone, firstName: emp.firstName, lastName: emp.lastName });
+}
+
+async function deliverEmail(emp: ClosureEmployee, html: string): Promise<ChannelResult> {
   if (!emp.email?.trim()) return { status: 'SKIPPED', error: 'Aucun courriel au dossier' };
   try {
+    const contactId = await emailContactId(emp);
     await sendEmailWithProvider({
       to: emp.email.trim(),
       cc: [EMAIL_PAIE, EMAIL_RH],
@@ -364,12 +375,22 @@ async function deliverEmail(emp: ClosureEmployee, html: string, contactId: strin
   }
 }
 
-async function deliverSms(emp: ClosureEmployee, message: string, contactId: string | null): Promise<ChannelResult> {
+async function deliverSms(emp: ClosureEmployee, message: string): Promise<ChannelResult> {
   if (!emp.phone?.trim()) return { status: 'SKIPPED', error: 'Aucun téléphone au dossier' };
   if (!isGhlConfigured()) return { status: 'FAILED', error: 'GHL non configuré (texto impossible)' };
   try {
-    const id = contactId ?? (await resolveGhlContactId(emp.phone, emp.email));
+    const id = await smsContactId(emp);
     if (!id) return { status: 'FAILED', error: 'Aucun contact GHL pour ce numéro' };
+    // Dernier garde-fou : GHL envoie au numéro de SA fiche. S'il ne correspond pas
+    // au numéro TalentSecure, on n'envoie pas (mieux vaut « échec » qu'un inconnu).
+    const contact = await getContactById(id);
+    const expected = lastTenDigits(emp.phone);
+    if (!contact?.phone || lastTenDigits(contact.phone) !== expected) {
+      return {
+        status: 'FAILED',
+        error: `Le contact GHL trouvé a un autre numéro (${contact?.phone || 'aucun'}) que la fiche (${emp.phone}) — texto non envoyé`,
+      };
+    }
     await sendSms(id, message);
     return { status: 'SENT', error: null };
   } catch (e) {
@@ -410,11 +431,9 @@ export async function sendClosure(
   });
 
   // 3. Envois (jamais bloquants pour la fermeture).
-  const wantsSms = input.sendSms && !!emp.phone?.trim();
-  const contactId = emp.email?.trim() || wantsSms ? await employeeContactId(emp) : null;
-  const email = await deliverEmail(emp, html, contactId);
+  const email = await deliverEmail(emp, html);
   const sms: ChannelResult = input.sendSms
-    ? await deliverSms(emp, smsText, contactId)
+    ? await deliverSms(emp, smsText)
     : { status: 'SKIPPED', error: 'Texto non demandé' };
 
   // 4. Trace.
@@ -456,10 +475,9 @@ export async function resendClosureNotice(employeeId: string, noticeId: string):
   const retrySms = notice.smsTo !== null && notice.smsStatus !== 'SENT';
   if (!retryEmail && !retrySms) throw new ApiError(400, 'Rien à renvoyer : tout est déjà parti');
 
-  const contactId = await employeeContactId(emp);
   const data: Prisma.EmployeeOffboardingNoticeUpdateInput = {};
   if (retryEmail) {
-    const r = await deliverEmail(emp, notice.htmlSnapshot, contactId);
+    const r = await deliverEmail(emp, notice.htmlSnapshot);
     Object.assign(data, { emailTo: emp.email?.trim() || null, emailStatus: r.status, emailError: r.error });
   }
   if (retrySms) {
@@ -471,8 +489,7 @@ export async function resendClosureNotice(employeeId: string, noticeId: string):
         deadline: notice.returnDeadlineAt,
         total: Number(notice.estimatedAmount),
         hasPieces: pieces.length > 0,
-      }),
-      contactId
+      })
     );
     Object.assign(data, { smsTo: emp.phone, smsStatus: r.status, smsError: r.error });
   }
