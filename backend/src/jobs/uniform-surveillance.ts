@@ -393,8 +393,16 @@ export async function checkDuplicateActiveIssuances(): Promise<number> {
 // liste ; le rappel est dédupliqué par employé + échéance.
 export async function checkInactiveEmployeesWithHoldings(): Promise<number> {
   const now = new Date();
+  // Préfiltre : seuls les INACTIF ayant AU MOINS une remise non-brouillon
+  // peuvent détenir des pièces (cf. listOutstandingByInactiveEmployees) —
+  // évite 2 requêtes Prisma × ~900 INACTIF historiques à chaque run horaire.
+  const holderIds = await prisma.uniformIssuance.findMany({
+    where: { status: { notIn: ['DRAFT', 'CANCELLED'] } },
+    select: { employeeId: true },
+    distinct: ['employeeId'],
+  });
   const employees = await prisma.employee.findMany({
-    where: { status: 'INACTIF', isDeleted: false },
+    where: { status: 'INACTIF', isDeleted: false, id: { in: holderIds.map((h) => h.employeeId) } },
     select: {
       id: true,
       firstName: true,
