@@ -13,9 +13,16 @@ jest.mock('../services/notification.service', () => ({
   sendEmailWithProvider: (...args: unknown[]) => sendEmailWithProvider(...args),
 }));
 const sendSms = jest.fn().mockResolvedValue({ messageId: 'sms-1' });
+const resolveGhlContactId = jest.fn().mockResolvedValue('contact-by-phone');
 jest.mock('../services/sms.service', () => ({
-  resolveGhlContactId: jest.fn().mockResolvedValue('contact-found'),
+  resolveGhlContactId: (...args: unknown[]) => resolveGhlContactId(...args),
   sendSms: (...args: unknown[]) => sendSms(...args),
+}));
+// Numéro inscrit sur la fiche GHL trouvée (par défaut = celui de la fiche TalentSecure).
+const getContactById = jest.fn().mockResolvedValue({ id: 'contact-by-phone', phone: '+15145550000' });
+jest.mock('../services/ghl.client', () => ({
+  ...jest.requireActual('../services/ghl.client'),
+  getContactById: (...args: unknown[]) => getContactById(...args),
 }));
 jest.mock('../services/ghl-email.service', () => ({
   ...jest.requireActual('../services/ghl-email.service'),
@@ -96,6 +103,8 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
   beforeEach(() => {
     sendEmailWithProvider.mockClear().mockResolvedValue(undefined);
     sendSms.mockClear().mockResolvedValue({ messageId: 'sms-1' });
+    resolveGhlContactId.mockClear().mockResolvedValue('contact-by-phone');
+    getContactById.mockClear().mockResolvedValue({ id: 'contact-by-phone', phone: '+15145550000' });
   });
 
   it('GET : défauts (+14 jours, CC paie + RH) et estimation des uniformes', async () => {
@@ -152,7 +161,9 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
     expect(mail.cc).toEqual(['paie@xguard.ca', 'rh@xguard.ca']);
     expect(mail.replyTo).toBe('rh@xguard.ca');
     expect(mail.contactId).toBe('contact-upserted');
-    expect(sendSms).toHaveBeenCalledWith('contact-upserted', expect.stringContaining('105,00 $'));
+    // Texto : contact retrouvé par le NUMÉRO de la fiche, jamais par le courriel.
+    expect(resolveGhlContactId).toHaveBeenCalledWith('5145550000', null);
+    expect(sendSms).toHaveBeenCalledWith('contact-by-phone', expect.stringContaining('105,00 $'));
 
     const notice = await prisma.employeeOffboardingNotice.findFirst({ where: { employeeId: emp.id } });
     expect(Number(notice?.estimatedAmount)).toBe(105);
@@ -166,6 +177,41 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
     const overview = await request(app).get(`/api/employees/${emp.id}/closure`).set('Authorization', `Bearer ${rhToken}`);
     expect(overview.body.data.tracking.status).toBe('EN_ATTENTE');
     expect(overview.body.data.tracking.daysLeft).toBe(14);
+  });
+
+  it('texto : si la fiche GHL a un autre numéro que TalentSecure, on N’ENVOIE PAS (bogue du 30 sept)', async () => {
+    const emp = await seedEmployee();
+    getContactById.mockResolvedValue({ id: 'contact-by-phone', phone: '+15147007521' });
+    const res = await request(app)
+      .post(`/api/employees/${emp.id}/closure`)
+      .set('Authorization', `Bearer ${rhToken}`)
+      .send(body());
+    expect(res.status).toBe(201);
+    expect(res.body.data.emailStatus).toBe('SENT');
+    expect(res.body.data.smsStatus).toBe('FAILED');
+    expect(res.body.data.smsError).toContain('autre numéro');
+    expect(sendSms).not.toHaveBeenCalled();
+  });
+
+  it('texto : numéro inconnu de GHL → contact créé avec le numéro de la fiche seulement', async () => {
+    const emp = await seedEmployee();
+    resolveGhlContactId.mockResolvedValue(null);
+    const { upsertPersonContact } = jest.requireMock('../services/ghl-email.service');
+    (upsertPersonContact as jest.Mock).mockClear();
+    getContactById.mockResolvedValue({ id: 'contact-upserted', phone: '+15145550000' });
+    const res = await request(app)
+      .post(`/api/employees/${emp.id}/closure`)
+      .set('Authorization', `Bearer ${rhToken}`)
+      .send(body());
+    expect(res.body.data.smsStatus).toBe('SENT');
+    const calls = (upsertPersonContact as jest.Mock).mock.calls.map((c) => c[0]);
+    // Courriel : par l'adresse seulement (on n'écrase pas le numéro d'une fiche existante).
+    expect(calls).toContainEqual(expect.objectContaining({ email: 'jean@example.com' }));
+    expect(calls.find((c) => c.email)).not.toHaveProperty('phone');
+    // Texto : par le numéro seulement.
+    expect(calls).toContainEqual(expect.objectContaining({ phone: '5145550000' }));
+    expect(calls.find((c) => c.phone)).not.toHaveProperty('email');
+    expect(sendSms).toHaveBeenCalledWith('contact-upserted', expect.any(String));
   });
 
   it('échec du courriel : le dossier est quand même fermé, l’erreur est gardée, puis « Renvoyer » réussit', async () => {
