@@ -37,3 +37,11 @@ export const updateEmployeeSchema = z
     notes: opt(5000),
   })
   .passthrough();
+
+/** « Fermer le dossier » : motif, paragraphe (retouchable), jour limite, texto. */
+export const employeeClosureSchema = z.object({
+  reason: z.enum(['INACTIVITE', 'DEMISSION', 'FIN_EMPLOI']),
+  reasonText: z.string().trim().min(1, 'Le paragraphe du motif est requis').max(5000),
+  deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date limite invalide (AAAA-MM-JJ)'),
+  sendSms: z.boolean().optional().default(false),
+});

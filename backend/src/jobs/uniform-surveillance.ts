@@ -10,10 +10,7 @@ import { notify } from '../services/notification.service';
 import { computeAmountOwed, computeHoldings } from '../services/uniform-stock.service';
 import { closeTerminationCore, notifyTerminationClosed } from '../services/uniform-termination.service';
 import { businessDaysBetween, addBusinessDays } from '../utils/business-days';
-import {
-  UNIFORM_AUTOCLOSE_GRACE_BUSINESS_DAYS,
-  UNIFORM_RETURN_DEADLINE_BUSINESS_DAYS,
-} from '../constants/uniform';
+import { defaultReturnDeadline } from '../services/employee-offboarding.service';
 
 const today = () => new Date().toISOString().split('T')[0];
 
@@ -386,13 +383,14 @@ export async function checkDuplicateActiveIssuances(): Promise<number> {
 // =============================================================================
 // 11. Anciens employés (INACTIF) détenant ENCORE des uniformes
 // =============================================================================
-// Comble l'angle mort du retour des uniformes des employés qui quittent :
-//   - avant l'échéance de retour  → rappel RH ;
-//   - après l'échéance (dans la grâce) → alerte ⚠️ RH + PAIE (montant à risque) ;
-//   - après l'échéance + délai de grâce → CLÔTURE AUTOMATIQUE des remises actives
-//     (pièces NOT_RETURNED, dette figée), via closeTerminationCore.
+// Suite de « Fermer le dossier » (lettre envoyée avec une date limite, +14 jours
+// par défaut) :
+//   - la veille de l'échéance → rappel dans l'app (RH/admins), une seule fois ;
+//   - échéance dépassée → CLÔTURE AUTOMATIQUE des remises actives (pièces
+//     NOT_RETURNED, dette figée) puis courriel à la PAIE (CC RH) avec la liste
+//     des pièces et le montant à retenir (notifyTerminationClosed).
 // Idempotent : après clôture, computeHoldings retombe à 0 → l'employé sort de la
-// liste ; les rappels sont dédupliqués par jour (dedupKey avec date).
+// liste ; le rappel est dédupliqué par employé + échéance.
 export async function checkInactiveEmployeesWithHoldings(): Promise<number> {
   const now = new Date();
   const employees = await prisma.employee.findMany({
@@ -412,30 +410,24 @@ export async function checkInactiveEmployeesWithHoldings(): Promise<number> {
     if (holdings.length === 0) continue;
 
     const totalPieces = holdings.reduce((s, h) => s + h.quantity, 0);
-    const owed = await computeAmountOwed(emp.id);
     const employeeName = `${emp.firstName} ${emp.lastName}`;
 
     // Échéance manquante (données héritées : INACTIF avant cette feature, créé
     // INACTIF en direct, ou transition hors updateEmployee) → on la rétablit ici
-    // (ancre = terminationDate sinon maintenant + 5 j ouvrables) et on persiste,
-    // sinon l'employé resterait coincé en rappel quotidien sans escalade ni
-    // clôture automatique.
+    // (ancre = terminationDate sinon maintenant, + 14 jours) et on persiste,
+    // sinon l'employé ne serait jamais clôturé.
     let deadline = emp.uniformReturnDeadlineAt;
     if (!deadline) {
       const anchor = emp.terminationDate ?? now;
-      deadline = addBusinessDays(anchor, UNIFORM_RETURN_DEADLINE_BUSINESS_DAYS);
+      deadline = defaultReturnDeadline(anchor);
       await prisma.employee.update({
         where: { id: emp.id },
         data: { terminationDate: emp.terminationDate ?? anchor, uniformReturnDeadlineAt: deadline },
       });
     }
 
-    const pastDeadline = now > deadline;
-    const graceEnd = addBusinessDays(deadline, UNIFORM_AUTOCLOSE_GRACE_BUSINESS_DAYS);
-    const pastGrace = now > graceEnd;
-
-    // --- Clôture automatique : échéance + grâce dépassées --------------------
-    if (pastGrace) {
+    // --- Clôture automatique : échéance dépassée ------------------------------
+    if (now > deadline) {
       const active = await prisma.uniformIssuance.findMany({
         where: { employeeId: emp.id, status: { in: ['ISSUED', 'PARTIALLY_RETURNED'] } },
         include: { lines: { include: { variant: true } }, returns: { include: { lines: true } } },
@@ -455,42 +447,20 @@ export async function checkInactiveEmployeesWithHoldings(): Promise<number> {
       continue;
     }
 
-    // --- Rappel / escalade ----------------------------------------------------
-    await notify({
-      type: 'UNIFORM_INACTIVE_EMPLOYEE_HAS_HOLDINGS',
-      channels: ['EMAIL', 'IN_APP'],
-      audience: 'RH',
-      dedupKey: `inactive-holdings-${emp.id}-${today()}`,
-      title: pastDeadline
-        ? `⚠️ Ancien employé — uniformes non retournés : ${employeeName}`
-        : `Ancien employé détient des uniformes — ${employeeName}`,
-      message: `${totalPieces} pièce(s) toujours détenue(s)${
-        deadline ? ` · échéance ${deadline.toISOString().split('T')[0]}` : ''
-      } · Montant à risque/dû : ${owed.owed.toFixed(2)} $`,
-      link: `/employees/${emp.id}`,
-      payload: {
-        employeeId: emp.id,
-        totalPieces,
-        owed: owed.owed,
-        deadline: deadline ? deadline.toISOString() : null,
-        overdue: pastDeadline,
-      },
-    });
-
-    // Échéance dépassée + dette → PAIE doit prélever sur la dernière paie.
-    if (pastDeadline && owed.owed > 0) {
+    // --- Rappel la veille de l'échéance ---------------------------------------
+    if (deadline.getTime() - now.getTime() <= 24 * 60 * 60 * 1000) {
       await notify({
         type: 'UNIFORM_INACTIVE_EMPLOYEE_HAS_HOLDINGS',
-        channels: ['EMAIL'],
-        audience: 'PAIE',
-        dedupKey: `inactive-holdings-paie-${emp.id}-${today()}`,
-        title: `Prélèvement uniforme — ${employeeName}`,
-        message: `Ancien employé · ${totalPieces} pièce(s) non retournée(s) · Montant : ${owed.owed.toFixed(2)} $`,
+        channels: ['IN_APP'],
+        audience: 'ADMINS',
+        dedupKey: `inactive-holdings-eve-${emp.id}-${deadline.toISOString()}`,
+        title: `Uniformes — échéance demain : ${employeeName}`,
+        message: `${totalPieces} pièce(s) toujours détenue(s). Sans retour d'ici la fin de la journée, le dossier sera clôturé et le montant envoyé à la paie.`,
         link: `/employees/${emp.id}`,
-        payload: { employeeId: emp.id, totalPieces, owed: owed.owed },
+        payload: { employeeId: emp.id, totalPieces, deadline: deadline.toISOString() },
       });
+      count++;
     }
-    count++;
   }
   return count;
 }

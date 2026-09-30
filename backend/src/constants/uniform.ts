@@ -97,11 +97,9 @@ export const SIGN_TOKEN_DAYS = 7;
 // Offboarding — retour des uniformes des employés qui quittent.
 // ---------------------------------------------------------------------------
 // Délai accordé à un employé pour retourner ses uniformes après sa fin d'emploi
-// (jours OUVRABLES). Reproduit la clause du consentement « Prêt d'uniforme »
-// (retour sous 5 jours ouvrables suivant la fin d'emploi).
-export const UNIFORM_RETURN_DEADLINE_BUSINESS_DAYS = 5;
-
-// Délai de grâce supplémentaire (jours OUVRABLES) après l'échéance de retour
-// avant la CLÔTURE AUTOMATIQUE de la remise (pièces marquées NOT_RETURNED, dette
-// figée pour prélèvement sur la dernière paie). Déclenché par le job horaire.
-export const UNIFORM_AUTOCLOSE_GRACE_BUSINESS_DAYS = 10;
+// (jours de CALENDRIER ; échéance = fin de journée, heure de Montréal). RH peut
+// choisir une autre date dans « Fermer le dossier ». Plus généreux que la clause
+// « 5 jours ouvrables » du consentement « Prêt d'uniforme ».
+// Au lendemain de l'échéance, le job horaire CLÔTURE automatiquement les remises
+// (pièces NOT_RETURNED, dette figée) et envoie le montant à retenir à la paie.
+export const UNIFORM_RETURN_DEADLINE_CALENDAR_DAYS = 14;

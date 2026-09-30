@@ -51,6 +51,10 @@ export interface SendGhlEmailInput {
   subject: string;
   html: string;
   contactName?: string;
+  /** Copies conformes (champ `emailCc` de l'API conversations v2). */
+  cc?: string[];
+  /** Contact déjà résolu (ex : employé upserté) — évite la création d'un contact « système ». */
+  contactId?: string;
 }
 
 export interface SendGhlEmailResult {
@@ -63,7 +67,7 @@ export interface SendGhlEmailResult {
  * Lève une ApiError 502 si l'envoi échoue.
  */
 export async function sendEmailViaGhl(input: SendGhlEmailInput): Promise<SendGhlEmailResult> {
-  const contactId = await findOrCreateContactByEmail(input.to, input.contactName);
+  const contactId = input.contactId || (await findOrCreateContactByEmail(input.to, input.contactName));
   try {
     const data = await ghlRequest<any>('/conversations/messages', {
       method: 'POST',
@@ -74,6 +78,7 @@ export async function sendEmailViaGhl(input: SendGhlEmailInput): Promise<SendGhl
         subject: input.subject,
         html: input.html,
         emailTo: input.to, // certains plans GHL acceptent cet override
+        ...(input.cc && input.cc.length > 0 ? { emailCc: input.cc } : {}),
       },
     });
     return {
@@ -87,4 +92,34 @@ export async function sendEmailViaGhl(input: SendGhlEmailInput): Promise<SendGhl
         : e?.message || 'inconnu';
     throw new ApiError(502, `GHL email échoué : ${JSON.stringify(detail)}`, 'GHL_EMAIL_FAILED');
   }
+}
+
+export interface UpsertPersonContactInput {
+  email?: string | null;
+  phone?: string | null;
+  firstName: string;
+  lastName: string;
+}
+
+/**
+ * Crée ou met à jour le contact GHL d'une VRAIE personne (employé), sans le
+ * tag « système » de `createSystemContact`. Le même contactId sert ensuite au
+ * courriel et au texto. Retourne null si ni courriel ni téléphone.
+ */
+export async function upsertPersonContact(input: UpsertPersonContactInput): Promise<string | null> {
+  const email = input.email?.trim() || undefined;
+  const phone = input.phone?.trim() || undefined;
+  if (!email && !phone) return null;
+  const data = await ghlRequest<any>('/contacts/upsert', {
+    method: 'POST',
+    body: {
+      locationId: getGhlLocationId(),
+      firstName: input.firstName,
+      lastName: input.lastName,
+      ...(email ? { email } : {}),
+      ...(phone ? { phone } : {}),
+      source: 'TalentSecure V2',
+    },
+  });
+  return data?.contact?.id || data?.id || null;
 }

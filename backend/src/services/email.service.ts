@@ -44,6 +44,7 @@ function getTransporter(): nodemailer.Transporter {
 
 export interface SendEmailInput {
   to: string | string[];
+  cc?: string[];
   subject: string;
   html: string;
   text?: string;
@@ -60,6 +61,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   const info = await t.sendMail({
     from: input.from || EMAIL_FROM,
     to: Array.isArray(input.to) ? input.to.join(', ') : input.to,
+    cc: input.cc && input.cc.length > 0 ? input.cc.join(', ') : undefined,
     subject: input.subject,
     html: input.html,
     text: input.text || stripHtml(input.html),

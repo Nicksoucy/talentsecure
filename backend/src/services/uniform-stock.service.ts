@@ -373,6 +373,8 @@ export interface InactiveHolder {
   charged: number;
   settled: number;
   activeIssuanceIds: string[];
+  /** Dernier avis « Fermer le dossier » envoyé (null = employé jamais avisé). */
+  lastNotice: { sentAt: Date; emailStatus: string; smsStatus: string } | null;
 }
 
 /**
@@ -390,18 +392,24 @@ export async function listOutstandingByInactiveEmployees(): Promise<InactiveHold
       lastName: true,
       terminationDate: true,
       uniformReturnDeadlineAt: true,
+      offboardingNotices: {
+        orderBy: { sentAt: 'desc' },
+        take: 1,
+        select: { sentAt: true, emailStatus: true, smsStatus: true },
+      },
     },
     orderBy: [{ uniformReturnDeadlineAt: 'asc' }, { lastName: 'asc' }],
   });
 
   const out: InactiveHolder[] = [];
-  for (const emp of employees) {
+  for (const { offboardingNotices, ...emp } of employees) {
     const holdings = await computeHoldings(emp.id);
     if (holdings.length === 0) continue;
     const owed = await computeAmountOwed(emp.id);
     const active = await getActiveIssuancesForEmployee(emp.id);
     out.push({
       employee: emp,
+      lastNotice: offboardingNotices[0] ?? null,
       holdings,
       totalPieces: holdings.reduce((s, h) => s + h.quantity, 0),
       owed: owed.owed,

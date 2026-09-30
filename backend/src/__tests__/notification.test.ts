@@ -17,6 +17,7 @@ jest.mock('../services/ghl-email.service', () => ({
   __esModule: true,
   sendEmailViaGhl: jest.fn().mockResolvedValue({ messageId: 'test-ghl' }),
 }));
+import { sendEmailViaGhl } from '../services/ghl-email.service';
 
 /**
  * Notifications — /api/notifications.
@@ -238,6 +239,26 @@ describe('Notifications — /api/notifications', () => {
       const after = await prisma.notification.findUnique({ where: { id: pending.id } });
       expect(after?.status).toBe('SENT');
       expect(after?.sentAt).not.toBeNull();
+    });
+
+    it('EMAIL formaté : gabarit (payload.emailHtml) + copies conformes (payload.emailCc) transmis au fournisseur', async () => {
+      await prisma.notification.deleteMany({});
+      (sendEmailViaGhl as jest.Mock).mockClear();
+      await prisma.notification.create({
+        data: {
+          type: 'UNIFORM_TERMINATION_CLOSED', channel: 'EMAIL', status: 'PENDING',
+          recipientEmail: 'paie@test.local', title: 'Retenue', message: 'm',
+          payload: { emailHtml: '<p>gabarit</p>', emailCc: ['rh@test.local'] },
+        },
+      });
+
+      const res = await request(app)
+        .post('/api/notifications/internal/dispatch')
+        .set('x-internal-token', TOKEN);
+      expect(res.body.data).toMatchObject({ sent: 1, failed: 0 });
+      expect(sendEmailViaGhl).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'paie@test.local', cc: ['rh@test.local'], html: '<p>gabarit</p>' })
+      );
     });
   });
 });

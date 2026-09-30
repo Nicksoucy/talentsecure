@@ -18,6 +18,66 @@ export interface UpdateEmployeeResponse {
   uniformWarning?: UniformOffboardingWarning;
 }
 
+// ---------------------------------------------------------------------------
+// Fermeture de dossier (lettre par courriel CC paie + RH, texto, date limite)
+// ---------------------------------------------------------------------------
+export type ClosureReason = 'INACTIVITE' | 'DEMISSION' | 'FIN_EMPLOI';
+export type ChannelStatus = 'SENT' | 'FAILED' | 'SKIPPED';
+export type ClosureTrackingStatus = 'EN_ATTENTE' | 'RAPPORTE' | 'TRANSMIS_PAIE' | 'AUCUN_UNIFORME';
+
+export interface ClosureEstimate {
+  pieces: Array<{ itemName: string; size: string; quantity: number; unitCost: number; lineTotal: number }>;
+  totalPieces: number;
+  total: number;
+  issuancesWithoutLines: number;
+}
+
+export interface ClosureNotice {
+  id: string;
+  sentAt: string;
+  sentByName: string | null;
+  reason: ClosureReason;
+  returnDeadlineAt: string;
+  emailTo: string | null;
+  emailCc: string[];
+  emailStatus: ChannelStatus;
+  emailError: string | null;
+  smsTo: string | null;
+  smsStatus: ChannelStatus;
+  smsError: string | null;
+  estimatedAmount: number;
+}
+
+export interface ClosureOverview {
+  employee: { id: string; firstName: string; lastName: string; email: string | null; phone: string; status: 'ACTIF' | 'INACTIF' };
+  defaults: {
+    deadline: string;
+    reasonTexts: Record<ClosureReason, string>;
+    reasonLabels: Record<ClosureReason, string>;
+    cc: string[];
+    subject: string;
+  };
+  estimate: ClosureEstimate;
+  notices: ClosureNotice[];
+  tracking: { status: ClosureTrackingStatus; daysLeft: number | null; owed: number } | null;
+}
+
+export interface ClosureInput {
+  reason: ClosureReason;
+  reasonText: string;
+  deadline: string;
+  sendSms: boolean;
+}
+
+export interface ClosurePreview {
+  subject: string;
+  to: string | null;
+  cc: string[];
+  html: string;
+  sms: string;
+  estimate: ClosureEstimate;
+}
+
 interface GetEmployeesParams {
   search?: string;
   status?: 'ACTIF' | 'INACTIF';
@@ -101,5 +161,25 @@ export const employeeService = {
   ): Promise<{ data: Employee; message: string }> {
     const response = await api.post(`/api/employees/promote-prospect/${prospectId}`, data);
     return response.data;
+  },
+
+  async getClosure(id: string): Promise<ClosureOverview> {
+    const response = await api.get(`/api/employees/${id}/closure`);
+    return response.data.data;
+  },
+
+  async previewClosure(id: string, input: ClosureInput): Promise<ClosurePreview> {
+    const response = await api.post(`/api/employees/${id}/closure/preview`, input);
+    return response.data.data;
+  },
+
+  async sendClosure(id: string, input: ClosureInput): Promise<ClosureNotice> {
+    const response = await api.post(`/api/employees/${id}/closure`, input);
+    return response.data.data;
+  },
+
+  async resendClosure(id: string, noticeId: string): Promise<ClosureNotice> {
+    const response = await api.post(`/api/employees/${id}/closure/${noticeId}/resend`);
+    return response.data.data;
   },
 };

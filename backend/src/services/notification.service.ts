@@ -26,6 +26,27 @@ import { sendEmailViaGhl } from './ghl-email.service';
 /** Provider de courriel : 'ghl' (par défaut) ou 'smtp'. */
 const EMAIL_PROVIDER = (process.env.EMAIL_PROVIDER || 'ghl').toLowerCase();
 
+/**
+ * Envoi d'un courriel via le fournisseur configuré (GHL par défaut, sinon SMTP),
+ * avec copies conformes. Point d'entrée commun des courriels formatés (lettre de
+ * fermeture de dossier, avis à la paie) et du worker de notifications.
+ */
+export async function sendEmailWithProvider(input: {
+  to: string;
+  cc?: string[];
+  subject: string;
+  html: string;
+  replyTo?: string;
+  contactId?: string;
+}): Promise<void> {
+  const cc = (input.cc || []).filter((c) => c && c.toLowerCase() !== input.to.toLowerCase());
+  if (EMAIL_PROVIDER === 'ghl') {
+    await sendEmailViaGhl({ to: input.to, cc, subject: input.subject, html: input.html, contactId: input.contactId });
+  } else {
+    await sendEmail({ to: input.to, cc, subject: input.subject, html: input.html, replyTo: input.replyTo });
+  }
+}
+
 export interface NotifyAudience {
   userIds?: string[];
   emails?: string[];
@@ -234,12 +255,14 @@ export async function dispatchPendingNotifications(): Promise<DispatchResult> {
         });
         sent++;
       } else if (n.channel === 'EMAIL' && n.recipientEmail) {
-        const html = htmlFromMessage(n);
-        if (EMAIL_PROVIDER === 'ghl') {
-          await sendEmailViaGhl({ to: n.recipientEmail, subject: n.title, html });
-        } else {
-          await sendEmail({ to: n.recipientEmail, subject: n.title, html });
-        }
+        // Courriel formaté (gabarit) + copies conformes : transportés dans le
+        // payload (`emailHtml`, `emailCc`) pour garder la file et ses reprises.
+        const p = (n.payload && typeof n.payload === 'object' && !Array.isArray(n.payload)
+          ? n.payload
+          : {}) as Record<string, unknown>;
+        const html = typeof p.emailHtml === 'string' ? p.emailHtml : htmlFromMessage(n);
+        const cc = Array.isArray(p.emailCc) ? p.emailCc.filter((c): c is string => typeof c === 'string') : [];
+        await sendEmailWithProvider({ to: n.recipientEmail, cc, subject: n.title, html });
         await prisma.notification.update({
           where: { id: n.id },
           data: { status: 'SENT', sentAt: new Date() },

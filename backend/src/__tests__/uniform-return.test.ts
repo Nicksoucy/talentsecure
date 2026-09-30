@@ -4,6 +4,7 @@ import { prisma, cleanDatabase } from './setup';
 import { createApp } from '../app';
 import { hashPassword } from '../utils/password';
 import { generateAccessToken } from '../utils/jwt';
+import { notify } from '../services/notification.service';
 
 /**
  * Retours d'uniforme — sous-routeur /api/uniforms/returns/* + holdings.
@@ -473,6 +474,16 @@ describe('Uniformes — retours /api/uniforms/returns', () => {
       expect(settlements).toHaveLength(1);
       expect(Number(settlements[0].amount)).toBe(25);
       expect(settlements[0].method).toBe('RETOUR TARDIF');
+
+      // La paie (qui avait reçu le montant à retenir) est avisée du remboursement, RH en copie.
+      expect(notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          audience: 'PAIE',
+          channels: ['EMAIL'],
+          title: expect.stringContaining('25.00 $ à rembourser'),
+          payload: expect.objectContaining({ amount: 25, emailCc: [expect.stringContaining('rh')] }),
+        })
+      );
 
       // La dette FACTURÉE reste 50 $ (la ligne DAMAGED du retour tardif est à
       // 0 $ — pas de double facturation) ; solde = 50 − 25 = 25 $.

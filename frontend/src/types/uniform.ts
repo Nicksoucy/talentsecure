@@ -164,6 +164,8 @@ export interface InactiveHolder {
   charged: number;
   settled: number;
   activeIssuanceIds: string[];
+  /** Dernier avis « Fermer le dossier » envoyé (null = jamais avisé). */
+  lastNotice?: { sentAt: string; emailStatus: string; smsStatus: string } | null;
 }
 
 export interface SignPayload {
