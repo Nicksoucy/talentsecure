@@ -8,6 +8,7 @@ import {
   createEmployee,
   updateEmployee,
   deleteEmployee,
+  getEmployeeHistoryHandler,
   promoteCandidateToEmployee,
   promoteProspectToEmployee,
 } from '../controllers/employee.controller';
@@ -55,6 +56,7 @@ router.post('/promote/:candidateId', validate({ params: candidateIdParam }), pro
 router.post('/promote-prospect/:prospectId', validate({ params: prospectIdParam }), promoteProspectToEmployee);
 
 router.get('/:id', validate({ params: uuidParam }), getEmployeeById);
+router.get('/:id/history', validate({ params: uuidParam }), getEmployeeHistoryHandler);
 router.put('/:id', validate({ params: uuidParam, body: updateEmployeeSchema }), updateEmployee);
 router.delete('/:id', validate({ params: uuidParam }), deleteEmployee);
 

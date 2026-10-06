@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
+import { SYSTEM_ACTOR_NAME } from '../services/audit.service';
 import { getCache, setCache } from '../config/cache';
 
 const DASHBOARD_OVERVIEW_CACHE_KEY = 'dashboard:overview';
@@ -77,10 +78,11 @@ export const getDashboardOverview = async (
     ]);
 
     const recentActivity = recentActivityRaw.map((log) => {
-      const name =
-        [log.user?.firstName, log.user?.lastName].filter(Boolean).join(' ').trim() ||
-        log.user?.email ||
-        'Utilisateur';
+      const name = log.user
+        ? [log.user.firstName, log.user.lastName].filter(Boolean).join(' ').trim() ||
+          log.user.email ||
+          'Utilisateur'
+        : SYSTEM_ACTOR_NAME;
       return {
         id: log.id,
         action: log.action,

@@ -117,6 +117,16 @@ describe('Surveillance offboarding — checkInactiveEmployeesWithHoldings', () =
     expect(payload.emailHtml).not.toContain('localhost');
     // Alerte dans l'app pour les admins.
     expect(closedNotifs.some((n) => n.channel === 'IN_APP')).toBe(true);
+
+    // Registre : la clôture est inscrite au nom du système (aucune personne).
+    const logs = await prisma.auditLog.findMany({ where: { resourceId: emp.id } });
+    expect(logs).toEqual([
+      expect.objectContaining({
+        userId: null,
+        resource: 'Uniform',
+        details: 'Uniformes clôturés automatiquement (délai de retour dépassé) — 2 pièce(s) non rendue(s), 60,00 $ à retenir',
+      }),
+    ]);
   });
 
   // Règle RH : l'agent a rapporté des uniformes (même en partie) → retour complet.

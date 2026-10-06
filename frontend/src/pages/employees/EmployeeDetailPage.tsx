@@ -17,6 +17,7 @@ import { usePerms } from '@/hooks/usePerms';
 import UniformFichePanel from '../uniformes/components/UniformFichePanel';
 import FileClosureDialog from './FileClosureDialog';
 import FileClosureCard from './FileClosureCard';
+import EmployeeHistoryCard from './EmployeeHistoryCard';
 
 function Info({ label, value }: { label: string; value?: any }) {
   return (
@@ -70,6 +71,7 @@ export default function EmployeeDetailPage() {
       qc.invalidateQueries({ queryKey: ['employees'] });
       qc.invalidateQueries({ queryKey: ['uniform-fiche', id] });
       qc.invalidateQueries({ queryKey: ['employee-closure', id] });
+      qc.invalidateQueries({ queryKey: ['employee-history', id] });
       enqueueSnackbar('Employé mis à jour', { variant: 'success' });
       setEditOpen(false);
       // Fin d'emploi avec uniformes encore détenus → avertissement non bloquant.
@@ -91,6 +93,7 @@ export default function EmployeeDetailPage() {
     onSuccess: ({ failed, total }) => {
       qc.invalidateQueries({ queryKey: ['uniform-fiche', id] });
       qc.invalidateQueries({ queryKey: ['rep-inactive-holdings'] });
+      qc.invalidateQueries({ queryKey: ['employee-history', id] });
       enqueueSnackbar(
         failed > 0 ? `${total - failed}/${total} remise(s) clôturée(s) — ${failed} en échec` : 'Fin d’emploi clôturée — dette figée',
         { variant: failed > 0 ? 'warning' : 'success' },
@@ -179,6 +182,8 @@ export default function EmployeeDetailPage() {
       ) : (
         <Typography color="text.secondary">Accès à la gestion des uniformes réservé.</Typography>
       )}
+
+      <EmployeeHistoryCard employeeId={id!} />
 
       {/* Dialogue de modification */}
       <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>

@@ -27,6 +27,7 @@ import { EMAIL_RH } from './email.service';
 import { estimateHoldingsCost } from './employee-offboarding.service';
 import { computeAmountOwed, computeHoldings } from './uniform-stock.service';
 import { formatLongFr } from '../utils/montreal-date';
+import { recordEmployeeAudit } from './audit.service';
 
 export type ClosableIssuance = Prisma.UniformIssuanceGetPayload<{
   include: {
@@ -123,6 +124,18 @@ export async function closeTerminationCore(
       data: { status: 'FAILED', failedReason: 'Issuance clôturée (terminaison)' },
     });
     return ret;
+  });
+
+  const pieces = lines.reduce((n, l) => n + l.quantity, 0);
+  const amount = lines.reduce((n, l) => n + l.quantity * l.unitReplacementCost, 0);
+  await recordEmployeeAudit({
+    employeeId: issuance.employeeId,
+    userId: createdById,
+    resource: 'Uniform',
+    details:
+      `${createdById ? 'Uniformes clôturés (fin d’emploi)' : 'Uniformes clôturés automatiquement (délai de retour dépassé)'}` +
+      ` — ${pieces} pièce(s) non rendue(s)` +
+      (waived ? ', rien retenu (retour déjà fait)' : `, ${money(amount)} à retenir`),
   });
 
   return { returnId: created.id, employeeId: issuance.employeeId, waived };

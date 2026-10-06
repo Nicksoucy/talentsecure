@@ -10,12 +10,16 @@
  *                            (via la MÊME logique d'offboarding uniformes que l'UI)
  *     [--reactivate]         repasse ACTIF les employés INACTIF présents au fichier
  *     [--skip-geocode]       saute la phase de géocodage (~1,1 s/adresse Nominatim)
+ *     --by <courriel>        OBLIGATOIRE avec --apply : la personne qui lance
+ *                            l'import, inscrite au registre de chaque
+ *                            désactivation / réactivation
  *
  * Matching : courriel (insensible casse) puis téléphones (10 derniers chiffres) —
  * mêmes sémantiques que utils/candidateMatch. Un employé déjà réclamé par une
  * autre ligne → AMBIGU (aucune écriture). Lignes sans courriel ni téléphone →
  * REVUE MANUELLE. Idempotent : relancer ne change rien (UNCHANGED).
  */
+import path from 'path';
 import ExcelJS from 'exceljs';
 import { prisma } from '../config/database';
 import { lastTenDigits } from '../utils/phone';
@@ -36,6 +40,7 @@ import {
   geocodeEmployeeById,
 } from '../services/addressGeocode.service';
 import { invalidateCaches } from '../utils/cacheInvalidation';
+import { recordEmployeeAudit } from '../services/audit.service';
 
 // ── Arguments ───────────────────────────────────────────────────────────────
 const argv = process.argv.slice(2);
@@ -45,11 +50,14 @@ const REACTIVATE = argv.includes('--reactivate');
 const SKIP_GEOCODE = argv.includes('--skip-geocode');
 const fileIdx = argv.indexOf('--file');
 const FILE = fileIdx >= 0 ? argv[fileIdx + 1] : undefined;
+const byIdx = argv.indexOf('--by');
+const BY_EMAIL = byIdx >= 0 ? argv[byIdx + 1]?.trim() : undefined;
 
-if (!FILE) {
+if (!FILE || (APPLY && !BY_EMAIL)) {
   console.error(
-    'Usage: npm run import:agendrix -- --file "<xlsx>" [--apply] [--deactivate-missing] [--reactivate] [--skip-geocode]'
+    'Usage: npm run import:agendrix -- --file "<xlsx>" [--apply --by <courriel>] [--deactivate-missing] [--reactivate] [--skip-geocode]'
   );
+  if (FILE) console.error('--apply exige --by <courriel> : la personne qui lance l\'import (registre).');
   process.exit(1);
 }
 
@@ -145,6 +153,18 @@ async function readRows(path: string): Promise<AgendrixRow[]> {
 async function main() {
   console.log(`=== IMPORT AGENDRIX ${APPLY ? '(APPLICATION)' : '(DRY-RUN — aucune écriture)'} ===`);
   console.log(`Fichier : ${FILE}`);
+  // Auteur inscrit au registre : vérifié AVANT toute écriture.
+  let actorId: string | null = null;
+  if (APPLY) {
+    const actor = await prisma.user.findFirst({
+      where: { email: { equals: BY_EMAIL!, mode: 'insensitive' } },
+      select: { id: true, email: true },
+    });
+    if (!actor) throw new Error(`--by : aucun utilisateur TalentSecure avec le courriel « ${BY_EMAIL} »`);
+    actorId = actor.id;
+    console.log(`Lancé par : ${actor.email}`);
+  }
+  const fileName = path.basename(FILE!);
   const rows = await readRows(FILE!);
   console.log(`Lignes employé valides : ${rows.length}`);
 
@@ -451,6 +471,11 @@ async function main() {
           if (r.emp.uniformReturnDeadlineAt) {
             await revertUniformOffboarding(r.emp.id, r.emp.uniformReturnDeadlineAt);
           }
+          await recordEmployeeAudit({
+            employeeId: r.emp.id,
+            userId: actorId,
+            details: `Employé réactivé par l'import Agendrix (présent dans ${fileName})`,
+          });
           geocodeIds.add(r.emp.id);
         } catch (e: any) {
           errors++;
@@ -469,6 +494,11 @@ async function main() {
             data: { status: 'INACTIF', ...fields },
           });
           const warning = await propagateUniformOffboarding(e.id, fields.uniformReturnDeadlineAt);
+          await recordEmployeeAudit({
+            employeeId: e.id,
+            userId: actorId,
+            details: `Employé passé à Inactif par l'import Agendrix (absent de ${fileName})`,
+          });
           if (warning) {
             console.log(
               `  ⚠ ${empLabel(e)} détient ${warning.totalPieces} pièce(s) d'uniforme (${warning.owed.toFixed(2)} $ dus) — échéance ${fields.uniformReturnDeadlineAt.toISOString().slice(0, 10)}`
