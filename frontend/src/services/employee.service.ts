@@ -74,6 +74,9 @@ export interface SilentClosureInput {
   reason: ClosureReason;
   /** Seulement si l'employé détient encore des pièces. */
   deadline?: string;
+  /** Courriel à la paie (RH en copie) : dossier fermé + état des uniformes. */
+  notifyPayroll?: boolean;
+  note?: string;
 }
 
 export interface ClosurePreview {
@@ -196,7 +199,7 @@ export const employeeService = {
     return response.data.data;
   },
 
-  async closeSilently(id: string, input: SilentClosureInput): Promise<{ becameInactive: boolean; piecesHeld: number }> {
+  async closeSilently(id: string, input: SilentClosureInput): Promise<{ becameInactive: boolean; piecesHeld: number; payrollNotified: boolean }> {
     const response = await api.post(`/api/employees/${id}/closure/silent`, input);
     return response.data.data;
   },

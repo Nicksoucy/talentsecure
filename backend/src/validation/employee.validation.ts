@@ -51,6 +51,9 @@ export const employeeSilentClosureSchema = z.object({
   reason: z.enum(['INACTIVITE', 'DEMISSION', 'FIN_EMPLOI']),
   // Date limite : seulement si l'employé détient encore des pièces.
   deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date limite invalide (AAAA-MM-JJ)').optional(),
+  // Courriel à la paie (CC RH) : dossier fermé + état des uniformes. Rien à l'employé.
+  notifyPayroll: z.boolean().optional().default(false),
+  note: z.string().trim().max(2000).optional(),
 }).strict();
 
 /** « Renvoyer » un avis : aucun paramètre — le texte original est réutilisé. */
