@@ -1,7 +1,11 @@
 import { prisma, cleanDatabase } from './setup';
 import { checkInactiveEmployeesWithHoldings } from '../jobs/uniform-surveillance';
 import { computeHoldings, computeAmountOwed } from '../services/uniform-stock.service';
-import { closeTerminationCore } from '../services/uniform-termination.service';
+import {
+  closeTerminationCore,
+  notifyTerminationClosed,
+  refundLateReturn,
+} from '../services/uniform-termination.service';
 
 /**
  * Surveillance offboarding — checkInactiveEmployeesWithHoldings.
@@ -110,7 +114,7 @@ describe('Surveillance offboarding — checkInactiveEmployeesWithHoldings', () =
     expect(emails).toHaveLength(1);
     expect(emails[0].recipientEmail).toContain('paie');
     const payload = emails[0].payload as any;
-    expect(payload.amountOwed).toBe(60);
+    expect(payload.amountToWithhold).toBe(60);
     expect(payload.emailCc).toEqual([expect.stringContaining('rh')]);
     expect(payload.emailHtml).toContain('Chemise 4385550003');
     expect(payload.emailHtml).toContain('60,00 $');
@@ -246,6 +250,91 @@ describe('Surveillance offboarding — checkInactiveEmployeesWithHoldings', () =
       expect(closeReturn?.lines).toHaveLength(0);
       expect((await computeAmountOwed(emp.id)).owed).toBe(0);
       expect((await load(iss.id))?.status).toBe('CLOSED_TERMINATION');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Cas Boualem Dahmouni (2026-10-07) : 2 remises clôturées à la main le même
+  // jour, puis retour tardif complet. Avant : la paie recevait « retenir 50 $ »
+  // seulement (2ᵉ courriel bloqué), puis « rembourser 220 $ ».
+  // -------------------------------------------------------------------------
+  describe('courriels à la paie — clôtures le même jour puis retour tardif', () => {
+    const load = (id: string) =>
+      prisma.uniformIssuance.findUnique({
+        where: { id },
+        include: { lines: { include: { variant: true } }, returns: { include: { lines: true } } },
+      });
+    const paieEmails = (type: string) =>
+      prisma.notification.findMany({ where: { type: type as any, channel: 'EMAIL' }, orderBy: { createdAt: 'asc' } });
+
+    async function twoClosures() {
+      const a = await seedInactiveHolder({ phone: '4385550020', deadline: new Date(), issuedQty: 1, cost: 50 });
+      // 2ᵉ remise du même employé : 170 $.
+      const variant2 = await prisma.uniformVariant.create({
+        data: { itemId: a.variant.itemId, size: 'L', barcode: 'SURV-4385550020-L', replacementCost: 85 },
+      });
+      const iss2 = await prisma.uniformIssuance.create({
+        data: {
+          employeeId: a.emp.id, division: 'SECURITE', status: 'ISSUED',
+          lines: { create: [{ variantId: variant2.id, quantity: 2, unitCostSnapshot: 85 }] },
+        },
+      });
+      // Comme le bouton « Clôturer » : une remise à la fois, chacune avise la paie.
+      const c1 = await closeTerminationCore((await load(a.iss.id))!, null);
+      await notifyTerminationClosed(a.emp.id, [c1!.returnId]);
+      const c2 = await closeTerminationCore((await load(iss2.id))!, null);
+      await notifyTerminationClosed(a.emp.id, [c2!.returnId]);
+      return { emp: a.emp, iss1: a.iss, iss2, variant1: a.variant, variant2 };
+    }
+
+    it('chaque clôture envoie SON courriel de retenue ; le 2ᵉ donne le total', async () => {
+      await seedAdmin();
+      await twoClosures();
+      const emails = await paieEmails('UNIFORM_TERMINATION_CLOSED');
+      expect(emails.map((e) => (e.payload as any).amountToWithhold)).toEqual([50, 170]);
+      expect(emails[1].message).toContain('total à retenir pour cet employé : 220.00 $');
+      expect((emails[1].payload as any).emailHtml).toContain('220,00 $');
+    });
+
+    it('retour tardif complet : la paie doit rembourser exactement ce qu’on lui a demandé (220 $)', async () => {
+      const { emp, iss1, iss2, variant1, variant2 } = await twoClosures();
+      const late = await prisma.uniformReturn.create({
+        data: {
+          issuanceId: iss1.id, employeeId: emp.id, status: 'RETURNED', returnedAt: new Date(), isLateReturn: true,
+          lines: { create: [{ variantId: variant1.id, quantity: 1, condition: 'GOOD', unitReplacementCost: 0 }] },
+        },
+      });
+      // Les 2 pantalons de l'autre remise reviennent aussi (retour complet).
+      await prisma.uniformReturn.create({
+        data: {
+          issuanceId: iss2.id, employeeId: emp.id, status: 'RETURNED', returnedAt: new Date(), isLateReturn: true,
+          lines: { create: [{ variantId: variant2.id, quantity: 2, condition: 'GOOD', unitReplacementCost: 0 }] },
+        },
+      });
+      expect(await refundLateReturn(late.id)).toBe(220);
+      const [refund] = await paieEmails('UNIFORM_SETTLEMENT_RECORDED');
+      expect(refund.title).toContain('220.00 $ à rembourser');
+      expect((refund.payload as any).emailHtml).toContain('le retour est complet');
+    });
+
+    it('si la paie n’a reçu que 50 $ (courriel en échec), on ne lui fait rembourser que 50 $', async () => {
+      const { emp, iss1, variant1 } = await twoClosures();
+      const [, second] = await paieEmails('UNIFORM_TERMINATION_CLOSED');
+      await prisma.notification.update({ where: { id: second.id }, data: { status: 'FAILED' } });
+      const late = await prisma.uniformReturn.create({
+        data: {
+          issuanceId: iss1.id, employeeId: emp.id, status: 'RETURNED', returnedAt: new Date(), isLateReturn: true,
+          lines: { create: [{ variantId: variant1.id, quantity: 1, condition: 'GOOD', unitReplacementCost: 0 }] },
+        },
+      });
+      // Le solde interne est soldé en entier (220 $)…
+      expect(await refundLateReturn(late.id)).toBe(220);
+      expect((await computeAmountOwed(emp.id)).owed).toBe(0);
+      // … mais la paie n'est invitée à rembourser que ce qu'on lui avait demandé.
+      const [refund] = await paieEmails('UNIFORM_SETTLEMENT_RECORDED');
+      expect(refund.title).toContain('50.00 $ à rembourser');
+      // Pièces encore chez lui : pas de « retour complet ».
+      expect((refund.payload as any).emailHtml).not.toContain('le retour est complet');
     });
   });
 });

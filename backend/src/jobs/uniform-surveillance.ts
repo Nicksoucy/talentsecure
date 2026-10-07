@@ -432,18 +432,18 @@ export async function checkInactiveEmployeesWithHoldings(): Promise<number> {
         where: { employeeId: emp.id, status: { in: ['ISSUED', 'PARTIALLY_RETURNED'] } },
         include: { lines: { include: { variant: true } }, returns: { include: { lines: true } } },
       });
-      let closedAny = false;
+      const closedIds: string[] = [];
       for (const iss of active) {
         const closed = await closeTerminationCore(
           iss,
           null,
           'Clôture automatique — fin d’emploi, délai de retour dépassé',
         );
-        if (closed) { count++; closedAny = true; }
+        if (closed) { count++; closedIds.push(closed.returnId); }
       }
       // Une SEULE notif de dette par employé, avec le montant FINAL (pas un cumul
       // partiel croissant remise par remise).
-      if (closedAny) await notifyTerminationClosed(emp.id);
+      if (closedIds.length > 0) await notifyTerminationClosed(emp.id, closedIds);
       continue;
     }
 
