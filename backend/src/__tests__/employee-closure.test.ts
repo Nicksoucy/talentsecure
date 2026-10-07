@@ -318,4 +318,49 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
     expect(forbidden.status).toBe(403);
     expect((await prisma.employee.findUnique({ where: { id: emp.id } }))?.status).toBe('ACTIF');
   });
+
+  describe('fermer SANS rien envoyer', () => {
+    const silent = (id: string, payload: Record<string, unknown>, token = rhToken) =>
+      request(app).post(`/api/employees/${id}/closure/silent`).set('Authorization', `Bearer ${token}`).send(payload);
+
+    it('uniformes déjà rapportés : Inactif, aucun courriel ni texto, aucun avis, trace au registre', async () => {
+      const emp = await seedEmployee({ withUniform: false });
+      const res = await silent(emp.id, { reason: 'DEMISSION' });
+      expect(res.status).toBe(201);
+      expect(res.body.data).toEqual({ becameInactive: true, piecesHeld: 0 });
+
+      const after = await prisma.employee.findUnique({ where: { id: emp.id } });
+      expect(after?.status).toBe('INACTIF');
+      expect(after?.terminationDate).toBeTruthy();
+      expect(sendEmailWithProvider).not.toHaveBeenCalled();
+      expect(sendSms).not.toHaveBeenCalled();
+      expect(await prisma.employeeOffboardingNotice.count({ where: { employeeId: emp.id } })).toBe(0);
+      expect(await prisma.notification.count({ where: { payload: { path: ['employeeId'], equals: emp.id } } })).toBe(0);
+
+      const history = await request(app).get(`/api/employees/${emp.id}/history`).set('Authorization', `Bearer ${rhToken}`);
+      expect(history.body.data).toEqual([
+        expect.objectContaining({ by: 'Tamara Hadid', details: 'Dossier fermé sans avis (Démission) — rien n’a été envoyé' }),
+      ]);
+    });
+
+    it('pièces encore détenues : fermé quand même, date limite posée et notée au registre', async () => {
+      const emp = await seedEmployee();
+      const res = await silent(emp.id, { reason: 'FIN_EMPLOI', deadline });
+      expect(res.status).toBe(201);
+      expect(res.body.data.piecesHeld).toBe(3);
+      const after = await prisma.employee.findUnique({ where: { id: emp.id } });
+      expect(montrealYmd(after!.uniformReturnDeadlineAt!)).toBe(deadline);
+      expect(sendEmailWithProvider).not.toHaveBeenCalled();
+      const log = await prisma.auditLog.findFirst({ where: { resourceId: emp.id } });
+      expect(log?.details).toMatch(/3 pièce\(s\) d’uniforme encore détenue\(s\), date limite/);
+    });
+
+    it('validation : motif inconnu → 400 ; champ en trop → 400 ; lecture seule → 403', async () => {
+      const emp = await seedEmployee({ withUniform: false });
+      expect((await silent(emp.id, { reason: 'AUTRE' })).status).toBe(400);
+      expect((await silent(emp.id, { reason: 'DEMISSION', sendSms: true })).status).toBe(400);
+      expect((await silent(emp.id, { reason: 'DEMISSION' }, salesToken)).status).toBe(403);
+      expect((await prisma.employee.findUnique({ where: { id: emp.id } }))?.status).toBe('ACTIF');
+    });
+  });
 });

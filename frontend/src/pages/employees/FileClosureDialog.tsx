@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Alert, Box, Button, Checkbox, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
-  FormControlLabel, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
+  FormControlLabel, MenuItem, Radio, RadioGroup, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import {
@@ -23,9 +23,13 @@ interface Props {
   overview: ClosureOverview;
 }
 
+type Mode = 'LETTRE' | 'SANS_ENVOI';
+
 /**
  * « Fermer le dossier » : étape 1 = motif, date limite, texto ; étape 2 = aperçu
  * exact du courriel (À employé, CC paie + RH) et du texto, puis envoi.
+ * Mode « sans rien envoyer » (uniformes déjà rapportés, aucun uniforme…) :
+ * motif seulement, le dossier est fermé directement, sans aperçu.
  */
 export default function FileClosureDialog({ open, onClose, overview }: Props) {
   const qc = useQueryClient();
@@ -33,6 +37,9 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
   const { employee, defaults, estimate } = overview;
   const hasPieces = estimate.pieces.length > 0;
 
+  const defaultMode: Mode = hasPieces ? 'LETTRE' : 'SANS_ENVOI';
+  const [mode, setMode] = useState<Mode>(defaultMode);
+  const silent = mode === 'SANS_ENVOI';
   const [step, setStep] = useState<1 | 2>(1);
   const [reason, setReason] = useState<ClosureReason>('INACTIVITE');
   const [reasonText, setReasonText] = useState(defaults.reasonTexts.INACTIVITE);
@@ -45,6 +52,7 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
   useEffect(() => {
     if (open) {
       setStep(1);
+      setMode(defaultMode);
       setReason('INACTIVITE');
       setReasonText(defaults.reasonTexts.INACTIVITE);
       setDeadline(defaults.deadline);
@@ -86,12 +94,30 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
     onError: (e) => enqueueSnackbar(getApiErrorMessage(e, 'Erreur lors de la fermeture du dossier'), { variant: 'error' }),
   });
 
+  const silentMut = useMutation({
+    mutationFn: () =>
+      employeeService.closeSilently(employee.id, { reason, ...(hasPieces ? { deadline } : {}) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['employee', employee.id] });
+      qc.invalidateQueries({ queryKey: ['employee-closure', employee.id] });
+      qc.invalidateQueries({ queryKey: ['employee-history', employee.id] });
+      qc.invalidateQueries({ queryKey: ['employees'] });
+      qc.invalidateQueries({ queryKey: ['uniform-fiche', employee.id] });
+      qc.invalidateQueries({ queryKey: ['rep-inactive-holdings'] });
+      enqueueSnackbar('Dossier fermé — rien n’a été envoyé', { variant: 'success' });
+      onClose();
+    },
+    onError: (e) => enqueueSnackbar(getApiErrorMessage(e, 'Erreur lors de la fermeture du dossier'), { variant: 'error' }),
+  });
+
   const pickReason = (r: ClosureReason) => {
     setReason(r);
     setReasonText(defaults.reasonTexts[r]);
   };
 
-  const canPreview = reasonText.trim().length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(deadline);
+  const validDeadline = /^\d{4}-\d{2}-\d{2}$/.test(deadline);
+  const canPreview = reasonText.trim().length > 0 && validDeadline;
+  const canCloseSilently = !hasPieces || validDeadline;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -102,13 +128,25 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
       {step === 1 && (
         <DialogContent dividers>
           <Stack spacing={2}>
-            {!employee.email && (
+            <RadioGroup value={mode} onChange={(ev) => setMode(ev.target.value as Mode)}>
+              <FormControlLabel
+                value="LETTRE"
+                control={<Radio />}
+                label="Envoyer une lettre à l’employé (courriel, paie et RH en copie)"
+              />
+              <FormControlLabel
+                value="SANS_ENVOI"
+                control={<Radio />}
+                label="Fermer sans rien envoyer (uniformes déjà rapportés, aucun uniforme, employé déjà avisé…)"
+              />
+            </RadioGroup>
+            {!silent && !employee.email && (
               <Alert severity="warning">
                 Aucun courriel au dossier : la lettre ne pourra pas être envoyée. Ajoutez le courriel sur la fiche
                 (Modifier), ou continuez et remettez la lettre autrement.
               </Alert>
             )}
-            {estimate.issuancesWithoutLines > 0 && (
+            {!silent && estimate.issuancesWithoutLines > 0 && (
               <Alert severity="warning">
                 {estimate.issuancesWithoutLines} remise(s) sans pièces inscrites (import historique) : le montant ci-dessous
                 est incomplet. Complétez la remise avant d’envoyer.
@@ -128,7 +166,7 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
                   <MenuItem key={r} value={r}>{defaults.reasonLabels[r]}</MenuItem>
                 ))}
               </TextField>
-              <TextField
+              {(!silent || hasPieces) && <TextField
                 label="Date limite de retour"
                 type="date"
                 size="small"
@@ -136,17 +174,19 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
                 onChange={(ev) => setDeadline(ev.target.value)}
                 InputLabelProps={{ shrink: true }}
                 helperText="Par défaut : aujourd’hui + 14 jours"
-              />
+              />}
             </Stack>
 
-            <TextField
-              label="Paragraphe d’ouverture (modifiable)"
-              multiline
-              minRows={4}
-              value={reasonText}
-              onChange={(ev) => setReasonText(ev.target.value)}
-              fullWidth
-            />
+            {!silent && (
+              <TextField
+                label="Paragraphe d’ouverture (modifiable)"
+                multiline
+                minRows={4}
+                value={reasonText}
+                onChange={(ev) => setReasonText(ev.target.value)}
+                fullWidth
+              />
+            )}
 
             <Box>
               <Typography variant="subtitle2" gutterBottom>Uniformes à rapporter</Typography>
@@ -178,17 +218,33 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
                 </>
               ) : (
                 <Typography variant="body2" color="text.secondary">
-                  Aucun uniforme détenu selon nos registres — la lettre demandera seulement le retour des biens de la Compagnie.
+                  {silent
+                    ? 'Aucun uniforme détenu selon nos registres.'
+                    : 'Aucun uniforme détenu selon nos registres — la lettre demandera seulement le retour des biens de la Compagnie.'}
                 </Typography>
               )}
             </Box>
 
+            {silent ? (
+              hasPieces ? (
+                <Alert severity="warning">
+                  Rien ne sera envoyé à l’employé, mais il détient encore des uniformes. Si rien ne revient d’ici la date
+                  limite, le dossier uniformes sera fermé automatiquement et <strong>la paie recevra le montant à retenir</strong>.
+                </Alert>
+              ) : (
+                <Alert severity="info">
+                  L’employé passera à <strong>Inactif</strong>. Aucun courriel ni texto ne sera envoyé (ni à l’employé, ni à
+                  la paie). La fermeture sera inscrite à l’historique du dossier.
+                </Alert>
+              )
+            ) : (
             <FormControlLabel
               control={
                 <Checkbox checked={sendSms} disabled={!employee.phone} onChange={(ev) => setSendSms(ev.target.checked)} />
               }
               label={employee.phone ? `Envoyer aussi un texto au ${employee.phone}` : 'Aucun téléphone au dossier'}
             />
+            )}
           </Stack>
         </DialogContent>
       )}
@@ -227,7 +283,17 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
 
       <DialogActions>
         <Button onClick={onClose}>Annuler</Button>
-        {step === 1 ? (
+        {step === 1 && silent ? (
+          <Button
+            variant="contained"
+            color="error"
+            disabled={!canCloseSilently || silentMut.isPending}
+            onClick={() => silentMut.mutate()}
+            startIcon={silentMut.isPending ? <CircularProgress size={16} color="inherit" /> : undefined}
+          >
+            Fermer le dossier sans envoi
+          </Button>
+        ) : step === 1 ? (
           <Button
             variant="contained"
             disabled={!canPreview || previewMut.isPending}

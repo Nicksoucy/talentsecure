@@ -46,5 +46,12 @@ export const employeeClosureSchema = z.object({
   sendSms: z.boolean().optional().default(false),
 });
 
+/** Fermer le dossier SANS rien envoyer (uniformes déjà rapportés, aucun uniforme…). */
+export const employeeSilentClosureSchema = z.object({
+  reason: z.enum(['INACTIVITE', 'DEMISSION', 'FIN_EMPLOI']),
+  // Date limite : seulement si l'employé détient encore des pièces.
+  deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date limite invalide (AAAA-MM-JJ)').optional(),
+}).strict();
+
 /** « Renvoyer » un avis : aucun paramètre — le texte original est réutilisé. */
 export const employeeClosureResendSchema = z.object({}).strict();

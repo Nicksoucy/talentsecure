@@ -491,6 +491,42 @@ export async function sendClosure(
 }
 
 /**
+ * Ferme le dossier SANS rien envoyer (ni lettre, ni texto, ni courriel à la
+ * paie) : l'employé a déjà rapporté ses uniformes, n'en a jamais eu, ou RH
+ * l'a avisé autrement. Statut INACTIF + fin d'emploi, trace au registre.
+ * S'il détient encore des pièces, la date limite s'applique quand même : à
+ * l'échéance, la clôture automatique avisera la paie comme d'habitude.
+ */
+export async function closeSilently(
+  employeeId: string,
+  input: { reason: ClosureReason; deadline?: string },
+  signer: ClosureSigner
+): Promise<{ becameInactive: boolean; piecesHeld: number }> {
+  const emp = await loadEmployee(employeeId);
+  const now = new Date();
+  const deadline = input.deadline ? parseDeadline(input.deadline, now) : undefined;
+  const fields = buildDeactivationFields(emp, now, deadline);
+  const becameInactive = emp.status === 'ACTIF';
+  await prisma.employee.update({
+    where: { id: employeeId },
+    data: { status: 'INACTIF', ...fields },
+  });
+  await propagateUniformOffboarding(employeeId, fields.uniformReturnDeadlineAt, emp.uniformReturnDeadlineAt);
+  const piecesHeld = (await computeHoldings(employeeId)).reduce((n, h) => n + h.quantity, 0);
+
+  await recordEmployeeAudit({
+    employeeId,
+    userId: signer.id,
+    details:
+      `Dossier fermé sans avis (${CLOSURE_REASON_LABELS[input.reason]}) — rien n’a été envoyé` +
+      (piecesHeld > 0
+        ? ` ; ${piecesHeld} pièce(s) d’uniforme encore détenue(s), date limite ${formatLongFr(fields.uniformReturnDeadlineAt)}`
+        : ''),
+  });
+  return { becameInactive, piecesHeld };
+}
+
+/**
  * Renvoie les canaux en échec d'un avis (même texte que l'original), après
  * correction du courriel/téléphone sur la fiche par exemple.
  */
