@@ -140,27 +140,30 @@ describe('FileClosureDialog', () => {
     it('sans uniforme : choisi par défaut, rien sur la lettre, ferme directement avec le motif', async () => {
       const user = userEvent.setup();
       const onClose = vi.fn();
-      closeSilently.mockResolvedValue({ becameInactive: true, piecesHeld: 0 });
+      closeSilently.mockResolvedValue({ becameInactive: true, piecesHeld: 0, payrollNotified: false });
       renderWithProviders(<FileClosureDialog open onClose={onClose} overview={makeOverview({ estimate: noPieces })} />);
 
       expect(screen.getByLabelText(/fermer sans rien envoyer/i)).toBeChecked();
       expect(screen.queryByLabelText(/paragraphe d’ouverture/i)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/date limite de retour/i)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/envoyer aussi un texto/i)).not.toBeInTheDocument();
-      expect(screen.getByText(/aucun courriel ni texto ne sera envoyé/i)).toBeInTheDocument();
+      // Paie avisée par défaut ; on la décoche → vraiment rien d'envoyé.
+      expect(screen.getByLabelText(/aviser la paie et les rh/i)).toBeChecked();
+      await user.click(screen.getByLabelText(/aviser la paie et les rh/i));
+      expect(screen.getByText(/ni à la paie/i)).toBeInTheDocument();
 
       await user.click(screen.getByLabelText('Motif'));
       await user.click(await screen.findByRole('option', { name: 'Démission' }));
       await user.click(screen.getByRole('button', { name: /fermer le dossier sans envoi/i }));
       await waitFor(() => expect(onClose).toHaveBeenCalled());
-      expect(closeSilently).toHaveBeenCalledWith('emp-1', { reason: 'DEMISSION' });
+      expect(closeSilently).toHaveBeenCalledWith('emp-1', { reason: 'DEMISSION', notifyPayroll: false });
       expect(previewClosure).not.toHaveBeenCalled();
       expect(sendClosure).not.toHaveBeenCalled();
     });
 
     it('avec uniformes : la lettre reste le choix par défaut ; sans envoi → avertissement paie + date limite envoyée', async () => {
       const user = userEvent.setup();
-      closeSilently.mockResolvedValue({ becameInactive: true, piecesHeld: 3 });
+      closeSilently.mockResolvedValue({ becameInactive: true, piecesHeld: 3, payrollNotified: true });
       renderWithProviders(<FileClosureDialog open onClose={vi.fn()} overview={makeOverview()} />);
 
       expect(screen.getByLabelText(/envoyer une lettre/i)).toBeChecked();
@@ -168,9 +171,12 @@ describe('FileClosureDialog', () => {
       expect(screen.getByText(/la paie recevra le montant à retenir/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/date limite de retour/i)).toHaveValue('2026-10-14');
 
-      await user.click(screen.getByRole('button', { name: /fermer le dossier sans envoi/i }));
+      await user.type(screen.getByLabelText(/note pour la paie/i), 'Rapportera lundi');
+      await user.click(screen.getByRole('button', { name: /fermer et aviser la paie/i }));
       await waitFor(() =>
-        expect(closeSilently).toHaveBeenCalledWith('emp-1', { reason: 'INACTIVITE', deadline: '2026-10-14' }),
+        expect(closeSilently).toHaveBeenCalledWith('emp-1', {
+          reason: 'INACTIVITE', deadline: '2026-10-14', notifyPayroll: true, note: 'Rapportera lundi',
+        }),
       );
     });
   });
