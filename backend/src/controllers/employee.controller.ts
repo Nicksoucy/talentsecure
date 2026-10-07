@@ -16,6 +16,7 @@ import {
   revertUniformOffboarding,
   UniformOffboardingWarning,
 } from '../services/employee-offboarding.service';
+import { getEmployeeHistory, recordEmployeeAudit } from '../services/audit.service';
 
 /** Invalidation du cache carte (les mutations changent les points affichés). */
 const invalidateEmployeeCaches = () =>
@@ -274,6 +275,15 @@ export const updateEmployee = async (req: Request, res: Response, next: NextFunc
     } else if (becomingActive && existing.uniformReturnDeadlineAt) {
       await revertUniformOffboarding(id, existing.uniformReturnDeadlineAt);
     }
+    if (becomingInactive || becomingActive) {
+      await recordEmployeeAudit({
+        employeeId: id,
+        userId: req.user?.id,
+        details: becomingInactive
+          ? 'Employé passé à Inactif (fiche employé)'
+          : 'Employé réactivé (fiche employé)',
+      });
+    }
 
     await invalidateEmployeeCaches();
     // Re-géocodage en arrière-plan seulement si un champ d'adresse a changé.
@@ -294,6 +304,15 @@ export const updateEmployee = async (req: Request, res: Response, next: NextFunc
   }
 };
 
+/** GET /api/employees/:id/history — registre du dossier (qui a fait quoi). */
+export const getEmployeeHistoryHandler = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json({ data: await getEmployeeHistory(req.params.id) });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const deleteEmployee = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
@@ -304,6 +323,12 @@ export const deleteEmployee = async (req: Request, res: Response, next: NextFunc
     await prisma.employee.update({
       where: { id },
       data: { isDeleted: true, deletedAt: new Date() },
+    });
+    await recordEmployeeAudit({
+      employeeId: id,
+      userId: req.user?.id,
+      action: 'DELETE',
+      details: `Employé supprimé : ${existing.firstName} ${existing.lastName}`,
     });
     await invalidateEmployeeCaches();
     res.json({ message: 'Employé supprimé' });

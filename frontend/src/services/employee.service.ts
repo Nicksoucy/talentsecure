@@ -100,6 +100,17 @@ interface EmployeesResponse {
   };
 }
 
+/** Une ligne du registre d'un dossier employé (qui a fait quoi, quand). */
+export interface EmployeeHistoryEntry {
+  id: string;
+  createdAt: string;
+  action: string;
+  resource: string;
+  details: string | null;
+  /** Nom de la personne, ou « Système » (clôture automatique, import). */
+  by: string;
+}
+
 export const employeeService = {
   async getEmployees(params?: GetEmployeesParams): Promise<EmployeesResponse> {
     // `near` (point + rayon) → nearLat/nearLng/nearRadiusKm pour l'API.
@@ -161,6 +172,11 @@ export const employeeService = {
   ): Promise<{ data: Employee; message: string }> {
     const response = await api.post(`/api/employees/promote-prospect/${prospectId}`, data);
     return response.data;
+  },
+
+  async getHistory(id: string): Promise<EmployeeHistoryEntry[]> {
+    const response = await api.get(`/api/employees/${id}/history`);
+    return response.data.data;
   },
 
   async getClosure(id: string): Promise<ClosureOverview> {

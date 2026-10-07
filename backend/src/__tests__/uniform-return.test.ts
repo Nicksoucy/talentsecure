@@ -60,6 +60,7 @@ jest.mock('../services/notification.service', () => ({
 describe('Uniformes — retours /api/uniforms/returns', () => {
   let app: Express;
   let adminToken: string;
+  let adminId: string;
   let magasinToken: string;
   let clientToken: string;
 
@@ -85,6 +86,7 @@ describe('Uniformes — retours /api/uniforms/returns', () => {
       data: { name: 'Client UR', email: 'client.ureturn@test.com', password: pw },
     });
 
+    adminId = admin.id;
     adminToken = generateAccessToken({ userId: admin.id, email: admin.email!, role: admin.role });
     magasinToken = generateAccessToken({ userId: magasin.id, email: magasin.email!, role: magasin.role });
     clientToken = generateAccessToken({ userId: client.id, email: client.email, role: 'CLIENT' });
@@ -298,6 +300,11 @@ describe('Uniformes — retours /api/uniforms/returns', () => {
       // Le retour est persistant en RETURNED avec returnedAt.
       const persisted = await prisma.uniformReturn.findUnique({ where: { id: ret.id } });
       expect(persisted?.status).toBe('RETURNED');
+
+      // Registre : le retour est inscrit au nom de la personne connectée.
+      const log = await prisma.auditLog.findFirst({ where: { resourceId: persisted!.employeeId, resource: 'Uniform' } });
+      expect(log?.userId).toBe(adminId);
+      expect(log?.details).toBe('Retour d’uniformes enregistré — 2 en bon état, 1 endommagée(s), 1 perdue(s)');
       expect(persisted?.returnedAt).toBeTruthy();
 
       // La remise parente est recalculée : tout est revenu ⇒ RETURNED.

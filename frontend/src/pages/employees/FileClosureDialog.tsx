@@ -70,6 +70,7 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
     onSuccess: (notice) => {
       qc.invalidateQueries({ queryKey: ['employee', employee.id] });
       qc.invalidateQueries({ queryKey: ['employee-closure', employee.id] });
+      qc.invalidateQueries({ queryKey: ['employee-history', employee.id] });
       qc.invalidateQueries({ queryKey: ['employees'] });
       qc.invalidateQueries({ queryKey: ['uniform-fiche', employee.id] });
       qc.invalidateQueries({ queryKey: ['rep-inactive-holdings'] });

@@ -16,6 +16,7 @@ import {
   refundLateReturn,
 } from '../services/uniform-termination.service';
 import { getOrCreateOpenBatch } from '../services/uniform-wash-batch.service';
+import { recordEmployeeAudit } from '../services/audit.service';
 
 const userId = (req: Request): string | undefined => (req.user as any)?.id;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -255,6 +256,21 @@ export const finalizeReturn = async (req: Request, res: Response, next: NextFunc
     // Premier retour d'un dossier fermé : la paie, qui retient le montant de la
     // lettre, apprend que le retour est complet et qu'il n'y a rien à retenir.
     const payrollNotice = ret.isLateReturn ? null : await notifyPayrollReturnReceived(ret.id);
+
+    const counts = [
+      goodCount && `${goodCount} en bon état`,
+      damagedCount && `${damagedCount} endommagée(s)`,
+      lostCount && `${lostCount} perdue(s)`,
+    ].filter(Boolean).join(', ');
+    await recordEmployeeAudit({
+      employeeId: ret.employeeId,
+      userId: userId(req),
+      resource: 'Uniform',
+      details:
+        `${ret.isLateReturn ? 'Retour tardif d’uniformes enregistré' : 'Retour d’uniformes enregistré'}` +
+        (counts ? ` — ${counts}` : '') +
+        (settledAmount > 0 ? ` ; ${settledAmount.toFixed(2).replace('.', ',')} $ remboursés` : ''),
+    });
 
     try {
       const pdf = await generateReturnPdf(ret.id);

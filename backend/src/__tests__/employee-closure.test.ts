@@ -190,6 +190,12 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
     expect(notice?.htmlSnapshot).toContain('105,00 $');
     expect(notice?.sentByName).toBe('Tamara Hadid');
 
+    // Registre : la fermeture est inscrite au nom de la personne.
+    const history = await request(app).get(`/api/employees/${emp.id}/history`).set('Authorization', `Bearer ${rhToken}`);
+    expect(history.body.data).toEqual([
+      expect.objectContaining({ by: 'Tamara Hadid', details: expect.stringMatching(/^Dossier fermé \(.+\) — retour des uniformes au plus tard le /) }),
+    ]);
+
     // Les remises actives ont reçu la date limite.
     const iss = await prisma.uniformIssuance.findFirst({ where: { employeeId: emp.id } });
     expect(iss?.dueReturnAt?.toISOString()).toBe(after!.uniformReturnDeadlineAt!.toISOString());

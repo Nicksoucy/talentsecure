@@ -645,7 +645,8 @@ model Placement {
 
 model AuditLog {
   id         String      @id @default(uuid())
-  userId     String
+  // null = action du système (import Agendrix sans auteur, clôture automatique…)
+  userId     String?
   action     AuditAction
   resource   String // "Candidate", "Catalogue", "User", etc.
   resourceId String? // Generic ID - not enforced by FK
@@ -655,11 +656,12 @@ model AuditLog {
   createdAt  DateTime    @default(now())
 
   // Relations
-  user User @relation(fields: [userId], references: [id])
+  user User? @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([action])
   @@index([resource])
+  @@index([resourceId])
   @@index([createdAt])
   @@map("audit_logs")
 }

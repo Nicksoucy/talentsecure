@@ -34,6 +34,7 @@ import {
 import { computeAmountOwed, computeHoldings } from './uniform-stock.service';
 import { returnedSinceClosure } from './uniform-termination.service';
 import { UNIFORM_RETURN_DEADLINE_CALENDAR_DAYS } from '../constants/uniform';
+import { recordEmployeeAudit } from './audit.service';
 
 export const CLOSURE_REASONS = ['INACTIVITE', 'DEMISSION', 'FIN_EMPLOI'] as const;
 export type ClosureReason = (typeof CLOSURE_REASONS)[number];
@@ -478,6 +479,12 @@ export async function sendClosure(
       piecesSnapshot: estimate.pieces as unknown as Prisma.InputJsonValue,
       htmlSnapshot: html,
     },
+  });
+
+  await recordEmployeeAudit({
+    employeeId,
+    userId: signer.id,
+    details: `Dossier fermé (${CLOSURE_REASON_LABELS[input.reason]}) — retour des uniformes au plus tard le ${formatLongFr(deadline)}`,
   });
 
   return { notice, becameInactive };

@@ -291,6 +291,38 @@ describe('Employees — /api/employees', () => {
       const after = await prisma.uniformIssuance.findUnique({ where: { id: iss.id } });
       expect(after?.dueReturnAt?.toISOString()).toBe(manual.toISOString());
     });
+
+    it('registre : désactivation et réactivation inscrites avec le nom de la personne', async () => {
+      const emp = await prisma.employee.create({
+        data: { firstName: 'Reg', lastName: 'Istre', phone: '5145558807', status: 'ACTIF' },
+      });
+      await request(app).put(`/api/employees/${emp.id}`).set('Authorization', `Bearer ${rhToken}`).send({ status: 'INACTIF' });
+      await request(app).put(`/api/employees/${emp.id}`).set('Authorization', `Bearer ${rhToken}`).send({ status: 'ACTIF' });
+      // Une modification sans changement de statut n'ajoute rien au registre.
+      await request(app).put(`/api/employees/${emp.id}`).set('Authorization', `Bearer ${rhToken}`).send({ city: 'Laval' });
+
+      const res = await request(app)
+        .get(`/api/employees/${emp.id}/history`)
+        .set('Authorization', `Bearer ${salesToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.map((h: any) => [h.details, h.by])).toEqual([
+        ['Employé réactivé (fiche employé)', 'Rh Emp'],
+        ['Employé passé à Inactif (fiche employé)', 'Rh Emp'],
+      ]);
+    });
+
+    it('registre : une action du système (sans utilisateur) s’affiche « Système »', async () => {
+      const emp = await prisma.employee.create({
+        data: { firstName: 'Sys', lastName: 'Teme', phone: '5145558808', status: 'INACTIF' },
+      });
+      await prisma.auditLog.create({
+        data: { userId: null, action: 'UPDATE', resource: 'Uniform', resourceId: emp.id, details: 'Clôture auto' },
+      });
+      const res = await request(app)
+        .get(`/api/employees/${emp.id}/history`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.body.data).toEqual([expect.objectContaining({ details: 'Clôture auto', by: 'Système' })]);
+    });
   });
 
   // -------------------------------------------------------------------------

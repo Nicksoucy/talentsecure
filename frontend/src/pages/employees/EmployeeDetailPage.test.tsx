@@ -16,6 +16,7 @@ vi.mock('@/services/employee.service', () => ({
     getEmployeeById: vi.fn(),
     updateEmployee: vi.fn(),
     getClosure: vi.fn(),
+    getHistory: vi.fn(),
   },
 }));
 
@@ -37,6 +38,7 @@ const getEmployeeById = vi.mocked(employeeService.getEmployeeById);
 const updateEmployee = vi.mocked(employeeService.updateEmployee);
 const closeTermination = vi.mocked(uniformService.closeTermination);
 const getClosure = vi.mocked(employeeService.getClosure);
+const getHistory = vi.mocked(employeeService.getHistory);
 
 function makeClosure(notices: any[] = []): any {
   return {
@@ -89,6 +91,7 @@ function renderPage(id = 'emp-1') {
 beforeEach(() => {
   vi.clearAllMocks();
   getClosure.mockResolvedValue(makeClosure());
+  getHistory.mockResolvedValue([]);
   // usePerms dérive ses droits du rôle dans le store auth : ADMIN ⇒
   // canViewUniforms + canWriteEmployees.
   useAuthStore.getState().setAuth(makeUser({ role: 'ADMIN' }), 'tok', 'refresh');
@@ -283,6 +286,29 @@ describe('EmployeeDetailPage', () => {
       renderPage();
       expect(await screen.findByText('Fermeture de dossier')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /fermer le dossier/i })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Historique du dossier', () => {
+    it('affiche qui a fait chaque action, « Système » quand personne n’a cliqué', async () => {
+      getEmployeeById.mockResolvedValue({ data: { ...makeEmployee(), status: 'INACTIF' } as Employee });
+      getHistory.mockResolvedValue([
+        { id: 'h-2', createdAt: '2026-08-11T16:13:25.000Z', action: 'UPDATE', resource: 'Uniform',
+          details: 'Uniformes clôturés automatiquement (délai de retour dépassé)', by: 'Système' },
+        { id: 'h-1', createdAt: '2026-07-17T17:44:47.000Z', action: 'UPDATE', resource: 'Employee',
+          details: 'Employé passé à Inactif (fiche employé)', by: 'Tamara Hadid' },
+      ]);
+      renderPage();
+      expect(await screen.findByText('Employé passé à Inactif (fiche employé)')).toBeInTheDocument();
+      expect(screen.getByText('Tamara Hadid')).toBeInTheDocument();
+      expect(screen.getByText('Système')).toBeInTheDocument();
+      expect(getHistory).toHaveBeenCalledWith('emp-1');
+    });
+
+    it('aucune action inscrite : message vide', async () => {
+      getEmployeeById.mockResolvedValue({ data: makeEmployee() });
+      renderPage();
+      expect(await screen.findByText(/Aucune action inscrite au registre/)).toBeInTheDocument();
     });
   });
 });
