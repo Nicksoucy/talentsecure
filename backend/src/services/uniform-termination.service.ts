@@ -140,6 +140,7 @@ function esc(s: string): string {
 }
 
 const money = (n: number) => `${n.toFixed(2).replace('.', ',')} $`;
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /** Courriel à la paie : pièces non retournées + montant à retenir. */
 export function buildPayrollDeductionHtml(opts: {
@@ -148,6 +149,8 @@ export function buildPayrollDeductionHtml(opts: {
   deadline: Date | null;
   lines: Array<{ itemName: string; size: string; quantity: number; lineTotal: number }>;
   amountOwed: number;
+  /** Retenues déjà demandées à la paie pour cet employé (courriels précédents). */
+  previouslyRequested?: number;
   link: string;
 }): string {
   const rows = opts.lines
@@ -167,6 +170,12 @@ export function buildPayrollDeductionHtml(opts: {
   n'a pas rapporté ses uniformes${deadline ? ` à la date limite du ${esc(deadline)}` : ''}.
   Le dossier uniformes est clôturé dans TalentSecure.</p>
   <p style="font-size:18px;">Montant à retenir sur la paie : <strong style="color:#dc2626;">${money(opts.amountOwed)}</strong></p>
+  ${
+    opts.previouslyRequested && opts.previouslyRequested > 0
+      ? `<p>Ce montant s’ajoute à ${money(opts.previouslyRequested)} déjà demandé${opts.previouslyRequested > 1 ? 's' : ''} dans un courriel précédent :
+  <strong>total à retenir pour cet employé : ${money(round2(opts.previouslyRequested + opts.amountOwed))}</strong>.</p>`
+      : ''
+  }
   ${rows ? `<table style="width:100%;border-collapse:collapse;font-size:14px;"><thead><tr style="background:#f3f4f6;">
     <th style="text-align:left;padding:6px 8px;border:1px solid #d1d5db;">Pièce</th>
     <th style="text-align:left;padding:6px 8px;border:1px solid #d1d5db;">Taille</th>
@@ -178,66 +187,128 @@ export function buildPayrollDeductionHtml(opts: {
 </div>`;
 }
 
+const CLOSURE_PAIE_TYPE = 'UNIFORM_TERMINATION_CLOSED' as const;
+const LATE_REFUND_PAIE_TYPE = 'UNIFORM_SETTLEMENT_RECORDED' as const;
+
+/** Somme d'un champ numérique des courriels envoyés à la paie (échecs exclus). */
+async function sumPayrollEmails(
+  employeeId: string,
+  type: typeof CLOSURE_PAIE_TYPE | typeof LATE_REFUND_PAIE_TYPE,
+  dedupPrefix: string,
+  pick: (payload: Record<string, unknown>) => unknown,
+  since?: Date | null
+): Promise<number> {
+  const sent = await prisma.notification.findMany({
+    where: {
+      type,
+      channel: 'EMAIL',
+      status: { not: 'FAILED' },
+      dedupKey: { startsWith: dedupPrefix },
+      payload: { path: ['employeeId'], equals: employeeId },
+      ...(since ? { createdAt: { gte: since } } : {}),
+    },
+    select: { payload: true },
+  });
+  return round2(sent.reduce((sum, n) => sum + (Number(pick((n.payload ?? {}) as Record<string, unknown>)) || 0), 0));
+}
+
 /**
- * Notifie la PAIE (CC RH) de la dette finale d'un employé après clôture(s) de
- * fin d'emploi, avec la liste des pièces. À appeler UNE seule fois par employé
- * (après avoir clôturé toutes ses remises) pour que le montant `owed` reflète le
- * total final, pas un cumul partiel croissant. Idempotent dans la journée via
- * dedupKey. RH/admins reçoivent aussi l'alerte dans l'app.
+ * Retenues réellement DEMANDÉES à la paie depuis la fermeture du dossier : la
+ * somme des courriels « Retenue uniformes » partis (pas ce que TalentSecure a
+ * calculé — un courriel bloqué ou en échec n'a rien demandé à la paie).
+ * Anciens courriels (avant 2026-10) : `amountOwed` = solde au moment de l'envoi.
  */
-export async function notifyTerminationClosed(employeeId: string): Promise<void> {
+export async function payrollWithholdingRequested(employeeId: string): Promise<number> {
+  return sumPayrollEmails(
+    employeeId,
+    CLOSURE_PAIE_TYPE,
+    'termination-closed-paie-',
+    (p) => p.amountToWithhold ?? p.amountOwed,
+    await closureSince(employeeId)
+  );
+}
+
+/** Remboursements déjà annoncés à la paie (courriels « rapportés en retard »). */
+async function payrollRefundAnnounced(employeeId: string): Promise<number> {
+  return sumPayrollEmails(
+    employeeId,
+    LATE_REFUND_PAIE_TYPE,
+    'late-return-paie-',
+    (p) => p.amountToRefund ?? p.amount,
+    await closureSince(employeeId)
+  );
+}
+
+/**
+ * Notifie la PAIE (CC RH) des pièces non rapportées par les clôtures de fin
+ * d'emploi `returnIds` (retours NOT_RETURNED créés par closeTerminationCore).
+ * UN courriel par appel, avec le montant de CES clôtures seulement — une 2ᵉ
+ * clôture le même jour envoie son propre courriel (avant : bloquée par une
+ * clé « une fois par jour », la paie ne recevait que le 1ᵉʳ montant). Le job
+ * passe toutes les remises clôturées d'un employé en un seul appel → un seul
+ * courriel. RH/admins reçoivent aussi l'alerte dans l'app.
+ */
+export async function notifyTerminationClosed(employeeId: string, returnIds: string[]): Promise<void> {
   try {
-    const owed = await computeAmountOwed(employeeId);
+    const ids = [...new Set(returnIds)].sort();
+    if (ids.length === 0) return;
     const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
     const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Agent';
-    const day = new Date().toISOString().split('T')[0];
 
     const closureLines = await prisma.uniformReturnLine.findMany({
-      where: {
-        condition: 'NOT_RETURNED',
-        return: { employeeId, status: 'RETURNED', isLateReturn: false },
-      },
+      where: { condition: 'NOT_RETURNED', returnId: { in: ids } },
       include: { variant: { include: { item: true } } },
     });
-    const lines = closureLines.map((l) => ({
-      itemName: l.variant?.item.name ?? 'Pièce',
-      size: l.variant?.size ?? '',
-      quantity: l.quantity,
-      lineTotal: Math.round(l.quantity * Number(l.unitReplacementCost) * 100) / 100,
-    }));
+    const lines = closureLines
+      .map((l) => ({
+        itemName: l.variant?.item.name ?? 'Pièce',
+        size: l.variant?.size ?? '',
+        quantity: l.quantity,
+        lineTotal: round2(l.quantity * Number(l.unitReplacementCost)),
+      }))
+      .filter((l) => l.lineTotal > 0);
+    const amount = round2(lines.reduce((sum, l) => sum + l.lineTotal, 0));
+    const previouslyRequested = amount > 0 ? await payrollWithholdingRequested(employeeId) : 0;
+    const key = ids.join(',');
 
     await notify({
-      type: 'UNIFORM_TERMINATION_CLOSED',
+      type: CLOSURE_PAIE_TYPE,
       channels: ['IN_APP'],
       audience: 'ADMINS',
-      dedupKey: `termination-closed-${employeeId}-${day}`,
+      dedupKey: `termination-closed-${key}`,
       title: `Fin d'emploi clôturée — ${employeeName}`,
       message:
-        owed.owed > 0
-          ? `Dette uniforme : ${owed.owed.toFixed(2)} $ transmise à la paie`
+        amount > 0
+          ? `Retenue uniforme : ${amount.toFixed(2)} $ transmise à la paie`
           : 'Aucune retenue sur la paie (uniformes rapportés ou rien à facturer)',
       link: `/employees/${employeeId}`,
-      payload: { employeeId, amountOwed: owed.owed },
+      payload: { employeeId, amountToWithhold: amount },
     }).catch(() => {});
-    if (owed.owed <= 0) return;
+    if (amount <= 0) return;
+    const total = round2(previouslyRequested + amount);
     await notify({
-      type: 'UNIFORM_TERMINATION_CLOSED',
+      type: CLOSURE_PAIE_TYPE,
       channels: ['EMAIL'],
       audience: 'PAIE',
-      dedupKey: `termination-closed-paie-${employeeId}-${day}`,
-      title: `Retenue uniformes — ${employeeName} — ${owed.owed.toFixed(2)} $`,
-      message: `Montant à retenir sur la paie : ${owed.owed.toFixed(2)} $`,
+      dedupKey: `termination-closed-paie-${key}`,
+      title: `Retenue uniformes — ${employeeName} — ${amount.toFixed(2)} $`,
+      message:
+        `Montant à retenir sur la paie : ${amount.toFixed(2)} $` +
+        (previouslyRequested > 0 ? ` (total à retenir pour cet employé : ${total.toFixed(2)} $)` : ''),
       link: `/employees/${employeeId}`,
       payload: {
         employeeId,
-        amountOwed: owed.owed,
+        returnIds: ids,
+        amountToWithhold: amount,
+        totalRequested: total,
         emailCc: [EMAIL_RH],
         emailHtml: buildPayrollDeductionHtml({
           employeeName,
           employeeNumber: employee?.employeeNumber,
           deadline: employee?.uniformReturnDeadlineAt ?? null,
           lines,
-          amountOwed: owed.owed,
+          amountOwed: amount,
+          previouslyRequested,
           link: `${appBaseUrl()}/employees/${employeeId}`,
         }),
       },
@@ -259,7 +330,6 @@ export async function notifyTerminationClosed(employeeId: string): Promise<void>
 
 const PHYSICAL_CONDITIONS: UniformItemCondition[] = ['GOOD', 'DAMAGED'];
 const CHARGED_CONDITIONS: UniformItemCondition[] = ['DAMAGED', 'LOST', 'NOT_RETURNED'];
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /** Début de la fin d'emploi : la dernière lettre « Fermer le dossier », sinon la date de fin d'emploi. */
 async function closureSince(employeeId: string): Promise<Date | null> {
@@ -484,6 +554,30 @@ export async function notifyPayrollReturnReceived(returnId: string): Promise<Pay
 export const LATE_RETURN_METHOD = 'RETOUR TARDIF';
 
 /**
+ * Pièces remises qui ne sont PAS revenues physiquement (ni rapportées, ni
+ * déclarées perdues). Différent de computeHoldings : après une clôture, les
+ * lignes NOT_RETURNED mettent les détentions à 0 alors que l'agent a encore
+ * les pièces — c'est justement ce que la paie veut savoir.
+ */
+async function piecesNotPhysicallyBack(employeeId: string): Promise<number> {
+  const [issued, back] = await Promise.all([
+    prisma.uniformIssuanceLine.aggregate({
+      where: { issuance: { employeeId, status: { notIn: ['DRAFT', 'CANCELLED'] } }, variantId: { not: null } },
+      _sum: { quantity: true },
+    }),
+    prisma.uniformReturnLine.aggregate({
+      where: {
+        condition: { in: [...PHYSICAL_CONDITIONS, 'LOST'] },
+        variantId: { not: null },
+        return: { employeeId, status: 'RETURNED' },
+      },
+      _sum: { quantity: true },
+    }),
+  ]);
+  return Math.max(0, (issued._sum.quantity ?? 0) - (back._sum.quantity ?? 0));
+}
+
+/**
  * Montant à rembourser à un agent qui rapporte des uniformes en retard : tout ce
  * qui a été facturé depuis la fermeture de son dossier (pièces non rapportées,
  * perdues, abîmées), moins ce qu'un retour tardif précédent a déjà remboursé.
@@ -517,6 +611,8 @@ export function buildPayrollLateRefundHtml(s: {
   charged: number;
   alreadyRefunded: number;
   refund: number;
+  /** Pièces encore chez l'agent après ce retour (0 = retour complet). */
+  otherPieces?: number;
   link: string;
 }): string {
   return `<div style="font-family:Arial,sans-serif;color:#111827;max-width:640px;margin:0 auto;padding:20px;">
@@ -526,12 +622,13 @@ export function buildPayrollLateRefundHtml(s: {
   <p style="margin-bottom:0;"><strong>Pièces reçues</strong></p>
   ${receivedTableHtml(s.received)}
   <table style="width:100%;border-collapse:collapse;font-size:15px;margin:8px 0 12px;"><tbody>
-    ${amountRow('Montant retenu pour les uniformes', money(s.charged))}
-    ${s.alreadyRefunded > 0 ? amountRow('Déjà remboursé', money(s.alreadyRefunded)) : ''}
+    ${amountRow('Retenue demandée à la paie pour les uniformes', money(s.charged))}
+    ${s.alreadyRefunded > 0 ? amountRow('Remboursement déjà annoncé', money(s.alreadyRefunded)) : ''}
     ${amountRow('À rembourser à l’employé', money(s.refund))}
   </tbody></table>
   <p>Règle convenue avec les RH : tout retour d’uniformes compte comme complet, même en retard. Tout le montant retenu est donc à rembourser.
   Si la retenue n’a pas encore été faite, ne la faites pas.</p>
+  ${s.otherPieces && s.otherPieces > 0 ? '' : '<p><strong>Il ne détient plus aucune pièce d’uniforme : le retour est complet.</strong></p>'}
   <p><a href="${esc(s.link)}" style="background:#2563eb;color:#fff;padding:10px 18px;text-decoration:none;border-radius:6px;display:inline-block;">Voir la fiche dans TalentSecure</a></p>
   <p style="font-size:12px;color:#6b7280;">TalentSecure — avis automatique. RH est en copie.</p>
 </div>`;
@@ -551,8 +648,17 @@ export async function refundLateReturn(returnId: string, createdById?: string | 
     });
     if (!ret || ret.status !== 'RETURNED' || !ret.isLateReturn) return 0;
     if (!ret.lines.some((l) => PHYSICAL_CONDITIONS.includes(l.condition))) return 0;
-    const { charged, alreadyRefunded, due } = await lateReturnRefundDue(ret.employeeId);
+    const { due } = await lateReturnRefundDue(ret.employeeId);
     if (due <= 0) return 0;
+    // Ce que la PAIE doit rembourser = ce qu'on lui a réellement demandé de
+    // retenir, moins ce qu'on lui a déjà dit de rembourser — pas le montant
+    // calculé par TalentSecure (cas Dahmouni 2026-10-07 : 50 $ demandés à la
+    // paie, mais « 220 $ à rembourser » annoncés).
+    const [requested, announced] = await Promise.all([
+      payrollWithholdingRequested(ret.employeeId),
+      payrollRefundAnnounced(ret.employeeId),
+    ]);
+    const payrollRefund = Math.max(0, round2(requested - announced));
 
     await prisma.uniformDebtSettlement.create({
       data: {
@@ -575,26 +681,33 @@ export async function refundLateReturn(returnId: string, createdById?: string | 
       channels: ['IN_APP'],
       audience: 'ADMINS',
       title: 'Retour tardif — tout est remboursé',
-      message: `${name} a rapporté des uniformes après la date limite : ${due.toFixed(2)} $ à lui rembourser (retour considéré complet, règle RH)`,
+      message:
+        payrollRefund > 0
+          ? `${name} a rapporté des uniformes après la date limite : ${payrollRefund.toFixed(2)} $ à lui rembourser (retour considéré complet, règle RH)`
+          : `${name} a rapporté des uniformes après la date limite : rien n’avait été demandé à la paie, rien à rembourser`,
       link: `/employees/${ret.employeeId}`,
-      payload: { returnId: ret.id, employeeId: ret.employeeId, amount: due },
+      payload: { returnId: ret.id, employeeId: ret.employeeId, amount: payrollRefund },
     }).catch((e) => console.error('notify failed:', e));
+    // Rien n'a été demandé à la paie (ou déjà annoncé) : rien à lui écrire.
+    if (payrollRefund <= 0) return due;
+    const otherPieces = await piecesNotPhysicallyBack(ret.employeeId);
     await notify({
       type: 'UNIFORM_SETTLEMENT_RECORDED',
       channels: ['EMAIL'],
       audience: 'PAIE',
       dedupKey: `late-return-paie-${ret.id}`,
-      title: `Uniformes rapportés en retard — ${name} — ${due.toFixed(2)} $ à rembourser`,
+      title: `Uniformes rapportés en retard — ${name} — ${payrollRefund.toFixed(2)} $ à rembourser`,
       message:
         `${name}${employee?.employeeNumber ? ` (matricule ${employee.employeeNumber})` : ''} a rapporté des uniformes après la date limite.\n` +
-        `Règle RH : tout retour compte comme complet. Montant à rembourser (ou à ne pas retenir) : ${due.toFixed(2)} $.`,
+        `Règle RH : tout retour compte comme complet. Montant à rembourser (ou à ne pas retenir) : ${payrollRefund.toFixed(2)} $.`,
       link,
       payload: {
         returnId: ret.id,
         employeeId: ret.employeeId,
         amount: due,
-        charged,
-        alreadyRefunded,
+        amountToRefund: payrollRefund,
+        requested,
+        announced,
         emailCc: [EMAIL_RH],
         emailHtml: buildPayrollLateRefundHtml({
           employeeName: name,
@@ -606,9 +719,10 @@ export async function refundLateReturn(returnId: string, createdById?: string | 
             quantity: l.quantity,
             condition: CONDITION_FR[l.condition] ?? l.condition,
           })),
-          charged,
-          alreadyRefunded,
-          refund: due,
+          charged: requested,
+          alreadyRefunded: announced,
+          refund: payrollRefund,
+          otherPieces,
           link,
         }),
       },

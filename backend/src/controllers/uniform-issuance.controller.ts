@@ -470,7 +470,7 @@ export const closeTermination = async (req: Request, res: Response, next: NextFu
     }
 
     const result = await closeTerminationCore(issuance, userId(req) ?? null);
-    await notifyTerminationClosed(issuance.employeeId);
+    if (result) await notifyTerminationClosed(issuance.employeeId, [result.returnId]);
     res.json({ message: 'Fin d’emploi clôturée — montant dû calculé', data: result });
   } catch (error) {
     next(error);

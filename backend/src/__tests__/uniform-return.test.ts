@@ -57,6 +57,22 @@ jest.mock('../services/notification.service', () => ({
   notify: jest.fn().mockResolvedValue([]),
 }));
 
+/** Courriel « Retenue uniformes » parti à la paie (ce qu'on lui a demandé de retenir). */
+async function payrollAsked(employeeId: string, amount: number) {
+  await prisma.notification.create({
+    data: {
+      type: 'UNIFORM_TERMINATION_CLOSED',
+      channel: 'EMAIL',
+      status: 'SENT',
+      recipientEmail: 'paie@xguard.ca',
+      title: `Retenue uniformes — ${amount} $`,
+      message: 'test',
+      dedupKey: `termination-closed-paie-${employeeId}-${amount}-${Math.random()}::paie@xguard.ca::EMAIL`,
+      payload: { employeeId, amountToWithhold: amount },
+    },
+  });
+}
+
 describe('Uniformes — retours /api/uniforms/returns', () => {
   let app: Express;
   let adminToken: string;
@@ -430,6 +446,7 @@ describe('Uniformes — retours /api/uniforms/returns', () => {
           lines: { create: [{ variantId, quantity: 2, condition: 'NOT_RETURNED', unitReplacementCost: 25 }] },
         },
       });
+      await payrollAsked(lateEmployeeId, 50);
     });
 
     it('createReturn sur remise clôturée → isLateReturn=true et coûts de ligne forcés à 0', async () => {
@@ -535,6 +552,7 @@ describe('Uniformes — retours /api/uniforms/returns', () => {
           lines: { create: [{ variantId, quantity: 2, condition: 'NOT_RETURNED', unitReplacementCost: 25 }] },
         },
       });
+      await payrollAsked(emp.id, 50);
       // La paie a retenu les 50 $ et RH l'a inscrit : plus rien de dû.
       await prisma.uniformDebtSettlement.create({ data: { employeeId: emp.id, amount: 50, method: 'RETENUE PAIE' } });
       expect((await computeAmountOwed(emp.id)).owed).toBe(0);
