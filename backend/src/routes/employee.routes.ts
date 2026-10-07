@@ -17,6 +17,7 @@ import {
   previewEmployeeClosure,
   sendEmployeeClosure,
   resendEmployeeClosure,
+  closeEmployeeSilently,
 } from '../controllers/employee-closure.controller';
 import { authenticateJWT, authorizeReadWrite } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
@@ -24,6 +25,7 @@ import {
   createEmployeeSchema,
   employeeClosureSchema,
   employeeClosureResendSchema,
+  employeeSilentClosureSchema,
   updateEmployeeSchema,
 } from '../validation/employee.validation';
 
@@ -68,6 +70,7 @@ router.post(
   validate({ params: uuidParam, body: employeeClosureSchema }),
   previewEmployeeClosure
 );
+router.post('/:id/closure/silent', validate({ params: uuidParam, body: employeeSilentClosureSchema }), closeEmployeeSilently);
 router.post('/:id/closure', validate({ params: uuidParam, body: employeeClosureSchema }), sendEmployeeClosure);
 router.post(
   '/:id/closure/:noticeId/resend',

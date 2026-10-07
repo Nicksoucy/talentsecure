@@ -69,6 +69,13 @@ export interface ClosureInput {
   sendSms: boolean;
 }
 
+/** Fermer le dossier sans rien envoyer. */
+export interface SilentClosureInput {
+  reason: ClosureReason;
+  /** Seulement si l'employé détient encore des pièces. */
+  deadline?: string;
+}
+
 export interface ClosurePreview {
   subject: string;
   to: string | null;
@@ -186,6 +193,11 @@ export const employeeService = {
 
   async previewClosure(id: string, input: ClosureInput): Promise<ClosurePreview> {
     const response = await api.post(`/api/employees/${id}/closure/preview`, input);
+    return response.data.data;
+  },
+
+  async closeSilently(id: string, input: SilentClosureInput): Promise<{ becameInactive: boolean; piecesHeld: number }> {
+    const response = await api.post(`/api/employees/${id}/closure/silent`, input);
     return response.data.data;
   },
 

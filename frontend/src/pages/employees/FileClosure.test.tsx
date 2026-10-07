@@ -12,12 +12,15 @@ vi.mock('@/services/employee.service', () => ({
     previewClosure: vi.fn(),
     sendClosure: vi.fn(),
     resendClosure: vi.fn(),
+    closeSilently: vi.fn(),
   },
 }));
 
 const previewClosure = vi.mocked(employeeService.previewClosure);
 const sendClosure = vi.mocked(employeeService.sendClosure);
 const resendClosure = vi.mocked(employeeService.resendClosure);
+const closeSilently = vi.mocked(employeeService.closeSilently);
+const noPieces = { pieces: [], totalPieces: 0, total: 0, issuancesWithoutLines: 0 };
 
 function makeOverview(overrides: Partial<ClosureOverview> = {}): ClosureOverview {
   return {
@@ -131,6 +134,45 @@ describe('FileClosureDialog', () => {
     await user.click(screen.getByRole('button', { name: /voir l’aperçu/i }));
     expect(await screen.findByText(/ne peut pas être dans le passé/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/date limite de retour/i)).toBeInTheDocument();
+  });
+
+  describe('fermer sans rien envoyer', () => {
+    it('sans uniforme : choisi par défaut, rien sur la lettre, ferme directement avec le motif', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      closeSilently.mockResolvedValue({ becameInactive: true, piecesHeld: 0 });
+      renderWithProviders(<FileClosureDialog open onClose={onClose} overview={makeOverview({ estimate: noPieces })} />);
+
+      expect(screen.getByLabelText(/fermer sans rien envoyer/i)).toBeChecked();
+      expect(screen.queryByLabelText(/paragraphe d’ouverture/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/date limite de retour/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/envoyer aussi un texto/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/aucun courriel ni texto ne sera envoyé/i)).toBeInTheDocument();
+
+      await user.click(screen.getByLabelText('Motif'));
+      await user.click(await screen.findByRole('option', { name: 'Démission' }));
+      await user.click(screen.getByRole('button', { name: /fermer le dossier sans envoi/i }));
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(closeSilently).toHaveBeenCalledWith('emp-1', { reason: 'DEMISSION' });
+      expect(previewClosure).not.toHaveBeenCalled();
+      expect(sendClosure).not.toHaveBeenCalled();
+    });
+
+    it('avec uniformes : la lettre reste le choix par défaut ; sans envoi → avertissement paie + date limite envoyée', async () => {
+      const user = userEvent.setup();
+      closeSilently.mockResolvedValue({ becameInactive: true, piecesHeld: 3 });
+      renderWithProviders(<FileClosureDialog open onClose={vi.fn()} overview={makeOverview()} />);
+
+      expect(screen.getByLabelText(/envoyer une lettre/i)).toBeChecked();
+      await user.click(screen.getByLabelText(/fermer sans rien envoyer/i));
+      expect(screen.getByText(/la paie recevra le montant à retenir/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/date limite de retour/i)).toHaveValue('2026-10-14');
+
+      await user.click(screen.getByRole('button', { name: /fermer le dossier sans envoi/i }));
+      await waitFor(() =>
+        expect(closeSilently).toHaveBeenCalledWith('emp-1', { reason: 'INACTIVITE', deadline: '2026-10-14' }),
+      );
+    });
   });
 });
 

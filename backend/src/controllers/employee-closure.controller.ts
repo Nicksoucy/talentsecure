@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { invalidateCaches } from '../utils/cacheInvalidation';
 import { EMPLOYEE_MAPPOINTS_CACHE_KEY } from '../services/addressGeocode.service';
 import {
+  closeSilently,
   getClosureOverview,
   previewClosure,
   resendClosureNotice,
@@ -39,6 +40,17 @@ export const sendEmployeeClosure = async (req: Request, res: Response, next: Nex
     await invalidateCaches({ statKeys: [EMPLOYEE_MAPPOINTS_CACHE_KEY] });
     const { htmlSnapshot: _html, ...data } = notice;
     res.status(201).json({ message: 'Dossier fermé', data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** POST /api/employees/:id/closure/silent — ferme le dossier sans rien envoyer. */
+export const closeEmployeeSilently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = await closeSilently(req.params.id, req.body, signerOf(req));
+    await invalidateCaches({ statKeys: [EMPLOYEE_MAPPOINTS_CACHE_KEY] });
+    res.status(201).json({ message: 'Dossier fermé (rien n’a été envoyé)', data });
   } catch (error) {
     next(error);
   }
