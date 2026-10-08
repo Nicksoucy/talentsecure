@@ -217,4 +217,16 @@ export const employeeService = {
     const response = await api.post(`/api/employees/${id}/closure/${noticeId}/resend`);
     return response.data.data;
   },
+
+  /** Lettre exacte envoyée (pour l'imprimer). */
+  async getClosureLetter(id: string, noticeId: string): Promise<string> {
+    const response = await api.get(`/api/employees/${id}/closure/${noticeId}/letter`);
+    return response.data.data.html;
+  },
+
+  /** Texto envoyé après coup (case non cochée à l'envoi de la lettre). */
+  async sendClosureSms(id: string, noticeId: string): Promise<ClosureNotice> {
+    const response = await api.post(`/api/employees/${id}/closure/${noticeId}/sms`, {});
+    return response.data.data;
+  },
 };

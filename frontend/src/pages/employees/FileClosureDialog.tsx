@@ -13,6 +13,7 @@ import {
   type ClosureReason,
 } from '@/services/employee.service';
 import { getApiErrorMessage } from '@/utils/apiError';
+import { printHtml } from '@/utils/printHtml';
 
 const money = (n: number) => `${n.toFixed(2).replace('.', ',')} $`;
 const REASONS: ClosureReason[] = ['INACTIVITE', 'DEMISSION', 'FIN_EMPLOI', 'AUTRE'];
@@ -394,6 +395,7 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
         ) : (
           <>
             <Button onClick={() => setStep(1)} disabled={sendMut.isPending}>Modifier</Button>
+            <Button onClick={() => preview && printHtml(preview.html)} disabled={!preview}>Imprimer</Button>
             <Button
               variant="contained"
               color="error"

@@ -377,6 +377,51 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
     });
   });
 
+  describe('imprimer la lettre / texto après coup', () => {
+    const sendLetter = async (emp: { id: string }, extra: Record<string, unknown> = {}) => {
+      const res = await request(app).post(`/api/employees/${emp.id}/closure`).set('Authorization', `Bearer ${rhToken}`).send(body(extra));
+      expect(res.status).toBe(201);
+      return res.body.data.id as string;
+    };
+
+    it('GET …/letter : la lettre exacte envoyée (lecture permise aux rôles lecture seule) ; avis d’un autre employé → 404', async () => {
+      const emp = await seedEmployee({ withUniform: false });
+      const noticeId = await sendLetter(emp, { uniformsReceived: true, sendSms: false });
+      const res = await request(app).get(`/api/employees/${emp.id}/closure/${noticeId}/letter`).set('Authorization', `Bearer ${salesToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.html).toContain('Nous confirmons avoir reçu vos uniformes');
+      expect(res.body.data.html).toBe(sendEmailWithProvider.mock.calls[0][0].html);
+      const other = await seedEmployee({ withUniform: false });
+      expect((await request(app).get(`/api/employees/${other.id}/closure/${noticeId}/letter`).set('Authorization', `Bearer ${rhToken}`)).status).toBe(404);
+    });
+
+    it('POST …/sms : texto envoyé après coup, même version que la lettre (uniformes reçus) ; pas deux fois', async () => {
+      const emp = await seedEmployee({ withUniform: false });
+      const noticeId = await sendLetter(emp, { uniformsReceived: true, sendSms: false });
+      expect(sendSms).not.toHaveBeenCalled();
+      const res = await request(app).post(`/api/employees/${emp.id}/closure/${noticeId}/sms`).set('Authorization', `Bearer ${rhToken}`).send({});
+      expect(res.status).toBe(200);
+      expect(res.body.data.smsStatus).toBe('SENT');
+      expect(res.body.data.htmlSnapshot).toBeUndefined();
+      expect(sendSms).toHaveBeenCalledWith('contact-by-phone', expect.stringContaining('Nous confirmons la réception de vos uniformes'));
+      expect(sendSms.mock.calls[0][1]).not.toContain('Merci de rapporter');
+      const again = await request(app).post(`/api/employees/${emp.id}/closure/${noticeId}/sms`).set('Authorization', `Bearer ${rhToken}`).send({});
+      expect(again.status).toBe(400);
+      expect((await request(app).post(`/api/employees/${emp.id}/closure/${noticeId}/sms`).set('Authorization', `Bearer ${salesToken}`).send({})).status).toBe(403);
+    });
+
+    it('« Renvoyer » un texto en échec d’une lettre « uniformes reçus » : renvoie la confirmation, pas « merci de rapporter »', async () => {
+      const emp = await seedEmployee({ withUniform: false });
+      sendSms.mockRejectedValueOnce(new Error('GHL en panne'));
+      const noticeId = await sendLetter(emp, { uniformsReceived: true, sendSms: true });
+      sendSms.mockClear().mockResolvedValue({ messageId: 'sms-2' });
+      const res = await request(app).post(`/api/employees/${emp.id}/closure/${noticeId}/resend`).set('Authorization', `Bearer ${rhToken}`).send({});
+      expect(res.status).toBe(200);
+      expect(res.body.data.smsStatus).toBe('SENT');
+      expect(sendSms).toHaveBeenCalledWith('contact-by-phone', expect.stringContaining('Nous confirmons la réception de vos uniformes'));
+    });
+  });
+
   describe('fermer SANS rien envoyer', () => {
     const silent = (id: string, payload: Record<string, unknown>, token = rhToken) =>
       request(app).post(`/api/employees/${id}/closure/silent`).set('Authorization', `Bearer ${token}`).send(payload);

@@ -8,6 +8,7 @@ import {
   type ClosureTrackingStatus,
 } from '@/services/employee.service';
 import { getApiErrorMessage } from '@/utils/apiError';
+import { printHtml } from '@/utils/printHtml';
 
 const money = (n: number) => `${n.toFixed(2).replace('.', ',')} $`;
 const fmtDay = (d: string) => new Date(d).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -54,7 +55,26 @@ export default function FileClosureCard({ overview, canWrite }: { overview: Clos
     onError: (e) => enqueueSnackbar(getApiErrorMessage(e, 'Erreur lors du renvoi'), { variant: 'error' }),
   });
 
+  const printMut = useMutation({
+    mutationFn: () => employeeService.getClosureLetter(overview.employee.id, notice!.id),
+    onSuccess: (html) => printHtml(html),
+    onError: (e) => enqueueSnackbar(getApiErrorMessage(e, 'Impossible d’ouvrir la lettre'), { variant: 'error' }),
+  });
+
+  const smsMut = useMutation({
+    mutationFn: () => employeeService.sendClosureSms(overview.employee.id, notice!.id),
+    onSuccess: (n) => {
+      qc.invalidateQueries({ queryKey: ['employee-closure', overview.employee.id] });
+      qc.invalidateQueries({ queryKey: ['employee-history', overview.employee.id] });
+      const ok = n.smsStatus === 'SENT';
+      enqueueSnackbar(ok ? 'Texto envoyé' : `Texto non envoyé : ${n.smsError ?? 'erreur'}`, { variant: ok ? 'success' : 'error' });
+    },
+    onError: (e) => enqueueSnackbar(getApiErrorMessage(e, 'Erreur lors de l’envoi du texto'), { variant: 'error' }),
+  });
+
   if (!notice || !overview.tracking) return null;
+  // Texto jamais demandé (case non cochée) : on peut l'envoyer après coup.
+  const canSendSmsLater = canWrite && !!overview.employee.phone && !notice.smsTo;
   const email = CHANNEL[notice.emailStatus];
   const sms = CHANNEL[notice.smsStatus];
   const anyFailed = notice.emailStatus === 'FAILED' || (notice.smsTo && notice.smsStatus === 'FAILED');
@@ -77,6 +97,16 @@ export default function FileClosureCard({ overview, canWrite }: { overview: Clos
         <Chip size="small" variant="outlined" label={`CC ${notice.emailCc.join(', ')}`} />
         {notice.smsTo && (
           <Chip size="small" variant="outlined" color={sms.color} label={`Texto ${sms.label} · ${notice.smsTo}`} />
+        )}
+      </Stack>
+      <Stack direction="row" spacing={1} mt={1.5} flexWrap="wrap" useFlexGap>
+        <Button size="small" variant="outlined" disabled={printMut.isPending} onClick={() => printMut.mutate()}>
+          {printMut.isPending ? 'Ouverture…' : 'Imprimer la lettre'}
+        </Button>
+        {canSendSmsLater && (
+          <Button size="small" variant="outlined" disabled={smsMut.isPending} onClick={() => smsMut.mutate()}>
+            {smsMut.isPending ? 'Envoi…' : `Envoyer le texto au ${overview.employee.phone}`}
+          </Button>
         )}
       </Stack>
       {anyFailed && (

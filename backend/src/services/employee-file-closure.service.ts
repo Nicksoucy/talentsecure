@@ -696,17 +696,66 @@ export async function resendClosureNotice(employeeId: string, noticeId: string):
     Object.assign(data, { emailTo: emp.email?.trim() || null, emailStatus: r.status, emailError: r.error });
   }
   if (retrySms) {
-    const pieces = Array.isArray(notice.piecesSnapshot) ? notice.piecesSnapshot : [];
-    const r = await deliverSms(
-      { ...emp },
-      buildClosureSms({
-        firstName: emp.firstName,
-        deadline: notice.returnDeadlineAt,
-        total: Number(notice.estimatedAmount),
-        hasPieces: pieces.length > 0,
-      })
-    );
+    const r = await deliverSms({ ...emp }, closureSmsForNotice(notice, emp.firstName));
     Object.assign(data, { smsTo: emp.phone, smsStatus: r.status, smsError: r.error });
   }
   return prisma.employeeOffboardingNotice.update({ where: { id: notice.id }, data });
+}
+
+/** Phrase propre à la lettre « Uniformes reçus » (l'avis ne garde pas la case). */
+const RECEIVED_MARKER = 'Nous confirmons avoir reçu vos uniformes';
+
+/**
+ * Texto correspondant à un avis déjà envoyé : même version que la lettre
+ * (uniformes reçus → confirmation datée du jour de la lettre ; sinon demande
+ * de retour avec la date limite et le montant annoncés).
+ */
+export function closureSmsForNotice(
+  notice: Pick<EmployeeOffboardingNotice, 'htmlSnapshot' | 'sentAt' | 'returnDeadlineAt' | 'estimatedAmount' | 'piecesSnapshot'>,
+  firstName: string
+): string {
+  const received = notice.htmlSnapshot.includes(RECEIVED_MARKER);
+  const pieces = Array.isArray(notice.piecesSnapshot) ? notice.piecesSnapshot : [];
+  return buildClosureSms({
+    firstName,
+    deadline: notice.returnDeadlineAt,
+    total: Number(notice.estimatedAmount),
+    hasPieces: !received && pieces.length > 0,
+    receivedAt: received ? notice.sentAt : undefined,
+  });
+}
+
+async function loadNotice(employeeId: string, noticeId: string): Promise<EmployeeOffboardingNotice> {
+  const notice = await prisma.employeeOffboardingNotice.findFirst({ where: { id: noticeId, employeeId } });
+  if (!notice) throw new ApiError(404, 'Avis introuvable');
+  return notice;
+}
+
+/** Lettre exacte envoyée (pour l'imprimer). */
+export async function getClosureLetterHtml(employeeId: string, noticeId: string): Promise<string> {
+  return (await loadNotice(employeeId, noticeId)).htmlSnapshot;
+}
+
+/**
+ * Envoie le texto APRÈS COUP (case texto non cochée à l'envoi de la lettre).
+ * Même texte que la lettre ; refusé s'il est déjà parti.
+ */
+export async function sendClosureSmsLater(
+  employeeId: string,
+  noticeId: string,
+  signer: ClosureSigner
+): Promise<EmployeeOffboardingNotice> {
+  const notice = await loadNotice(employeeId, noticeId);
+  if (notice.smsStatus === 'SENT') throw new ApiError(400, 'Le texto est déjà parti');
+  const emp = await loadEmployee(employeeId);
+  if (!emp.phone?.trim()) throw new ApiError(400, 'Aucun téléphone au dossier');
+  const r = await deliverSms(emp, closureSmsForNotice(notice, emp.firstName));
+  const updated = await prisma.employeeOffboardingNotice.update({
+    where: { id: notice.id },
+    data: { smsTo: emp.phone, smsStatus: r.status, smsError: r.error },
+  });
+  if (r.status === 'SENT') {
+    await recordEmployeeAudit({ employeeId, userId: signer.id, details: `Texto de fermeture envoyé au ${emp.phone}` });
+  }
+  return updated;
 }
