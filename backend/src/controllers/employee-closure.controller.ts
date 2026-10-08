@@ -3,7 +3,9 @@ import { invalidateCaches } from '../utils/cacheInvalidation';
 import { EMPLOYEE_MAPPOINTS_CACHE_KEY } from '../services/addressGeocode.service';
 import {
   closeSilently,
+  getClosureLetterHtml,
   getClosureOverview,
+  sendClosureSmsLater,
   previewClosure,
   resendClosureNotice,
   sendClosure,
@@ -62,6 +64,25 @@ export const resendEmployeeClosure = async (req: Request, res: Response, next: N
     const notice = await resendClosureNotice(req.params.id, req.params.noticeId);
     const { htmlSnapshot: _html, ...data } = notice;
     res.json({ message: 'Avis renvoyé', data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** GET /api/employees/:id/closure/:noticeId/letter — lettre exacte envoyée (impression). */
+export const getEmployeeClosureLetter = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json({ data: { html: await getClosureLetterHtml(req.params.id, req.params.noticeId) } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** POST /api/employees/:id/closure/:noticeId/sms — envoie le texto après coup. */
+export const sendEmployeeClosureSms = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { htmlSnapshot: _html, ...data } = await sendClosureSmsLater(req.params.id, req.params.noticeId, signerOf(req));
+    res.json({ message: data.smsStatus === 'SENT' ? 'Texto envoyé' : 'Texto non envoyé', data });
   } catch (error) {
     next(error);
   }

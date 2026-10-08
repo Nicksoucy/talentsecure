@@ -18,6 +18,8 @@ import {
   sendEmployeeClosure,
   resendEmployeeClosure,
   closeEmployeeSilently,
+  getEmployeeClosureLetter,
+  sendEmployeeClosureSms,
 } from '../controllers/employee-closure.controller';
 import { authenticateJWT, authorizeReadWrite } from '../middleware/auth';
 import { validate } from '../middleware/validation.middleware';
@@ -76,6 +78,12 @@ router.post(
   '/:id/closure/:noticeId/resend',
   validate({ params: noticeParams, body: employeeClosureResendSchema }),
   resendEmployeeClosure
+);
+router.get('/:id/closure/:noticeId/letter', validate({ params: noticeParams }), getEmployeeClosureLetter);
+router.post(
+  '/:id/closure/:noticeId/sms',
+  validate({ params: noticeParams, body: employeeClosureResendSchema }),
+  sendEmployeeClosureSms
 );
 
 export default router;

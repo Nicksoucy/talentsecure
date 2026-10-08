@@ -6,6 +6,7 @@ import { makeUser } from '@/test/factories';
 import { employeeService, type ClosureOverview, type ClosureNotice } from '@/services/employee.service';
 import FileClosureDialog from './FileClosureDialog';
 import FileClosureCard from './FileClosureCard';
+import { printHtml } from '@/utils/printHtml';
 
 vi.mock('@/services/employee.service', () => ({
   employeeService: {
@@ -13,13 +14,19 @@ vi.mock('@/services/employee.service', () => ({
     sendClosure: vi.fn(),
     resendClosure: vi.fn(),
     closeSilently: vi.fn(),
+    getClosureLetter: vi.fn(),
+    sendClosureSms: vi.fn(),
   },
 }));
+
+vi.mock('@/utils/printHtml', () => ({ printHtml: vi.fn() }));
 
 const previewClosure = vi.mocked(employeeService.previewClosure);
 const sendClosure = vi.mocked(employeeService.sendClosure);
 const resendClosure = vi.mocked(employeeService.resendClosure);
 const closeSilently = vi.mocked(employeeService.closeSilently);
+const getClosureLetter = vi.mocked(employeeService.getClosureLetter);
+const sendClosureSms = vi.mocked(employeeService.sendClosureSms);
 const noPieces = { pieces: [], totalPieces: 0, total: 0, issuancesWithoutLines: 0 };
 
 function makeOverview(overrides: Partial<ClosureOverview> = {}): ClosureOverview {
@@ -121,6 +128,10 @@ describe('FileClosureDialog', () => {
     expect(previewClosure).toHaveBeenCalledWith('emp-1', {
       reason: 'INACTIVITE', reasonText: 'Texte inactivité', deadline: '2026-10-14', sendSms: true,
     });
+
+    // L'aperçu peut être imprimé avant l'envoi.
+    await user.click(screen.getByRole('button', { name: /^imprimer$/i }));
+    expect(printHtml).toHaveBeenCalledWith('<p>lettre</p>');
 
     await user.click(screen.getByRole('button', { name: /envoyer et fermer le dossier/i }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
@@ -249,6 +260,38 @@ describe('FileClosureDialog', () => {
 });
 
 describe('FileClosureCard', () => {
+  it('« Imprimer la lettre » : charge la lettre envoyée et ouvre l’impression', async () => {
+    const user = userEvent.setup();
+    getClosureLetter.mockResolvedValue('<p>Lettre envoyée</p>');
+    renderWithProviders(
+      <FileClosureCard overview={makeOverview({ notices: [makeNotice()], tracking: { status: 'AUCUN_UNIFORME', daysLeft: null, owed: 0 } })} canWrite={false} />,
+    );
+    await user.click(screen.getByRole('button', { name: /imprimer la lettre/i }));
+    await waitFor(() => expect(printHtml).toHaveBeenCalledWith('<p>Lettre envoyée</p>'));
+    expect(getClosureLetter).toHaveBeenCalledWith('emp-1', 'n-1');
+  });
+
+  it('texto jamais demandé : « Envoyer le texto » (écriture seulement) ; déjà envoyé : pas de bouton', async () => {
+    const user = userEvent.setup();
+    sendClosureSms.mockResolvedValue(makeNotice({ smsStatus: 'SENT' }));
+    const noSms = makeOverview({
+      notices: [makeNotice({ smsTo: null, smsStatus: 'SKIPPED' })],
+      tracking: { status: 'AUCUN_UNIFORME', daysLeft: null, owed: 0 },
+    });
+    const { unmount } = renderWithProviders(<FileClosureCard overview={noSms} canWrite />);
+    await user.click(screen.getByRole('button', { name: /envoyer le texto au 5145550000/i }));
+    await waitFor(() => expect(sendClosureSms).toHaveBeenCalledWith('emp-1', 'n-1'));
+    unmount();
+
+    const { unmount: u2 } = renderWithProviders(<FileClosureCard overview={noSms} canWrite={false} />);
+    expect(screen.queryByRole('button', { name: /envoyer le texto/i })).not.toBeInTheDocument();
+    u2();
+    renderWithProviders(
+      <FileClosureCard overview={makeOverview({ notices: [makeNotice()], tracking: { status: 'AUCUN_UNIFORME', daysLeft: null, owed: 0 } })} canWrite />,
+    );
+    expect(screen.queryByRole('button', { name: /envoyer le texto/i })).not.toBeInTheDocument();
+  });
+
   it('rien à afficher sans avis', () => {
     const { container } = renderWithProviders(<FileClosureCard overview={makeOverview()} canWrite />);
     expect(container).toBeEmptyDOMElement();
