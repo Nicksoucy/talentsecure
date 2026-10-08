@@ -338,6 +338,7 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
       expect(preview.status).toBe(200);
       expect(preview.body.data.html).toContain('Nous confirmons avoir reçu vos uniformes');
       expect(preview.body.data.html).not.toContain('Vous devez retourner');
+      expect(preview.body.data.html).toContain('Réception des biens de la Compagnie');
       expect(preview.body.data.sms).toContain('Nous confirmons la réception de vos uniformes le');
       expect(preview.body.data.sms).not.toContain('Merci de rapporter');
 

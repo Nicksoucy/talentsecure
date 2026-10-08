@@ -176,7 +176,7 @@ export function buildClosureLetterHtml(opts: {
   ${h3("Relevé d'emploi")}
   ${p('Un relevé d\'emploi (RE) sera déposé électroniquement auprès de Service Canada, conformément aux exigences applicables. Pour obtenir une copie de votre relevé d\'emploi, veuillez consulter Mon dossier Service Canada à l\'adresse suivante : <a href="https://www.servicecanada.gc.ca/eng/online/mysca.shtml">www.servicecanada.gc.ca/eng/online/mysca.shtml</a>.')}
   ${p(`Si vous souhaitez obtenir une copie de votre relevé d'emploi par un autre moyen que votre dossier sur l'ARC, veuillez communiquer avec le service des paies à l'adresse courriel suivante : <a href="mailto:${esc(EMAIL_PAIE)}">${esc(EMAIL_PAIE)}</a>`)}
-  ${h3('Retour des biens de la Compagnie')}
+  ${h3(opts.uniformsReceived ? 'Réception des biens de la Compagnie' : 'Retour des biens de la Compagnie')}
   ${
     opts.uniformsReceived
       ? p(`Nous confirmons avoir reçu vos uniformes et les biens de la Compagnie qui vous avaient été remis, <strong>en date du ${esc(
