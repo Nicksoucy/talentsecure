@@ -15,7 +15,7 @@ import {
 import { getApiErrorMessage } from '@/utils/apiError';
 
 const money = (n: number) => `${n.toFixed(2).replace('.', ',')} $`;
-const REASONS: ClosureReason[] = ['INACTIVITE', 'DEMISSION', 'FIN_EMPLOI'];
+const REASONS: ClosureReason[] = ['INACTIVITE', 'DEMISSION', 'FIN_EMPLOI', 'AUTRE'];
 
 interface Props {
   open: boolean;
@@ -23,7 +23,10 @@ interface Props {
   overview: ClosureOverview;
 }
 
-type Mode = 'LETTRE' | 'SANS_ENVOI';
+// LETTRE : lettre à l'employé (CC paie + RH). RECEPTION : uniformes reçus, la
+// paie et les RH en sont avisées, rien à l'employé. SANS_ENVOI : rien à
+// l'employé, courriel général à la paie facultatif.
+type Mode = 'LETTRE' | 'RECEPTION' | 'SANS_ENVOI';
 
 /**
  * « Fermer le dossier » : étape 1 = motif, date limite, texto ; étape 2 = aperçu
@@ -39,13 +42,16 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
 
   const defaultMode: Mode = hasPieces ? 'LETTRE' : 'SANS_ENVOI';
   const [mode, setMode] = useState<Mode>(defaultMode);
-  const silent = mode === 'SANS_ENVOI';
+  const silent = mode !== 'LETTRE';
+  const reception = mode === 'RECEPTION';
   const [step, setStep] = useState<1 | 2>(1);
   const [reason, setReason] = useState<ClosureReason>('INACTIVITE');
   const [reasonText, setReasonText] = useState(defaults.reasonTexts.INACTIVITE);
   const [deadline, setDeadline] = useState(defaults.deadline);
   const [sendSms, setSendSms] = useState(!!employee.phone);
   const [notifyPayroll, setNotifyPayroll] = useState(true);
+  const payrollEmail = reception || notifyPayroll;
+  const [uniformsReceived, setUniformsReceived] = useState(false);
   const [payrollNote, setPayrollNote] = useState('');
   const [preview, setPreview] = useState<ClosurePreview | null>(null);
 
@@ -61,12 +67,15 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
       setReasonText(defaults.reasonTexts.INACTIVITE);
       setDeadline(defaults.deadline);
       setSendSms(!!employee.phone);
+      setUniformsReceived(false);
       setPreview(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const input: ClosureInput = { reason, reasonText, deadline, sendSms };
+  // Case grisée dès que le système montre des pièces : la valeur ne part qu'à vide.
+  const received = uniformsReceived && !hasPieces;
+  const input: ClosureInput = { reason, reasonText, deadline, sendSms, ...(received ? { uniformsReceived: true } : {}) };
 
   const previewMut = useMutation({
     mutationFn: () => employeeService.previewClosure(employee.id, input),
@@ -103,8 +112,9 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
       employeeService.closeSilently(employee.id, {
         reason,
         ...(hasPieces ? { deadline } : {}),
-        notifyPayroll,
-        ...(notifyPayroll && payrollNote.trim() ? { note: payrollNote.trim() } : {}),
+        notifyPayroll: payrollEmail,
+        ...(reception ? { uniformsReceived: true } : {}),
+        ...(payrollEmail && payrollNote.trim() ? { note: payrollNote.trim() } : {}),
       }),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ['employee', employee.id] });
@@ -147,9 +157,19 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
                 label="Envoyer une lettre à l’employé (courriel, paie et RH en copie)"
               />
               <FormControlLabel
+                value="RECEPTION"
+                control={<Radio />}
+                disabled={hasPieces}
+                label={
+                  hasPieces
+                    ? 'Fermeture avec réception des uniformes — enregistrez d’abord le retour (« Retourner des uniformes »)'
+                    : 'Fermeture avec réception des uniformes (la paie et les RH sont avisées, rien à l’employé)'
+                }
+              />
+              <FormControlLabel
                 value="SANS_ENVOI"
                 control={<Radio />}
-                label="Fermer sans rien envoyer à l’employé (uniformes déjà rapportés, aucun uniforme, employé déjà avisé…)"
+                label="Fermer sans rien envoyer à l’employé (employé déjà avisé, fermeture faite par une autre personne…)"
               />
             </RadioGroup>
             {!silent && !employee.email && (
@@ -178,7 +198,7 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
                   <MenuItem key={r} value={r}>{defaults.reasonLabels[r]}</MenuItem>
                 ))}
               </TextField>
-              {(!silent || hasPieces) && <TextField
+              {((!silent && !received) || (silent && hasPieces)) && <TextField
                 label="Date limite de retour"
                 type="date"
                 size="small"
@@ -232,22 +252,43 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
                 <Typography variant="body2" color="text.secondary">
                   {silent
                     ? 'Aucun uniforme détenu selon nos registres.'
+                    : received
+                    ? 'Aucun uniforme détenu selon nos registres — la lettre confirmera la réception des uniformes.'
                     : 'Aucun uniforme détenu selon nos registres — la lettre demandera seulement le retour des biens de la Compagnie.'}
                 </Typography>
+              )}
+              {!silent && (
+                <FormControlLabel
+                  sx={{ mt: 1 }}
+                  control={
+                    <Checkbox
+                      checked={received}
+                      disabled={hasPieces}
+                      onChange={(ev) => setUniformsReceived(ev.target.checked)}
+                    />
+                  }
+                  label={
+                    hasPieces
+                      ? 'Uniformes reçus — enregistrez d’abord le retour (« Retourner des uniformes »)'
+                      : 'Uniformes reçus — la lettre confirme la réception en date d’aujourd’hui (rien à retenir)'
+                  }
+                />
               )}
             </Box>
 
             {silent ? (
               <Stack spacing={1.5}>
-                <FormControlLabel
-                  control={<Checkbox checked={notifyPayroll} onChange={(ev) => setNotifyPayroll(ev.target.checked)} />}
-                  label={
-                    hasPieces
-                      ? 'Aviser la paie et les RH par courriel (dossier fermé, uniformes encore détenus)'
-                      : 'Aviser la paie et les RH par courriel (dossier fermé, uniformes retournés — rien à retenir)'
-                  }
-                />
-                {notifyPayroll && (
+                {!reception && (
+                  <FormControlLabel
+                    control={<Checkbox checked={notifyPayroll} onChange={(ev) => setNotifyPayroll(ev.target.checked)} />}
+                    label={
+                      hasPieces
+                        ? 'Aviser la paie et les RH par courriel (dossier fermé, uniformes encore détenus)'
+                        : 'Aviser la paie et les RH par courriel (dossier fermé, aucune retenue d’uniforme)'
+                    }
+                  />
+                )}
+                {payrollEmail && (
                   <TextField
                     label="Note pour la paie et les RH (optionnel)"
                     multiline
@@ -263,10 +304,17 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
                     Rien ne sera envoyé à l’employé, mais il détient encore des uniformes. Si rien ne revient d’ici la date
                     limite, le dossier uniformes sera fermé automatiquement et <strong>la paie recevra le montant à retenir</strong>.
                   </Alert>
+                ) : reception ? (
+                  <Alert severity="info">
+                    L’employé passera à <strong>Inactif</strong>. Rien ne sera envoyé à l’employé ; la paie (RH en copie)
+                    recevra « Dossier fermé — uniformes reçus le{' '}
+                    {new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' })}, rien à
+                    retenir ». La fermeture sera inscrite à l’historique du dossier.
+                  </Alert>
                 ) : (
                   <Alert severity="info">
                     L’employé passera à <strong>Inactif</strong>. Rien ne sera envoyé à l’employé
-                    {notifyPayroll ? ' ; la paie (RH en copie) recevra un courriel « dossier fermé — rien à retenir »' : ', ni à la paie'}.
+                    {notifyPayroll ? ' ; la paie (RH en copie) recevra un courriel général « dossier fermé, aucune retenue »' : ', ni à la paie'}.
                     La fermeture sera inscrite à l’historique du dossier.
                   </Alert>
                 )}
@@ -305,12 +353,19 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
                 <strong>Texto :</strong> {preview.sms}
               </Alert>
             )}
+            {received ? (
+              <Alert severity="info">
+                L’employé passera à <strong>Inactif</strong>. La lettre confirme la réception des uniformes en date
+                d’aujourd’hui ; la paie et les RH la reçoivent en copie : rien à retenir.
+              </Alert>
+            ) : (
             <Alert severity="warning">
               L’employé passera à <strong>Inactif</strong>. Si aucun uniforme n’est revenu le{' '}
               {new Date(`${deadline}T12:00:00`).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' })}, le dossier
               uniformes sera fermé automatiquement et la paie recevra le montant à retenir. S’il en rapporte avant, même en
               partie, le retour compte comme complet et la paie reçoit un courriel « rien à retenir ».
             </Alert>
+            )}
           </Stack>
         </DialogContent>
       )}
@@ -325,7 +380,7 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
             onClick={() => silentMut.mutate()}
             startIcon={silentMut.isPending ? <CircularProgress size={16} color="inherit" /> : undefined}
           >
-            {notifyPayroll ? 'Fermer et aviser la paie' : 'Fermer le dossier sans envoi'}
+            {reception ? 'Fermer et confirmer la réception' : notifyPayroll ? 'Fermer et aviser la paie' : 'Fermer le dossier sans envoi'}
           </Button>
         ) : step === 1 ? (
           <Button

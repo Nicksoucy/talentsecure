@@ -27,8 +27,8 @@ function makeOverview(overrides: Partial<ClosureOverview> = {}): ClosureOverview
     employee: { id: 'emp-1', firstName: 'Jean', lastName: 'Tremblay', email: 'jean@example.com', phone: '5145550000', status: 'ACTIF' },
     defaults: {
       deadline: '2026-10-14',
-      reasonTexts: { INACTIVITE: 'Texte inactivité', DEMISSION: 'Texte démission', FIN_EMPLOI: 'Texte fin' },
-      reasonLabels: { INACTIVITE: 'Inactivité', DEMISSION: 'Démission', FIN_EMPLOI: "Fin d'emploi" },
+      reasonTexts: { INACTIVITE: 'Texte inactivité', DEMISSION: 'Texte démission', FIN_EMPLOI: 'Texte fin', AUTRE: 'Texte général' },
+      reasonLabels: { INACTIVITE: 'Inactivité', DEMISSION: 'Démission', FIN_EMPLOI: "Fin d'emploi", AUTRE: 'Autre / inconnu' },
       cc: ['paie@xguard.ca', 'rh@xguard.ca'],
       subject: 'Fermeture de votre dossier XGuard',
     },
@@ -134,6 +134,72 @@ describe('FileClosureDialog', () => {
     await user.click(screen.getByRole('button', { name: /voir l’aperçu/i }));
     expect(await screen.findByText(/ne peut pas être dans le passé/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/date limite de retour/i)).toBeInTheDocument();
+  });
+
+  describe('case « Uniformes reçus »', () => {
+    it('sans pièce au système : cochée → plus de date limite, l’aperçu demande la confirmation', async () => {
+      const user = userEvent.setup();
+      previewClosure.mockResolvedValue({
+        subject: 's', to: 'jean@example.com', cc: ['paie@xguard.ca', 'rh@xguard.ca'],
+        html: '<p>lettre</p>', sms: 'texto', estimate: noPieces,
+      });
+      renderWithProviders(<FileClosureDialog open onClose={vi.fn()} overview={makeOverview({ estimate: noPieces })} />);
+      // Le mode sans envoi est choisi par défaut sans uniforme : on passe à la lettre.
+      await user.click(screen.getByLabelText(/envoyer une lettre/i));
+      const box = screen.getByLabelText(/uniformes reçus — la lettre confirme la réception/i);
+      expect(box).not.toBeChecked();
+      expect(screen.getByLabelText(/date limite de retour/i)).toBeInTheDocument();
+
+      await user.click(box);
+      expect(screen.queryByLabelText(/date limite de retour/i)).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /voir l’aperçu/i }));
+      expect(previewClosure).toHaveBeenCalledWith('emp-1', expect.objectContaining({ uniformsReceived: true }));
+      expect(await screen.findByText(/la lettre confirme la réception des uniformes en date/i)).toBeInTheDocument();
+    });
+
+    it('pièces encore au système : case grisée, rien de « reçu » n’est envoyé', async () => {
+      const user = userEvent.setup();
+      previewClosure.mockResolvedValue({
+        subject: 's', to: 'jean@example.com', cc: [], html: '<p>l</p>', sms: 't', estimate: makeOverview().estimate,
+      });
+      renderWithProviders(<FileClosureDialog open onClose={vi.fn()} overview={makeOverview()} />);
+      expect(screen.getByLabelText(/uniformes reçus — enregistrez d’abord le retour/i)).toBeDisabled();
+      await user.click(screen.getByRole('button', { name: /voir l’aperçu/i }));
+      expect(previewClosure.mock.calls[0][1]).not.toHaveProperty('uniformsReceived');
+    });
+  });
+
+  describe('fermeture avec réception des uniformes', () => {
+    it('sans pièce : choix disponible, motif « Autre / inconnu », envoie la réception à la paie', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      closeSilently.mockResolvedValue({ becameInactive: true, piecesHeld: 0, payrollNotified: true });
+      renderWithProviders(<FileClosureDialog open onClose={onClose} overview={makeOverview({ estimate: noPieces })} />);
+
+      await user.click(screen.getByLabelText(/fermeture avec réception des uniformes/i));
+      // Pas de case « aviser la paie » : la paie est toujours avisée dans ce choix.
+      expect(screen.queryByLabelText(/aviser la paie et les rh/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/uniformes reçus le/i)).toBeInTheDocument();
+
+      await user.click(screen.getByLabelText('Motif'));
+      await user.click(await screen.findByRole('option', { name: 'Autre / inconnu' }));
+      await user.click(screen.getByRole('button', { name: /fermer et confirmer la réception/i }));
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(closeSilently).toHaveBeenCalledWith('emp-1', { reason: 'AUTRE', notifyPayroll: true, uniformsReceived: true });
+    });
+
+    it('pièces encore au système : choix grisé', () => {
+      renderWithProviders(<FileClosureDialog open onClose={vi.fn()} overview={makeOverview()} />);
+      expect(screen.getByLabelText(/fermeture avec réception des uniformes — enregistrez d’abord le retour/i)).toBeDisabled();
+    });
+
+    it('lettre : le motif « Autre / inconnu » met le texte général', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<FileClosureDialog open onClose={vi.fn()} overview={makeOverview()} />);
+      await user.click(screen.getByLabelText('Motif'));
+      await user.click(await screen.findByRole('option', { name: 'Autre / inconnu' }));
+      expect(screen.getByLabelText(/paragraphe d’ouverture/i)).toHaveValue('Texte général');
+    });
   });
 
   describe('fermer sans rien envoyer', () => {
