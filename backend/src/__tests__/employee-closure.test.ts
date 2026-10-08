@@ -161,7 +161,13 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
     expect(html).toContain('Motif &lt;b&gt;test&lt;/b&gt;'); // échappé
     expect(html).toContain('105,00 $');
     expect(html).toContain('au plus tard le');
-    expect(html).toContain('Tamara Hadid');
+    // Pas de liste des pièces (l'inventaire peut être inexact) : le montant seulement (RH 2026-10-08).
+    expect(html).not.toContain('Selon nos registres');
+    expect(html).not.toMatch(/Chemise Test/);
+    expect(html).toContain("suite à l'entente initiale lors de votre embauche");
+    // Signature : le service RH, jamais le nom de la personne connectée (demande RH 2026-10-08).
+    expect(html).toContain('Les Ressources Humaines XGuard');
+    expect(html).not.toContain('Tamara Hadid');
     expect(sms).toContain('Sans retour, 105 $ seront déduits de votre paie, tel que convenu à l\'embauche.');
     const after = await prisma.employee.findUnique({ where: { id: emp.id } });
     expect(after?.status).toBe('ACTIF');

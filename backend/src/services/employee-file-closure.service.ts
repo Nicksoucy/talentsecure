@@ -27,7 +27,6 @@ import { resolveGhlContactId, sendSms } from './sms.service';
 import {
   buildDeactivationFields,
   estimateHoldingsCost,
-  EstimatedPiece,
   HoldingsEstimate,
   propagateUniformOffboarding,
 } from './employee-offboarding.service';
@@ -44,7 +43,8 @@ export const DEFAULT_REASON_TEXTS: Record<ClosureReason, string> = {
   INACTIVITE:
     "Nous vous informons que votre dossier est fermé en date d'aujourd'hui, puisque vous n'avez effectué aucun quart de travail depuis longtemps. Malgré votre disponibilité déclarée, vous avez décliné toutes les demandes de remplacement qui vous ont été adressées, et/ou vous n'y avez jamais répondu, ou encore vous ne vous êtes pas connecté à l'application Agendrix pour postuler sur les quarts disponibles. Cette situation ne nous permet plus de vous maintenir activement sur notre liste d'agents actifs.",
   DEMISSION:
-    "Nous accusons réception de votre démission et vous informons que votre dossier est fermé en date d'aujourd'hui.",
+    // Formulation neutre demandée par les RH (Tamara, 2026-10-08) : pas toujours une démission.
+    'Nous vous confirmons que votre dossier chez XGuard est maintenant fermé.',
   FIN_EMPLOI:
     "Nous vous informons que votre emploi au sein de Sécurité XGuard prend fin et que votre dossier est fermé en date d'aujourd'hui.",
 };
@@ -111,31 +111,6 @@ function paragraphs(text: string): string {
     .join('');
 }
 
-function piecesTable(pieces: EstimatedPiece[], total: number): string {
-  const rows = pieces
-    .map(
-      (p) => `<tr>
-        <td style="padding:6px 8px;border:1px solid #d1d5db;">${esc(p.itemName)}</td>
-        <td style="padding:6px 8px;border:1px solid #d1d5db;">${esc(p.size)}</td>
-        <td style="padding:6px 8px;border:1px solid #d1d5db;text-align:right;">${p.quantity}</td>
-        <td style="padding:6px 8px;border:1px solid #d1d5db;text-align:right;">${money(p.lineTotal)}</td>
-      </tr>`
-    )
-    .join('');
-  return `<table style="width:100%;border-collapse:collapse;margin:8px 0 12px;font-size:14px;">
-    <thead><tr style="background:#f3f4f6;">
-      <th style="text-align:left;padding:6px 8px;border:1px solid #d1d5db;">Pièce</th>
-      <th style="text-align:left;padding:6px 8px;border:1px solid #d1d5db;">Taille</th>
-      <th style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">Qté</th>
-      <th style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">Valeur</th>
-    </tr></thead>
-    <tbody>${rows}
-      <tr><td colspan="3" style="padding:6px 8px;border:1px solid #d1d5db;text-align:right;"><strong>Total</strong></td>
-      <td style="padding:6px 8px;border:1px solid #d1d5db;text-align:right;"><strong>${money(total)}</strong></td></tr>
-    </tbody>
-  </table>`;
-}
-
 /** Lettre « Fermeture de votre dossier XGuard » (reprend le modèle PDF de RH). */
 export function buildClosureLetterHtml(opts: {
   reasonText: string;
@@ -147,17 +122,16 @@ export function buildClosureLetterHtml(opts: {
 }): string {
   const h3 = (t: string) => `<h3 style="font-size:15px;margin:20px 0 8px;">${t}</h3>`;
   const p = (t: string) => `<p style="margin:0 0 12px;text-align:justify;">${t}</p>`;
-  const signerName = [opts.signer.firstName, opts.signer.lastName].filter(Boolean).join(' ').trim();
   const deadlineText = `<strong style="background:#fef08a;">au plus tard le ${esc(formatLongFr(opts.deadline))}</strong>`;
 
+  // Pas de liste des pièces dans la lettre (RH, 2026-10-08) : l'inventaire du
+  // système peut être inexact — seulement le montant, selon l'entente d'embauche.
   const uniforms =
     !opts.uniformsReceived && opts.estimate.pieces.length > 0
-      ? p('Selon nos registres, vous détenez toujours les pièces suivantes :') +
-        piecesTable(opts.estimate.pieces, opts.estimate.total) +
-        p(
+      ? p(
           `<strong>À défaut de retour complet dans ce délai, un montant de ${money(
             opts.estimate.total
-          )} correspondant à la valeur des pièces non retournées sera déduit de votre paie.</strong>`
+          )} sera déduit de votre paie, suite à l'entente initiale lors de votre embauche.</strong>`
         )
       : '';
 
@@ -189,8 +163,8 @@ export function buildClosureLetterHtml(opts: {
   ${p("Nous profitons de cette occasion pour vous rappeler que conformément au <em>Code civil du Québec</em>, vous conservez à l'égard de la Compagnie certaines obligations qui continuent de s'appliquer malgré la fin de votre emploi. Vous êtes également lié par le devoir de loyauté que vous impose la loi envers la Compagnie, pour une période raisonnable suite à votre terminaison d'emploi. Ainsi, vous ne pouvez pas faire usage de l'information à caractère confidentiel que vous avez obtenue dans l'exécution ou à l'occasion de votre emploi au sein de la Compagnie, que ce soit au profit d'un tiers ou pour votre usage personnel.")}
   ${p("Également, il ne vous sera pas loisible de détourner les occasions d'affaires dont vous auriez pu prendre connaissance dans le cadre de l'exercice de vos fonctions ou de solliciter nos salariés afin qu'ils entrent au service d'une tierce partie, et ce tant directement qu'indirectement.")}
   ${p("Nous vous souhaitons bon succès dans vos projets futurs et vous prions d'agréer, l'expression de nos sentiments distingués.")}
-  <p style="margin:24px 0 0;">${signerName ? `<strong>${esc(signerName)}</strong><br>` : ''}Les Ressources Humaines<br>
-  <a href="mailto:${esc(EMAIL_RH)}">${esc(EMAIL_RH)}</a><br>Sécurité XGuard<br>9380 Boulevard Saint-Laurent, H2N 1P3</p>
+  <p style="margin:24px 0 0;"><strong>Les Ressources Humaines XGuard</strong><br>
+  <a href="mailto:${esc(EMAIL_RH)}">${esc(EMAIL_RH)}</a><br>9380 Boulevard Saint-Laurent, H2N 1P3</p>
 </body></html>`;
 }
 
