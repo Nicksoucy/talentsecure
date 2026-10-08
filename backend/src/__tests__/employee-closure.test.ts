@@ -57,6 +57,15 @@ describe('buildClosureSms — texte des RH (2026-09-30)', () => {
     expect(none).not.toContain('déduits');
     expect(none).toContain('tout bien de la Compagnie');
   });
+
+  it('uniformes reçus : confirmation datée, rien à rapporter', () => {
+    expect(
+      buildClosureSms({ firstName: 'Jean', deadline: endOfDayMontreal('2026-10-22'), total: 0, hasPieces: false, receivedAt: new Date('2026-10-08T15:00:00Z') })
+    ).toBe(
+      'Sécurité XGuard : Bonjour Jean, votre dossier est maintenant fermé. Nous confirmons la réception de vos uniformes le 8 octobre : ' +
+        'aucun montant ne sera retenu sur votre paie. Les détails vous ont été envoyés par courriel (pensez à vérifier vos courriels indésirables).'
+    );
+  });
 });
 
 describe('Fermeture de dossier — /api/employees/:id/closure', () => {
@@ -317,6 +326,45 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
       .send(body());
     expect(forbidden.status).toBe(403);
     expect((await prisma.employee.findUnique({ where: { id: emp.id } }))?.status).toBe('ACTIF');
+  });
+
+  describe('case « Uniformes reçus »', () => {
+    it('lettre et texto CONFIRMENT la réception en date du jour ; rien à retenir ; registre', async () => {
+      const emp = await seedEmployee({ withUniform: false });
+      const preview = await request(app)
+        .post(`/api/employees/${emp.id}/closure/preview`)
+        .set('Authorization', `Bearer ${rhToken}`)
+        .send(body({ uniformsReceived: true }));
+      expect(preview.status).toBe(200);
+      expect(preview.body.data.html).toContain('Nous confirmons avoir reçu vos uniformes');
+      expect(preview.body.data.html).not.toContain('Vous devez retourner');
+      expect(preview.body.data.sms).toContain('Nous confirmons la réception de vos uniformes le');
+      expect(preview.body.data.sms).not.toContain('Merci de rapporter');
+
+      const res = await request(app)
+        .post(`/api/employees/${emp.id}/closure`)
+        .set('Authorization', `Bearer ${rhToken}`)
+        .send(body({ uniformsReceived: true }));
+      expect(res.status).toBe(201);
+      const mail = sendEmailWithProvider.mock.calls[0][0];
+      expect(mail.cc).toEqual(['paie@xguard.ca', 'rh@xguard.ca']);
+      expect(mail.html).toContain('Aucun montant ne sera retenu sur votre paie pour les uniformes');
+      expect(sendSms).toHaveBeenCalledWith('contact-by-phone', expect.stringContaining('aucun montant ne sera retenu'));
+      const log = await prisma.auditLog.findFirst({ where: { resourceId: emp.id } });
+      expect(log?.details).toMatch(/^Dossier fermé \(Inactivité\) — réception des uniformes confirmée le .+, rien à retenir$/);
+    });
+
+    it('refusé si le système montre encore des pièces : rien n’est fermé ni envoyé', async () => {
+      const emp = await seedEmployee();
+      const res = await request(app)
+        .post(`/api/employees/${emp.id}/closure`)
+        .set('Authorization', `Bearer ${rhToken}`)
+        .send(body({ uniformsReceived: true }));
+      expect(res.status).toBe(400);
+      expect(JSON.stringify(res.body)).toContain('3 pièce(s)');
+      expect((await prisma.employee.findUnique({ where: { id: emp.id } }))?.status).toBe('ACTIF');
+      expect(sendEmailWithProvider).not.toHaveBeenCalled();
+    });
   });
 
   describe('fermer SANS rien envoyer', () => {

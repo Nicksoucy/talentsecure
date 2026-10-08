@@ -46,6 +46,7 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
   const [deadline, setDeadline] = useState(defaults.deadline);
   const [sendSms, setSendSms] = useState(!!employee.phone);
   const [notifyPayroll, setNotifyPayroll] = useState(true);
+  const [uniformsReceived, setUniformsReceived] = useState(false);
   const [payrollNote, setPayrollNote] = useState('');
   const [preview, setPreview] = useState<ClosurePreview | null>(null);
 
@@ -61,12 +62,15 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
       setReasonText(defaults.reasonTexts.INACTIVITE);
       setDeadline(defaults.deadline);
       setSendSms(!!employee.phone);
+      setUniformsReceived(false);
       setPreview(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const input: ClosureInput = { reason, reasonText, deadline, sendSms };
+  // Case grisée dès que le système montre des pièces : la valeur ne part qu'à vide.
+  const received = uniformsReceived && !hasPieces;
+  const input: ClosureInput = { reason, reasonText, deadline, sendSms, ...(received ? { uniformsReceived: true } : {}) };
 
   const previewMut = useMutation({
     mutationFn: () => employeeService.previewClosure(employee.id, input),
@@ -178,7 +182,7 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
                   <MenuItem key={r} value={r}>{defaults.reasonLabels[r]}</MenuItem>
                 ))}
               </TextField>
-              {(!silent || hasPieces) && <TextField
+              {((!silent && !received) || (silent && hasPieces)) && <TextField
                 label="Date limite de retour"
                 type="date"
                 size="small"
@@ -232,8 +236,27 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
                 <Typography variant="body2" color="text.secondary">
                   {silent
                     ? 'Aucun uniforme détenu selon nos registres.'
+                    : received
+                    ? 'Aucun uniforme détenu selon nos registres — la lettre confirmera la réception des uniformes.'
                     : 'Aucun uniforme détenu selon nos registres — la lettre demandera seulement le retour des biens de la Compagnie.'}
                 </Typography>
+              )}
+              {!silent && (
+                <FormControlLabel
+                  sx={{ mt: 1 }}
+                  control={
+                    <Checkbox
+                      checked={received}
+                      disabled={hasPieces}
+                      onChange={(ev) => setUniformsReceived(ev.target.checked)}
+                    />
+                  }
+                  label={
+                    hasPieces
+                      ? 'Uniformes reçus — enregistrez d’abord le retour (« Retourner des uniformes »)'
+                      : 'Uniformes reçus — la lettre confirme la réception en date d’aujourd’hui (rien à retenir)'
+                  }
+                />
               )}
             </Box>
 
@@ -305,12 +328,19 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
                 <strong>Texto :</strong> {preview.sms}
               </Alert>
             )}
+            {received ? (
+              <Alert severity="info">
+                L’employé passera à <strong>Inactif</strong>. La lettre confirme la réception des uniformes en date
+                d’aujourd’hui ; la paie et les RH la reçoivent en copie : rien à retenir.
+              </Alert>
+            ) : (
             <Alert severity="warning">
               L’employé passera à <strong>Inactif</strong>. Si aucun uniforme n’est revenu le{' '}
               {new Date(`${deadline}T12:00:00`).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' })}, le dossier
               uniformes sera fermé automatiquement et la paie recevra le montant à retenir. S’il en rapporte avant, même en
               partie, le retour compte comme complet et la paie reçoit un courriel « rien à retenir ».
             </Alert>
+            )}
           </Stack>
         </DialogContent>
       )}

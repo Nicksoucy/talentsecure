@@ -64,6 +64,12 @@ export interface ClosureInput {
   /** Jour limite YYYY-MM-DD (fin de journée à Montréal). */
   deadline: string;
   sendSms: boolean;
+  /**
+   * Uniformes déjà reçus (souvent : inventaire absent du système) : la lettre
+   * et le texto CONFIRMENT la réception en date du jour au lieu de demander
+   * le retour. Refusé si le système montre encore des pièces chez l'employé.
+   */
+  uniformsReceived?: boolean;
 }
 
 export interface ClosureSigner {
@@ -137,6 +143,7 @@ export function buildClosureLetterHtml(opts: {
   estimate: Pick<HoldingsEstimate, 'pieces' | 'total'>;
   signer: ClosureSigner;
   date?: Date;
+  uniformsReceived?: boolean;
 }): string {
   const h3 = (t: string) => `<h3 style="font-size:15px;margin:20px 0 8px;">${t}</h3>`;
   const p = (t: string) => `<p style="margin:0 0 12px;text-align:justify;">${t}</p>`;
@@ -144,7 +151,7 @@ export function buildClosureLetterHtml(opts: {
   const deadlineText = `<strong style="background:#fef08a;">au plus tard le ${esc(formatLongFr(opts.deadline))}</strong>`;
 
   const uniforms =
-    opts.estimate.pieces.length > 0
+    !opts.uniformsReceived && opts.estimate.pieces.length > 0
       ? p('Selon nos registres, vous détenez toujours les pièces suivantes :') +
         piecesTable(opts.estimate.pieces, opts.estimate.total) +
         p(
@@ -170,7 +177,13 @@ export function buildClosureLetterHtml(opts: {
   ${p('Un relevé d\'emploi (RE) sera déposé électroniquement auprès de Service Canada, conformément aux exigences applicables. Pour obtenir une copie de votre relevé d\'emploi, veuillez consulter Mon dossier Service Canada à l\'adresse suivante : <a href="https://www.servicecanada.gc.ca/eng/online/mysca.shtml">www.servicecanada.gc.ca/eng/online/mysca.shtml</a>.')}
   ${p(`Si vous souhaitez obtenir une copie de votre relevé d'emploi par un autre moyen que votre dossier sur l'ARC, veuillez communiquer avec le service des paies à l'adresse courriel suivante : <a href="mailto:${esc(EMAIL_PAIE)}">${esc(EMAIL_PAIE)}</a>`)}
   ${h3('Retour des biens de la Compagnie')}
-  ${p(`Vous devez retourner l'ensemble des biens appartenant à la Compagnie, qui sont toujours en votre possession. Cela inclut notamment tous les uniformes, équipements, accessoires ou tout autre matériel qui vous a été remis dans le cadre de votre emploi. Ce retour doit être effectué ${deadlineText}, soit en personne à nos bureaux du lundi au vendredi entre 9h et 15h30, soit par la poste (Postes Canada) à l'adresse suivante : ${esc(OFFICE_ADDRESS)}.`)}
+  ${
+    opts.uniformsReceived
+      ? p(`Nous confirmons avoir reçu vos uniformes et les biens de la Compagnie qui vous avaient été remis, <strong>en date du ${esc(
+          formatLongFr(opts.date ?? new Date())
+        )}</strong>. Aucun montant ne sera retenu sur votre paie pour les uniformes.`)
+      : p(`Vous devez retourner l'ensemble des biens appartenant à la Compagnie, qui sont toujours en votre possession. Cela inclut notamment tous les uniformes, équipements, accessoires ou tout autre matériel qui vous a été remis dans le cadre de votre emploi. Ce retour doit être effectué ${deadlineText}, soit en personne à nos bureaux du lundi au vendredi entre 9h et 15h30, soit par la poste (Postes Canada) à l'adresse suivante : ${esc(OFFICE_ADDRESS)}.`)
+  }
   ${uniforms}
   ${h3('Rappel de vos obligations')}
   ${p("Nous profitons de cette occasion pour vous rappeler que conformément au <em>Code civil du Québec</em>, vous conservez à l'égard de la Compagnie certaines obligations qui continuent de s'appliquer malgré la fin de votre emploi. Vous êtes également lié par le devoir de loyauté que vous impose la loi envers la Compagnie, pour une période raisonnable suite à votre terminaison d'emploi. Ainsi, vous ne pouvez pas faire usage de l'information à caractère confidentiel que vous avez obtenue dans l'exécution ou à l'occasion de votre emploi au sein de la Compagnie, que ce soit au profit d'un tiers ou pour votre usage personnel.")}
@@ -195,11 +208,23 @@ function smsMoney(n: number): string {
  * 40 $ seront déduits de votre paie, tel que convenu à l'embauche. Les détails
  * vous ont été envoyés par courriel (pensez à vérifier vos courriels indésirables). »
  */
-export function buildClosureSms(opts: { firstName: string; deadline: Date; total: number; hasPieces: boolean }): string {
+export function buildClosureSms(opts: {
+  firstName: string;
+  deadline: Date;
+  total: number;
+  hasPieces: boolean;
+  /** Date de réception des uniformes (case « Uniformes reçus ») : texto de confirmation. */
+  receivedAt?: Date;
+}): string {
   const day = formatLongFr(opts.deadline).replace(/ \d{4}$/, '').replace(/^1 /, '1er ');
   const place = 'au 9380, boul. Saint-Laurent (lun. au ven., 9 h à 15 h 30)';
   const head = `Sécurité XGuard : Bonjour ${opts.firstName.trim()}, votre dossier est maintenant fermé.`;
-  const body = opts.hasPieces
+  const receivedDay = opts.receivedAt
+    ? formatLongFr(opts.receivedAt).replace(/ \d{4}$/, '').replace(/^1 /, '1er ')
+    : null;
+  const body = receivedDay
+    ? ` Nous confirmons la réception de vos uniformes le ${receivedDay} : aucun montant ne sera retenu sur votre paie.`
+    : opts.hasPieces
     ? ` Merci de rapporter vos uniformes d'ici le ${day} ${place} ou de nous les envoyer par la poste. Sans retour, ${smsMoney(
         opts.total
       )} seront déduits de votre paie, tel que convenu à l'embauche.`
@@ -325,20 +350,44 @@ export async function getClosureOverview(employeeId: string) {
 }
 
 /** Aperçu exact du courriel et du texto, sans rien modifier. */
+/**
+ * « Uniformes reçus » n'est permis que si le système ne montre plus aucune
+ * pièce chez l'employé : sinon la clôture automatique retiendrait quand même
+ * le montant à l'échéance. RH enregistre d'abord le retour.
+ */
+function assertUniformsReceivable(input: ClosureInput, estimate: HoldingsEstimate): void {
+  if (input.uniformsReceived && estimate.pieces.length > 0) {
+    throw new ApiError(
+      400,
+      `Le système indique encore ${estimate.totalPieces} pièce(s) chez l'employé : enregistrez d'abord le retour (« Retourner des uniformes »).`
+    );
+  }
+}
+
 export async function previewClosure(employeeId: string, input: ClosureInput, signer: ClosureSigner) {
   const emp = await loadEmployee(employeeId);
   const deadline = parseDeadline(input.deadline);
   const estimate = await estimateHoldingsCost(employeeId);
+  assertUniformsReceivable(input, estimate);
+  const now = new Date();
   return {
     subject: CLOSURE_EMAIL_SUBJECT,
     to: emp.email,
     cc: [EMAIL_PAIE, EMAIL_RH],
-    html: buildClosureLetterHtml({ reasonText: input.reasonText, deadline, estimate, signer }),
+    html: buildClosureLetterHtml({
+      reasonText: input.reasonText,
+      deadline,
+      estimate,
+      signer,
+      date: now,
+      uniformsReceived: input.uniformsReceived,
+    }),
     sms: buildClosureSms({
       firstName: emp.firstName,
       deadline,
       total: estimate.total,
       hasPieces: estimate.pieces.length > 0,
+      receivedAt: input.uniformsReceived ? now : undefined,
     }),
     estimate,
   };
@@ -432,6 +481,7 @@ export async function sendClosure(
   const emp = await loadEmployee(employeeId);
   const now = new Date();
   const deadline = parseDeadline(input.deadline, now);
+  if (input.uniformsReceived) assertUniformsReceivable(input, await estimateHoldingsCost(employeeId));
 
   // 1. Statut + ancres de fin d'emploi (même logique que PUT /employees/:id).
   const fields = buildDeactivationFields(emp, now, deadline);
@@ -444,12 +494,20 @@ export async function sendClosure(
 
   // 2. Contenu (figé au moment de l'envoi).
   const estimate = await estimateHoldingsCost(employeeId);
-  const html = buildClosureLetterHtml({ reasonText: input.reasonText, deadline, estimate, signer, date: now });
+  const html = buildClosureLetterHtml({
+    reasonText: input.reasonText,
+    deadline,
+    estimate,
+    signer,
+    date: now,
+    uniformsReceived: input.uniformsReceived,
+  });
   const smsText = buildClosureSms({
     firstName: emp.firstName,
     deadline,
     total: estimate.total,
     hasPieces: estimate.pieces.length > 0,
+    receivedAt: input.uniformsReceived ? now : undefined,
   });
 
   // 3. Envois (jamais bloquants pour la fermeture).
@@ -484,7 +542,9 @@ export async function sendClosure(
   await recordEmployeeAudit({
     employeeId,
     userId: signer.id,
-    details: `Dossier fermé (${CLOSURE_REASON_LABELS[input.reason]}) — retour des uniformes au plus tard le ${formatLongFr(deadline)}`,
+    details: input.uniformsReceived
+      ? `Dossier fermé (${CLOSURE_REASON_LABELS[input.reason]}) — réception des uniformes confirmée le ${formatLongFr(now)}, rien à retenir`
+      : `Dossier fermé (${CLOSURE_REASON_LABELS[input.reason]}) — retour des uniformes au plus tard le ${formatLongFr(deadline)}`,
   });
 
   return { notice, becameInactive };

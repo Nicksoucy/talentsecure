@@ -67,6 +67,8 @@ export interface ClosureInput {
   reasonText: string;
   deadline: string;
   sendSms: boolean;
+  /** La lettre confirme la réception des uniformes (aucune pièce au système). */
+  uniformsReceived?: boolean;
 }
 
 /** Fermer le dossier sans rien envoyer. */

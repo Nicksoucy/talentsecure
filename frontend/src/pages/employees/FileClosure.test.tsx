@@ -136,6 +136,39 @@ describe('FileClosureDialog', () => {
     expect(screen.getByLabelText(/date limite de retour/i)).toBeInTheDocument();
   });
 
+  describe('case « Uniformes reçus »', () => {
+    it('sans pièce au système : cochée → plus de date limite, l’aperçu demande la confirmation', async () => {
+      const user = userEvent.setup();
+      previewClosure.mockResolvedValue({
+        subject: 's', to: 'jean@example.com', cc: ['paie@xguard.ca', 'rh@xguard.ca'],
+        html: '<p>lettre</p>', sms: 'texto', estimate: noPieces,
+      });
+      renderWithProviders(<FileClosureDialog open onClose={vi.fn()} overview={makeOverview({ estimate: noPieces })} />);
+      // Le mode sans envoi est choisi par défaut sans uniforme : on passe à la lettre.
+      await user.click(screen.getByLabelText(/envoyer une lettre/i));
+      const box = screen.getByLabelText(/uniformes reçus — la lettre confirme la réception/i);
+      expect(box).not.toBeChecked();
+      expect(screen.getByLabelText(/date limite de retour/i)).toBeInTheDocument();
+
+      await user.click(box);
+      expect(screen.queryByLabelText(/date limite de retour/i)).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /voir l’aperçu/i }));
+      expect(previewClosure).toHaveBeenCalledWith('emp-1', expect.objectContaining({ uniformsReceived: true }));
+      expect(await screen.findByText(/la lettre confirme la réception des uniformes en date/i)).toBeInTheDocument();
+    });
+
+    it('pièces encore au système : case grisée, rien de « reçu » n’est envoyé', async () => {
+      const user = userEvent.setup();
+      previewClosure.mockResolvedValue({
+        subject: 's', to: 'jean@example.com', cc: [], html: '<p>l</p>', sms: 't', estimate: makeOverview().estimate,
+      });
+      renderWithProviders(<FileClosureDialog open onClose={vi.fn()} overview={makeOverview()} />);
+      expect(screen.getByLabelText(/enregistrez d’abord le retour/i)).toBeDisabled();
+      await user.click(screen.getByRole('button', { name: /voir l’aperçu/i }));
+      expect(previewClosure.mock.calls[0][1]).not.toHaveProperty('uniformsReceived');
+    });
+  });
+
   describe('fermer sans rien envoyer', () => {
     it('sans uniforme : choisi par défaut, rien sur la lettre, ferme directement avec le motif', async () => {
       const user = userEvent.setup();

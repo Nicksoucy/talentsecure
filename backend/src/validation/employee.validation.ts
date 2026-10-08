@@ -44,6 +44,7 @@ export const employeeClosureSchema = z.object({
   reasonText: z.string().trim().min(1, 'Le paragraphe du motif est requis').max(5000),
   deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date limite invalide (AAAA-MM-JJ)'),
   sendSms: z.boolean().optional().default(false),
+  uniformsReceived: z.boolean().optional().default(false),
 });
 
 /** Fermer le dossier SANS rien envoyer (uniformes déjà rapportés, aucun uniforme…). */
