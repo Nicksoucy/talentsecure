@@ -21,7 +21,7 @@ export interface UpdateEmployeeResponse {
 // ---------------------------------------------------------------------------
 // Fermeture de dossier (lettre par courriel CC paie + RH, texto, date limite)
 // ---------------------------------------------------------------------------
-export type ClosureReason = 'INACTIVITE' | 'DEMISSION' | 'FIN_EMPLOI';
+export type ClosureReason = 'INACTIVITE' | 'DEMISSION' | 'FIN_EMPLOI' | 'AUTRE';
 export type ChannelStatus = 'SENT' | 'FAILED' | 'SKIPPED';
 export type ClosureTrackingStatus = 'EN_ATTENTE' | 'RAPPORTE' | 'TRANSMIS_PAIE' | 'AUCUN_UNIFORME';
 
@@ -79,6 +79,8 @@ export interface SilentClosureInput {
   /** Courriel à la paie (RH en copie) : dossier fermé + état des uniformes. */
   notifyPayroll?: boolean;
   note?: string;
+  /** « Fermeture avec réception des uniformes » : la paie (CC RH) reçoit la confirmation. */
+  uniformsReceived?: boolean;
 }
 
 export interface ClosurePreview {

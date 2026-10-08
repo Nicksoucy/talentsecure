@@ -146,6 +146,9 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
     expect(res.body.data.estimate.total).toBe(105);
     expect(res.body.data.notices).toEqual([]);
     expect(res.body.data.tracking).toBeNull();
+    // Motif « Autre / inconnu » : texte général (fermeture par quelqu'un d'autre que les RH).
+    expect(res.body.data.defaults.reasonLabels.AUTRE).toBe('Autre / inconnu');
+    expect(res.body.data.defaults.reasonTexts.AUTRE).toBe('Nous vous confirmons que votre dossier chez XGuard est maintenant fermé.');
   });
 
   it('aperçu : lettre avec motif, date limite, pièces et montant ; texto ; rien n’est modifié', async () => {
@@ -324,7 +327,7 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
     const badReason = await request(app)
       .post(`/api/employees/${emp.id}/closure`)
       .set('Authorization', `Bearer ${rhToken}`)
-      .send(body({ reason: 'AUTRE' }));
+      .send(body({ reason: 'BIDON' }));
     expect(badReason.status).toBe(400);
     const forbidden = await request(app)
       .post(`/api/employees/${emp.id}/closure`)
@@ -410,7 +413,7 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
       expect(log?.details).toMatch(/3 pièce\(s\) d’uniforme encore détenue\(s\), date limite/);
     });
 
-    it('aviser la paie : courriel À paie CC RH « rien à retenir », note incluse, rien à l’employé', async () => {
+    it('aviser la paie : courriel général « dossier fermé, aucune retenue », note incluse, rien à l’employé', async () => {
       const emp = await seedEmployee({ withUniform: false });
       const res = await silent(emp.id, { reason: 'DEMISSION', notifyPayroll: true, note: 'Ne pas retenir les 50 $.' });
       expect(res.status).toBe(201);
@@ -421,16 +424,40 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
       const mails = await prisma.notification.findMany({ where: { channel: 'EMAIL', payload: { path: ['employeeId'], equals: emp.id } } });
       expect(mails).toHaveLength(1);
       expect(mails[0].recipientEmail).toBe('paie@xguard.ca');
-      expect(mails[0].title).toContain('uniformes retournés, rien à retenir');
+      // Courriel général : il n'affirme pas que des uniformes ont été reçus.
+      expect(mails[0].title).toMatch(/^Dossier fermé — Jean Test\w+$/);
       const payload = mails[0].payload as any;
       expect(payload.emailCc).toEqual(['rh@xguard.ca']);
       expect(payload.amountToWithhold).toBe(0);
-      expect(payload.emailHtml).toContain('Rien à retenir sur la paie');
+      expect(payload.emailHtml).toContain('Aucune retenue d’uniforme à faire sur la paie');
+      expect(payload.emailHtml).not.toContain('Uniformes reçus');
       expect(payload.emailHtml).toContain('Ne pas retenir les 50 $.');
       expect(payload.emailHtml).toContain('Fermé par Tamara Hadid');
 
       const log = await prisma.auditLog.findFirst({ where: { resourceId: emp.id } });
       expect(log?.details).toBe('Dossier fermé sans avis à l’employé (Démission) — courriel à la paie (RH en copie)');
+    });
+
+    it('fermeture avec réception des uniformes : paie avisée « uniformes reçus le … », même sans la case paie', async () => {
+      const emp = await seedEmployee({ withUniform: false });
+      const res = await silent(emp.id, { reason: 'AUTRE', uniformsReceived: true });
+      expect(res.status).toBe(201);
+      expect(res.body.data.payrollNotified).toBe(true);
+      expect(sendEmailWithProvider).not.toHaveBeenCalled();
+      const mail = await prisma.notification.findFirst({ where: { channel: 'EMAIL', payload: { path: ['employeeId'], equals: emp.id } } });
+      expect(mail?.title).toContain('uniformes reçus, rien à retenir');
+      const html = (mail?.payload as any).emailHtml as string;
+      expect(html).toMatch(/Uniformes reçus le \d{1,2} \S+ \d{4}\. Rien à retenir sur la paie\./);
+      expect(html).toContain('Motif : Autre / inconnu');
+      const log = await prisma.auditLog.findFirst({ where: { resourceId: emp.id } });
+      expect(log?.details).toMatch(/^Dossier fermé avec réception des uniformes le .+ \(Autre \/ inconnu\) — courriel à la paie \(RH en copie\), rien à l’employé$/);
+    });
+
+    it('réception des uniformes refusée si le système montre encore des pièces', async () => {
+      const emp = await seedEmployee();
+      const res = await silent(emp.id, { reason: 'AUTRE', uniformsReceived: true });
+      expect(res.status).toBe(400);
+      expect((await prisma.employee.findUnique({ where: { id: emp.id } }))?.status).toBe('ACTIF');
     });
 
     it('aviser la paie avec pièces encore détenues : liste + date limite, rien à retenir pour l’instant', async () => {
@@ -441,9 +468,9 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
       expect((mail?.payload as any).emailHtml).toContain('105,00 $');
     });
 
-    it('validation : motif inconnu → 400 ; champ en trop → 400 ; lecture seule → 403', async () => {
+    it('validation : motif hors liste → 400 ; champ en trop → 400 ; lecture seule → 403', async () => {
       const emp = await seedEmployee({ withUniform: false });
-      expect((await silent(emp.id, { reason: 'AUTRE' })).status).toBe(400);
+      expect((await silent(emp.id, { reason: 'BIDON' })).status).toBe(400);
       expect((await silent(emp.id, { reason: 'DEMISSION', sendSms: true })).status).toBe(400);
       expect((await silent(emp.id, { reason: 'DEMISSION' }, salesToken)).status).toBe(403);
       expect((await prisma.employee.findUnique({ where: { id: emp.id } }))?.status).toBe('ACTIF');

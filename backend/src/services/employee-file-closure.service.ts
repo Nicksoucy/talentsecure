@@ -35,7 +35,9 @@ import { appBaseUrl, returnedSinceClosure } from './uniform-termination.service'
 import { UNIFORM_RETURN_DEADLINE_CALENDAR_DAYS } from '../constants/uniform';
 import { recordEmployeeAudit } from './audit.service';
 
-export const CLOSURE_REASONS = ['INACTIVITE', 'DEMISSION', 'FIN_EMPLOI'] as const;
+// AUTRE : fermeture faite par quelqu'un d'autre que les RH, ou motif inconnu →
+// texte général, sans motif précis.
+export const CLOSURE_REASONS = ['INACTIVITE', 'DEMISSION', 'FIN_EMPLOI', 'AUTRE'] as const;
 export type ClosureReason = (typeof CLOSURE_REASONS)[number];
 
 /** Paragraphe d'ouverture proposé par motif — RH peut le retoucher avant l'envoi. */
@@ -47,12 +49,14 @@ export const DEFAULT_REASON_TEXTS: Record<ClosureReason, string> = {
     'Nous vous confirmons que votre dossier chez XGuard est maintenant fermé.',
   FIN_EMPLOI:
     "Nous vous informons que votre emploi au sein de Sécurité XGuard prend fin et que votre dossier est fermé en date d'aujourd'hui.",
+  AUTRE: 'Nous vous confirmons que votre dossier chez XGuard est maintenant fermé.',
 };
 
 export const CLOSURE_REASON_LABELS: Record<ClosureReason, string> = {
   INACTIVITE: 'Inactivité',
   DEMISSION: 'Démission',
   FIN_EMPLOI: "Fin d'emploi",
+  AUTRE: 'Autre / inconnu',
 };
 
 export const CLOSURE_EMAIL_SUBJECT = 'Fermeture de votre dossier XGuard';
@@ -537,6 +541,8 @@ export function buildSilentClosurePayrollHtml(o: {
   deadline: Date;
   note?: string;
   link: string;
+  /** Choix « Fermeture avec réception des uniformes » : confirme la réception datée. */
+  uniformsReceived?: boolean;
 }): string {
   const held = o.estimate.pieces.length > 0;
   const rows = o.estimate.pieces
@@ -555,7 +561,9 @@ export function buildSilentClosurePayrollHtml(o: {
     <th style="text-align:left;padding:6px 8px;border:1px solid #d1d5db;">Taille</th>
     <th style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">Qté</th>
     <th style="text-align:right;padding:6px 8px;border:1px solid #d1d5db;">Valeur</th></tr></thead><tbody>${rows}</tbody></table>`
-    : `<p style="font-size:17px;"><strong>Uniformes : retournés (ou aucun uniforme au dossier). Rien à retenir sur la paie.</strong></p>`;
+    : o.uniformsReceived
+    ? `<p style="font-size:17px;"><strong>Uniformes reçus le ${esc(formatLongFr(o.closedAt))}. Rien à retenir sur la paie.</strong></p>`
+    : `<p style="font-size:17px;"><strong>Aucune retenue d’uniforme à faire sur la paie.</strong></p>`;
   const note = o.note?.trim()
     ? `<p style="background:#f3f4f6;padding:10px 12px;border-radius:6px;"><strong>Note :</strong><br>${esc(o.note.trim()).replace(/\n/g, '<br>')}</p>`
     : '';
@@ -582,11 +590,22 @@ export function buildSilentClosurePayrollHtml(o: {
  */
 export async function closeSilently(
   employeeId: string,
-  input: { reason: ClosureReason; deadline?: string; notifyPayroll?: boolean; note?: string },
+  input: { reason: ClosureReason; deadline?: string; notifyPayroll?: boolean; note?: string; uniformsReceived?: boolean },
   signer: ClosureSigner
 ): Promise<{ becameInactive: boolean; piecesHeld: number; payrollNotified: boolean }> {
   const emp = await loadEmployee(employeeId);
   const now = new Date();
+  // « Fermeture avec réception des uniformes » : même garde que la lettre, et
+  // la paie (RH en copie) est toujours avisée.
+  if (input.uniformsReceived) {
+    const est = await estimateHoldingsCost(employeeId);
+    if (est.pieces.length > 0) {
+      throw new ApiError(
+        400,
+        `Le système indique encore ${est.totalPieces} pièce(s) chez l'employé : enregistrez d'abord le retour (« Retourner des uniformes »).`
+      );
+    }
+  }
   const deadline = input.deadline ? parseDeadline(input.deadline, now) : undefined;
   const fields = buildDeactivationFields(emp, now, deadline);
   const becameInactive = emp.status === 'ACTIF';
@@ -597,7 +616,7 @@ export async function closeSilently(
   await propagateUniformOffboarding(employeeId, fields.uniformReturnDeadlineAt, emp.uniformReturnDeadlineAt);
   const piecesHeld = (await computeHoldings(employeeId)).reduce((n, h) => n + h.quantity, 0);
 
-  const payrollNotified = !!input.notifyPayroll;
+  const payrollNotified = !!input.notifyPayroll || !!input.uniformsReceived;
   if (payrollNotified) {
     const [estimate, extra] = await Promise.all([
       estimateHoldingsCost(employeeId),
@@ -611,12 +630,16 @@ export async function closeSilently(
       channels: ['EMAIL'],
       audience: 'PAIE',
       dedupKey: `closure-silent-paie-${employeeId}-${now.getTime()}`,
-      title: nothingHeld
-        ? `Dossier fermé — ${employeeName} — uniformes retournés, rien à retenir`
-        : `Dossier fermé — ${employeeName} — ${estimate.totalPieces} pièce(s) d’uniforme encore détenue(s)`,
-      message: nothingHeld
-        ? `Le dossier de ${employeeName} est fermé. Uniformes retournés (ou aucun au dossier) : rien à retenir sur la paie.`
-        : `Le dossier de ${employeeName} est fermé. Il détient encore ${estimate.totalPieces} pièce(s) : rien à retenir pour l’instant.`,
+      title: !nothingHeld
+        ? `Dossier fermé — ${employeeName} — ${estimate.totalPieces} pièce(s) d’uniforme encore détenue(s)`
+        : input.uniformsReceived
+        ? `Dossier fermé — ${employeeName} — uniformes reçus, rien à retenir`
+        : `Dossier fermé — ${employeeName}`,
+      message: !nothingHeld
+        ? `Le dossier de ${employeeName} est fermé. Il détient encore ${estimate.totalPieces} pièce(s) : rien à retenir pour l’instant.`
+        : input.uniformsReceived
+        ? `Le dossier de ${employeeName} est fermé. Uniformes reçus le ${formatLongFr(now)} : rien à retenir sur la paie.`
+        : `Le dossier de ${employeeName} est fermé. Aucune retenue d’uniforme à faire.`,
       link: `/employees/${employeeId}`,
       payload: {
         employeeId,
@@ -633,6 +656,7 @@ export async function closeSilently(
           deadline: fields.uniformReturnDeadlineAt,
           note: input.note,
           link: `${appBaseUrl()}/employees/${employeeId}`,
+          uniformsReceived: input.uniformsReceived,
         }),
       },
     });
@@ -642,8 +666,10 @@ export async function closeSilently(
     employeeId,
     userId: signer.id,
     details:
-      `Dossier fermé sans avis à l’employé (${CLOSURE_REASON_LABELS[input.reason]}) — ` +
-      (payrollNotified ? 'courriel à la paie (RH en copie)' : 'rien n’a été envoyé') +
+      (input.uniformsReceived
+        ? `Dossier fermé avec réception des uniformes le ${formatLongFr(now)} (${CLOSURE_REASON_LABELS[input.reason]}) — courriel à la paie (RH en copie), rien à l’employé`
+        : `Dossier fermé sans avis à l’employé (${CLOSURE_REASON_LABELS[input.reason]}) — ` +
+          (payrollNotified ? 'courriel à la paie (RH en copie)' : 'rien n’a été envoyé')) +
       (piecesHeld > 0
         ? ` ; ${piecesHeld} pièce(s) d’uniforme encore détenue(s), date limite ${formatLongFr(fields.uniformReturnDeadlineAt)}`
         : ''),
