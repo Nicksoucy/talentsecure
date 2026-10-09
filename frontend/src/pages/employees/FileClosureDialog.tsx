@@ -308,9 +308,9 @@ export default function FileClosureDialog({ open, onClose, overview }: Props) {
                 ) : reception ? (
                   <Alert severity="info">
                     L’employé passera à <strong>Inactif</strong>. Rien ne sera envoyé à l’employé ; la paie (RH en copie)
-                    recevra « Dossier fermé — uniformes reçus le{' '}
+                    recevra « Retour d’uniformes — {employee.firstName} {employee.lastName} » : uniformes reçus le{' '}
                     {new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' })}, rien à
-                    retenir ». La fermeture sera inscrite à l’historique du dossier.
+                    retenir, avec son nom, son téléphone et son courriel. La fermeture sera inscrite à l’historique du dossier.
                   </Alert>
                 ) : (
                   <Alert severity="info">

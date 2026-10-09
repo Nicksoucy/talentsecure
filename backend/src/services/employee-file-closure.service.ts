@@ -20,7 +20,7 @@ import { ApiError } from '../utils/apiError';
 import { addDaysYmd, endOfDayMontreal, formatLongFr, montrealYmd } from '../utils/montreal-date';
 import { EMAIL_PAIE, EMAIL_RH } from './email.service';
 import { getContactById, isGhlConfigured } from './ghl.client';
-import { lastTenDigits } from '../utils/phone';
+import { formatPhoneFr, lastTenDigits } from '../utils/phone';
 import { upsertPersonContact } from './ghl-email.service';
 import { notify, sendEmailWithProvider } from './notification.service';
 import { resolveGhlContactId, sendSms } from './sms.service';
@@ -123,8 +123,15 @@ export function buildClosureLetterHtml(opts: {
   signer: ClosureSigner;
   date?: Date;
   uniformsReceived?: boolean;
+  /** Destinataire en tête de lettre : la paie (en copie) sait de qui il s'agit. */
+  recipient?: { name: string; email?: string | null; phone?: string | null };
 }): string {
   const h3 = (t: string) => `<h3 style="font-size:15px;margin:20px 0 8px;">${t}</h3>`;
+  const recipient = opts.recipient
+    ? `<p style="margin:0 0 12px;"><strong>${esc(opts.recipient.name)}</strong>${
+        opts.recipient.email?.trim() ? `<br>${esc(opts.recipient.email.trim())}` : ''
+      }${opts.recipient.phone?.trim() ? `<br>${esc(formatPhoneFr(opts.recipient.phone))}` : ''}</p>`
+    : '';
   const p = (t: string) => `<p style="margin:0 0 12px;text-align:justify;">${t}</p>`;
   const deadlineText = `<strong style="background:#fef08a;">au plus tard le ${esc(formatLongFr(opts.deadline))}</strong>`;
 
@@ -145,6 +152,7 @@ export function buildClosureLetterHtml(opts: {
   <div style="text-align:center;font-size:22px;letter-spacing:6px;font-weight:bold;margin-bottom:24px;">SÉCURITÉ XGUARD</div>
   <p style="margin:0 0 12px;">Montréal, le ${esc(formatLongFr(opts.date ?? new Date()))}</p>
   <p style="margin:0 0 12px;">SOUS TOUTES RÉSERVES<br>STRICTEMENT CONFIDENTIEL<br>REMIS PAR COURRIEL</p>
+  ${recipient}
   <p style="margin:0 0 4px;"><strong>OBJET : Fermeture de votre dossier XGuard</strong></p>
   <hr style="border:0;border-top:1px solid #111827;margin:0 0 16px;">
   <p style="margin:0 0 12px;">Bonjour,</p>
@@ -359,6 +367,7 @@ export async function previewClosure(employeeId: string, input: ClosureInput, si
       signer,
       date: now,
       uniformsReceived: input.uniformsReceived,
+      recipient: { name: `${emp.firstName} ${emp.lastName}`, email: emp.email, phone: emp.phone },
     }),
     sms: buildClosureSms({
       firstName: emp.firstName,
@@ -479,6 +488,7 @@ export async function sendClosure(
     signer,
     date: now,
     uniformsReceived: input.uniformsReceived,
+    recipient: { name: `${emp.firstName} ${emp.lastName}`, email: emp.email, phone: emp.phone },
   });
   const smsText = buildClosureSms({
     firstName: emp.firstName,
@@ -534,6 +544,8 @@ const moneyFr = (n: number) => `${n.toFixed(2).replace('.', ',')} $`;
 export function buildSilentClosurePayrollHtml(o: {
   employeeName: string;
   employeeNumber?: string | null;
+  employeePhone?: string | null;
+  employeeEmail?: string | null;
   reasonLabel: string;
   closedAt: Date;
   closedBy: string | null;
@@ -567,10 +579,21 @@ export function buildSilentClosurePayrollHtml(o: {
   const note = o.note?.trim()
     ? `<p style="background:#f3f4f6;padding:10px 12px;border-radius:6px;"><strong>Note :</strong><br>${esc(o.note.trim()).replace(/\n/g, '<br>')}</p>`
     : '';
+  // Identité de l'employé, bien en vue : la paie doit savoir de qui il s'agit.
+  const idRow = (label: string, value?: string | null) =>
+    `<tr><td style="padding:6px 10px;border:1px solid #d1d5db;background:#f9fafb;width:34%;">${label}</td>
+      <td style="padding:6px 10px;border:1px solid #d1d5db;"><strong>${value?.trim() ? esc(value.trim()) : '—'}</strong></td></tr>`;
+  const identity = `<table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 14px;"><tbody>
+    ${idRow('Nom complet', o.employeeName)}
+    ${idRow('Téléphone', o.employeePhone ? formatPhoneFr(o.employeePhone) : null)}
+    ${idRow('Courriel', o.employeeEmail)}
+    ${o.employeeNumber ? idRow('Matricule', o.employeeNumber) : ''}
+  </tbody></table>`;
+  const heading = o.uniformsReceived && !held ? 'Retour d’uniformes' : 'Dossier fermé';
   return `<div style="font-family:Arial,sans-serif;color:#111827;max-width:640px;margin:0 auto;padding:20px;">
-  <h2 style="color:#1f2937;margin-top:0;">Dossier fermé — ${esc(o.employeeName)}</h2>
-  <p>Le dossier de <strong>${esc(o.employeeName)}</strong>${o.employeeNumber ? ` (matricule ${esc(o.employeeNumber)})` : ''}
-  est fermé en date du ${esc(formatLongFr(o.closedAt))}. Motif : ${esc(o.reasonLabel)}.</p>
+  <h2 style="color:#1f2937;margin-top:0;">${heading} — ${esc(o.employeeName)}</h2>
+  ${identity}
+  <p>Le dossier de <strong>${esc(o.employeeName)}</strong> est fermé en date du ${esc(formatLongFr(o.closedAt))}. Motif : ${esc(o.reasonLabel)}.</p>
   ${uniforms}
   ${note}
   <p style="color:#6b7280;">Aucun avis n’a été envoyé à l’employé.${o.closedBy ? ` Fermé par ${esc(o.closedBy)}.` : ''}</p>
@@ -633,7 +656,7 @@ export async function closeSilently(
       title: !nothingHeld
         ? `Dossier fermé — ${employeeName} — ${estimate.totalPieces} pièce(s) d’uniforme encore détenue(s)`
         : input.uniformsReceived
-        ? `Dossier fermé — ${employeeName} — uniformes reçus, rien à retenir`
+        ? `Retour d’uniformes — ${employeeName}`
         : `Dossier fermé — ${employeeName}`,
       message: !nothingHeld
         ? `Le dossier de ${employeeName} est fermé. Il détient encore ${estimate.totalPieces} pièce(s) : rien à retenir pour l’instant.`
@@ -649,6 +672,8 @@ export async function closeSilently(
         emailHtml: buildSilentClosurePayrollHtml({
           employeeName,
           employeeNumber: extra?.employeeNumber,
+          employeePhone: emp.phone,
+          employeeEmail: emp.email,
           reasonLabel: CLOSURE_REASON_LABELS[input.reason],
           closedAt: now,
           closedBy,

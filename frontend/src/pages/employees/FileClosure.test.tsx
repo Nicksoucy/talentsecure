@@ -190,6 +190,7 @@ describe('FileClosureDialog', () => {
       await user.click(screen.getByLabelText(/fermeture avec réception des uniformes/i));
       // Pas de case « aviser la paie » : la paie est toujours avisée dans ce choix.
       expect(screen.queryByLabelText(/aviser la paie et les rh/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/Retour d’uniformes — Jean Tremblay/)).toBeInTheDocument();
       expect(screen.getByText(/uniformes reçus le/i)).toBeInTheDocument();
 
       await user.click(screen.getByLabelText('Motif'));

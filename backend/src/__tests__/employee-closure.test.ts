@@ -170,6 +170,8 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
     expect(html).toContain("suite à l'entente initiale lors de votre embauche");
     // Signature : le service RH, jamais le nom de la personne connectée (demande RH 2026-10-08).
     expect(html).toContain('Les Ressources Humaines XGuard');
+    // En-tête de lettre : nom, courriel et téléphone de l'employé (la paie est en copie).
+    expect(html).toMatch(/<strong>Jean Test\w+<\/strong><br>jean@example\.com<br>\(514\) 555-0000/);
     expect(html).not.toContain('Tamara Hadid');
     expect(sms).toContain('Sans retour, 105 $ seront déduits de votre paie, tel que convenu à l\'embauche.');
     const after = await prisma.employee.findUnique({ where: { id: emp.id } });
@@ -490,10 +492,15 @@ describe('Fermeture de dossier — /api/employees/:id/closure', () => {
       expect(res.body.data.payrollNotified).toBe(true);
       expect(sendEmailWithProvider).not.toHaveBeenCalled();
       const mail = await prisma.notification.findFirst({ where: { channel: 'EMAIL', payload: { path: ['employeeId'], equals: emp.id } } });
-      expect(mail?.title).toContain('uniformes reçus, rien à retenir');
+      expect(mail?.title).toMatch(/^Retour d’uniformes — Jean Test\w+$/);
       const html = (mail?.payload as any).emailHtml as string;
       expect(html).toMatch(/Uniformes reçus le \d{1,2} \S+ \d{4}\. Rien à retenir sur la paie\./);
       expect(html).toContain('Motif : Autre / inconnu');
+      // Identité claire de l'employé pour la paie.
+      expect(html).toContain('Retour d’uniformes — Jean');
+      expect(html).toMatch(/Nom complet<\/td>\s*<td[^>]*><strong>Jean Test\w+<\/strong>/);
+      expect(html).toMatch(/Téléphone<\/td>\s*<td[^>]*><strong>\(514\) 555-0000<\/strong>/);
+      expect(html).toMatch(/Courriel<\/td>\s*<td[^>]*><strong>jean@example\.com<\/strong>/);
       const log = await prisma.auditLog.findFirst({ where: { resourceId: emp.id } });
       expect(log?.details).toMatch(/^Dossier fermé avec réception des uniformes le .+ \(Autre \/ inconnu\) — courriel à la paie \(RH en copie\), rien à l’employé$/);
     });
