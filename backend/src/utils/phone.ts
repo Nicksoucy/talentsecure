@@ -10,3 +10,10 @@
 export function lastTenDigits(phone?: string | null): string {
   return (phone || '').replace(/\D/g, '').slice(-10);
 }
+
+/** Numéro lisible « (514) 572-1982 » ; tel quel s'il n'a pas 10 chiffres. */
+export function formatPhoneFr(phone?: string | null): string {
+  const d = lastTenDigits(phone);
+  if (d.length !== 10) return (phone || '').trim();
+  return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+}
