@@ -167,6 +167,34 @@ describe('EmployeeDetailPage', () => {
     expect(screen.getByRole('button', { name: /enregistrer/i })).toBeEnabled();
   });
 
+  it('signaleur : pastille « Signaleur » à côté du nom', async () => {
+    getEmployeeById.mockResolvedValue({ data: { ...makeEmployee(), divisions: ['SIGNALISATION'] } });
+    renderPage();
+
+    await screen.findByRole('heading', { name: /marc lavoie/i });
+    expect(screen.getByText('Signaleur')).toBeInTheDocument();
+    expect(screen.queryByText('Agent de sécurité')).not.toBeInTheDocument();
+  });
+
+  it('« Modifier » : le métier est pré-rempli et envoyé en liste (les deux métiers)', async () => {
+    getEmployeeById.mockResolvedValue({ data: { ...makeEmployee(), divisions: ['SIGNALISATION'] } });
+    updateEmployee.mockResolvedValue({ data: makeEmployee(), message: 'ok' } as any);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /modifier/i }));
+    const metier = await screen.findByRole('combobox', { name: 'Métier' });
+    expect(metier).toHaveTextContent('Signaleur');
+    await user.click(metier);
+    await user.click(screen.getByRole('option', { name: 'Agent de sécurité et signaleur' }));
+    await user.click(screen.getByRole('button', { name: /enregistrer/i }));
+
+    await waitFor(() => expect(updateEmployee).toHaveBeenCalled());
+    const payload = updateEmployee.mock.calls[0][1] as any;
+    expect(payload.divisions).toEqual(['SECURITE', 'SIGNALISATION']);
+    expect(payload).not.toHaveProperty('division');
+  });
+
   it('masque le bouton « Modifier » pour un rôle sans droit d\'écriture', async () => {
     useAuthStore.getState().setAuth(makeUser({ role: 'MAGASIN' as never }), 'tok', 'refresh');
     getEmployeeById.mockResolvedValue({ data: makeEmployee() });

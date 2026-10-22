@@ -73,7 +73,7 @@ function pageResponse(employees: Employee[], total = employees.length) {
   };
 }
 
-const STATS = { data: { total: 12, actifs: 9, inactifs: 3 } };
+const STATS = { data: { total: 12, actifs: 9, inactifs: 3, agentsActifs: 8, signaleursActifs: 2 } };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -112,10 +112,12 @@ describe('EmployeesPage', () => {
 
     renderWithProviders(<EmployeesPage />);
 
-    // Les 3 cartes de stats (Total / Actifs / Inactifs) reflètent la réponse mockée.
+    // Les cartes de stats (Total / Actifs / Signaleurs actifs / Inactifs) reflètent la réponse mockée.
     expect(await screen.findByText('12')).toBeInTheDocument();
     expect(screen.getByText('9')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('Signaleurs actifs')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
   });
 
   it('affiche l\'état vide « Aucun employé » quand la liste est vide', async () => {
@@ -238,5 +240,77 @@ describe('EmployeesPage', () => {
     expect(lastCall.near).toBeUndefined();
     // La colonne Distance disparaît avec le filtre.
     expect(screen.queryByText('Distance')).not.toBeInTheDocument();
+  });
+
+  describe('Métier — agents de sécurité et signaleurs', () => {
+    it('colonne « Métier » : pastille « Signaleur » pour un signaleur, « Agent de sécurité » sinon', async () => {
+      svc.getEmployees.mockResolvedValue(
+        pageResponse([
+          makeEmployee(),
+          makeEmployee({ id: 'emp-2', firstName: 'Julie', lastName: 'Deshaies', divisions: ['SIGNALISATION'] }),
+        ])
+      );
+      renderWithProviders(<EmployeesPage />);
+
+      const julie = (await screen.findByText('Julie Deshaies')).closest('tr') as HTMLElement;
+      expect(within(julie).getByText('Signaleur')).toBeInTheDocument();
+      expect(within(julie).queryByText('Agent de sécurité')).not.toBeInTheDocument();
+      const marie = screen.getByText('Marie Gagnon').closest('tr') as HTMLElement;
+      expect(within(marie).getByText('Agent de sécurité')).toBeInTheDocument();
+    });
+
+    it('filtre « Métier : Signaleurs » → requête avec division=SIGNALISATION', async () => {
+      svc.getEmployees.mockResolvedValue(pageResponse([makeEmployee()]));
+      const user = userEvent.setup();
+      renderWithProviders(<EmployeesPage />);
+      await screen.findByText('Marie Gagnon');
+
+      await user.click(screen.getByRole('combobox', { name: 'Métier' }));
+      await user.click(screen.getByRole('option', { name: 'Signaleurs' }));
+
+      await waitFor(() =>
+        expect(svc.getEmployees).toHaveBeenCalledWith(
+          expect.objectContaining({ division: 'SIGNALISATION', page: 1 })
+        )
+      );
+    });
+
+    it('clic sur « Signaleurs actifs » → liste des signaleurs actifs', async () => {
+      svc.getEmployees.mockResolvedValue(pageResponse([makeEmployee()]));
+      const user = userEvent.setup();
+      renderWithProviders(<EmployeesPage />);
+      await screen.findByText('Marie Gagnon');
+
+      await user.click(screen.getByText('Signaleurs actifs'));
+
+      await waitFor(() =>
+        expect(svc.getEmployees).toHaveBeenCalledWith(
+          expect.objectContaining({ division: 'SIGNALISATION', status: 'ACTIF' })
+        )
+      );
+    });
+
+    it('« Ajouter un employé » : choisir « Signaleur » envoie divisions=[SIGNALISATION]', async () => {
+      svc.getEmployees.mockResolvedValue(pageResponse([makeEmployee()]));
+      svc.createEmployee.mockResolvedValue({ data: makeEmployee(), message: 'ok' });
+      const user = userEvent.setup();
+      renderWithProviders(<EmployeesPage />);
+      await screen.findByText('Marie Gagnon');
+
+      await user.click(screen.getByRole('button', { name: /ajouter un employé/i }));
+      const dialog = await screen.findByRole('dialog');
+      await user.type(within(dialog).getByLabelText('Prénom'), 'Charles');
+      await user.type(within(dialog).getByLabelText('Téléphone'), '438-399-6712');
+      await user.click(within(dialog).getByRole('combobox', { name: 'Métier' }));
+      await user.click(screen.getByRole('option', { name: 'Signaleur' }));
+      await user.click(within(dialog).getByRole('button', { name: 'Créer' }));
+
+      await waitFor(() =>
+        expect(svc.createEmployee).toHaveBeenCalledWith(
+          expect.objectContaining({ firstName: 'Charles', divisions: ['SIGNALISATION'] })
+        )
+      );
+      expect(svc.createEmployee.mock.calls[0][0]).not.toHaveProperty('division');
+    });
   });
 });

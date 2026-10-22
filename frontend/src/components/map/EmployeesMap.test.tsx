@@ -133,6 +133,18 @@ describe('EmployeesMap', () => {
     );
   });
 
+  it('métier « signaleurs » : points et liste filtrés, unité « signaleurs »', async () => {
+    apiGet.mockImplementation((url: string) => {
+      if (url === '/api/employees/stats/map-points?division=SIGNALISATION') return Promise.resolve(MAP_POINTS);
+      return Promise.resolve({ data: { pagination: { total: 0 } } });
+    });
+    renderWithProviders(<EmployeesMap division="SIGNALISATION" />);
+
+    await screen.findByTestId('map');
+    expect(apiGet).toHaveBeenCalledWith('/api/employees/stats/map-points?division=SIGNALISATION');
+    expect(await screen.findByText('2 signaleurs')).toBeInTheDocument();
+  });
+
   it("affiche un message d'erreur si le chargement des points échoue", async () => {
     apiGet.mockRejectedValueOnce(new Error('boom'));
     renderWithProviders(<EmployeesMap />);

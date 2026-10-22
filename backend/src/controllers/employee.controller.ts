@@ -18,6 +18,30 @@ import {
 } from '../services/employee-offboarding.service';
 import { getEmployeeHistory, recordEmployeeAudit } from '../services/audit.service';
 
+type EmployeeDivision = 'SECURITE' | 'SIGNALISATION';
+const DIVISIONS: readonly EmployeeDivision[] = ['SECURITE', 'SIGNALISATION'];
+const DIVISION_LABEL: Record<EmployeeDivision, string> = {
+  SECURITE: 'Agent de sécurité',
+  SIGNALISATION: 'Signaleur',
+};
+
+/** `?division=SIGNALISATION` → filtre Prisma ; valeur inconnue/absente → aucun filtre. */
+function divisionFilter(raw: unknown): { divisions?: { has: EmployeeDivision } } {
+  return DIVISIONS.includes(raw as EmployeeDivision)
+    ? { divisions: { has: raw as EmployeeDivision } }
+    : {};
+}
+
+/** Métiers dédupliqués, ordre stable (sécurité d'abord). */
+function normalizeDivisions(list: unknown): EmployeeDivision[] | undefined {
+  if (!Array.isArray(list)) return undefined;
+  const picked = DIVISIONS.filter((d) => list.includes(d));
+  return picked.length > 0 ? picked : undefined;
+}
+
+const divisionsText = (list: readonly EmployeeDivision[]) =>
+  list.map((d) => DIVISION_LABEL[d]).join(' + ');
+
 /** Invalidation du cache carte (les mutations changent les points affichés). */
 const invalidateEmployeeCaches = () =>
   invalidateCaches({ statKeys: [EMPLOYEE_MAPPOINTS_CACHE_KEY] });
@@ -53,6 +77,7 @@ export const getEmployees = async (req: Request, res: Response, next: NextFuncti
       search,
       status,
       city,
+      division,
       page = 1,
       limit = 20,
       sortBy = 'createdAt',
@@ -60,7 +85,7 @@ export const getEmployees = async (req: Request, res: Response, next: NextFuncti
     } = req.query;
 
     const skip = (Number(page) - 1) * Number(limit);
-    const where: any = { isDeleted: false };
+    const where: any = { isDeleted: false, ...divisionFilter(division) };
 
     if (status) where.status = status;
     if (city) where.city = { contains: city as string, mode: 'insensitive' };
@@ -154,12 +179,15 @@ export const getEmployeeById = async (req: Request, res: Response, next: NextFun
 
 export const getEmployeesStats = async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    const [total, actifs, inactifs] = await prisma.$transaction([
+    const actif = { isDeleted: false, status: 'ACTIF' as const };
+    const [total, actifs, inactifs, agentsActifs, signaleursActifs] = await prisma.$transaction([
       prisma.employee.count({ where: { isDeleted: false } }),
-      prisma.employee.count({ where: { isDeleted: false, status: 'ACTIF' } }),
+      prisma.employee.count({ where: actif }),
       prisma.employee.count({ where: { isDeleted: false, status: 'INACTIF' } }),
+      prisma.employee.count({ where: { ...actif, divisions: { has: 'SECURITE' } } }),
+      prisma.employee.count({ where: { ...actif, divisions: { has: 'SIGNALISATION' } } }),
     ]);
-    res.json({ data: { total, actifs, inactifs } });
+    res.json({ data: { total, actifs, inactifs, agentsActifs, signaleursActifs } });
   } catch (error) {
     next(error);
   }
@@ -170,22 +198,26 @@ export const getEmployeesStats = async (_req: Request, res: Response, next: Next
  * adresse exacte (source 'address', libellé = noms des agents), centroïde du
  * secteur postal ('postal') ou centre-ville ('city'). Même enveloppe que les
  * cartes candidats/prospects (GeoPointsMap côté frontend).
+ * `?division=` restreint à un métier (agents ou signaleurs) — non mis en cache :
+ * quelques centaines de lignes, et la clé de cache unique reste invalidable.
  */
 export const getEmployeesMapPoints = async (
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const cached = await getCache<{ success: boolean; data: any }>(
-      EMPLOYEE_MAPPOINTS_CACHE_KEY
-    );
+    const byDivision = divisionFilter(req.query.division);
+    const filtered = Object.keys(byDivision).length > 0;
+    const cached = filtered
+      ? null
+      : await getCache<{ success: boolean; data: any }>(EMPLOYEE_MAPPOINTS_CACHE_KEY);
     if (cached) {
       return res.json(cached);
     }
 
     const employees = await prisma.employee.findMany({
-      where: { isDeleted: false, status: 'ACTIF' },
+      where: { isDeleted: false, status: 'ACTIF', ...byDivision },
       select: {
         lat: true,
         lng: true,
@@ -204,7 +236,7 @@ export const getEmployeesMapPoints = async (
     const { points, unplaced } = buildGeoMapPoints(rows, { nameLabelSources: ['address'] });
 
     const payload = { success: true, data: { points, unplaced } };
-    await setCache(EMPLOYEE_MAPPOINTS_CACHE_KEY, payload, 300);
+    if (!filtered) await setCache(EMPLOYEE_MAPPOINTS_CACHE_KEY, payload, 300);
 
     res.json(payload);
   } catch (error) {
@@ -274,6 +306,13 @@ export const updateEmployee = async (req: Request, res: Response, next: NextFunc
       uniformWarning = await propagateUniformOffboarding(id, deadline);
     } else if (becomingActive && existing.uniformReturnDeadlineAt) {
       await revertUniformOffboarding(id, existing.uniformReturnDeadlineAt);
+    }
+    if (data.divisions && divisionsText(data.divisions) !== divisionsText(existing.divisions)) {
+      await recordEmployeeAudit({
+        employeeId: id,
+        userId: req.user?.id,
+        details: `Métier modifié : ${divisionsText(existing.divisions)} → ${divisionsText(data.divisions)} (fiche employé)`,
+      });
     }
     if (becomingInactive || becomingActive) {
       await recordEmployeeAudit({
@@ -347,6 +386,7 @@ export const promoteCandidateToEmployee = async (req: Request, res: Response, ne
   try {
     const { candidateId } = req.params;
     const { hireDate, position, assignment, employeeNumber } = req.body;
+    const divisions = normalizeDivisions(req.body?.divisions);
 
     const candidate = await prisma.candidate.findUnique({ where: { id: candidateId } });
     if (!candidate || candidate.isDeleted) {
@@ -383,6 +423,7 @@ export const promoteCandidateToEmployee = async (req: Request, res: Response, ne
           position: position || null,
           assignment: assignment || null,
           employeeNumber: employeeNumber || null,
+          ...(divisions ? { divisions } : {}),
           hasBSP: candidate.hasBSP,
           bspNumber: candidate.bspNumber,
           bspExpiryDate: candidate.bspExpiryDate,
@@ -438,6 +479,7 @@ export const promoteProspectToEmployee = async (req: Request, res: Response, nex
   try {
     const { prospectId } = req.params;
     const { hireDate, position, assignment, employeeNumber } = req.body || {};
+    const divisions = normalizeDivisions(req.body?.divisions);
 
     const prospect = await prisma.prospectCandidate.findUnique({ where: { id: prospectId } });
     if (!prospect || prospect.isDeleted) {
@@ -474,6 +516,7 @@ export const promoteProspectToEmployee = async (req: Request, res: Response, nex
           position: position || null,
           assignment: assignment || null,
           employeeNumber: employeeNumber || null,
+          ...(divisions ? { divisions } : {}),
           hasBSP: false,
           hasVehicle: false,
           cvUrl: prospect.cvUrl,
@@ -531,7 +574,10 @@ function buildEmployeeData(body: any, isUpdate = false) {
     hasVehicle: body.hasVehicle ?? false,
     cvUrl: body.cvUrl ?? null,
     notes: body.notes ?? null,
+    // Absent → défaut de la base (agent de sécurité) en création, inchangé en update.
+    divisions: normalizeDivisions(body.divisions),
   };
+  if (data.divisions === undefined) delete data.divisions;
   // En update, ne pas écraser avec des valeurs absentes
   if (isUpdate) {
     Object.keys(data).forEach((k) => {

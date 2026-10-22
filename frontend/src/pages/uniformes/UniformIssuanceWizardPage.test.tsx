@@ -188,6 +188,31 @@ describe('UniformIssuanceWizardPage', () => {
     expect(listItems).toHaveBeenLastCalledWith({ division: 'SIGNALISATION' });
   });
 
+  it('depuis la fiche d’un signaleur (?employeeId) : catalogue Signalisation par défaut', async () => {
+    vi.mocked(employeeService.getEmployeeById).mockResolvedValue({
+      data: { id: 'emp-9', firstName: 'Julie', lastName: 'Deshaies', divisions: ['SIGNALISATION'] } as any,
+    });
+    renderWithProviders(<UniformIssuanceWizardPage />, { route: '/uniformes/remises/nouvelle?employeeId=emp-9' });
+
+    await vi.waitFor(() => expect(listItems).toHaveBeenLastCalledWith({ division: 'SIGNALISATION' }));
+    expect(screen.getByRole('combobox', { name: /division/i })).toHaveTextContent('Signalisation');
+  });
+
+  it('choisir un signaleur dans la liste des agents bascule la division ; « (signaleur) » affiché', async () => {
+    getEmployees.mockResolvedValue({
+      data: [{ id: 'emp-9', firstName: 'Julie', lastName: 'Deshaies', divisions: ['SIGNALISATION'] } as any],
+      pagination: { total: 1, page: 1, limit: 15, totalPages: 1 },
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<UniformIssuanceWizardPage />);
+    await screen.findByText('Chemise tactique');
+
+    await user.click(screen.getByRole('combobox', { name: 'Agent' }));
+    await user.click(await screen.findByRole('option', { name: 'Julie Deshaies (signaleur)' }));
+
+    await vi.waitFor(() => expect(listItems).toHaveBeenLastCalledWith({ division: 'SIGNALISATION' }));
+  });
+
   it("affiche le total du prêt et le compteur de lignes après ajout d'une quantité", async () => {
     const user = userEvent.setup();
     renderWithProviders(<UniformIssuanceWizardPage />);

@@ -1,5 +1,5 @@
 import api from './api';
-import { Employee } from '@/types';
+import { Employee, EmployeeDivision } from '@/types';
 import type { Holding } from '@/types/uniform';
 
 /** Avertissement non bloquant renvoyé quand un employé passe INACTIF en
@@ -95,6 +95,8 @@ export interface ClosurePreview {
 interface GetEmployeesParams {
   search?: string;
   status?: 'ACTIF' | 'INACTIF';
+  /** Métier : agents de sécurité ou signaleurs (ceux qui font les deux sortent dans les deux). */
+  division?: EmployeeDivision;
   city?: string;
   page?: number;
   limit?: number;
@@ -145,7 +147,13 @@ export const employeeService = {
   },
 
   async getEmployeesStats(): Promise<{
-    data: { total: number; actifs: number; inactifs: number };
+    data: {
+      total: number;
+      actifs: number;
+      inactifs: number;
+      agentsActifs: number;
+      signaleursActifs: number;
+    };
   }> {
     const response = await api.get('/api/employees/stats/summary');
     return response.data;
@@ -171,7 +179,13 @@ export const employeeService = {
    */
   async promoteCandidate(
     candidateId: string,
-    data: { hireDate?: string; position?: string; assignment?: string; employeeNumber?: string }
+    data: {
+      hireDate?: string;
+      position?: string;
+      assignment?: string;
+      employeeNumber?: string;
+      divisions?: EmployeeDivision[];
+    }
   ): Promise<{ data: Employee; message: string }> {
     const response = await api.post(`/api/employees/promote/${candidateId}`, data);
     return response.data;

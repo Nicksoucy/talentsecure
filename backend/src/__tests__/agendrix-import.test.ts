@@ -1,6 +1,12 @@
 import {
+  buildAgendrixColumnMap,
   cleanNameTags,
   computeEmployeeUpdate,
+  divisionsWithAdded,
+  isDepartmentAccount,
+  parseDivisionArg,
+  planMissingEmployee,
+  toCanonicalCells,
   EmployeeSnapshot,
   normalizeAgendrixRow,
   parseAgendrixAddress,
@@ -254,5 +260,82 @@ describe('agendrixImport — computeEmployeeUpdate (politique de fusion)', () =>
     )!;
     expect(divergent.data.lastName).toBeUndefined();
     expect(divergent.warnings.some((w) => w.includes('Autre-Nom'))).toBe(true);
+  });
+});
+
+describe('agendrixImport — colonnes lues par leur entête', () => {
+  const PHONES = ['Téléphone', 'Type de téléphone', 'Téléphone', 'Type de téléphone', 'Téléphone', 'Type de téléphone'];
+
+  it('export du 17 juillet (Prénom, Nom, Adresse, Courriel, Tél…) : ordre canonique inchangé', () => {
+    const headers = ['Prénom', 'Nom', 'Adresse municipale', 'Courriel', ...PHONES];
+    const map = buildAgendrixColumnMap(headers);
+    const cells = ['A', 'B', '1 rue X, Laval, QC H7A 1A1', 'a@b.ca', '514-555-0001', 'Mobile', ' ', ' ', ' ', ' '];
+    expect(toCanonicalCells(map, cells)).toEqual(cells);
+  });
+
+  it('export signalisation du 22 octobre (Tél… avant Courriel et Adresse) : remis dans le bon ordre', () => {
+    const headers = ['Prénom', 'Nom', ...PHONES, 'Courriel', 'Adresse municipale'];
+    const cells = ['Julie', 'Deshaies', '(450) 712-8163', 'Mobile', ' ', ' ', ' ', ' ', 'juliedeshaies45@icloud.com', '13 Rue Bonin, Lourdes-de-Joliette, QC J0K 1K0'];
+    const row = normalizeAgendrixRow(toCanonicalCells(buildAgendrixColumnMap(headers), cells), 10) as AgendrixRow;
+    expect(row.email).toBe('juliedeshaies45@icloud.com');
+    expect(row.primaryPhone).toBe('(450) 712-8163');
+    expect(row.parsed).toEqual(expect.objectContaining({ address: '13 Rue Bonin', postalCode: 'J0K 1K0' }));
+  });
+
+  it('export sans courriel ni adresse (30 septembre) : champs vides, téléphones lus', () => {
+    const headers = ['Prénom', 'Nom', ...PHONES];
+    const map = buildAgendrixColumnMap(headers);
+    expect(map.email).toBeNull();
+    expect(map.address).toBeNull();
+    const row = normalizeAgendrixRow(toCanonicalCells(map, ['Ibrahima', 'Sy', '514-555-0002', 'Mobile']), 3) as AgendrixRow;
+    expect(row.email).toBeNull();
+    expect(row.rawAddress).toBeNull();
+    expect(row.phones).toEqual(['514-555-0002']);
+  });
+
+  it('sans Prénom/Nom → erreur explicite (mauvais fichier)', () => {
+    expect(() => buildAgendrixColumnMap(['Quart', 'Début', 'Fin'])).toThrow(/Prénom/);
+  });
+});
+
+describe('agendrixImport — comptes département', () => {
+  it('les 3 comptes génériques du fichier signalisation sont ignorés', () => {
+    expect(isDepartmentAccount('Comptabilité', 'Xguard', 'comptabilite@xguard.ca')).toBe(true);
+    expect(isDepartmentAccount('Opérations', 'XGuard', 'gestionprojets@xguard.ca')).toBe(true);
+    expect(isDepartmentAccount('Ressources', 'Humaines', 'rh@xguard.ca')).toBe(true);
+  });
+
+  it('un vrai employé avec un courriel @xguard.ca (souvent sans téléphone) est gardé', () => {
+    expect(isDepartmentAccount('Jade', 'Beauchemin', 'jade.beauchemin@xguard.ca')).toBe(false);
+    expect(isDepartmentAccount('Lida', 'Ly', 'lida@xguard.ca')).toBe(false);
+  });
+});
+
+describe('agendrixImport — métier du fichier (sécurité / signalisation)', () => {
+  it('--division : sécurité par défaut, signalisation reconnue, valeur inconnue refusée', () => {
+    expect(parseDivisionArg(undefined)).toBe('SECURITE');
+    expect(parseDivisionArg('signalisation')).toBe('SIGNALISATION');
+    expect(parseDivisionArg('Signaleurs')).toBe('SIGNALISATION');
+    expect(parseDivisionArg('sécurité')).toBe('SECURITE');
+    expect(parseDivisionArg('drone')).toBeNull();
+  });
+
+  it('présent au fichier : métier ajouté (les autres gardés), rien si déjà là', () => {
+    expect(divisionsWithAdded(['SECURITE'], 'SIGNALISATION')).toEqual(['SECURITE', 'SIGNALISATION']);
+    expect(divisionsWithAdded(['SIGNALISATION'], 'SECURITE')).toEqual(['SECURITE', 'SIGNALISATION']);
+    expect(divisionsWithAdded(['SIGNALISATION'], 'SIGNALISATION')).toBeNull();
+  });
+
+  it('absent du fichier sécurité : un signaleur n’est JAMAIS désactivé', () => {
+    expect(planMissingEmployee(['SIGNALISATION'], 'SECURITE')).toEqual({ action: 'ignore' });
+  });
+
+  it('absent du fichier : les deux métiers → on retire seulement celui-ci ; un seul → désactivation', () => {
+    expect(planMissingEmployee(['SECURITE', 'SIGNALISATION'], 'SECURITE')).toEqual({
+      action: 'removeDivision',
+      remaining: ['SIGNALISATION'],
+    });
+    expect(planMissingEmployee(['SECURITE'], 'SECURITE')).toEqual({ action: 'deactivate' });
+    expect(planMissingEmployee(['SIGNALISATION'], 'SIGNALISATION')).toEqual({ action: 'deactivate' });
   });
 });

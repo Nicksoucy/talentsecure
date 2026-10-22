@@ -47,6 +47,13 @@ import { useAuthStore } from '@/store/authStore';
 import ContactConflictDialog from '@/components/ContactConflictDialog';
 import { contactService, ContactConflict } from '@/services/contact.service';
 import CrossTableHint from '@/components/CrossTableHint';
+import {
+  DivisionChips,
+  DivisionSelect,
+  divisionsFromChoice,
+  type DivisionChoice,
+} from '@/components/EmployeeDivision';
+import type { EmployeeDivision } from '@/types';
 
 const EmployeesMap = lazy(() => import('@/components/map/EmployeesMap'));
 
@@ -63,7 +70,10 @@ function formatDate(d?: string) {
   return new Date(d).toLocaleDateString('fr-CA');
 }
 
-const EMPTY_FORM = { firstName: '', lastName: '', email: '', phone: '', status: 'ACTIF', hireDate: '', position: '', assignment: '' };
+const EMPTY_FORM = {
+  firstName: '', lastName: '', email: '', phone: '', status: 'ACTIF', hireDate: '', position: '', assignment: '',
+  division: 'SECURITE' as DivisionChoice,
+};
 
 export default function EmployeesPage() {
   // Lien profond `?q=` (depuis le bandeau « trouvé ailleurs » / l'omnibox) : pré-remplit la recherche.
@@ -75,6 +85,8 @@ export default function EmployeesPage() {
   // pour ne pas refaire une requête à chaque frappe.
   const [debouncedSearch, setDebouncedSearch] = useState(initialQ);
   const [status, setStatus] = useState<'' | 'ACTIF' | 'INACTIF'>('');
+  // Métier : agents de sécurité / signaleurs (filtre aussi la carte).
+  const [division, setDivision] = useState<'' | EmployeeDivision>('');
   // Carte des agents actifs (repliée par défaut) + filtre par rayon depuis la carte.
   const [showMap, setShowMap] = useState(false);
   const [nearFilter, setNearFilter] = useState<NearFilter | null>(null);
@@ -112,10 +124,14 @@ export default function EmployeesPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => employeeService.createEmployee({
-      ...form,
-      hireDate: form.hireDate || undefined,
-    } as any),
+    mutationFn: () => {
+      const { division: choice, ...rest } = form;
+      return employeeService.createEmployee({
+        ...rest,
+        hireDate: rest.hireDate || undefined,
+        divisions: divisionsFromChoice(choice),
+      } as any);
+    },
     onSuccess: () => {
       enqueueSnackbar('Employé créé', { variant: 'success' });
       setAddOpen(false);
@@ -142,13 +158,14 @@ export default function EmployeesPage() {
   }, [search]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['employees', page, debouncedSearch, status, nearFilter],
+    queryKey: ['employees', page, debouncedSearch, status, division, nearFilter],
     queryFn: () =>
       employeeService.getEmployees({
         page,
         limit: pageSize,
         search: debouncedSearch.trim() || undefined,
         status: status || undefined,
+        division: division || undefined,
         sortBy: 'createdAt',
         sortOrder: 'desc',
         near: nearFilter
@@ -227,14 +244,14 @@ export default function EmployeesPage() {
               </Box>
             }
           >
-            <EmployeesMap onNearbySelect={handleNearbySelect} />
+            <EmployeesMap onNearbySelect={handleNearbySelect} division={division || undefined} />
           </Suspense>
         </Box>
       </Collapse>
 
       {/* Stats */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={4}>
+        <Grid item xs={6} sm={3}>
           <Card>
             <CardContent>
               <Typography color="text.secondary" variant="body2">Total</Typography>
@@ -242,7 +259,7 @@ export default function EmployeesPage() {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={4}>
+        <Grid item xs={6} sm={3}>
           <Card>
             <CardContent>
               <Typography color="text.secondary" variant="body2">Actifs</Typography>
@@ -250,7 +267,18 @@ export default function EmployeesPage() {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} sm={4}>
+        <Grid item xs={6} sm={3}>
+          <Card
+            onClick={() => { setDivision('SIGNALISATION'); setStatus('ACTIF'); setPage(1); }}
+            sx={{ cursor: 'pointer' }}
+          >
+            <CardContent>
+              <Typography color="text.secondary" variant="body2">Signaleurs actifs</Typography>
+              <Typography variant="h4" color="warning.main">{stats?.signaleursActifs ?? '—'}</Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={6} sm={3}>
           <Card>
             <CardContent>
               <Typography color="text.secondary" variant="body2">Inactifs</Typography>
@@ -286,6 +314,19 @@ export default function EmployeesPage() {
               <MenuItem value="INACTIF">Inactif</MenuItem>
             </Select>
           </FormControl>
+          <FormControl sx={{ minWidth: 200 }}>
+            <InputLabel id="employees-division-label">Métier</InputLabel>
+            <Select
+              labelId="employees-division-label"
+              label="Métier"
+              value={division}
+              onChange={(e) => { setDivision(e.target.value as any); setPage(1); }}
+            >
+              <MenuItem value="">Tous</MenuItem>
+              <MenuItem value="SECURITE">Agents de sécurité</MenuItem>
+              <MenuItem value="SIGNALISATION">Signaleurs</MenuItem>
+            </Select>
+          </FormControl>
           {nearFilter && (
             <Chip
               color="primary"
@@ -306,6 +347,7 @@ export default function EmployeesPage() {
           <TableHead>
             <TableRow>
               <TableCell>Nom</TableCell>
+              <TableCell>Métier</TableCell>
               <TableCell>Email</TableCell>
               <TableCell>Téléphone</TableCell>
               <TableCell>Ville</TableCell>
@@ -320,13 +362,13 @@ export default function EmployeesPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={8 + (isUniformStaff ? 1 : 0) + (nearFilter ? 1 : 0)} align="center" sx={{ py: 6 }}>
+                <TableCell colSpan={9 + (isUniformStaff ? 1 : 0) + (nearFilter ? 1 : 0)} align="center" sx={{ py: 6 }}>
                   <CircularProgress />
                 </TableCell>
               </TableRow>
             ) : employees.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8 + (isUniformStaff ? 1 : 0) + (nearFilter ? 1 : 0)} align="center" sx={{ py: 6 }}>
+                <TableCell colSpan={9 + (isUniformStaff ? 1 : 0) + (nearFilter ? 1 : 0)} align="center" sx={{ py: 6 }}>
                   <Typography color="text.secondary">Aucun employé</Typography>
                 </TableCell>
               </TableRow>
@@ -347,6 +389,9 @@ export default function EmployeesPage() {
                     ) : (
                       `${e.firstName} ${e.lastName}`
                     )}
+                  </TableCell>
+                  <TableCell>
+                    <DivisionChips divisions={e.divisions} />
                   </TableCell>
                   <TableCell>{e.email || '—'}</TableCell>
                   <TableCell>{e.phone}</TableCell>
@@ -440,6 +485,8 @@ export default function EmployeesPage() {
           )}
           <TextField label="Téléphone" fullWidth value={form.phone}
             onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          <DivisionSelect fullWidth value={form.division}
+            onChange={(choice) => setForm({ ...form, division: choice })} />
           <Box sx={{ display: 'flex', gap: 2 }}>
             <FormControl fullWidth>
               <InputLabel>Statut</InputLabel>

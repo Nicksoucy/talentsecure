@@ -1,6 +1,8 @@
 /**
- * Sync du roster Agendrix (export « Agendrix - employés » .xlsx) → TalentSecure.
- * Le fichier fait foi pour « qui est employé ACTIF » chez XGuard.
+ * Sync d'un roster Agendrix (export « Agendrix - employés » .xlsx) → TalentSecure.
+ * XGuard a DEUX comptes Agendrix : sécurité (agents) et signalisation
+ * (signaleurs). Chaque fichier fait foi pour « qui est ACTIF dans CE métier »
+ * seulement — un signaleur absent du fichier sécurité n'est jamais désactivé.
  *
  * DRY-RUN PAR DÉFAUT (aucune écriture) — rapport détaillé sur stdout.
  *
@@ -10,10 +12,18 @@
  *                            (via la MÊME logique d'offboarding uniformes que l'UI)
  *     [--reactivate]         repasse ACTIF les employés INACTIF présents au fichier
  *     [--skip-geocode]       saute la phase de géocodage (~1,1 s/adresse Nominatim)
+ *     [--division securite|signalisation]
+ *                            métier du fichier (défaut : securite). Présent au
+ *                            fichier → métier ajouté ; créé avec ce métier ;
+ *                            réactivé avec ce métier seulement. Absent du
+ *                            fichier (--deactivate-missing) → si l'employé a
+ *                            aussi l'autre métier, on retire seulement celui-ci
+ *                            (il reste ACTIF) ; sinon désactivation.
  *     --by <courriel>        OBLIGATOIRE avec --apply : la personne qui lance
  *                            l'import, inscrite au registre de chaque
  *                            désactivation / réactivation
  *
+ * Colonnes lues par leur ENTÊTE (l'ordre change d'un export à l'autre).
  * Matching : courriel (insensible casse) puis téléphones (10 derniers chiffres) —
  * mêmes sémantiques que utils/candidateMatch. Un employé déjà réclamé par une
  * autre ligne → AMBIGU (aucune écriture). Lignes sans courriel ni téléphone →
@@ -25,9 +35,16 @@ import { prisma } from '../config/database';
 import { lastTenDigits } from '../utils/phone';
 import {
   AgendrixRow,
+  buildAgendrixColumnMap,
   computeEmployeeUpdate,
+  DIVISION_LABEL,
+  divisionsWithAdded,
+  EmployeeDivision,
   EmployeeSnapshot,
   normalizeAgendrixRow,
+  parseDivisionArg,
+  planMissingEmployee,
+  toCanonicalCells,
   UpdatePlan,
 } from '../utils/agendrixImport';
 import {
@@ -52,17 +69,23 @@ const fileIdx = argv.indexOf('--file');
 const FILE = fileIdx >= 0 ? argv[fileIdx + 1] : undefined;
 const byIdx = argv.indexOf('--by');
 const BY_EMAIL = byIdx >= 0 ? argv[byIdx + 1]?.trim() : undefined;
+const divIdx = argv.indexOf('--division');
+const DIVISION = parseDivisionArg(divIdx >= 0 ? argv[divIdx + 1] : undefined);
 
-if (!FILE || (APPLY && !BY_EMAIL)) {
+if (!FILE || (APPLY && !BY_EMAIL) || !DIVISION) {
   console.error(
-    'Usage: npm run import:agendrix -- --file "<xlsx>" [--apply --by <courriel>] [--deactivate-missing] [--reactivate] [--skip-geocode]'
+    'Usage: npm run import:agendrix -- --file "<xlsx>" [--division securite|signalisation] [--apply --by <courriel>] [--deactivate-missing] [--reactivate] [--skip-geocode]'
   );
-  if (FILE) console.error('--apply exige --by <courriel> : la personne qui lance l\'import (registre).');
+  if (FILE && APPLY && !BY_EMAIL) console.error('--apply exige --by <courriel> : la personne qui lance l\'import (registre).');
+  if (!DIVISION) console.error('--division : « securite » ou « signalisation ».');
   process.exit(1);
 }
+const DIV: EmployeeDivision = DIVISION;
+const DIV_LABEL = DIVISION_LABEL[DIV];
 
 // ── Types locaux ────────────────────────────────────────────────────────────
 interface EmployeeRow extends EmployeeSnapshot {
+  divisions: EmployeeDivision[];
   terminationDate: Date | null;
   uniformReturnDeadlineAt: Date | null;
   lat: number | null;
@@ -130,12 +153,22 @@ async function readRows(path: string): Promise<AgendrixRow[]> {
   const ws = wb.worksheets[0];
   if (!ws) throw new Error('Classeur vide (aucune feuille)');
 
+  // Colonnes retrouvées par leur entête : l'ordre change d'un export à l'autre.
+  const headerRow = ws.getRow(1);
+  const headers = Array.from({ length: ws.columnCount }, (_, i) =>
+    cellText(headerRow.getCell(i + 1).value).trim()
+  );
+  const columns = buildAgendrixColumnMap(headers);
+  console.log(
+    `Colonnes : courriel ${columns.email != null ? 'oui' : 'NON'} · adresse ${columns.address != null ? 'oui' : 'NON'} · téléphones ${columns.phones.length}`
+  );
+
   const rows: AgendrixRow[] = [];
   const skipped: string[] = [];
   ws.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return; // entêtes
-    const cells = Array.from({ length: 10 }, (_, i) => cellText(row.getCell(i + 1).value));
-    const parsed = normalizeAgendrixRow(cells, rowNumber);
+    const raw = Array.from({ length: headers.length }, (_, i) => cellText(row.getCell(i + 1).value));
+    const parsed = normalizeAgendrixRow(toCanonicalCells(columns, raw), rowNumber);
     if ('skipped' in parsed) {
       if (parsed.skipped !== 'ligne vide') skipped.push(`ligne ${rowNumber}: ${parsed.skipped}`);
       return;
@@ -153,6 +186,7 @@ async function readRows(path: string): Promise<AgendrixRow[]> {
 async function main() {
   console.log(`=== IMPORT AGENDRIX ${APPLY ? '(APPLICATION)' : '(DRY-RUN — aucune écriture)'} ===`);
   console.log(`Fichier : ${FILE}`);
+  console.log(`Métier du fichier : ${DIV_LABEL} (${DIV})`);
   // Auteur inscrit au registre : vérifié AVANT toute écriture.
   let actorId: string | null = null;
   if (APPLY) {
@@ -183,6 +217,7 @@ async function main() {
       postalCode: true,
       status: true,
       employeeNumber: true,
+      divisions: true,
       terminationDate: true,
       uniformReturnDeadlineAt: true,
       lat: true,
@@ -296,8 +331,16 @@ async function main() {
       }
       claimed.set(emp.id, row);
 
-      const plan = computeEmployeeUpdate(emp, row);
+      let plan = computeEmployeeUpdate(emp, row);
       if (plan) warnings.push(...plan.warnings.map((w) => `${empLabel(emp!)} — ${w}`));
+      // ACTIF présent au fichier : métier ajouté s'il ne l'a pas (la
+      // réactivation, elle, repart de ce métier seul — voir plus bas).
+      const added = emp.status === 'ACTIF' ? divisionsWithAdded(emp.divisions, DIV) : null;
+      if (added) {
+        plan = plan ?? { data: {}, changes: [], warnings: [], addressChanged: false };
+        plan.data.divisions = added;
+        plan.changes.push(`métier : + ${DIV_LABEL} (${emp.divisions.map((d) => DIVISION_LABEL[d]).join(' + ')} → ${added.map((d) => DIVISION_LABEL[d]).join(' + ')})`);
+      }
 
       if (emp.status === 'INACTIF') {
         reactivations.push({ emp, row, plan });
@@ -331,10 +374,18 @@ async function main() {
     creations.push({ row, cand, prosp });
   }
 
-  // Départs probables : ACTIF jamais réclamés par une ligne du fichier.
-  const toDeactivate = employees
-    .filter((e) => e.status === 'ACTIF' && !claimed.has(e.id))
-    .sort((a, b) => a.lastName.localeCompare(b.lastName, 'fr'));
+  // Absents du fichier : seulement les ACTIF de CE métier. S'ils ont aussi
+  // l'autre métier, on retire seulement celui-ci ; sinon départ probable.
+  const toDeactivate: EmployeeRow[] = [];
+  const toRemoveDivision: { emp: EmployeeRow; remaining: EmployeeDivision[] }[] = [];
+  for (const e of employees) {
+    if (e.status !== 'ACTIF' || claimed.has(e.id)) continue;
+    const missing = planMissingEmployee(e.divisions, DIV);
+    if (missing.action === 'deactivate') toDeactivate.push(e);
+    else if (missing.action === 'removeDivision') toRemoveDivision.push({ emp: e, remaining: missing.remaining });
+  }
+  toDeactivate.sort((a, b) => a.lastName.localeCompare(b.lastName, 'fr'));
+  toRemoveDivision.sort((a, b) => a.emp.lastName.localeCompare(b.emp.lastName, 'fr'));
 
   // ── Rapport ──────────────────────────────────────────────────────────────
   const sortRows = <T extends { row: AgendrixRow }>(list: T[]) =>
@@ -355,11 +406,18 @@ async function main() {
   console.log(`\n─── INCHANGÉS : ${unchanged.length} ───`);
 
   console.log(`\n─── RÉACTIVATIONS suggérées (${reactivations.length}) ${REACTIVATE ? '[--reactivate: APPLIQUÉES]' : '[rapport seulement — utiliser --reactivate]'} ───`);
-  for (const r of sortRows(reactivations)) console.log(`  ↑ ${empLabel(r.emp)}`);
+  for (const r of sortRows(reactivations)) {
+    console.log(`  ↑ ${empLabel(r.emp)} — réactivé comme ${DIV_LABEL} seulement`);
+  }
 
   console.log(`\n─── DÉPARTS probables (${toDeactivate.length}) ${DEACTIVATE_MISSING ? '[--deactivate-missing: DÉSACTIVÉS]' : '[rapport seulement — utiliser --deactivate-missing]'} ───`);
   for (const e of toDeactivate) {
     console.log(`  ↓ ${empLabel(e)}${e.city ? ` — ${e.city}` : ''}${e.phone ? ` — ${e.phone}` : ''}`);
+  }
+
+  console.log(`\n─── MÉTIER « ${DIV_LABEL} » RETIRÉ, restent ACTIFS (${toRemoveDivision.length}) ${DEACTIVATE_MISSING ? '[--deactivate-missing: APPLIQUÉ]' : '[rapport seulement — utiliser --deactivate-missing]'} ───`);
+  for (const r of toRemoveDivision) {
+    console.log(`  − ${empLabel(r.emp)} — reste ${r.remaining.map((d) => DIVISION_LABEL[d]).join(' + ')}`);
   }
 
   if (ambiguous.length > 0) {
@@ -419,6 +477,7 @@ async function main() {
               videoStoragePath: cand?.videoStoragePath ?? prosp?.videoStoragePath ?? null,
               notes: cand?.hrNotes ?? prosp?.notes ?? null,
               convertedFromCandidateId: cand?.id ?? null,
+              divisions: [DIV],
             },
           });
           // Un contact ne vit qu'à une place : le candidat sort de Candidats,
@@ -437,6 +496,12 @@ async function main() {
           }
           return employee;
         });
+        await recordEmployeeAudit({
+          employeeId: created.id,
+          userId: actorId,
+          action: 'CREATE',
+          details: `Employé créé comme ${DIV_LABEL} par l'import Agendrix (présent dans ${fileName})`,
+        });
         geocodeIds.add(created.id);
       } catch (e: any) {
         errors++;
@@ -448,6 +513,13 @@ async function main() {
     for (const u of updates) {
       try {
         await prisma.employee.update({ where: { id: u.emp.id }, data: u.plan.data });
+        if (u.plan.data.divisions) {
+          await recordEmployeeAudit({
+            employeeId: u.emp.id,
+            userId: actorId,
+            details: `Métier ${DIV_LABEL} ajouté par l'import Agendrix (présent dans ${fileName})`,
+          });
+        }
         if (u.plan.addressChanged || u.emp.lat == null) geocodeIds.add(u.emp.id);
       } catch (e: any) {
         errors++;
@@ -463,6 +535,7 @@ async function main() {
             where: { id: r.emp.id },
             data: {
               ...(r.plan?.data ?? {}),
+              divisions: [DIV],
               status: 'ACTIF',
               terminationDate: null,
               uniformReturnDeadlineAt: null,
@@ -474,7 +547,7 @@ async function main() {
           await recordEmployeeAudit({
             employeeId: r.emp.id,
             userId: actorId,
-            details: `Employé réactivé par l'import Agendrix (présent dans ${fileName})`,
+            details: `Employé réactivé comme ${DIV_LABEL} par l'import Agendrix (présent dans ${fileName})`,
           });
           geocodeIds.add(r.emp.id);
         } catch (e: any) {
@@ -510,6 +583,21 @@ async function main() {
         }
       }
       console.log(`  Désactivations appliquées : ${toDeactivate.length}`);
+
+      for (const r of toRemoveDivision) {
+        try {
+          await prisma.employee.update({ where: { id: r.emp.id }, data: { divisions: r.remaining } });
+          await recordEmployeeAudit({
+            employeeId: r.emp.id,
+            userId: actorId,
+            details: `Métier ${DIV_LABEL} retiré par l'import Agendrix (absent de ${fileName}) — reste ${r.remaining.map((d) => DIVISION_LABEL[d]).join(' + ')}`,
+          });
+        } catch (err: any) {
+          errors++;
+          console.error(`  ✗ retrait du métier ${empLabel(r.emp)}: ${err.message}`);
+        }
+      }
+      console.log(`  Métiers retirés (restent actifs) : ${toRemoveDivision.length}`);
     }
 
     await invalidateCaches({ statKeys: [EMPLOYEE_MAPPOINTS_CACHE_KEY] });
@@ -548,7 +636,8 @@ async function main() {
   console.log(`  Mises à jour    : ${updates.length}`);
   console.log(`  Inchangés       : ${unchanged.length}`);
   console.log(`  Réactivations   : ${reactivations.length} ${REACTIVATE ? '(appliquées)' : '(suggestion)'}`);
-  console.log(`  Départs (ACTIF absents du fichier) : ${toDeactivate.length} ${DEACTIVATE_MISSING ? '(désactivés)' : '(suggestion)'}`);
+  console.log(`  Départs (${DIV === 'SECURITE' ? 'agents' : 'signaleurs'} ACTIFS absents du fichier) : ${toDeactivate.length} ${DEACTIVATE_MISSING ? '(désactivés)' : '(suggestion)'}`);
+  console.log(`  Métier retiré, restent actifs : ${toRemoveDivision.length} ${DEACTIVATE_MISSING ? '(appliqué)' : '(suggestion)'}`);
   console.log(`  Ambigus         : ${ambiguous.length} — Revue manuelle : ${manualReview.length}`);
   if (errors > 0) console.log(`  ERREURS         : ${errors}`);
   if (!APPLY) {

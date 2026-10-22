@@ -276,6 +276,9 @@ export interface ProspectCandidate {
   contracts?: string[]; // codes des contrats clients rattachés (ex. ['PSB'])
 }
 
+/** Métier d'un employé — même vocabulaire que les divisions d'uniformes. */
+export type EmployeeDivision = 'SECURITE' | 'SIGNALISATION';
+
 export interface Employee {
   id: string;
   firstName: string;
@@ -291,6 +294,8 @@ export interface Employee {
   employeeNumber?: string;
   position?: string;
   assignment?: string;
+  /** Agent de sécurité et/ou signaleur (jamais vide ; défaut : agent de sécurité). */
+  divisions?: EmployeeDivision[];
   hasBSP: boolean;
   bspNumber?: string;
   bspExpiryDate?: string;
