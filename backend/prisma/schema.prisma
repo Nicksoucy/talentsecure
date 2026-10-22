@@ -1165,6 +1165,12 @@ model Employee {
   position       String? // Poste / titre
   assignment     String? // Mandat / site (ex: Magellan Brossard)
 
+  // Métier(s) : SECURITE = agent de sécurité, SIGNALISATION = signaleur. Une
+  // personne peut faire les deux (jamais vide). Chaque roster Agendrix ne gère
+  // QUE son métier : un signaleur absent du fichier sécurité n'est jamais
+  // désactivé par l'import sécurité (voir utils/agendrixImport).
+  divisions UniformDivision[] @default([SECURITE])
+
   // Offboarding uniformes — posés automatiquement à la transition ACTIF→INACTIF,
   // remis à null si l'employé est réactivé. terminationDate ancre l'échéance de
   // retour (uniformReturnDeadlineAt = +14 jours, ou date choisie par RH), utilisée par la

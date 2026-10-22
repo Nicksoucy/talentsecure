@@ -137,6 +137,76 @@ export function parseMatriculePrefix(rawFirstName: string): {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
+// Colonnes : l'export Agendrix laisse choisir et ordonner les colonnes
+// ───────────────────────────────────────────────────────────────────────────
+
+const normName = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z]/g, '');
+
+/** Index (0-based) des colonnes du fichier, retrouvées par leur entête. */
+export interface AgendrixColumnMap {
+  firstName: number;
+  lastName: number;
+  address: number | null;
+  email: number | null;
+  /** Paires (téléphone, type) dans l'ordre du fichier — type null si absent. */
+  phones: { phone: number; type: number | null }[];
+}
+
+/**
+ * Entêtes → index des colonnes. Les exports observés n'ont PAS le même ordre
+ * (« Prénom | Nom | Adresse | Courriel | Tél… » le 17 juillet, « … | Courriel |
+ * Tél… | Adresse » le 10 août, sans courriel ni adresse le 30 septembre) : lire
+ * par position mélangerait courriels, téléphones et adresses.
+ * Prénom et Nom sont obligatoires ; le reste est optionnel.
+ */
+export function buildAgendrixColumnMap(headers: string[]): AgendrixColumnMap {
+  const keys = headers.map((h) => normName(String(h ?? '')));
+  const find = (k: string) => {
+    const i = keys.indexOf(k);
+    return i >= 0 ? i : null;
+  };
+  const firstName = find('prenom');
+  const lastName = find('nom');
+  if (firstName == null || lastName == null) {
+    throw new Error(
+      `Entêtes « Prénom » et « Nom » introuvables (entêtes lues : ${headers.join(' | ')})`
+    );
+  }
+  const phones: AgendrixColumnMap['phones'] = [];
+  keys.forEach((k, i) => {
+    if (k !== 'telephone') return;
+    const next = keys[i + 1] === 'typedetelephone' ? i + 1 : null;
+    phones.push({ phone: i, type: next });
+  });
+  return {
+    firstName,
+    lastName,
+    address: find('adressemunicipale') ?? find('adresse'),
+    email: find('courriel') ?? find('adressecourriel'),
+    phones,
+  };
+}
+
+/**
+ * Cellules du fichier → 10 cellules dans l'ordre canonique attendu par
+ * normalizeAgendrixRow (Prénom, Nom, Adresse, Courriel, 3× Téléphone + type).
+ */
+export function toCanonicalCells(map: AgendrixColumnMap, cells: string[]): string[] {
+  const at = (i: number | null) => (i == null ? '' : String(cells[i] ?? ''));
+  const out = [at(map.firstName), at(map.lastName), at(map.address), at(map.email)];
+  for (let k = 0; k < 3; k++) {
+    const p = map.phones[k];
+    out.push(p ? at(p.phone) : '', p ? at(p.type) : '');
+  }
+  return out;
+}
+
+// ───────────────────────────────────────────────────────────────────────────
 // Ligne Agendrix normalisée
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -155,10 +225,41 @@ export interface AgendrixRow {
   matricule: string | null;
 }
 
+// Boîtes partagées XGuard présentes comme « employés » dans Agendrix. Liste
+// fermée : de vrais employés ont un courriel @xguard.ca (souvent sans
+// téléphone), on ne peut donc pas écarter tout le domaine.
+const DEPARTMENT_MAILBOXES = new Set([
+  'rh',
+  'comptabilite',
+  'gestionprojets',
+  'paie',
+  'operations',
+  'info',
+  'admin',
+  'recrutement',
+]);
+const DEPARTMENT_NAMES = new Set(['ressourceshumaines', 'comptabilite', 'operations']);
+
 /**
- * Cellules brutes d'une ligne (10 colonnes, chaînes) → ligne normalisée, ou
- * { skipped } pour les lignes vides et les comptes département (« Comptabilité
- * Xguard », « RH XGuard », … — Prénom ou Nom == « xguard »).
+ * Compte département : Prénom ou Nom == « xguard » (« Comptabilité Xguard »),
+ * nom complet de service (« Ressources Humaines »), ou boîte partagée connue
+ * (rh@xguard.ca, gestionprojets@xguard.ca…).
+ */
+export function isDepartmentAccount(
+  firstName: string,
+  lastName: string,
+  email: string | null
+): boolean {
+  if (firstName.toLowerCase() === 'xguard' || lastName.toLowerCase() === 'xguard') return true;
+  if (DEPARTMENT_NAMES.has(normName(`${firstName}${lastName}`))) return true;
+  const m = (email || '').match(/^([^@]+)@xguard\.ca$/i);
+  return !!m && DEPARTMENT_MAILBOXES.has(normName(m[1]));
+}
+
+/**
+ * Cellules brutes d'une ligne (10 colonnes canoniques, chaînes — voir
+ * toCanonicalCells) → ligne normalisée, ou { skipped } pour les lignes vides
+ * et les comptes département (isDepartmentAccount).
  */
 export function normalizeAgendrixRow(
   cells: (string | null | undefined)[],
@@ -175,11 +276,11 @@ export function normalizeAgendrixRow(
   const { firstName, matricule } = parseMatriculePrefix(firstTags.name);
   const lastName = lastTags.name;
 
-  if (firstName.toLowerCase() === 'xguard' || lastName.toLowerCase() === 'xguard') {
+  const email = text(3).toLowerCase() || null;
+
+  if (isDepartmentAccount(firstName, lastName, email)) {
     return { skipped: `compte département (${rawFirst} ${rawLast})` };
   }
-
-  const email = text(3).toLowerCase() || null;
 
   // Téléphones : colonnes (4,6,8) + type (5,7,9) — « Mobile » d'abord.
   const entries: { phone: string; type: string }[] = [];
@@ -247,13 +348,6 @@ export interface UpdatePlan {
   warnings: string[];
   addressChanged: boolean;
 }
-
-const normName = (s: string) =>
-  s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z]/g, '');
 
 const normPostal = (s?: string | null) => (s || '').replace(/\s+/g, '').toUpperCase();
 
@@ -342,4 +436,63 @@ export function computeEmployeeUpdate(
 
   if (changes.length === 0 && warnings.length === 0) return null;
   return { data, changes, warnings, addressChanged };
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Métier (division) : chaque roster Agendrix ne gère QUE son métier
+// ───────────────────────────────────────────────────────────────────────────
+
+/** Même vocabulaire que les divisions d'uniformes (enum UniformDivision). */
+export type EmployeeDivision = 'SECURITE' | 'SIGNALISATION';
+
+export const DIVISION_LABEL: Record<EmployeeDivision, string> = {
+  SECURITE: 'agent de sécurité',
+  SIGNALISATION: 'signaleur',
+};
+
+/** « --division signalisation » → 'SIGNALISATION' ; défaut SECURITE ; null si inconnu. */
+export function parseDivisionArg(raw?: string | null): EmployeeDivision | null {
+  const k = normName(raw || 'securite');
+  if (k === 'securite' || k === 'agent' || k === 'agents') return 'SECURITE';
+  if (k === 'signalisation' || k === 'signaleur' || k === 'signaleurs') return 'SIGNALISATION';
+  return null;
+}
+
+/**
+ * Employé ACTIF présent au fichier du métier `division` : métiers à écrire
+ * (métier ajouté, les autres conservés), ou null s'il l'a déjà.
+ */
+export function divisionsWithAdded(
+  current: EmployeeDivision[],
+  division: EmployeeDivision
+): EmployeeDivision[] | null {
+  if (current.includes(division)) return null;
+  return sortDivisions([...current, division]);
+}
+
+export type MissingEmployeePlan =
+  | { action: 'ignore' }
+  | { action: 'removeDivision'; remaining: EmployeeDivision[] }
+  | { action: 'deactivate' };
+
+/**
+ * Employé ACTIF ABSENT du fichier du métier `division` (--deactivate-missing) :
+ * - pas de ce métier → rien (un signaleur n'est jamais touché par le fichier
+ *   sécurité, et inversement) ;
+ * - ce métier + un autre → on retire seulement ce métier, il reste ACTIF ;
+ * - ce métier seulement → désactivation (fin d'emploi, uniformes).
+ */
+export function planMissingEmployee(
+  current: EmployeeDivision[],
+  division: EmployeeDivision
+): MissingEmployeePlan {
+  if (!current.includes(division)) return { action: 'ignore' };
+  const remaining = current.filter((d) => d !== division);
+  return remaining.length > 0 ? { action: 'removeDivision', remaining } : { action: 'deactivate' };
+}
+
+/** Ordre stable (sécurité d'abord) pour comparer et afficher. */
+export function sortDivisions(list: EmployeeDivision[]): EmployeeDivision[] {
+  const order: EmployeeDivision[] = ['SECURITE', 'SIGNALISATION'];
+  return order.filter((d) => list.includes(d));
 }

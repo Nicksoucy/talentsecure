@@ -54,6 +54,7 @@ import QuickOverview from '@/components/candidates/QuickOverview';
 import CandidateBadges from '@/components/candidates/CandidateBadges';
 import QuestionnaireCard from '@/components/candidates/QuestionnaireCard';
 import CandidateTabs, { CustomTabPanel } from './components/CandidateTabs';
+import { DivisionSelect, divisionsFromChoice, type DivisionChoice } from '@/components/EmployeeDivision';
 
 const STATUS_COLORS: Record<string, 'success' | 'info' | 'warning' | 'error' | 'default'> = {
   ELITE: 'error',
@@ -85,7 +86,9 @@ const CandidateDetailPage = () => {
   const [initialFormData, setInitialFormData] = useState<InterviewFormData | null>(null);
   const [tabValue, setTabValue] = useState(0);
   const [promoteDialog, setPromoteDialog] = useState(false);
-  const [promoteForm, setPromoteForm] = useState({ hireDate: '', position: '', assignment: '', employeeNumber: '' });
+  const [promoteForm, setPromoteForm] = useState({
+    hireDate: '', position: '', assignment: '', employeeNumber: '', division: 'SECURITE' as DivisionChoice,
+  });
 
   // Édition rapide des coordonnées (corriger ville/adresse d'après le CV) —
   // distincte du gros formulaire d'évaluation (« Modifier »).
@@ -195,6 +198,7 @@ const CandidateDetailPage = () => {
       position: promoteForm.position || undefined,
       assignment: promoteForm.assignment || undefined,
       employeeNumber: promoteForm.employeeNumber || undefined,
+      divisions: divisionsFromChoice(promoteForm.division),
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['candidates'] });
@@ -474,6 +478,11 @@ const CandidateDetailPage = () => {
             fullWidth label="Date d'embauche" type="date" InputLabelProps={{ shrink: true }}
             value={promoteForm.hireDate}
             onChange={(e) => setPromoteForm({ ...promoteForm, hireDate: e.target.value })}
+            sx={{ mb: 2 }}
+          />
+          <DivisionSelect
+            fullWidth value={promoteForm.division}
+            onChange={(choice) => setPromoteForm({ ...promoteForm, division: choice })}
             sx={{ mb: 2 }}
           />
           <TextField

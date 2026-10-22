@@ -8,6 +8,13 @@ import { z } from 'zod';
  */
 const opt = (max: number) => z.string().max(max).optional().nullable();
 
+/** Métier(s) : agent de sécurité et/ou signaleur — jamais vide. */
+const divisions = z
+  .array(z.enum(['SECURITE', 'SIGNALISATION']))
+  .min(1, 'Choisir au moins un métier (agent de sécurité ou signaleur)')
+  .max(2)
+  .optional();
+
 export const createEmployeeSchema = z
   .object({
     firstName: z.string().max(100),
@@ -20,6 +27,7 @@ export const createEmployeeSchema = z
     postalCode: opt(20),
     bspNumber: opt(50),
     notes: opt(5000),
+    divisions,
   })
   .passthrough();
 
@@ -35,6 +43,7 @@ export const updateEmployeeSchema = z
     postalCode: opt(20),
     bspNumber: opt(50),
     notes: opt(5000),
+    divisions,
   })
   .passthrough();
 

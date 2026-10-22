@@ -21,6 +21,7 @@ import type { UniformDivision, UniformItem, UniformSourceMode, UniformStockLocat
 import BarcodeScannerInput from './components/BarcodeScannerInput';
 import SignaturePad from './components/SignaturePad';
 import StockQuickFixDialog, { type StockQuickFixTab, type StockQuickFixTarget } from './components/StockQuickFixDialog';
+import { choiceFromDivisions, isFlaggerOnly } from '@/components/EmployeeDivision';
 
 const money = (n: any) => `$ ${Number(n).toFixed(2)}`;
 /** Normalise pour la recherche : minuscules + sans accents. */
@@ -71,6 +72,12 @@ export default function UniformIssuanceWizardPage() {
   const [employee, setEmployee] = useState<any>(null);
   const [empSearch, setEmpSearch] = useState('');
   const [division, setDivision] = useState<UniformDivision>('SECURITE');
+  // Division par défaut = métier de l'agent choisi : un signaleur ouvre
+  // directement le catalogue Signalisation. Les deux métiers → on ne touche pas.
+  const applyEmployeeDivision = (emp: any) => {
+    const choice = choiceFromDivisions(emp?.divisions);
+    if (emp && choice !== 'LES_DEUX') setDivision(choice);
+  };
   // Source par défaut des lignes : AUTO (front d'abord, puis back) ou un
   // emplacement forcé. Chaque ligne peut l'écraser via rowState[id].source.
   const [defaultMode, setDefaultMode] = useState<UniformSourceMode>('AUTO');
@@ -111,7 +118,15 @@ export default function UniformIssuanceWizardPage() {
   useEffect(() => {
     if (isEdit) return; // en édition, l'agent vient du brouillon
     const id = searchParams.get('employeeId');
-    if (id) employeeService.getEmployeeById(id).then((r) => setEmployee(r.data)).catch(() => {});
+    if (id) {
+      employeeService
+        .getEmployeeById(id)
+        .then((r) => {
+          setEmployee(r.data);
+          applyEmployeeDivision(r.data);
+        })
+        .catch(() => {});
+    }
   }, [searchParams, isEdit]);
 
   // Hydratation de l'entête depuis le brouillon (une seule fois).
@@ -576,9 +591,9 @@ export default function UniformIssuanceWizardPage() {
           <Autocomplete
             sx={{ flex: 1, minWidth: { xs: 0, md: 260 }, width: { xs: '100%', md: 'auto' } }}
             options={employees.data?.data || []}
-            getOptionLabel={(o: any) => `${o.firstName} ${o.lastName}${o.assignment ? ' — ' + o.assignment : ''}`}
+            getOptionLabel={(o: any) => `${o.firstName} ${o.lastName}${isFlaggerOnly(o.divisions) ? ' (signaleur)' : ''}${o.assignment ? ' — ' + o.assignment : ''}`}
             value={employee}
-            onChange={(_, v) => setEmployee(v)}
+            onChange={(_, v) => { setEmployee(v); applyEmployeeDivision(v); }}
             onInputChange={(_, v) => setEmpSearch(v)}
             renderInput={(params) => <TextField {...params} label="Agent" size="small" />}
             isOptionEqualToValue={(o: any, v: any) => o.id === v?.id}

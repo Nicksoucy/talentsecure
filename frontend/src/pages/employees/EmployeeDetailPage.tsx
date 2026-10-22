@@ -18,6 +18,12 @@ import UniformFichePanel from '../uniformes/components/UniformFichePanel';
 import FileClosureDialog from './FileClosureDialog';
 import FileClosureCard from './FileClosureCard';
 import EmployeeHistoryCard from './EmployeeHistoryCard';
+import {
+  DivisionChips,
+  DivisionSelect,
+  choiceFromDivisions,
+  divisionsFromChoice,
+} from '@/components/EmployeeDivision';
 
 function Info({ label, value }: { label: string; value?: any }) {
   return (
@@ -57,7 +63,8 @@ export default function EmployeeDetailPage() {
 
   const saveMut = useMutation({
     mutationFn: () => {
-      const payload: any = { ...form };
+      const { division, ...rest } = form;
+      const payload: any = { ...rest, divisions: divisionsFromChoice(division) };
       // Champs optionnels vides → null (évite de stocker des chaînes vides).
       ['employeeNumber', 'email', 'address', 'city', 'postalCode', 'position', 'assignment', 'bspNumber'].forEach((k) => {
         if (payload[k] === '') payload[k] = null;
@@ -116,6 +123,7 @@ export default function EmployeeDetailPage() {
       email: e.email || '', phone: e.phone || '',
       address: e.address || '', city: e.city || '', province: e.province || 'QC', postalCode: e.postalCode || '',
       position: e.position || '', assignment: e.assignment || '',
+      division: choiceFromDivisions(e.divisions),
       hireDate: e.hireDate ? String(e.hireDate).slice(0, 10) : '',
       hasBSP: !!e.hasBSP, bspNumber: e.bspNumber || '', hasVehicle: !!e.hasVehicle,
     });
@@ -132,7 +140,10 @@ export default function EmployeeDetailPage() {
       {/* En-tête profil */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2} flexWrap="wrap" gap={1}>
-          <Typography variant="h5" fontWeight="bold">{e.firstName} {e.lastName}</Typography>
+          <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Typography variant="h5" fontWeight="bold">{e.firstName} {e.lastName}</Typography>
+            <DivisionChips divisions={e.divisions} size="medium" />
+          </Stack>
           <Stack direction="row" spacing={1} alignItems="center">
             <Chip
               label={e.status === 'ACTIF' ? 'Actif' : 'Inactif'}
@@ -210,6 +221,9 @@ export default function EmployeeDetailPage() {
             <Grid item xs={12} sm={5}><TextField label="Ville" fullWidth size="small" value={form.city || ''} onChange={(ev) => set('city', ev.target.value)} /></Grid>
             <Grid item xs={6} sm={3}><TextField label="Province" fullWidth size="small" value={form.province || ''} onChange={(ev) => set('province', ev.target.value)} /></Grid>
             <Grid item xs={6} sm={4}><TextField label="Code postal" fullWidth size="small" value={form.postalCode || ''} onChange={(ev) => set('postalCode', ev.target.value)} /></Grid>
+            <Grid item xs={12}>
+              <DivisionSelect fullWidth size="small" value={form.division || 'SECURITE'} onChange={(c) => set('division', c)} />
+            </Grid>
             <Grid item xs={12} sm={6}><TextField label="Poste" fullWidth size="small" value={form.position || ''} onChange={(ev) => set('position', ev.target.value)} /></Grid>
             <Grid item xs={12} sm={6}><TextField label="Mandat / site" fullWidth size="small" value={form.assignment || ''} onChange={(ev) => set('assignment', ev.target.value)} /></Grid>
             <Grid item xs={12} sm={6}><TextField label="Date d'embauche" type="date" fullWidth size="small" InputLabelProps={{ shrink: true }} value={form.hireDate || ''} onChange={(ev) => set('hireDate', ev.target.value)} /></Grid>

@@ -1,5 +1,6 @@
 import React from 'react';
 import GeoPointsMap from './GeoPointsMap';
+import type { EmployeeDivision } from '@/types';
 
 /**
  * Carte des agents (employés) ACTIFS : pins verts à l'adresse exacte (libellé =
@@ -8,6 +9,8 @@ import GeoPointsMap from './GeoPointsMap';
  * générique partagé.
  */
 interface EmployeesMapProps {
+  /** Métier affiché (agents de sécurité ou signaleurs) ; absent = tous. */
+  division?: EmployeeDivision;
   onNearbySelect?: (
     center: { lat: number; lng: number },
     radiusKm: number,
@@ -15,16 +18,20 @@ interface EmployeesMapProps {
   ) => void;
 }
 
-const EmployeesMap: React.FC<EmployeesMapProps> = ({ onNearbySelect }) => (
-  <GeoPointsMap
-    pointsUrl="/api/employees/stats/map-points"
-    listUrl="/api/employees"
-    unitSingular="agent"
-    unitPlural="agents"
-    sitesUrl="/api/mandates/stats/map-points"
-    contracts
-    onNearbySelect={onNearbySelect}
-  />
-);
+const EmployeesMap: React.FC<EmployeesMapProps> = ({ division, onNearbySelect }) => {
+  const q = division ? `?division=${division}` : '';
+  const flaggers = division === 'SIGNALISATION';
+  return (
+    <GeoPointsMap
+      pointsUrl={`/api/employees/stats/map-points${q}`}
+      listUrl={`/api/employees${q}`}
+      unitSingular={flaggers ? 'signaleur' : 'agent'}
+      unitPlural={flaggers ? 'signaleurs' : 'agents'}
+      sitesUrl="/api/mandates/stats/map-points"
+      contracts
+      onNearbySelect={onNearbySelect}
+    />
+  );
+};
 
 export default EmployeesMap;

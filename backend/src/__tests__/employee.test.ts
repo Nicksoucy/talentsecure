@@ -417,4 +417,126 @@ describe('Employees — /api/employees', () => {
       expect(res.body.pagination.total).toBe(0);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Métier : agents de sécurité / signaleurs (une personne peut faire les deux)
+  // -------------------------------------------------------------------------
+  describe('Métier — agents de sécurité et signaleurs', () => {
+    let signaleurId: string;
+    beforeAll(async () => {
+      const sig = await prisma.employee.create({
+        data: { firstName: 'Sig', lastName: 'Naleur', phone: '4505550101', status: 'ACTIF', divisions: ['SIGNALISATION'], lat: 45.3, lng: -73.3, geocodeSource: 'address' },
+      });
+      signaleurId = sig.id;
+      await prisma.employee.create({
+        data: { firstName: 'Les', lastName: 'Deux', phone: '4505550102', status: 'ACTIF', divisions: ['SECURITE', 'SIGNALISATION'] },
+      });
+      await prisma.employee.create({
+        data: { firstName: 'Sig', lastName: 'Inactif', phone: '4505550103', status: 'INACTIF', divisions: ['SIGNALISATION'] },
+      });
+    });
+
+    it('un employé sans métier précisé est agent de sécurité (défaut de la base)', async () => {
+      const emp = await prisma.employee.create({ data: { firstName: 'Def', lastName: 'Aut', phone: '4505550104' } });
+      expect(emp.divisions).toEqual(['SECURITE']);
+    });
+
+    it('GET ?division=SIGNALISATION → signaleurs seulement (y compris ceux qui font les deux)', async () => {
+      const res = await request(app)
+        .get('/api/employees?division=SIGNALISATION&limit=100')
+        .set('Authorization', `Bearer ${salesToken}`);
+      expect(res.status).toBe(200);
+      const names = res.body.data.map((e: any) => `${e.firstName} ${e.lastName}`).sort();
+      expect(names).toEqual(['Les Deux', 'Sig Inactif', 'Sig Naleur']);
+      expect(res.body.data.every((e: any) => e.divisions.includes('SIGNALISATION'))).toBe(true);
+    });
+
+    it('GET ?division=SECURITE → exclut les signaleurs seulement ; valeur inconnue → aucun filtre', async () => {
+      const sec = await request(app)
+        .get('/api/employees?division=SECURITE&limit=100')
+        .set('Authorization', `Bearer ${adminToken}`);
+      const secNames = sec.body.data.map((e: any) => `${e.firstName} ${e.lastName}`);
+      expect(secNames).toContain('Les Deux');
+      expect(secNames).not.toContain('Sig Naleur');
+
+      const all = await request(app)
+        .get('/api/employees?division=PILOTE&limit=100')
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(all.status).toBe(200);
+      expect(all.body.pagination.total).toBeGreaterThan(sec.body.pagination.total);
+    });
+
+    it('stats : agents et signaleurs ACTIFS comptés séparément', async () => {
+      const res = await request(app)
+        .get('/api/employees/stats/summary')
+        .set('Authorization', `Bearer ${adminToken}`);
+      const expected = await prisma.employee.count({
+        where: { isDeleted: false, status: 'ACTIF', divisions: { has: 'SIGNALISATION' } },
+      });
+      expect(expected).toBe(2); // Sig Naleur + Les Deux (l'inactif ne compte pas)
+      expect(res.body.data.signaleursActifs).toBe(expected);
+      expect(res.body.data.agentsActifs).toBe(
+        await prisma.employee.count({ where: { isDeleted: false, status: 'ACTIF', divisions: { has: 'SECURITE' } } })
+      );
+    });
+
+    it('carte : ?division=SIGNALISATION ne place que les signaleurs actifs', async () => {
+      const res = await request(app)
+        .get('/api/employees/stats/map-points?division=SIGNALISATION')
+        .set('Authorization', `Bearer ${salesToken}`);
+      expect(res.status).toBe(200);
+      const points = res.body.data.points as Array<{ lat: number; label: string }>;
+      expect(points).toHaveLength(1);
+      expect(points[0]).toEqual(expect.objectContaining({ lat: 45.3, label: 'Sig Naleur' }));
+    });
+
+    it('POST : crée un signaleur ; liste vide refusée (400)', async () => {
+      const ok = await request(app)
+        .post('/api/employees')
+        .set('Authorization', `Bearer ${rhToken}`)
+        .send({ firstName: 'Nou', lastName: 'Veau', phone: '4505550105', divisions: ['SIGNALISATION'] });
+      expect(ok.status).toBe(201);
+      expect(ok.body.data.divisions).toEqual(['SIGNALISATION']);
+
+      const empty = await request(app)
+        .post('/api/employees')
+        .set('Authorization', `Bearer ${rhToken}`)
+        .send({ firstName: 'Sans', lastName: 'Metier', phone: '4505550106', divisions: [] });
+      expect(empty.status).toBe(400);
+    });
+
+    it('PUT : changer le métier est inscrit au registre ; le reste de la fiche ne le touche pas', async () => {
+      await request(app)
+        .put(`/api/employees/${signaleurId}`)
+        .set('Authorization', `Bearer ${rhToken}`)
+        .send({ city: 'Longueuil' });
+      expect((await prisma.employee.findUnique({ where: { id: signaleurId } }))?.divisions).toEqual(['SIGNALISATION']);
+
+      const res = await request(app)
+        .put(`/api/employees/${signaleurId}`)
+        .set('Authorization', `Bearer ${rhToken}`)
+        .send({ divisions: ['SIGNALISATION', 'SECURITE'] });
+      expect(res.status).toBe(200);
+      expect(res.body.data.divisions).toEqual(['SECURITE', 'SIGNALISATION']);
+
+      const hist = await request(app)
+        .get(`/api/employees/${signaleurId}/history`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(hist.body.data.map((h: any) => h.details)).toEqual([
+        'Métier modifié : Signaleur → Agent de sécurité + Signaleur (fiche employé)',
+      ]);
+    });
+
+    it('promotion d’un candidat directement comme signaleur', async () => {
+      const cand = await prisma.candidate.create({
+        data: { firstName: 'Cand', lastName: 'Signal', phone: '4505550107', city: 'Laval', createdById: adminId },
+      });
+      const res = await request(app)
+        .post(`/api/employees/promote/${cand.id}`)
+        .set('Authorization', `Bearer ${rhToken}`)
+        .send({ divisions: ['SIGNALISATION'] });
+      expect(res.status).toBe(201);
+      expect(res.body.data.divisions).toEqual(['SIGNALISATION']);
+    });
+  });
 });
