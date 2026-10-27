@@ -27,6 +27,7 @@
     "backfill:experience-months": "ts-node src/scripts/backfillExperienceMonths.ts",
     "backfill:availability": "ts-node src/scripts/backfillCandidateAvailability.ts",
     "inspect:ghl-fields": "ts-node src/scripts/inspect-ghl-survey-fields.ts",
+    "replay:ghl-cvs": "ts-node src/scripts/replay-refused-ghl-cvs.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "NODE_OPTIONS=--max-old-space-size=6144 jest --coverage",
