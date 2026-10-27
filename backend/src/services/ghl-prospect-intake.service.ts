@@ -289,9 +289,10 @@ export async function ingestGhlProspect(input: GhlProspectInput): Promise<GhlInt
           where: { id: prospect.id },
           data: { videoStoragePath: key, videoUploadedAt: new Date() },
         });
-        console.log('🎥 Vidéo de présentation stockée dans R2:', key);
+        // S12 — l'id seulement : la clé R2 et le nom viennent de la saisie du candidat.
+        console.log('🎥 Vidéo de présentation stockée dans R2:', { id: prospect.id });
       } else {
-        console.warn('⚠️ Fichier vidéo invalide (ignoré) pour', `${firstName} ${lastName}`);
+        console.warn('⚠️ Fichier vidéo invalide (ignoré):', { id: prospect.id });
       }
     } catch (e: any) {
       console.error('⚠️ Échec téléchargement vidéo (prospect créé quand même):', e.message);
