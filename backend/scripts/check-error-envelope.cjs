@@ -19,7 +19,10 @@ const DIR = path.join(__dirname, '..', 'src', 'controllers');
 // `throw new ApiError(...)` (handler global + alias `error` rétro-compatible).
 // Reste 52 : handlers sans next(error) (cv-proxy stream, webhooks res.status(500)
 // en catch), réponses multi-clés (409/403 avec hint), et 5xx.
-const BASELINE = 52;
+// 52 → 50 : PAS une migration — le 400 et le 409 du webhook prospect GHL ont
+// suivi la logique dans services/ghl-prospect-intake.service.ts (même corps
+// `{ error }`, contrat du webhook inchangé), hors du périmètre compté ici.
+const BASELINE = 50;
 
 const re = /\.json\(\s*\{\s*error\b/g;
 
