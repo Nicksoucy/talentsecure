@@ -3,12 +3,16 @@ import {
   getVideoSession,
   initiateVideoUpload,
   completeVideoUpload,
+  initiateOpenVideoUpload,
+  completeOpenVideoUpload,
 } from '../controllers/public-video.controller';
 import { validate } from '../middleware/validation.middleware';
 import { videoUploadLimiter } from '../middleware/rate-limit.middleware';
 import {
   completeUploadSchema,
   initiateUploadSchema,
+  openCompleteUploadSchema,
+  openInitiateUploadSchema,
   videoSessionQuerySchema,
 } from '../validation/public-video.validation';
 
@@ -47,5 +51,19 @@ router.post('/initiate', validate({ body: initiateUploadSchema }), initiateVideo
  * @access  Public — lien opaque + rate limit
  */
 router.post('/complete', validate({ body: completeUploadSchema }), completeVideoUpload);
+
+/**
+ * @route   POST /api/public/video/open/initiate
+ * @desc    Lien général (/video) : URL présignée, identité donnée par le candidat
+ * @access  Public — rate limit
+ */
+router.post('/open/initiate', validate({ body: openInitiateUploadSchema }), initiateOpenVideoUpload);
+
+/**
+ * @route   POST /api/public/video/open/complete
+ * @desc    Lien général : vérifie la vidéo, la rattache ou crée la fiche prospect
+ * @access  Public — rate limit
+ */
+router.post('/open/complete', validate({ body: openCompleteUploadSchema }), completeOpenVideoUpload);
 
 export default router;

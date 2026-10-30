@@ -33,12 +33,14 @@ import {
 } from '../services/r2.service';
 import { isLikelyVideo } from '../utils/ghlFetch';
 import { ApiError } from '../utils/apiError';
-import { recordUpload } from '../services/pending-video.service';
-import { findMatchingProspect } from '../utils/candidateMatch';
+import { claimForProspect, recordUpload } from '../services/pending-video.service';
+import { findContactEverywhere, findMatchingProspect } from '../utils/candidateMatch';
+import { lastTenDigits } from '../utils/phone';
 import {
   MAX_VIDEO_BYTES,
   isUsableContactId,
   normalizeMimeType,
+  OpenContact,
 } from '../validation/public-video.validation';
 import logger from '../config/logger';
 
@@ -200,13 +202,7 @@ export const getVideoSession = async (req: Request, res: Response, next: NextFun
  */
 export const initiateVideoUpload = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!useR2) {
-      throw new ApiError(
-        503,
-        "Le stockage vidéo n'est pas configuré sur ce serveur.",
-        'STOCKAGE_INDISPONIBLE'
-      );
-    }
+    assertStorageConfigured();
 
     const { c: contactId, contentType, sizeBytes } = req.body as {
       c: string;
@@ -243,6 +239,48 @@ export const initiateVideoUpload = async (req: Request, res: Response, next: Nex
 };
 
 /**
+ * Vérifie l'objet déposé dans R2 : il existe, sa taille est plausible, et ses
+ * premiers octets sont bien ceux d'une vidéo. Supprime ce qui ne passe pas.
+ */
+async function verifyUploadedVideo(key: string) {
+  const head = await headObjectInR2(key);
+  if (!head) {
+    throw new ApiError(
+      400,
+      "Le téléversement ne s'est pas terminé. Réessayez.",
+      'TELEVERSEMENT_INTROUVABLE'
+    );
+  }
+  if (head.contentLength <= 100 || head.contentLength > MAX_VIDEO_BYTES) {
+    await deleteFileFromR2(key).catch(() => undefined);
+    throw new ApiError(400, 'Le fichier reçu est vide ou trop volumineux.', 'FICHIER_INVALIDE');
+  }
+
+  // Magic bytes : un `Content-Type` déclaré ne prouve rien. On lit seulement
+  // les premiers Ko — jamais les 500 Mo dans la mémoire de Cloud Run.
+  const prefix = await readObjectPrefix(key, 4096);
+  if (!prefix || !isLikelyVideo(prefix)) {
+    await deleteFileFromR2(key).catch(() => undefined);
+    throw new ApiError(
+      400,
+      "Ce fichier n'est pas une vidéo valide. Essayez avec un MP4 ou un MOV.",
+      'FICHIER_NON_VIDEO'
+    );
+  }
+  return head;
+}
+
+function assertStorageConfigured() {
+  if (!useR2) {
+    throw new ApiError(
+      503,
+      "Le stockage vidéo n'est pas configuré sur ce serveur.",
+      'STOCKAGE_INDISPONIBLE'
+    );
+  }
+}
+
+/**
  * POST /api/public/video/complete
  *
  * Confirme le téléversement : vérifie que l'objet existe vraiment, que c'est
@@ -261,30 +299,7 @@ export const completeVideoUpload = async (req: Request, res: Response, next: Nex
     // n'importe qui pourrait s'attribuer un objet arbitraire du bucket.
     if (!key.startsWith(`videos/inbox/${contactId}/`)) throw invalidLinkError();
 
-    const head = await headObjectInR2(key);
-    if (!head) {
-      throw new ApiError(
-        400,
-        "Le téléversement ne s'est pas terminé. Réessayez.",
-        'TELEVERSEMENT_INTROUVABLE'
-      );
-    }
-    if (head.contentLength <= 100 || head.contentLength > MAX_VIDEO_BYTES) {
-      await deleteFileFromR2(key).catch(() => undefined);
-      throw new ApiError(400, 'Le fichier reçu est vide ou trop volumineux.', 'FICHIER_INVALIDE');
-    }
-
-    // Magic bytes : un `Content-Type` déclaré ne prouve rien. On lit seulement
-    // les premiers Ko — jamais les 500 Mo dans la mémoire de Cloud Run.
-    const prefix = await readObjectPrefix(key, 4096);
-    if (!prefix || !isLikelyVideo(prefix)) {
-      await deleteFileFromR2(key).catch(() => undefined);
-      throw new ApiError(
-        400,
-        "Ce fichier n'est pas une vidéo valide. Essayez avec un MP4 ou un MOV.",
-        'FICHIER_NON_VIDEO'
-      );
-    }
+    const head = await verifyUploadedVideo(key);
 
     const result = await recordUpload({
       ghlContactId: contactId,
@@ -311,6 +326,131 @@ export const completeVideoUpload = async (req: Request, res: Response, next: Nex
       // candidat, la nuance n'est là que pour le debug.
       attached: result.claimed,
     });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+// ── Lien général (/video) ───────────────────────────────────────────────────
+//
+// Même téléversement, mais sans contact GHL : le lien ne porte aucun
+// identifiant, on peut donc le texter, l'envoyer par courriel ou le publier
+// tel quel. Le candidat donne lui-même son nom et son téléphone.
+//
+// Ce qui protège ces routes : le rate limit par IP, l'URL présignée qui fige
+// type et taille, et la vérification des magic bytes. Une fiche prospect n'est
+// créée qu'APRÈS qu'une vraie vidéo a été reçue.
+
+/** Numéro stocké comme le fait GHL (E.164), pour rester comparable. */
+function e164(phone: string): string {
+  return `+1${lastTenDigits(phone)}`;
+}
+
+/**
+ * Identifiant du dépôt, dérivé du téléphone : le même candidat qui refait sa
+ * vidéo remplace la précédente au lieu d'empiler des orphelins. Haché pour que
+ * le numéro n'apparaisse ni dans la clé R2 ni dans la colonne `ghlContactId`.
+ * Le préfixe `web_` le distingue d'un vrai contact GHL.
+ */
+function openUploadId(phone: string): string {
+  const hash = crypto.createHash('sha256').update(lastTenDigits(phone)).digest('hex');
+  return `web_${hash.slice(0, 32)}`;
+}
+
+/**
+ * POST /api/public/video/open/initiate
+ *
+ * Comme /initiate, mais l'identité vient du formulaire au lieu de GHL.
+ */
+export const initiateOpenVideoUpload = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    assertStorageConfigured();
+
+    const { phone, contentType, sizeBytes } = req.body as OpenContact & {
+      contentType: string;
+      sizeBytes: number;
+    };
+
+    const ext = EXT_BY_MIME[contentType] || '.bin';
+    const key = `videos/inbox/${openUploadId(phone)}/${crypto.randomUUID()}${ext}`;
+
+    const uploadUrl = await getConstrainedUploadUrl({
+      key,
+      contentType,
+      exactBytes: sizeBytes,
+      expiresIn: UPLOAD_URL_TTL_SECONDS,
+    });
+
+    return res.json({ uploadUrl, key, contentType, expiresIn: UPLOAD_URL_TTL_SECONDS });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * POST /api/public/video/open/complete
+ *
+ * Vérifie la vidéo puis la range :
+ *   1. une fiche prospect correspond (téléphone ou courriel) → la vidéo y va ;
+ *   2. personne nulle part → on crée la fiche prospect avec la vidéo ;
+ *   3. la personne est déjà Candidat ou Employé → on ne crée rien (elle ne
+ *      doit vivre qu'à une place) ; la vidéo reste dans la liste des vidéos
+ *      non rattachées, avec son téléphone et son courriel.
+ */
+export const completeOpenVideoUpload = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { firstName, lastName, phone, email, key, filename } = req.body as OpenContact & {
+      key: string;
+      filename?: string;
+    };
+    const uploadId = openUploadId(phone);
+
+    // Même garde que /complete : seule une clé émise pour CE téléphone passe.
+    if (!key.startsWith(`videos/inbox/${uploadId}/`)) throw invalidLinkError();
+
+    const head = await verifyUploadedVideo(key);
+    const storedPhone = e164(phone);
+
+    let result = await recordUpload({
+      ghlContactId: uploadId,
+      email: email || null,
+      phone: storedPhone,
+      storagePath: key,
+      originalName: filename || null,
+      contentType: head.contentType ? normalizeMimeType(head.contentType) : null,
+      sizeBytes: head.contentLength,
+    });
+
+    if (!result.claimed) {
+      const existing = await findContactEverywhere(prisma, email, storedPhone);
+      if (existing) {
+        logger.info('Vidéo du lien général : déjà Candidat/Employé, laissée dans les non rattachées', {
+          section: existing.section,
+          id: existing.id,
+        });
+      } else {
+        const prospect = await prisma.prospectCandidate.create({
+          data: {
+            firstName,
+            lastName,
+            email: email || null,
+            phone: storedPhone,
+            source: 'lien-video',
+            submissionDate: new Date(),
+            notes: 'Ajouté par le lien vidéo général (/video)',
+          },
+        });
+        const claimedId = await claimForProspect({
+          id: prospect.id,
+          email: email || null,
+          phone: storedPhone,
+          videoStoragePath: null,
+        });
+        result = { claimed: Boolean(claimedId), prospectId: prospect.id };
+      }
+    }
+
+    return res.status(201).json({ success: true, attached: result.claimed });
   } catch (error) {
     return next(error);
   }

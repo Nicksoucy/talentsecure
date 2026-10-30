@@ -13,6 +13,10 @@ import { prisma, cleanDatabase } from './setup';
  *   POST /api/public/video/initiate  → initiateVideoUpload
  *   POST /api/public/video/complete  → completeVideoUpload
  *
+ * Lien général (/video), sans contact GHL — le candidat donne son identité :
+ *   POST /api/public/video/open/initiate  → initiateOpenVideoUpload
+ *   POST /api/public/video/open/complete  → completeOpenVideoUpload
+ *
  * Couvre :
  *  - validation du lien : contact inconnu, autre location, contact trop ancien ;
  *  - garde-fous de l'URL présignée : type non-vidéo, taille hors plafond ;
@@ -339,6 +343,136 @@ describe('Téléversement vidéo public — /api/public/video', () => {
       const rows = await prisma.pendingVideoUpload.findMany({ where: { ghlContactId: CONTACT_ID } });
       expect(rows).toHaveLength(1);
       expect(rows[0].storagePath).toBe(key2);
+    });
+  });
+
+  describe('Lien général — /open/initiate et /open/complete', () => {
+    const OPEN_INITIATE_URL = '/api/public/video/open/initiate';
+    const OPEN_COMPLETE_URL = '/api/public/video/open/complete';
+    const who = {
+      firstName: 'Karim',
+      lastName: 'Benali',
+      phone: '(418) 555-0199',
+      email: 'karim@example.com',
+    };
+
+    /** Clé que le serveur émet pour ce téléphone (on la lit dans /initiate). */
+    async function issuedKey(body: Record<string, any> = who): Promise<string> {
+      const res = await request(app)
+        .post(OPEN_INITIATE_URL)
+        .send({ ...body, filename: 'moi.mp4', contentType: 'video/mp4', sizeBytes: 5_000_000 });
+      expect(res.status).toBe(200);
+      return res.body.key;
+    }
+
+    beforeEach(() => {
+      r2.headObjectInR2.mockResolvedValue({ contentLength: 5_000_000, contentType: 'video/mp4' });
+      r2.readObjectPrefix.mockResolvedValue(MP4_PREFIX);
+    });
+
+    it("n'appelle jamais GHL : aucun contact n'est requis", async () => {
+      const key = await issuedKey();
+      await request(app).post(OPEN_COMPLETE_URL).send({ ...who, key });
+      expect(ghlClient.getContactById).not.toHaveBeenCalled();
+      expect(ghlClient.setContactCustomField).not.toHaveBeenCalled();
+    });
+
+    it('téléphone invalide → 400, aucune URL émise', async () => {
+      const res = await request(app)
+        .post(OPEN_INITIATE_URL)
+        .send({ ...who, phone: '555-01', filename: 'a.mp4', contentType: 'video/mp4', sizeBytes: 1000 });
+      expect(res.status).toBe(400);
+      expect(r2.getConstrainedUploadUrl).not.toHaveBeenCalled();
+    });
+
+    it('nom manquant → 400', async () => {
+      const res = await request(app)
+        .post(OPEN_INITIATE_URL)
+        .send({ ...who, lastName: '  ', filename: 'a.mp4', contentType: 'video/mp4', sizeBytes: 1000 });
+      expect(res.status).toBe(400);
+    });
+
+    it('courriel facultatif : une chaîne vide est acceptée', async () => {
+      const key = await issuedKey({ ...who, email: '' });
+      expect(key).toMatch(/^videos\/inbox\/web_[0-9a-f]{32}\/[0-9a-f-]+\.mp4$/);
+    });
+
+    it('la clé ne contient pas le numéro de téléphone', async () => {
+      const key = await issuedKey();
+      expect(key).not.toContain('4185550199');
+    });
+
+    it("clé émise pour un AUTRE téléphone → 404 (pas d'appropriation d'objet)", async () => {
+      const key = await issuedKey({ ...who, phone: '514-555-0000' });
+      const res = await request(app).post(OPEN_COMPLETE_URL).send({ ...who, key });
+      expect(res.status).toBe(404);
+    });
+
+    it('magic bytes non-vidéo → 400, suppression, et AUCUNE fiche créée', async () => {
+      r2.readObjectPrefix.mockResolvedValue(Buffer.from('%PDF-1.7 pas une video du tout'));
+      const key = await issuedKey();
+      const res = await request(app).post(OPEN_COMPLETE_URL).send({ ...who, key });
+      expect(res.status).toBe(400);
+      expect(r2.deleteFileFromR2).toHaveBeenCalledWith(key);
+      expect(await prisma.prospectCandidate.count()).toBe(0);
+    });
+
+    it('prospect existant (même téléphone, autre format) → la vidéo va sur sa fiche', async () => {
+      const prospect = await prisma.prospectCandidate.create({
+        data: { firstName: 'Karim', lastName: 'Benali', phone: '+14185550199' },
+      });
+      const key = await issuedKey();
+
+      const res = await request(app).post(OPEN_COMPLETE_URL).send({ ...who, key });
+      expect(res.status).toBe(201);
+      expect(res.body.attached).toBe(true);
+
+      const updated = await prisma.prospectCandidate.findUnique({ where: { id: prospect.id } });
+      expect(updated?.videoStoragePath).toBe(key);
+      expect(await prisma.prospectCandidate.count()).toBe(1);
+    });
+
+    it('personne inconnue → fiche prospect créée avec la vidéo', async () => {
+      const key = await issuedKey();
+      const res = await request(app).post(OPEN_COMPLETE_URL).send({ ...who, key });
+      expect(res.status).toBe(201);
+      expect(res.body.attached).toBe(true);
+
+      const created = await prisma.prospectCandidate.findFirst();
+      expect(created).toMatchObject({
+        firstName: 'Karim',
+        lastName: 'Benali',
+        email: 'karim@example.com',
+        phone: '+14185550199',
+        source: 'lien-video',
+        videoStoragePath: key,
+      });
+    });
+
+    it('déjà Candidat → aucune fiche prospect, la vidéo reste dans les non rattachées', async () => {
+      const admin = await prisma.user.create({
+        data: { email: 'admin.open@test.com', password: 'x', firstName: 'A', lastName: 'B', role: 'ADMIN' },
+      });
+      await prisma.candidate.create({
+        data: { firstName: 'Karim', lastName: 'Benali', phone: '418-555-0199', city: 'Québec', createdById: admin.id },
+      });
+      const key = await issuedKey();
+
+      const res = await request(app).post(OPEN_COMPLETE_URL).send({ ...who, key });
+      expect(res.status).toBe(201);
+      expect(res.body.attached).toBe(false);
+      expect(await prisma.prospectCandidate.count()).toBe(0);
+
+      const pending = await prisma.pendingVideoUpload.findFirst();
+      expect(pending).toMatchObject({ storagePath: key, phone: '+14185550199', claimedAt: null });
+    });
+
+    it('un second envoi du même téléphone ne crée pas de deuxième fiche', async () => {
+      await request(app).post(OPEN_COMPLETE_URL).send({ ...who, key: await issuedKey() });
+      await request(app).post(OPEN_COMPLETE_URL).send({ ...who, key: await issuedKey() });
+
+      expect(await prisma.prospectCandidate.count()).toBe(1);
+      expect(await prisma.pendingVideoUpload.count()).toBe(1);
     });
   });
 });
