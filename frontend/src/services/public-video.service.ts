@@ -20,6 +20,14 @@ interface InitiateResponse {
   expiresIn: number;
 }
 
+/** Identité donnée par le candidat sur le lien général (/video). */
+export interface OpenVideoContact {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email?: string;
+}
+
 export const publicVideoService = {
   async getSession(contactId: string): Promise<VideoSession> {
     const r = await publicApi.get('/api/public/video/session', { params: { c: contactId } });
@@ -52,6 +60,30 @@ export const publicVideoService = {
     await uploadFileToSignedUrl(uploadUrl, file, contentType, onProgress);
 
     const done = await publicApi.post('/api/public/video/complete', { c: contactId, key, filename });
+    return { attached: Boolean((done.data as any)?.attached) };
+  },
+
+  /**
+   * Même parcours que `upload`, pour le lien général : pas de contact GHL,
+   * l'identité saisie par le candidat accompagne chaque appel.
+   */
+  async uploadOpen(
+    contact: OpenVideoContact,
+    file: Blob,
+    filename: string,
+    onProgress?: (progress: number) => void
+  ): Promise<{ attached: boolean }> {
+    const init = await publicApi.post('/api/public/video/open/initiate', {
+      ...contact,
+      filename,
+      contentType: file.type,
+      sizeBytes: file.size,
+    });
+    const { uploadUrl, key, contentType } = init.data as InitiateResponse;
+
+    await uploadFileToSignedUrl(uploadUrl, file, contentType, onProgress);
+
+    const done = await publicApi.post('/api/public/video/open/complete', { ...contact, key, filename });
     return { attached: Boolean((done.data as any)?.attached) };
   },
 };

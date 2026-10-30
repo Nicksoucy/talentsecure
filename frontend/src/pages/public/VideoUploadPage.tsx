@@ -1,26 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Alert,
-  Box,
-  Button,
-  CircularProgress,
-  Container,
-  LinearProgress,
-  Paper,
-  Stack,
-  Tab,
-  Tabs,
-  Typography,
-} from '@mui/material';
-import {
-  CloudUpload as UploadIcon,
-  CheckCircle as CheckCircleIcon,
-  Videocam as VideocamIcon,
-} from '@mui/icons-material';
+import { Alert, Box, CircularProgress, Container, Paper, Stack, Typography } from '@mui/material';
+import { CheckCircle as CheckCircleIcon, Videocam as VideocamIcon } from '@mui/icons-material';
 import { publicVideoService } from '@/services/public-video.service';
-import VideoRecorder from '@/components/video/VideoRecorder';
+import PublicVideoPicker, { formatMb } from '@/components/video/PublicVideoPicker';
 
 /**
  * Page publique de téléversement de la vidéo de présentation.
@@ -36,10 +20,6 @@ import VideoRecorder from '@/components/video/VideoRecorder';
 
 export const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
 
-const ACCEPTED_EXTENSIONS = 'video/mp4,video/quicktime,video/webm,video/x-matroska,video/3gpp';
-
-const formatMb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(0)} Mo`;
-
 export default function VideoUploadPage() {
   const [searchParams] = useSearchParams();
   // On retient le premier paramètre EXPLOITABLE, pas simplement le premier
@@ -51,12 +31,10 @@ export default function VideoUploadPage() {
       /^[A-Za-z0-9_-]{10,64}$/.test((v || '').trim())
     )?.trim() || '';
 
-  const [tab, setTab] = useState<'file' | 'record'>('file');
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: session, isLoading, isError, error: sessionError } = useQuery({
     queryKey: ['public-video-session', contactId],
@@ -98,13 +76,7 @@ export default function VideoUploadPage() {
       );
     } finally {
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
-  };
-
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) void send(file, file.name);
   };
 
   // ── États terminaux ───────────────────────────────────────────────────────
@@ -174,66 +146,12 @@ export default function VideoUploadPage() {
         </Alert>
       )}
 
-      <Paper elevation={2} sx={{ overflow: 'hidden' }}>
-        <Tabs
-          value={tab}
-          onChange={(_, value) => setTab(value)}
-          variant="fullWidth"
-          sx={{ borderBottom: 1, borderColor: 'divider' }}
-        >
-          <Tab value="file" label="Téléverser un fichier" disabled={uploading} />
-          <Tab value="record" label="Enregistrer maintenant" disabled={uploading} />
-        </Tabs>
-
-        <Box sx={{ p: 3 }}>
-          {tab === 'file' && (
-            <Stack spacing={2}>
-              <input
-                type="file"
-                accept={ACCEPTED_EXTENSIONS}
-                onChange={handleFileSelect}
-                ref={fileInputRef}
-                style={{ display: 'none' }}
-                id="public-video-input"
-                data-testid="public-video-input"
-              />
-              <label htmlFor="public-video-input">
-                <Button
-                  variant="contained"
-                  component="span"
-                  size="large"
-                  startIcon={<UploadIcon />}
-                  disabled={uploading}
-                  fullWidth
-                >
-                  Choisir ma vidéo
-                </Button>
-              </label>
-              <Typography variant="caption" color="text.secondary">
-                MP4, MOV, WebM — jusqu'à {formatMb(maxBytes)}. Si votre vidéo est plus lourde,
-                utilisez plutôt l'onglet « Enregistrer maintenant ».
-              </Typography>
-            </Stack>
-          )}
-
-          {tab === 'record' && (
-            <VideoRecorder
-              onRecorded={(blob, filename) => void send(blob, filename)}
-              onUnavailable={() => setTab('file')}
-              disabled={uploading}
-            />
-          )}
-
-          {uploading && (
-            <Box mt={3}>
-              <LinearProgress variant="determinate" value={progress} />
-              <Typography variant="caption" color="text.secondary" display="block" mt={1}>
-                Envoi en cours — {progress} %. Gardez cette page ouverte.
-              </Typography>
-            </Box>
-          )}
-        </Box>
-      </Paper>
+      <PublicVideoPicker
+        maxBytes={maxBytes}
+        uploading={uploading}
+        progress={progress}
+        onSend={send}
+      />
 
       <Stack direction="row" spacing={1} alignItems="center" mt={3} color="text.secondary">
         <VideocamIcon fontSize="small" />

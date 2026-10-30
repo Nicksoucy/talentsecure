@@ -72,6 +72,35 @@ vidéo de GHL. Une vidéo déjà présente sur un prospect n'est jamais écrasé
   vidéo est supprimé de R2.
 - Rate limit dédié : 10 req/min/IP (`videoUploadLimiter`).
 
+## Lien général `/video` (à envoyer librement)
+
+`/ma-video?c={{contact.id}}` ne marche que dans un message envoyé par GHL, et
+72 h après la dernière activité du contact. Pour texter, envoyer par courriel ou
+publier un lien sans passer par GHL, il y a `/video`, qui ne contient aucun
+identifiant :
+
+    https://talentsecure-frontend-572017163659.northamerica-northeast1.run.app/video
+
+Le candidat entre son prénom, son nom, son téléphone (obligatoire) et son
+courriel (facultatif), puis téléverse ou enregistre sa vidéo. Routes :
+`POST /api/public/video/open/initiate` et `/open/complete`. GHL n'est jamais
+appelé.
+
+À la réception :
+
+1. une fiche Candidat potentiel correspond (téléphone ou courriel) → la vidéo y va ;
+2. personne nulle part → une fiche est créée (`source = 'lien-video'`) avec la vidéo ;
+3. déjà Candidat ou Employé → rien n'est créé ; la vidéo reste dans
+   `GET /api/prospects/pending-videos` avec son téléphone et son courriel.
+
+Le dépôt est rangé dans `pending_video_uploads` sous `ghlContactId = web_<hash du
+téléphone>` : un renvoi du même numéro remplace le précédent. Comme pour
+`/ma-video`, une vidéo déjà présente sur la fiche n'est jamais écrasée.
+
+Protection : rate limit par IP, URL présignée qui fige type et taille, magic
+bytes vérifiés. La fiche n'est créée qu'après réception d'une vraie vidéo.
+Aucun changement de schéma.
+
 ## Configuration GoHighLevel (à faire dans l'UI)
 
 À faire **après** le déploiement, une fois la page vérifiée en production.

@@ -40,6 +40,8 @@ const ExportPage = lazy(() => import('./pages/exports/ExportPage'));
 const CatalogueViewPage = lazy(() => import('./pages/public/CatalogueViewPage'));
 const UniformSignPage = lazy(() => import('./pages/public/UniformSignPage'));
 const VideoUploadPage = lazy(() => import('./pages/public/VideoUploadPage'));
+const OpenVideoUploadPage = lazy(() => import('./pages/public/OpenVideoUploadPage'));
+const PublicNotFoundPage = lazy(() => import('./pages/public/PublicNotFoundPage'));
 const UniformsHubPage = lazy(() => import('./pages/uniformes/UniformsHubPage'));
 const UniformsCataloguePage = lazy(() => import('./pages/uniformes/UniformsCataloguePage'));
 const UniformInventoryPage = lazy(() => import('./pages/uniformes/UniformInventoryPage'));
@@ -88,6 +90,9 @@ function App() {
           {/* Vidéo de présentation du candidat — cible de la redirection du
               formulaire GoHighLevel et du rappel SMS/courriel. */}
           <Route path="/ma-video" element={<VideoUploadPage />} />
+          {/* Lien vidéo général, sans identifiant : à texter ou publier
+              librement. Le candidat donne son nom et son téléphone. */}
+          <Route path="/video" element={<OpenVideoUploadPage />} />
           {/* Questionnaire du candidat. Jeton en segment de chemin (patron des
               pages catalogue/uniforme) : le lien est envoyé par les RH, pas
               construit par une redirection GoHighLevel. */}
@@ -172,8 +177,11 @@ function App() {
             </Route>
           </Route>
 
-          {/* 404 */}
-          <Route path="*" element={<HomeRedirect />} />
+          {/* 404. Un visiteur non connecté (un candidat avec un lien mal copié,
+              ou une page pas encore déployée) ne voit JAMAIS la page de
+              connexion : message neutre à la place. Le personnel connecté
+              revient à son accueil comme avant. */}
+          <Route path="*" element={canAccessAdminPanel ? <HomeRedirect /> : <PublicNotFoundPage />} />
         </Routes>
       </Suspense>
     </ErrorBoundary>

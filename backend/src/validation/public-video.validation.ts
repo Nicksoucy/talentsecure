@@ -93,3 +93,54 @@ export const completeUploadSchema = z.object({
   c: ghlContactIdSchema,
   key: z.string().trim().min(1).max(512),
 });
+
+// ── Lien général (/video) ───────────────────────────────────────────────────
+//
+// Lien sans identifiant, qu'on peut texter ou publier librement. Faute de
+// contact GHL, c'est le candidat qui donne ses coordonnées : le téléphone est
+// obligatoire (une fiche prospect ne peut pas exister sans), le courriel non.
+
+/** Téléphone nord-américain : 10 chiffres, ou 11 avec l'indicatif 1. */
+function digitsOf(phone: string): string {
+  return phone.replace(/\D/g, '');
+}
+
+const openContactShape = {
+  firstName: z.string().trim().min(1, 'Prénom requis').max(80),
+  lastName: z.string().trim().min(1, 'Nom requis').max(80),
+  phone: z
+    .string()
+    .trim()
+    .max(30)
+    .refine((p) => {
+      const d = digitsOf(p);
+      return d.length === 10 || (d.length === 11 && d.startsWith('1'));
+    }, 'Numéro de téléphone invalide'),
+  email: z
+    .string()
+    .trim()
+    .max(200)
+    .email('Courriel invalide')
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+};
+
+export const openInitiateUploadSchema = z.object({
+  ...openContactShape,
+  filename: initiateUploadSchema.shape.filename,
+  contentType: videoContentTypeSchema,
+  sizeBytes: initiateUploadSchema.shape.sizeBytes,
+});
+
+export const openCompleteUploadSchema = z.object({
+  ...openContactShape,
+  key: completeUploadSchema.shape.key,
+  filename: z.string().trim().max(255).optional(),
+});
+
+export type OpenContact = {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email?: string;
+};
