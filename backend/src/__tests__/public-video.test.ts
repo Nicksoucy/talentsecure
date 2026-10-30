@@ -394,8 +394,18 @@ describe('Téléversement vidéo public — /api/public/video', () => {
       expect(res.status).toBe(400);
     });
 
-    it('courriel facultatif : une chaîne vide est acceptée', async () => {
-      const key = await issuedKey({ ...who, email: '' });
+    it('courriel obligatoire : vide ou absent → 400, aucune URL émise', async () => {
+      for (const email of ['', undefined]) {
+        const res = await request(app)
+          .post(OPEN_INITIATE_URL)
+          .send({ ...who, email, filename: 'a.mp4', contentType: 'video/mp4', sizeBytes: 1000 });
+        expect(res.status).toBe(400);
+      }
+      expect(r2.getConstrainedUploadUrl).not.toHaveBeenCalled();
+    });
+
+    it('la clé est construite par le serveur (préfixe web_ + UUID)', async () => {
+      const key = await issuedKey();
       expect(key).toMatch(/^videos\/inbox\/web_[0-9a-f]{32}\/[0-9a-f-]+\.mp4$/);
     });
 

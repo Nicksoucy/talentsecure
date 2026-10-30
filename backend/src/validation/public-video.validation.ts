@@ -97,8 +97,10 @@ export const completeUploadSchema = z.object({
 // ── Lien général (/video) ───────────────────────────────────────────────────
 //
 // Lien sans identifiant, qu'on peut texter ou publier librement. Faute de
-// contact GHL, c'est le candidat qui donne ses coordonnées : le téléphone est
-// obligatoire (une fiche prospect ne peut pas exister sans), le courriel non.
+// contact GHL, c'est le candidat qui donne ses coordonnées. Téléphone ET
+// courriel sont obligatoires : une fiche prospect ne peut pas exister sans
+// téléphone, et sans courriel le recruteur n'a aucun recours si le numéro est
+// faux.
 
 /** Téléphone nord-américain : 10 chiffres, ou 11 avec l'indicatif 1. */
 function digitsOf(phone: string): string {
@@ -116,13 +118,7 @@ const openContactShape = {
       const d = digitsOf(p);
       return d.length === 10 || (d.length === 11 && d.startsWith('1'));
     }, 'Numéro de téléphone invalide'),
-  email: z
-    .string()
-    .trim()
-    .max(200)
-    .email('Courriel invalide')
-    .optional()
-    .or(z.literal('').transform(() => undefined)),
+  email: z.string().trim().min(1, 'Courriel requis').max(200).email('Courriel invalide'),
 };
 
 export const openInitiateUploadSchema = z.object({
@@ -142,5 +138,5 @@ export type OpenContact = {
   firstName: string;
   lastName: string;
   phone: string;
-  email?: string;
+  email: string;
 };
