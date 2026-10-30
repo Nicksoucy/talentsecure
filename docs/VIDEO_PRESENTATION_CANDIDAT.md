@@ -86,16 +86,26 @@ courriel (facultatif), puis téléverse ou enregistre sa vidéo. Routes :
 `POST /api/public/video/open/initiate` et `/open/complete`. GHL n'est jamais
 appelé.
 
-À la réception :
+À la réception (`fileOpenUpload`, `pending-video.service.ts`) :
 
-1. une fiche Candidat potentiel correspond (téléphone ou courriel) → la vidéo y va ;
-2. personne nulle part → une fiche est créée (`source = 'lien-video'`) avec la vidéo ;
-3. déjà Candidat ou Employé → rien n'est créé ; la vidéo reste dans
-   `GET /api/prospects/pending-videos` avec son téléphone et son courriel.
+1. **employé ACTIF** → rien n'est créé ; la vidéo reste dans
+   `GET /api/prospects/pending-videos` avec son téléphone et son courriel ;
+2. **Candidat** → elle devient sa vidéo de présentation (pas de doublon dans
+   Candidats potentiels) ;
+3. **Candidat potentiel** (téléphone ou courriel) → la vidéo va sur sa fiche ;
+4. **ancien employé (INACTIF)** → nouvelle fiche Candidat potentiel, avec la
+   note « Ancien employé — voir sa fiche employé (…) » ;
+5. **personne nulle part** → nouvelle fiche (`source = 'lien-video'`).
+
+**La vidéo la plus récente gagne**, sur `/video` comme sur `/ma-video` : un
+renvoi remplace la vidéo de la fiche et rafraîchit la date de soumission (la
+fiche remonte en tête de liste). Le CV n'est pas touché. L'ancien fichier
+reste dans R2. Seule exception : si la fiche porte déjà une vidéo plus récente
+que l'upload (upload resté en attente, réclamé tard), celle de la fiche reste.
 
 Le dépôt est rangé dans `pending_video_uploads` sous `ghlContactId = web_<hash du
-téléphone>` : un renvoi du même numéro remplace le précédent. Comme pour
-`/ma-video`, une vidéo déjà présente sur la fiche n'est jamais écrasée.
+téléphone>` : un renvoi du même numéro réutilise la ligne. Sa date d'envoi est
+`updatedAt` (et non `createdAt`, figée sur le premier envoi).
 
 Protection : rate limit par IP, URL présignée qui fige type et taille, magic
 bytes vérifiés. La fiche n'est créée qu'après réception d'une vraie vidéo.

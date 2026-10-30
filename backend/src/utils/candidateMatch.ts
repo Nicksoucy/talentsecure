@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { EmployeeStatus, PrismaClient } from '@prisma/client';
 import { lastTenDigits } from './phone';
 
 export interface MatchedCandidate {
@@ -71,12 +71,16 @@ export interface MatchedEmployee {
  *
  * Même logique de correspondance que findMatchingCandidate : email
  * (insensible) OU téléphone (exact puis 10 derniers chiffres).
+ *
+ * `opts.status` restreint aux employés de ce statut (ex. ACTIF seulement).
  */
 export async function findMatchingEmployee(
   prisma: PrismaClient,
   email?: string | null,
-  phone?: string | null
+  phone?: string | null,
+  opts: { status?: EmployeeStatus } = {}
 ): Promise<MatchedEmployee | null> {
+  const statusFilter = opts.status ? { status: opts.status } : {};
   const cleanEmail = (email || '').trim();
   const cleanPhone = (phone || '').trim();
   const digits = lastTenDigits(cleanPhone);
@@ -88,14 +92,14 @@ export async function findMatchingEmployee(
   if (or.length === 0) return null;
 
   const exact = await prisma.employee.findFirst({
-    where: { isDeleted: false, OR: or },
+    where: { isDeleted: false, ...statusFilter, OR: or },
     select: { id: true, firstName: true, lastName: true },
   });
   if (exact) return exact;
 
   if (digits.length === 10) {
     const employees = await prisma.employee.findMany({
-      where: { isDeleted: false, phone: { not: '' } },
+      where: { isDeleted: false, ...statusFilter, phone: { not: '' } },
       select: { id: true, firstName: true, lastName: true, phone: true },
     });
     const match = employees.find(

@@ -114,6 +114,11 @@ export async function createCandidateVideoTx(
  * Crée/REMPLACE la vidéo d'un type donné pour un candidat (hors transaction).
  * Supprime l'objet de stockage précédent du même type s'il diffère, puis crée la
  * nouvelle ligne. Synchronise le miroir si PRESENTATION.
+ *
+ * `keepPreviousFile` : garde l'ancien objet dans le stockage (seule la ligne est
+ * remplacée). Sert aux vidéos renvoyées par le candidat lui-même : l'ancienne
+ * peut encore être celle de sa fiche prospect d'origine (même objet partagé à
+ * la conversion), et on ne jette pas une vidéo sur un simple renvoi.
  */
 export async function setCandidateVideo(params: {
   candidateId: string;
@@ -122,13 +127,14 @@ export async function setCandidateVideo(params: {
   videoUrl?: string | null;
   videoSourceUrl?: string | null;
   createdById?: string | null;
+  keepPreviousFile?: boolean;
 }): Promise<void> {
   const { candidateId, type, videoStoragePath } = params;
 
   // Remplace : supprime l'ancien objet de stockage du même type s'il diffère.
-  const existing = await prisma.candidateVideo.findMany({
-    where: { candidateId, type },
-  });
+  const existing = params.keepPreviousFile
+    ? []
+    : await prisma.candidateVideo.findMany({ where: { candidateId, type } });
   for (const row of existing) {
     if (row.videoStoragePath && row.videoStoragePath !== videoStoragePath) {
       try {

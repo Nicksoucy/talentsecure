@@ -111,7 +111,29 @@ describe('Vidéos publiques en attente — pending-video.service', () => {
       expect(pending?.claimedAt).toBeNull();
     });
 
-    it("n'écrase JAMAIS une vidéo déjà présente sur le prospect", async () => {
+    it('une vidéo plus ANCIENNE sur la fiche est remplacée, et la date rafraîchie', async () => {
+      const old = new Date('2026-01-15T12:00:00Z');
+      const prospect = await prisma.prospectCandidate.create({
+        data: {
+          firstName: 'Léa',
+          lastName: 'T',
+          email: 'candidat@example.com',
+          phone: '5145559876',
+          videoStoragePath: 'videos/prospects/ancienne.mp4',
+          videoUploadedAt: old,
+          submissionDate: old,
+        },
+      });
+      await recordUpload(upload());
+
+      const updated = await prisma.prospectCandidate.findUnique({ where: { id: prospect.id } });
+      expect(updated?.videoStoragePath).toBe(upload().storagePath);
+      expect(updated!.videoUploadedAt!.getTime()).toBeGreaterThan(old.getTime());
+      // La fiche remonte en tête de liste (triée par date de soumission).
+      expect(updated!.submissionDate!.getTime()).toBeGreaterThan(old.getTime());
+    });
+
+    it('une vidéo plus RÉCENTE sur la fiche est conservée (upload resté en attente)', async () => {
       await recordUpload(upload());
       const prospect = await prisma.prospectCandidate.create({
         data: {
@@ -119,14 +141,15 @@ describe('Vidéos publiques en attente — pending-video.service', () => {
           lastName: 'T',
           email: 'candidat@example.com',
           phone: '5145559876',
-          videoStoragePath: 'videos/prospects/deja-la.mp4',
+          videoStoragePath: 'videos/prospects/plus-recente.mp4',
+          videoUploadedAt: new Date(Date.now() + 60_000),
         },
       });
 
       await claimForProspect({ ...prospect });
 
       const updated = await prisma.prospectCandidate.findUnique({ where: { id: prospect.id } });
-      expect(updated?.videoStoragePath).toBe('videos/prospects/deja-la.mp4');
+      expect(updated?.videoStoragePath).toBe('videos/prospects/plus-recente.mp4');
 
       // L'upload est quand même marqué réclamé : on sait à qui il appartient,
       // il n'a donc rien à faire dans la liste des orphelins.
