@@ -25,7 +25,7 @@ export interface OpenVideoContact {
   firstName: string;
   lastName: string;
   phone: string;
-  email?: string;
+  email: string;
 }
 
 export const publicVideoService = {

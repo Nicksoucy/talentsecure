@@ -6,7 +6,7 @@ import { publicVideoService } from '@/services/public-video.service';
 
 /**
  * Lien vidéo général (/video) : aucun identifiant dans l'adresse, le candidat
- * donne son nom et son téléphone avant d'envoyer sa vidéo.
+ * donne son nom, son téléphone et son courriel avant d'envoyer sa vidéo.
  */
 
 vi.mock('@/services/public-video.service', () => ({
@@ -38,7 +38,7 @@ function fileOfSize(bytes: number, name = 'video.mp4', type = 'video/mp4'): File
   return file;
 }
 
-async function fillContact(phone = '514 555-1234', email = '') {
+async function fillContact(phone = '514 555-1234', email = 'karim@example.com') {
   await userEvent.type(screen.getByLabelText(/Prénom/), 'Karim');
   await userEvent.type(screen.getByLabelText(/^Nom/), 'Benali');
   await userEvent.type(screen.getByLabelText(/Téléphone/), phone);
@@ -53,7 +53,8 @@ beforeEach(() => {
 describe('OpenVideoUploadPage — lien général /video', () => {
   it("demande les coordonnées avant de montrer l'envoi", () => {
     renderPage();
-    expect(screen.getByText(/Envoyez-nous votre vidéo/)).toBeInTheDocument();
+    expect(screen.getByText(/Montrez-nous qui vous êtes/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Étape 1 sur 3')).toBeInTheDocument();
     expect(screen.queryByTestId('public-video-input')).not.toBeInTheDocument();
   });
 
@@ -87,12 +88,20 @@ describe('OpenVideoUploadPage — lien général /video', () => {
     expect(await screen.findByText(/Vidéo bien reçue/)).toBeInTheDocument();
   });
 
-  it('courriel laissé vide → non transmis', async () => {
+  it('courriel vide → message, on reste sur le formulaire', async () => {
+    renderPage();
+    await fillContact('514 555-1234', '');
+    expect(screen.getByText('Votre courriel')).toBeInTheDocument();
+    expect(screen.queryByTestId('public-video-input')).not.toBeInTheDocument();
+  });
+
+  it("l'étape avance : coordonnées → vidéo → fini", async () => {
     uploadOpen.mockResolvedValue({ attached: true });
     renderPage();
     await fillContact();
+    expect(screen.getByLabelText('Étape 2 sur 3')).toBeInTheDocument();
     await userEvent.upload(screen.getByTestId('public-video-input'), fileOfSize(1_000_000));
-    expect(uploadOpen.mock.calls[0][0].email).toBeUndefined();
+    expect(await screen.findByLabelText('Étape 3 sur 3')).toBeInTheDocument();
   });
 
   it('vidéo au-delà de 500 Mo → refusée avant tout appel au serveur', async () => {

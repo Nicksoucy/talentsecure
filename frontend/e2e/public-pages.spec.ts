@@ -14,7 +14,7 @@ test.describe('Pages publiques — jamais la page de connexion (E2E)', () => {
 
   test('/video : le formulaire du candidat, pas la connexion', async ({ page }) => {
     await page.goto('/video');
-    await expect(page.getByText('Envoyez-nous votre vidéo')).toBeVisible();
+    await expect(page.getByText('Montrez-nous qui vous êtes en 30 secondes')).toBeVisible();
     await expect(page).toHaveURL(/\/video$/);
   });
 
