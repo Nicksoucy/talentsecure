@@ -17,8 +17,16 @@ vi.mock('@/services/public-video.service', () => ({
   },
 }));
 
+// VideoRecorder pilote getUserMedia + MediaRecorder, absents de jsdom.
 vi.mock('@/components/video/VideoRecorder', () => ({
-  default: () => null,
+  default: ({ onRecorded }: { onRecorded: (blob: Blob, filename: string) => void }) => (
+    <button
+      type="button"
+      onClick={() => onRecorded(new Blob(['video'], { type: 'video/webm' }), 'presentation.webm')}
+    >
+      Simuler un enregistrement
+    </button>
+  ),
 }));
 
 const uploadOpen = vi.mocked(publicVideoService.uploadOpen);
@@ -44,6 +52,11 @@ async function fillContact(phone = '514 555-1234', email = 'karim@example.com') 
   await userEvent.type(screen.getByLabelText(/Téléphone/), phone);
   if (email) await userEvent.type(screen.getByLabelText(/Courriel/), email);
   await userEvent.click(screen.getByRole('button', { name: /Continuer/ }));
+}
+
+/** « Enregistrer maintenant » est ouvert d'office : le fichier est au 2e onglet. */
+async function goToFileTab() {
+  await userEvent.click(screen.getByRole('tab', { name: /Téléverser un fichier/i }));
 }
 
 beforeEach(() => {
@@ -77,12 +90,32 @@ describe('OpenVideoUploadPage — lien général /video', () => {
     await fillContact('514 555-1234', 'karim@example.com');
 
     expect(screen.getByText(/Merci Karim/)).toBeInTheDocument();
+    await goToFileTab();
     await userEvent.upload(screen.getByTestId('public-video-input'), fileOfSize(1_000_000));
 
     expect(uploadOpen).toHaveBeenCalledWith(
       { firstName: 'Karim', lastName: 'Benali', phone: '514 555-1234', email: 'karim@example.com' },
       expect.any(File),
       'video.mp4',
+      expect.any(Function)
+    );
+    expect(await screen.findByText(/Vidéo bien reçue/)).toBeInTheDocument();
+  });
+
+  it("« Enregistrer maintenant » est le premier onglet, ouvert d'office", async () => {
+    uploadOpen.mockResolvedValue({ attached: true });
+    renderPage();
+    await fillContact();
+
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs[0]).toHaveTextContent('Enregistrer maintenant');
+    expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
+
+    await userEvent.click(screen.getByText('Simuler un enregistrement'));
+    expect(uploadOpen).toHaveBeenCalledWith(
+      expect.objectContaining({ firstName: 'Karim' }),
+      expect.any(Blob),
+      'presentation.webm',
       expect.any(Function)
     );
     expect(await screen.findByText(/Vidéo bien reçue/)).toBeInTheDocument();
@@ -100,6 +133,7 @@ describe('OpenVideoUploadPage — lien général /video', () => {
     renderPage();
     await fillContact();
     expect(screen.getByLabelText('Étape 2 sur 3')).toBeInTheDocument();
+    await goToFileTab();
     await userEvent.upload(screen.getByTestId('public-video-input'), fileOfSize(1_000_000));
     expect(await screen.findByLabelText('Étape 3 sur 3')).toBeInTheDocument();
   });
@@ -107,6 +141,7 @@ describe('OpenVideoUploadPage — lien général /video', () => {
   it('vidéo au-delà de 500 Mo → refusée avant tout appel au serveur', async () => {
     renderPage();
     await fillContact();
+    await goToFileTab();
     await userEvent.upload(screen.getByTestId('public-video-input'), fileOfSize(600 * 1024 * 1024));
     expect(screen.getByText(/au-delà de la limite/)).toBeInTheDocument();
     expect(uploadOpen).not.toHaveBeenCalled();
@@ -116,6 +151,7 @@ describe('OpenVideoUploadPage — lien général /video', () => {
     uploadOpen.mockRejectedValue({ response: { data: { message: 'Numéro de téléphone invalide' } } });
     renderPage();
     await fillContact();
+    await goToFileTab();
     await userEvent.upload(screen.getByTestId('public-video-input'), fileOfSize(1_000_000));
     expect(await screen.findByText(/Numéro de téléphone invalide/)).toBeInTheDocument();
   });

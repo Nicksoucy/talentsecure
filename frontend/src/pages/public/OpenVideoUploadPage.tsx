@@ -279,6 +279,7 @@ export default function OpenVideoUploadPage() {
                   uploading={uploading}
                   progress={progress}
                   onSend={send}
+                  recordFirst
                 />
                 <Button
                   size="small"
