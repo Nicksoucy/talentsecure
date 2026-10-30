@@ -41,6 +41,7 @@ const CatalogueViewPage = lazy(() => import('./pages/public/CatalogueViewPage'))
 const UniformSignPage = lazy(() => import('./pages/public/UniformSignPage'));
 const VideoUploadPage = lazy(() => import('./pages/public/VideoUploadPage'));
 const OpenVideoUploadPage = lazy(() => import('./pages/public/OpenVideoUploadPage'));
+const PublicNotFoundPage = lazy(() => import('./pages/public/PublicNotFoundPage'));
 const UniformsHubPage = lazy(() => import('./pages/uniformes/UniformsHubPage'));
 const UniformsCataloguePage = lazy(() => import('./pages/uniformes/UniformsCataloguePage'));
 const UniformInventoryPage = lazy(() => import('./pages/uniformes/UniformInventoryPage'));
@@ -176,8 +177,11 @@ function App() {
             </Route>
           </Route>
 
-          {/* 404 */}
-          <Route path="*" element={<HomeRedirect />} />
+          {/* 404. Un visiteur non connecté (un candidat avec un lien mal copié,
+              ou une page pas encore déployée) ne voit JAMAIS la page de
+              connexion : message neutre à la place. Le personnel connecté
+              revient à son accueil comme avant. */}
+          <Route path="*" element={canAccessAdminPanel ? <HomeRedirect /> : <PublicNotFoundPage />} />
         </Routes>
       </Suspense>
     </ErrorBoundary>
