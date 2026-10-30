@@ -19,13 +19,17 @@ import { prisma, cleanDatabase } from './setup';
  *  - 404/409 métier : 409 doublon (par téléphone), priorité Employé/Candidat
  *    qui renvoient 200 « non ajouté » et NE créent PAS de prospect ;
  *  - chemins heureux : 201 + persistance réelle en base (form-cv) ;
- *  - survey : 400 sans email/téléphone, 202 quand la soumission est introuvable.
+ *  - survey : 400 sans email/téléphone, 202 quand la soumission est introuvable ;
+ *  - contact GHL en double (téléphone vide) : numéro repris de la soumission ;
+ *  - renvoi du formulaire avec un autre CV : CV mis à jour au lieu de 409.
  *
  * Services externes MOCKÉS (zéro réseau réel) :
  *  - ../services/survey-sync.service  (API GHL : findSubmissionByContact / syncOneSubmission)
  *  - ../utils/ghlFetch + ../services/r2.service (téléchargement vidéo + R2),
  *    chargés en `require()` paresseux dans le contrôleur seulement si video_url ;
- *  - axios (Nominatim) : le géocodage à la création ne doit jamais sortir en CI.
+ *  - axios (Nominatim) : le géocodage à la création ne doit jamais sortir en CI ;
+ *  - ../services/ghl.client (findSubmittedPhoneByEmail) : recherche du téléphone
+ *    dans les soumissions GHL quand le contact n'en a pas.
  */
 
 // Le secret DOIT être en place AVANT que le contrôleur ne le lise (à la requête).
@@ -53,9 +57,15 @@ jest.mock('../utils/ghlFetch', () => ({
 jest.mock('../services/r2.service', () => ({
   uploadBufferToR2: jest.fn(async () => undefined),
 }));
+jest.mock('../services/ghl.client', () => ({
+  ...jest.requireActual('../services/ghl.client'),
+  isGhlConfigured: jest.fn(() => true),
+  findSubmittedPhoneByEmail: jest.fn(async () => null),
+}));
 
 import { createApp } from '../app';
 const surveySync = require('../services/survey-sync.service');
+const ghlClient = require('../services/ghl.client');
 
 const PROSPECT_URL = '/api/webhooks/gohighlevel/prospect';
 const SURVEY_URL = '/api/webhooks/gohighlevel/survey-prospect';
@@ -362,6 +372,139 @@ describe('Webhooks GoHighLevel — /api/webhooks', () => {
       expect(res.status).toBe(409);
       expect(res.body.error).toBe('Duplicate prospect');
       expect(res.body.matchedBy).toBe('phone');
+    });
+  });
+
+  describe('POST /gohighlevel/prospect — renvoi du formulaire avec un autre CV', () => {
+    it('prospect existant + nouveau CV → 200, CV remplacé et fiche remontée', async () => {
+      const before = new Date('2026-09-01T12:00:00Z');
+      const existing = await prisma.prospectCandidate.create({
+        data: {
+          firstName: 'Renvoi',
+          lastName: 'Cv',
+          phone: '5145552020',
+          email: 'renvoi@test.com',
+          source: 'form-cv',
+          cvUrl: 'https://services.leadconnectorhq.com/documents/download/ancien',
+          cvStoragePath: 'cvs/prospects/ancien.pdf',
+          submissionDate: before,
+        },
+      });
+
+      const res = await request(app)
+        .post(PROSPECT_URL)
+        .set('x-webhook-secret', WEBHOOK_SECRET)
+        .send({
+          first_name: 'Renvoi',
+          email: 'renvoi@test.com',
+          phone: '5145552020',
+          cv_url: 'https://services.leadconnectorhq.com/documents/download/nouveau',
+          disponibilites: ['Soir', 'Fin de semaine'],
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.prospectId).toBe(existing.id);
+
+      const after = await prisma.prospectCandidate.findUnique({ where: { id: existing.id } });
+      expect(after?.cvUrl).toBe('https://services.leadconnectorhq.com/documents/download/nouveau');
+      // La copie R2 passe avant cvUrl à l'affichage : elle doit disparaître,
+      // sinon l'ancien CV resterait celui qu'on voit.
+      expect(after?.cvStoragePath).toBeNull();
+      expect(after!.submissionDate!.getTime()).toBeGreaterThan(before.getTime());
+      expect(after?.availableEvenings).toBe(true);
+      expect(after?.availableWeekends).toBe(true);
+      expect(await prisma.prospectCandidate.count({ where: { phone: '5145552020' } })).toBe(1);
+    });
+
+    it('même CV qu’avant → 409, rien ne change', async () => {
+      const cvUrl = 'https://services.leadconnectorhq.com/documents/download/meme';
+      const existing = await prisma.prospectCandidate.create({
+        data: { firstName: 'Meme', lastName: 'Cv', phone: '5145552121', source: 'form-cv', cvUrl },
+      });
+
+      const res = await request(app)
+        .post(PROSPECT_URL)
+        .set('x-webhook-secret', WEBHOOK_SECRET)
+        .send({ first_name: 'Meme', phone: '5145552121', cv_url: cvUrl });
+      expect(res.status).toBe(409);
+
+      const after = await prisma.prospectCandidate.findUnique({ where: { id: existing.id } });
+      expect(after?.updatedAt.getTime()).toBe(existing.updatedAt.getTime());
+    });
+
+    it('fiche déjà convertie → 409, on ne touche pas au CV', async () => {
+      const existing = await prisma.prospectCandidate.create({
+        data: {
+          firstName: 'Converti',
+          lastName: 'Ancien',
+          phone: '5145552222',
+          source: 'form-cv',
+          cvUrl: 'https://services.leadconnectorhq.com/documents/download/v1',
+          isConverted: true,
+        },
+      });
+
+      const res = await request(app)
+        .post(PROSPECT_URL)
+        .set('x-webhook-secret', WEBHOOK_SECRET)
+        .send({
+          first_name: 'Converti',
+          phone: '5145552222',
+          cv_url: 'https://services.leadconnectorhq.com/documents/download/v2',
+        });
+      expect(res.status).toBe(409);
+      const after = await prisma.prospectCandidate.findUnique({ where: { id: existing.id } });
+      expect(after?.cvUrl).toBe('https://services.leadconnectorhq.com/documents/download/v1');
+    });
+  });
+
+  describe('POST /gohighlevel/prospect — téléphone resté sur un contact GHL en double', () => {
+    it('téléphone vide → repris de la soumission GHL → 201', async () => {
+      ghlClient.findSubmittedPhoneByEmail.mockResolvedValueOnce('+15145553030');
+
+      const res = await request(app)
+        .post(PROSPECT_URL)
+        .set('x-webhook-secret', WEBHOOK_SECRET)
+        .send({
+          first_name: 'Double',
+          last_name: 'Contact',
+          email: 'double@test.com',
+          phone: '',
+          cv_url: 'https://services.leadconnectorhq.com/documents/download/cv',
+        });
+      expect(res.status).toBe(201);
+      expect(ghlClient.findSubmittedPhoneByEmail).toHaveBeenCalledWith('double@test.com');
+
+      const inDb = await prisma.prospectCandidate.findUnique({ where: { id: res.body.prospectId } });
+      expect(inDb?.phone).toBe('+15145553030');
+      expect(inDb?.email).toBe('double@test.com');
+    });
+
+    it('rien dans la soumission non plus → 400 comme avant', async () => {
+      const res = await request(app)
+        .post(PROSPECT_URL)
+        .set('x-webhook-secret', WEBHOOK_SECRET)
+        .send({ first_name: 'Introuvable', email: 'introuvable@test.com' });
+      expect(res.status).toBe(400);
+      expect(res.body.received).toEqual({ hasFirstName: true, hasPhone: false });
+    });
+
+    it('GHL en panne → 400 propre, pas de 500', async () => {
+      ghlClient.findSubmittedPhoneByEmail.mockRejectedValueOnce(new Error('GHL /forms/submissions → 503'));
+
+      const res = await request(app)
+        .post(PROSPECT_URL)
+        .set('x-webhook-secret', WEBHOOK_SECRET)
+        .send({ first_name: 'Panne', email: 'panne@test.com' });
+      expect(res.status).toBe(400);
+    });
+
+    it('le téléphone est déjà là → aucune recherche GHL', async () => {
+      const res = await request(app)
+        .post(PROSPECT_URL)
+        .set('x-webhook-secret', WEBHOOK_SECRET)
+        .send({ first_name: 'Normal', email: 'normal@test.com', phone: '5145553131' });
+      expect(res.status).toBe(201);
+      expect(ghlClient.findSubmittedPhoneByEmail).not.toHaveBeenCalled();
     });
   });
 

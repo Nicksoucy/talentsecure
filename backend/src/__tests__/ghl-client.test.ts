@@ -1,4 +1,6 @@
-import { GhlApiError, GhlConfigError, getGhlToken, getGhlLocationId, isGhlConfigured } from '../services/ghl.client';
+import {
+  GhlApiError, GhlConfigError, getGhlToken, getGhlLocationId, isGhlConfigured, findSubmittedPhoneByEmail,
+} from '../services/ghl.client';
 
 /**
  * Client GoHighLevel — src/services/ghl.client.ts
@@ -84,5 +86,63 @@ describe('configuration — aucune valeur par défaut', () => {
 
     delete process.env.GHL_LOCATION_ID;
     expect(isGhlConfigured()).toBe(false);
+  });
+});
+
+describe('findSubmittedPhoneByEmail — numéro resté sur un contact GHL en double', () => {
+  const original = { token: process.env.GHL_PIT_TOKEN, loc: process.env.GHL_LOCATION_ID, fetch: global.fetch };
+  let fetchMock: jest.Mock;
+
+  const respond = (submissions: unknown[]) =>
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ submissions }) });
+
+  beforeEach(() => {
+    process.env.GHL_PIT_TOKEN = 'pit-test';
+    process.env.GHL_LOCATION_ID = 'loc-test';
+    fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    process.env.GHL_PIT_TOKEN = original.token;
+    process.env.GHL_LOCATION_ID = original.loc;
+    global.fetch = original.fetch;
+  });
+
+  it('cherche les soumissions de la location par courriel', async () => {
+    respond([]);
+    await findSubmittedPhoneByEmail('  Marie@Test.com ');
+    const url = new URL(fetchMock.mock.calls[0][0]);
+    expect(url.pathname).toBe('/forms/submissions');
+    expect(url.searchParams.get('locationId')).toBe('loc-test');
+    expect(url.searchParams.get('q')).toBe('marie@test.com');
+  });
+
+  it('prend le téléphone de la soumission la plus récente, courriel sans tenir compte de la casse', async () => {
+    respond([
+      { email: 'marie@test.com', createdAt: '2026-10-01T10:00:00Z', others: { email: 'marie@test.com', phone: '+15145550001' } },
+      { email: 'MARIE@test.com', createdAt: '2026-10-27T04:08:54Z', others: { email: 'MARIE@test.com', phone: '+15145550002' } },
+    ]);
+    expect(await findSubmittedPhoneByEmail('marie@test.com')).toBe('+15145550002');
+  });
+
+  it('ignore une soumission dont le nom ressemble mais le courriel diffère', async () => {
+    respond([
+      { email: 'marie.autre@test.com', createdAt: '2026-10-27T00:00:00Z', others: { email: 'marie.autre@test.com', phone: '+15145550009' } },
+    ]);
+    expect(await findSubmittedPhoneByEmail('marie@test.com')).toBeNull();
+  });
+
+  it('passe à une soumission plus ancienne si la dernière n’a pas de téléphone', async () => {
+    respond([
+      { createdAt: '2026-10-27T00:00:00Z', others: { email: 'marie@test.com', phone: '' } },
+      { createdAt: '2026-10-20T00:00:00Z', others: { email: 'marie@test.com', phone: '+15145550003' } },
+    ]);
+    expect(await findSubmittedPhoneByEmail('marie@test.com')).toBe('+15145550003');
+  });
+
+  it('courriel vide → aucun appel GHL', async () => {
+    expect(await findSubmittedPhoneByEmail('   ')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

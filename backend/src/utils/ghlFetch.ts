@@ -1,5 +1,4 @@
 import https from 'https';
-import http from 'http';
 
 export interface GhlFile {
   buffer: Buffer;
@@ -11,12 +10,28 @@ const MAX_REDIRECTS = 6;
 const MAX_SOFT_REDIRECT_BODY = 8 * 1024;
 
 /**
+ * Seuls hôtes servis, à CHAQUE saut (redirections comprises). L'URL arrive du
+ * webhook GHL : sans cette liste, quiconque connaît le secret pourrait faire
+ * télécharger au serveur une adresse interne (SSRF, alerte CodeQL
+ * js/request-forgery). En prod, tous les liens CV/vidéo suivent la chaîne
+ * services.leadconnectorhq.com → storage.googleapis.com (vérifié 2026-10-27).
+ * Comparaison exacte, pas de suffixe : c'est ce que CodeQL reconnaît.
+ */
+const ALLOWED_HOSTS = new Set([
+  'services.leadconnectorhq.com',
+  'storage.googleapis.com',
+  'firebasestorage.googleapis.com',
+  'assets.cdn.filesafe.space',
+]);
+
+/**
  * Télécharge un fichier hébergé par GHL / un CDN, en gérant :
  *  - les vrais redirects HTTP 3xx (Location)
  *  - le "soft-redirect" GoHighLevel : /documents/download renvoie
  *    200 + Content-Type text/plain + body "Temporary Redirect.
  *    Redirecting to https://storage.googleapis.com/...".
  *
+ * Seuls les hôtes de ALLOWED_HOSTS, en https, sont suivis.
  * Retourne le contenu en mémoire (Buffer) + le content-type final.
  * Utilisé par le proxy CV (streaming) et par la synchro survey (upload R2).
  */
@@ -28,12 +43,20 @@ export function downloadGhlFile(url: string, redirectsLeft = MAX_REDIRECTS): Pro
     } catch {
       return reject(new Error('URL invalide'));
     }
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-      return reject(new Error('Seules les URLs http(s) sont acceptées'));
+    if (parsed.protocol !== 'https:') {
+      return reject(new Error('Seules les URLs https sont acceptées'));
+    }
+    if (!ALLOWED_HOSTS.has(parsed.hostname)) {
+      return reject(new Error(`Hôte non autorisé : ${parsed.hostname}`));
     }
 
-    const client = parsed.protocol === 'https:' ? https : http;
-    const req = client.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
+    const options = {
+      hostname: parsed.hostname,
+      port: parsed.port || undefined,
+      path: `${parsed.pathname}${parsed.search}`,
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    };
+    const req = https.get(options, (res) => {
       const status = res.statusCode ?? 0;
 
       // Vrai redirect HTTP

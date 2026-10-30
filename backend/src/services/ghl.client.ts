@@ -129,6 +129,31 @@ export async function ghlRequest<T = any>(path: string, options: GhlRequestOptio
   return (await res.json()) as T;
 }
 
+/**
+ * Téléphone écrit dans la dernière soumission de formulaire de ce courriel.
+ *
+ * GHL ne pose pas un numéro sur un contact quand ce numéro appartient déjà à un
+ * AUTRE contact (personne en double : une fiche au courriel, une au téléphone).
+ * Le workflow envoie alors `{{contact.phone}}` vide alors que la personne a bien
+ * écrit son numéro dans le formulaire — la soumission, elle, l'a gardé.
+ * `q` cherche aussi dans les noms : on ne garde que le courriel exact.
+ */
+export async function findSubmittedPhoneByEmail(email: string): Promise<string | null> {
+  const target = email.trim().toLowerCase();
+  if (!target) return null;
+  const data = await ghlRequest<{ submissions?: any[] }>('/forms/submissions', {
+    query: { locationId: getGhlLocationId(), q: target, limit: 20 },
+  });
+  const sameEmail = (data?.submissions || [])
+    .filter((s) => [s.others?.email, s.email].some((e) => String(e || '').trim().toLowerCase() === target))
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  for (const s of sameEmail) {
+    const phone = String(s.others?.phone || '').trim();
+    if (phone) return phone;
+  }
+  return null;
+}
+
 export interface GhlContact {
   id: string;
   locationId?: string;

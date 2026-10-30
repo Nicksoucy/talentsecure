@@ -63,7 +63,7 @@ function findVideoFile(others: any): GhlFileRef | null {
   return collectFiles(others).find((f) => f.mimetype.startsWith('video/')) || null;
 }
 
-function findCvFile(others: any): GhlFileRef | null {
+export function findCvFile(others: any): GhlFileRef | null {
   const files = collectFiles(others);
   // Priorité aux documents (PDF / Word)
   const doc = files.find((f) => DOC_OR_IMG.slice(0, 3).some((m) => f.mimetype.includes(m)));
