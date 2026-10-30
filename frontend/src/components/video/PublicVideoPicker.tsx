@@ -18,10 +18,23 @@ interface PublicVideoPickerProps {
   uploading: boolean;
   progress: number;
   onSend: (blob: Blob, filename: string) => Promise<void> | void;
+  /**
+   * Onglet « Enregistrer maintenant » en premier et ouvert d'office. Pour les
+   * liens envoyés à froid : rares sont les candidats qui ont déjà une vidéo
+   * d'eux sous la main. Si la caméra est indisponible, on bascule quand même
+   * sur le fichier (onUnavailable).
+   */
+  recordFirst?: boolean;
 }
 
-export default function PublicVideoPicker({ maxBytes, uploading, progress, onSend }: PublicVideoPickerProps) {
-  const [tab, setTab] = useState<'file' | 'record'>('file');
+export default function PublicVideoPicker({
+  maxBytes,
+  uploading,
+  progress,
+  onSend,
+  recordFirst = false,
+}: PublicVideoPickerProps) {
+  const [tab, setTab] = useState<'file' | 'record'>(recordFirst ? 'record' : 'file');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -39,8 +52,9 @@ export default function PublicVideoPicker({ maxBytes, uploading, progress, onSen
         variant="fullWidth"
         sx={{ borderBottom: 1, borderColor: 'divider' }}
       >
+        {recordFirst && <Tab value="record" label="Enregistrer maintenant" disabled={uploading} />}
         <Tab value="file" label="Téléverser un fichier" disabled={uploading} />
-        <Tab value="record" label="Enregistrer maintenant" disabled={uploading} />
+        {!recordFirst && <Tab value="record" label="Enregistrer maintenant" disabled={uploading} />}
       </Tabs>
 
       <Box sx={{ p: 3 }}>
