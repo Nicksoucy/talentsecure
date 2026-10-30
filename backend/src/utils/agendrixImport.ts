@@ -21,11 +21,38 @@ export interface ParsedAddress {
 }
 
 const POSTAL_RE = /([A-Za-z]\d[A-Za-z])\s*(\d[A-Za-z]\d)/;
-const PROVINCE_WORD_RE = /^(qc|q[cu][eé]bec|province de qu[eé]bec)$/i;
 
-/** Vrai si le segment est un mot de province (QC / Québec / Quebec / Qc). */
-function isProvinceWord(s: string): boolean {
-  return PROVINCE_WORD_RE.test(s.trim().normalize('NFC'));
+// Tokens de province/territoire à ne JAMAIS retenir comme ville. Clé = lettres
+// minuscules sans accents ni ponctuation (« Qué » → « que », « Q.C. » → « qc »).
+// Valeur = code province 2 lettres (pour renseigner province quand il n'y a pas
+// de code postal). « quebec » y figure comme avant : la ville « Québec » n'est
+// pas perdue pour autant — un city null n'écrase jamais la fiche (voir merge).
+const PROVINCE_BY_TOKEN: Record<string, string> = {
+  ab: 'AB', bc: 'BC', mb: 'MB', nb: 'NB', nl: 'NL', ns: 'NS', nt: 'NT',
+  nu: 'NU', on: 'ON', pe: 'PE', qc: 'QC', pq: 'QC', que: 'QC', sk: 'SK', yt: 'YT',
+  ontario: 'ON', quebec: 'QC', provincedequebec: 'QC',
+};
+
+// Tokens « pays » (jamais une ville non plus) : « Canada », « CA », « CAN ».
+const COUNTRY_TOKENS = new Set(['canada', 'ca', 'can']);
+
+/** Lettres minuscules sans accents ni ponctuation (« Saint-Jean » → « saintjean »). */
+function letterKey(s: string): string {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z]/g, '');
+}
+
+/** Code province (2 lettres) si le segment EST un token de province isolé, sinon null. */
+function provinceCode(s: string): string | null {
+  return PROVINCE_BY_TOKEN[letterKey(s)] ?? null;
+}
+
+/** Vrai si le segment est un token « pays » (Canada / CA / CAN). */
+function isCountryWord(s: string): boolean {
+  return COUNTRY_TOKENS.has(letterKey(s));
 }
 
 /**
@@ -34,12 +61,18 @@ function isProvinceWord(s: string): boolean {
  * Montréal QC H3X 2H5, Canada », « 5-1655,Rue Mullins, Montréal,QC »,
  * « 4050 Rue prieur Est Montréal Nord Québec » (sans virgules),
  * « 350 rue evangeline l'assomption » (minuscules), ville/CP absents, etc.
- * Province : code postal prioritaire, sinon QC.
+ * XGuard a des agents hors-Québec (région d'Ottawa) : un token de province
+ * (« ON », « QUE », « Ontario »…) n'est JAMAIS gardé comme ville — il renseigne
+ * la province, et la vraie ville (« Ottawa », « Gloucester ») est extraite quand
+ * elle précède le code. Province : code postal prioritaire, sinon token nommé,
+ * sinon QC.
  */
 export function parseAgendrixAddress(raw?: string | null): ParsedAddress {
-  const empty: ParsedAddress = { address: null, city: null, province: 'QC', postalCode: null };
   let s = (raw || '').replace(/[‘’]/g, "'").replace(/\s+/g, ' ').trim();
-  if (!s) return empty;
+
+  // Province explicitement nommée dans la chaîne (« , ON », « Montréal QC ») —
+  // captée pour renseigner la province, jamais gardée comme ville.
+  let mentionedProvince: string | null = null;
 
   // 1) Code postal (retiré de la chaîne, normalisé « H1V 2E8 »).
   let postalCode: string | null = null;
@@ -49,63 +82,99 @@ export function parseAgendrixAddress(raw?: string | null): ParsedAddress {
     s = (s.slice(0, pm.index) + s.slice((pm.index ?? 0) + pm[0].length)).trim();
   }
 
-  // 2) Segments par virgules, sans « Canada » ni mots de province isolés.
-  let segments = s
+  const finish = (address: string | null, city: string | null): ParsedAddress => {
+    const cityClean = city ? canonicalCity(city) : '';
+    return {
+      address,
+      city: cityClean || null,
+      province: resolveProvince({ postalCode, province: mentionedProvince }),
+      postalCode,
+    };
+  };
+
+  if (!s) return finish(null, null);
+
+  // 2) Segments par virgules, sans pays (« Canada »/« CA ») ni token de province
+  //    isolé (« QC », « ON », « QUE »… → capté dans mentionedProvince).
+  const segments = s
     .split(',')
     .map((p) => p.trim().replace(/[\s,]+$/g, ''))
     .filter(Boolean)
-    .filter((p) => !/^canada$/i.test(p))
-    .filter((p) => !isProvinceWord(p));
+    .filter((p) => !isCountryWord(p))
+    .filter((p) => {
+      const code = provinceCode(p);
+      if (code) {
+        mentionedProvince = code;
+        return false;
+      }
+      return true;
+    });
 
-  // Suffixe de province collé au segment (« Montréal QC », « Montréal Qc »).
-  segments = segments
-    .map((p) => p.replace(/\s+(qc|q[cu][eé]bec)\s*$/i, '').trim())
-    .filter(Boolean);
+  if (segments.length === 0) return finish(null, null);
 
-  if (segments.length === 0) return { ...empty, postalCode };
+  // Retire une province COLLÉE au dernier mot d'un segment (« Montréal QC »,
+  // « Ottawa ON », « Gloucester Ontario ») — captée, jamais gardée comme ville.
+  const stripGluedProvince = (seg: string): string => {
+    const m = seg.match(/^(.*\S)\s+(\S+)$/);
+    if (m) {
+      const code = provinceCode(m[2]);
+      if (code) {
+        mentionedProvince = code;
+        return m[1].trim();
+      }
+    }
+    return seg;
+  };
 
   let city: string | null = null;
   let addressParts: string[];
 
   if (segments.length >= 2) {
-    // Dernier segment sans chiffre = ville (« Appartement 822 » reste dans la rue).
-    const last = segments[segments.length - 1];
-    if (!/\d/.test(last)) {
+    // Dernier segment = ville (« Appartement 822 » reste dans la rue). On ne
+    // retire un « QC »/« ON » collé QUE sur ce segment-ville — jamais sur une rue
+    // (« 1234 Rue Ontario » garde « Ontario »).
+    const last = stripGluedProvince(segments[segments.length - 1]);
+    if (last && !/\d/.test(last)) {
       city = last;
       addressParts = segments.slice(0, -1);
     } else {
       addressParts = segments;
     }
   } else {
-    // Un seul segment (aucune virgule) : cherche une ville connue en fin de
-    // chaîne (« … Montréal Nord Québec », « … l'assomption ») — suffixe le plus
-    // long d'abord, jamais de mot contenant un chiffre.
+    // Un seul segment (aucune virgule) : on écarte les tokens de province en fin
+    // (« … Ottawa ON », « … Montréal Nord Québec ») pour délimiter la ville, mais
+    // on ne les retient comme province QUE si une vraie ville est reconnue juste
+    // avant — sinon « 1234 Rue Ontario » resterait amputé de « Ontario ».
     const words = segments[0].split(' ').filter(Boolean);
-    while (words.length > 1 && isProvinceWord(words[words.length - 1])) words.pop();
+    const core = [...words];
+    let trailingProvince: string | null = null;
+    while (core.length > 1) {
+      const code = provinceCode(core[core.length - 1]);
+      if (!code) break;
+      trailingProvince = code;
+      core.pop();
+    }
+    // Suffixe le plus long d'abord ; jamais un segment contenant un chiffre.
     let matched: { city: string; take: number } | null = null;
-    const maxTake = Math.min(4, words.length - 1);
+    const maxTake = Math.min(4, core.length);
     for (let take = maxTake; take >= 1 && !matched; take--) {
-      const tail = words.slice(words.length - take);
+      const tail = core.slice(core.length - take);
       if (tail.some((w) => /\d/.test(w))) continue;
       const resolved = resolveCanonical(tail.join(' '));
       if (resolved) matched = { city: resolved, take };
     }
     if (matched) {
+      if (trailingProvince) mentionedProvince = trailingProvince;
       city = matched.city;
-      addressParts = [words.slice(0, words.length - matched.take).join(' ')];
+      addressParts = [core.slice(0, core.length - matched.take).join(' ')];
     } else {
+      // Ville non reconnue → on GARDE les mots d'origine (province incluse).
       addressParts = [words.join(' ')];
     }
   }
 
   const address = addressParts.join(', ').trim() || null;
-  const cityClean = city ? canonicalCity(city) : '';
-  return {
-    address,
-    city: cityClean || null,
-    province: resolveProvince({ postalCode }),
-    postalCode,
-  };
+  return finish(address, city);
 }
 
 // ───────────────────────────────────────────────────────────────────────────
