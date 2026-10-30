@@ -13,7 +13,12 @@
  */
 
 import { prisma } from '../config/database';
-import { findMatchingProspect } from '../utils/candidateMatch';
+import {
+  findMatchingCandidate,
+  findMatchingEmployee,
+  findMatchingProspect,
+} from '../utils/candidateMatch';
+import { setCandidateVideo } from './candidate-video.service';
 import { lastTenDigits } from '../utils/phone';
 import logger from '../config/logger';
 
@@ -41,6 +46,12 @@ export interface ClaimResult {
  * remplace l'ancienne au lieu d'empiler des orphelins.
  */
 export async function recordUpload(input: RecordUploadInput): Promise<ClaimResult> {
+  await upsertPending(input);
+  return claimByContact(input.ghlContactId);
+}
+
+/** Gare (ou remplace) l'upload d'un contact, non réclamé. */
+async function upsertPending(input: RecordUploadInput) {
   const email = input.email?.trim() || null;
   const phone = input.phone?.trim() || null;
 
@@ -55,13 +66,11 @@ export async function recordUpload(input: RecordUploadInput): Promise<ClaimResul
     claimedAt: null,
   };
 
-  await prisma.pendingVideoUpload.upsert({
+  return prisma.pendingVideoUpload.upsert({
     where: { ghlContactId: input.ghlContactId },
     create: { ghlContactId: input.ghlContactId, ...row },
     update: row,
   });
-
-  return claimByContact(input.ghlContactId);
 }
 
 /** Tente de rattacher l'upload d'un contact GHL au prospect correspondant. */
@@ -72,7 +81,7 @@ async function claimByContact(ghlContactId: string): Promise<ClaimResult> {
   const match = await findMatchingProspect(prisma, pending.email, pending.phone);
   if (!match) return { claimed: false };
 
-  return attach(pending.id, pending.storagePath, match.id);
+  return attach(pending, match.id);
 }
 
 /**
@@ -90,7 +99,7 @@ export async function claimForProspect(prospect: {
   const pending = await findUnclaimedFor(prospect.email, prospect.phone);
   if (!pending) return null;
 
-  const result = await attach(pending.id, pending.storagePath, prospect.id, prospect.videoStoragePath);
+  const result = await attach(pending, prospect.id);
   return result.claimed ? pending.id : null;
 }
 
@@ -109,7 +118,7 @@ export async function sweepUnclaimed(): Promise<{ scanned: number; claimed: numb
     try {
       const match = await findMatchingProspect(prisma, pending.email, pending.phone);
       if (!match) continue;
-      const result = await attach(pending.id, pending.storagePath, match.id);
+      const result = await attach(pending, match.id);
       if (result.claimed) claimed++;
     } catch (e: any) {
       logger.error('Balayage vidéos en attente : échec sur un upload', {
@@ -128,49 +137,67 @@ export async function sweepUnclaimed(): Promise<{ scanned: number; claimed: numb
 /**
  * Écrit la vidéo sur le prospect et marque l'upload comme réclamé.
  *
- * On ne remplace JAMAIS une vidéo déjà présente sur le prospect. L'upload est
- * quand même marqué réclamé : on sait à qui il appartient, donc il n'a rien à
- * faire dans la liste des orphelins (qui doit rester « on ignore le
- * propriétaire »). Le fichier reste dans R2 et la ligne garde sa trace.
+ * La vidéo la plus RÉCENTE gagne : un candidat qui renvoie une vidéo nous dit
+ * que quelque chose a changé. Elle remplace donc l'ancienne, et la date de
+ * soumission est rafraîchie pour que la fiche remonte en tête de liste.
+ * L'ancien fichier reste dans R2 : on ne jette rien sur un simple renvoi.
+ *
+ * Seule exception : la fiche porte déjà une vidéo PLUS récente que cet upload
+ * (un upload resté en attente puis réclamé tard par le balayage, par exemple).
+ * Celle de la fiche est alors conservée. L'upload est quand même marqué
+ * réclamé : on sait à qui il appartient, donc il n'a rien à faire dans la liste
+ * des orphelins (qui doit rester « on ignore le propriétaire »).
+ *
+ * La date de l'upload est `updatedAt` et non `createdAt` : un renvoi du même
+ * contact met à jour la ligne existante (upsert), `createdAt` resterait figé
+ * sur le premier envoi.
  */
 async function attach(
-  pendingId: string,
-  storagePath: string,
-  prospectId: string,
-  knownExistingPath?: string | null
+  pending: { id: string; storagePath: string; updatedAt: Date },
+  prospectId: string
 ): Promise<ClaimResult> {
-  const existingPath =
-    knownExistingPath !== undefined
-      ? knownExistingPath
-      : (
-          await prisma.prospectCandidate.findUnique({
-            where: { id: prospectId },
-            select: { videoStoragePath: true },
-          })
-        )?.videoStoragePath ?? null;
+  const uploadedAt = pending.updatedAt;
+  const prospect = await prisma.prospectCandidate.findUnique({
+    where: { id: prospectId },
+    select: { videoStoragePath: true, videoUploadedAt: true, submissionDate: true },
+  });
 
-  const superseded = Boolean(existingPath) && existingPath !== storagePath;
+  const superseded =
+    Boolean(prospect?.videoStoragePath) &&
+    prospect?.videoStoragePath !== pending.storagePath &&
+    Boolean(prospect?.videoUploadedAt) &&
+    (prospect?.videoUploadedAt as Date) > uploadedAt;
+
+  const refreshSubmission = !prospect?.submissionDate || prospect.submissionDate < uploadedAt;
 
   await prisma.$transaction(async (tx) => {
     if (!superseded) {
       await tx.prospectCandidate.update({
         where: { id: prospectId },
-        data: { videoStoragePath: storagePath, videoUploadedAt: new Date() },
+        data: {
+          videoStoragePath: pending.storagePath,
+          videoUploadedAt: uploadedAt,
+          ...(refreshSubmission ? { submissionDate: uploadedAt } : {}),
+        },
       });
     }
     await tx.pendingVideoUpload.update({
-      where: { id: pendingId },
+      where: { id: pending.id },
       data: { claimedByProspectId: prospectId, claimedAt: new Date() },
     });
   });
 
   if (superseded) {
-    logger.warn('Vidéo publique reçue mais le prospect en avait déjà une — conservée telle quelle', {
+    logger.warn('Vidéo publique plus ancienne que celle de la fiche — fiche conservée telle quelle', {
       prospectId,
-      pendingId,
+      pendingId: pending.id,
     });
   } else {
-    logger.info('Vidéo publique rattachée au prospect', { prospectId, storagePath });
+    logger.info('Vidéo publique rattachée au prospect', {
+      prospectId,
+      storagePath: pending.storagePath,
+      replaced: Boolean(prospect?.videoStoragePath && prospect.videoStoragePath !== pending.storagePath),
+    });
   }
 
   return { claimed: true, prospectId, supersededByExisting: superseded };
@@ -217,4 +244,91 @@ export async function listOrphanUploads(minAgeMinutes: number = 60) {
     orderBy: { createdAt: 'desc' },
     take: 200,
   });
+}
+
+// ── Lien général (/video) ───────────────────────────────────────────────────
+
+export interface OpenUploadInput extends RecordUploadInput {
+  firstName: string;
+  lastName: string;
+}
+
+export type OpenFilingOutcome =
+  | 'active-employee'
+  | 'candidate'
+  | 'prospect'
+  | 'former-employee'
+  | 'new-prospect';
+
+export interface OpenFilingResult {
+  outcome: OpenFilingOutcome;
+  /** Fiche qui a reçu la vidéo (candidat ou prospect) ; absente pour un employé actif. */
+  recordId?: string;
+}
+
+/**
+ * Range une vidéo reçue par le lien général. Contrairement à /ma-video, il n'y
+ * a pas de webhook GHL derrière : c'est ici qu'on décide où va la personne.
+ *
+ *   1. Employé ACTIF → rien n'est créé ; la vidéo reste dans les non rattachées.
+ *   2. Candidat → elle devient sa vidéo de présentation (la précédente est
+ *      remplacée, son fichier conservé). Pas de doublon dans Candidats potentiels.
+ *   3. Candidat potentiel → la vidéo va sur sa fiche (voir `attach`).
+ *   4. Ancien employé (INACTIF) → nouvelle fiche Candidat potentiel, avec une
+ *      note qui le signale pour que le recruteur le sache avant de rappeler.
+ *   5. Personne nulle part → nouvelle fiche Candidat potentiel.
+ */
+export async function fileOpenUpload(input: OpenUploadInput): Promise<OpenFilingResult> {
+  const pending = await upsertPending(input);
+  const { email, phone } = pending;
+
+  const activeEmployee = await findMatchingEmployee(prisma, email, phone, { status: 'ACTIF' });
+  if (activeEmployee) {
+    logger.info('Vidéo du lien général : employé actif, laissée dans les non rattachées', {
+      employeeId: activeEmployee.id,
+    });
+    return { outcome: 'active-employee' };
+  }
+
+  const candidate = await findMatchingCandidate(prisma, email, phone);
+  if (candidate) {
+    await setCandidateVideo({
+      candidateId: candidate.id,
+      type: 'PRESENTATION',
+      videoStoragePath: pending.storagePath,
+      keepPreviousFile: true,
+    });
+    // `claimedByProspectId` reste vide : la colonne ne vise que les prospects.
+    // `claimedAt` suffit à sortir l'upload de la liste des orphelins.
+    await prisma.pendingVideoUpload.update({
+      where: { id: pending.id },
+      data: { claimedAt: new Date() },
+    });
+    logger.info('Vidéo du lien général posée sur le candidat', { candidateId: candidate.id });
+    return { outcome: 'candidate', recordId: candidate.id };
+  }
+
+  const prospect = await findMatchingProspect(prisma, email, phone);
+  if (prospect) {
+    await attach(pending, prospect.id);
+    return { outcome: 'prospect', recordId: prospect.id };
+  }
+
+  const formerEmployee = await findMatchingEmployee(prisma, email, phone);
+  const created = await prisma.prospectCandidate.create({
+    data: {
+      firstName: input.firstName,
+      lastName: input.lastName,
+      email,
+      phone: phone || '',
+      source: 'lien-video',
+      submissionDate: pending.updatedAt,
+      notes: formerEmployee
+        ? `Ancien employé — voir sa fiche employé (${formerEmployee.firstName} ${formerEmployee.lastName}). ` +
+          'Ajouté par le lien vidéo général (/video).'
+        : 'Ajouté par le lien vidéo général (/video)',
+    },
+  });
+  await attach(pending, created.id);
+  return { outcome: formerEmployee ? 'former-employee' : 'new-prospect', recordId: created.id };
 }

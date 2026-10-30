@@ -47,6 +47,8 @@ jest.mock('../services/r2.service', () => ({
   headObjectInR2: jest.fn(),
   readObjectPrefix: jest.fn(),
   deleteFileFromR2: jest.fn(async () => undefined),
+  // Sans domaine public configuré, le vrai renvoie la clé elle-même.
+  getPublicUrl: jest.fn((key: string) => key),
 }));
 
 import { createApp } from '../app';
@@ -449,12 +451,71 @@ describe('Téléversement vidéo public — /api/public/video', () => {
       });
     });
 
-    it('déjà Candidat → aucune fiche prospect, la vidéo reste dans les non rattachées', async () => {
+    async function adminId(): Promise<string> {
       const admin = await prisma.user.create({
         data: { email: 'admin.open@test.com', password: 'x', firstName: 'A', lastName: 'B', role: 'ADMIN' },
       });
-      await prisma.candidate.create({
-        data: { firstName: 'Karim', lastName: 'Benali', phone: '418-555-0199', city: 'Québec', createdById: admin.id },
+      return admin.id;
+    }
+
+    it('déjà Candidat → la vidéo devient sa présentation, aucune fiche prospect', async () => {
+      const candidate = await prisma.candidate.create({
+        data: {
+          firstName: 'Karim',
+          lastName: 'Benali',
+          phone: '418-555-0199',
+          city: 'Québec',
+          createdById: await adminId(),
+        },
+      });
+      await prisma.candidateVideo.create({
+        data: {
+          candidateId: candidate.id,
+          type: 'PRESENTATION',
+          videoStoragePath: 'videos/prospects/ancienne.mp4',
+          videoUploadedAt: new Date('2026-01-15T12:00:00Z'),
+        },
+      });
+      const key = await issuedKey();
+
+      const res = await request(app).post(OPEN_COMPLETE_URL).send({ ...who, key });
+      expect(res.status).toBe(201);
+      expect(res.body.attached).toBe(true);
+      expect(await prisma.prospectCandidate.count()).toBe(0);
+
+      const videos = await prisma.candidateVideo.findMany({ where: { candidateId: candidate.id } });
+      expect(videos).toHaveLength(1);
+      expect(videos[0]).toMatchObject({ type: 'PRESENTATION', videoStoragePath: key });
+
+      // Miroir sur la fiche candidat (lu par le catalogue et le partage public).
+      const updated = await prisma.candidate.findUnique({ where: { id: candidate.id } });
+      expect(updated?.videoStoragePath).toBe(key);
+
+      // L'ancien fichier n'est pas supprimé du stockage.
+      expect(r2.deleteFileFromR2).not.toHaveBeenCalledWith('videos/prospects/ancienne.mp4');
+
+      const pending = await prisma.pendingVideoUpload.findFirst();
+      expect(pending?.claimedAt).toBeTruthy();
+    });
+
+    it('ancien employé (INACTIF) → nouvelle fiche prospect, signalée « Ancien employé »', async () => {
+      await prisma.employee.create({
+        data: { firstName: 'Karim', lastName: 'Benali', phone: '4185550199', status: 'INACTIF' },
+      });
+      const key = await issuedKey();
+
+      const res = await request(app).post(OPEN_COMPLETE_URL).send({ ...who, key });
+      expect(res.status).toBe(201);
+      expect(res.body.attached).toBe(true);
+
+      const created = await prisma.prospectCandidate.findFirst();
+      expect(created).toMatchObject({ source: 'lien-video', videoStoragePath: key });
+      expect(created?.notes).toMatch(/^Ancien employé — voir sa fiche employé \(Karim Benali\)/);
+    });
+
+    it('employé ACTIF → rien n’est créé, la vidéo reste dans les non rattachées', async () => {
+      await prisma.employee.create({
+        data: { firstName: 'Karim', lastName: 'Benali', phone: '4185550199', status: 'ACTIF' },
       });
       const key = await issuedKey();
 
@@ -465,6 +526,41 @@ describe('Téléversement vidéo public — /api/public/video', () => {
 
       const pending = await prisma.pendingVideoUpload.findFirst();
       expect(pending).toMatchObject({ storagePath: key, phone: '+14185550199', claimedAt: null });
+    });
+
+    it('prospect avec une vidéo plus ancienne → remplacée, date de soumission rafraîchie', async () => {
+      const old = new Date('2026-01-15T12:00:00Z');
+      const prospect = await prisma.prospectCandidate.create({
+        data: {
+          firstName: 'Karim',
+          lastName: 'Benali',
+          phone: '+14185550199',
+          videoStoragePath: 'videos/prospects/ancienne.mp4',
+          videoUploadedAt: old,
+          submissionDate: old,
+          cvStoragePath: 'cvs/karim.pdf',
+        },
+      });
+      const key = await issuedKey();
+
+      await request(app).post(OPEN_COMPLETE_URL).send({ ...who, key });
+
+      const updated = await prisma.prospectCandidate.findUnique({ where: { id: prospect.id } });
+      expect(updated?.videoStoragePath).toBe(key);
+      expect(updated!.submissionDate!.getTime()).toBeGreaterThan(old.getTime());
+      expect(updated?.cvStoragePath).toBe('cvs/karim.pdf');
+      expect(r2.deleteFileFromR2).not.toHaveBeenCalledWith('videos/prospects/ancienne.mp4');
+    });
+
+    it('un renvoi remplace la vidéo du premier envoi sur la même fiche', async () => {
+      const key1 = await issuedKey();
+      await request(app).post(OPEN_COMPLETE_URL).send({ ...who, key: key1 });
+      const key2 = await issuedKey();
+      await request(app).post(OPEN_COMPLETE_URL).send({ ...who, key: key2 });
+
+      const prospects = await prisma.prospectCandidate.findMany();
+      expect(prospects).toHaveLength(1);
+      expect(prospects[0].videoStoragePath).toBe(key2);
     });
 
     it('un second envoi du même téléphone ne crée pas de deuxième fiche', async () => {

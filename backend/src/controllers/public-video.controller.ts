@@ -33,8 +33,8 @@ import {
 } from '../services/r2.service';
 import { isLikelyVideo } from '../utils/ghlFetch';
 import { ApiError } from '../utils/apiError';
-import { claimForProspect, recordUpload } from '../services/pending-video.service';
-import { findContactEverywhere, findMatchingProspect } from '../utils/candidateMatch';
+import { fileOpenUpload, recordUpload } from '../services/pending-video.service';
+import { findMatchingProspect } from '../utils/candidateMatch';
 import { lastTenDigits } from '../utils/phone';
 import {
   MAX_VIDEO_BYTES,
@@ -390,12 +390,9 @@ export const initiateOpenVideoUpload = async (req: Request, res: Response, next:
 /**
  * POST /api/public/video/open/complete
  *
- * Vérifie la vidéo puis la range :
- *   1. une fiche prospect correspond (téléphone ou courriel) → la vidéo y va ;
- *   2. personne nulle part → on crée la fiche prospect avec la vidéo ;
- *   3. la personne est déjà Candidat ou Employé → on ne crée rien (elle ne
- *      doit vivre qu'à une place) ; la vidéo reste dans la liste des vidéos
- *      non rattachées, avec son téléphone et son courriel.
+ * Vérifie la vidéo puis la range selon qui l'envoie (voir `fileOpenUpload`) :
+ * Candidat, Candidat potentiel, ancien employé ou inconnu reçoivent la vidéo
+ * sur une fiche ; seul un employé actif la laisse dans les non rattachées.
  */
 export const completeOpenVideoUpload = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -409,48 +406,20 @@ export const completeOpenVideoUpload = async (req: Request, res: Response, next:
     if (!key.startsWith(`videos/inbox/${uploadId}/`)) throw invalidLinkError();
 
     const head = await verifyUploadedVideo(key);
-    const storedPhone = e164(phone);
 
-    let result = await recordUpload({
+    const result = await fileOpenUpload({
       ghlContactId: uploadId,
+      firstName,
+      lastName,
       email: email || null,
-      phone: storedPhone,
+      phone: e164(phone),
       storagePath: key,
       originalName: filename || null,
       contentType: head.contentType ? normalizeMimeType(head.contentType) : null,
       sizeBytes: head.contentLength,
     });
 
-    if (!result.claimed) {
-      const existing = await findContactEverywhere(prisma, email, storedPhone);
-      if (existing) {
-        logger.info('Vidéo du lien général : déjà Candidat/Employé, laissée dans les non rattachées', {
-          section: existing.section,
-          id: existing.id,
-        });
-      } else {
-        const prospect = await prisma.prospectCandidate.create({
-          data: {
-            firstName,
-            lastName,
-            email: email || null,
-            phone: storedPhone,
-            source: 'lien-video',
-            submissionDate: new Date(),
-            notes: 'Ajouté par le lien vidéo général (/video)',
-          },
-        });
-        const claimedId = await claimForProspect({
-          id: prospect.id,
-          email: email || null,
-          phone: storedPhone,
-          videoStoragePath: null,
-        });
-        result = { claimed: Boolean(claimedId), prospectId: prospect.id };
-      }
-    }
-
-    return res.status(201).json({ success: true, attached: result.claimed });
+    return res.status(201).json({ success: true, attached: result.outcome !== 'active-employee' });
   } catch (error) {
     return next(error);
   }
